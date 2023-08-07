@@ -161,7 +161,7 @@ OSOBJS += \
 endif
 
 OSOBJS += \
-	$(OS)/$(OS).o \
+	$(OS)/$(OS)_platform.o \
 	$(OS)/$(OS)_thread.o \
 	$(OS)/$(OS)_audio.o \
 	$(OS)/$(OS)_power.o \

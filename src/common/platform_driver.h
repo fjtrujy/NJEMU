@@ -29,6 +29,7 @@ typedef struct platform_driver
 
 
 extern platform_driver_t platform_psp;
+extern platform_driver_t platform_ps2;
 extern platform_driver_t platform_null;
 
 extern platform_driver_t *platform_drivers[];

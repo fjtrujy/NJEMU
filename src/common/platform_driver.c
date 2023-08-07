@@ -19,6 +19,9 @@ platform_driver_t *platform_drivers[] = {
 #ifdef PSP
 	&platform_psp,
 #endif
+#ifdef PS2
+	&platform_ps2,
+#endif
 	&platform_null,
 	NULL,
 };
