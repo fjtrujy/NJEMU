@@ -31,6 +31,7 @@ typedef struct audio_driver
 
 
 extern audio_driver_t audio_psp;
+extern audio_driver_t audio_ps2;
 extern audio_driver_t audio_null;
 
 extern audio_driver_t *audio_drivers[];
