@@ -607,6 +607,7 @@ typedef struct ui_text_driver
 
 
 extern ui_text_driver_t ui_text_psp;
+extern ui_text_driver_t ui_text_ps2;
 extern ui_text_driver_t ui_text_null;
 
 extern ui_text_driver_t *ui_text_drivers[];

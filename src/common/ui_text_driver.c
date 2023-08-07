@@ -21,6 +21,9 @@ ui_text_driver_t *ui_text_drivers[] = {
 #ifdef PSP
 	&ui_text_psp,
 #endif
+#ifdef PS2
+	&ui_text_ps2,
+#endif
 	&ui_text_null,
 	NULL,
 };
