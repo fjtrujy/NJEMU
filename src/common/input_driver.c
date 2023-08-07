@@ -223,6 +223,9 @@ input_driver_t *input_drivers[] = {
 #ifdef PSP
 	&input_psp,
 #endif
+#ifdef PS2
+	&input_ps2,
+#endif
 	&input_null,
 	NULL,
 };

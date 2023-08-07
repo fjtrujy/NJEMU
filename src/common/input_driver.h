@@ -63,6 +63,7 @@ typedef struct input_driver
 
 
 extern input_driver_t input_psp;
+extern input_driver_t input_ps2;
 extern input_driver_t input_null;
 
 extern input_driver_t *input_drivers[];
