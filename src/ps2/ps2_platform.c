@@ -1,15 +1,56 @@
 #include "emumain.h"
 
+#include <kernel.h>
+#include <sifrpc.h>
+#include <iopcontrol.h>
+#include <sbv_patches.h>
+#include <ps2_filesystem_driver.h>
+
 typedef struct ps2_platform {
 } ps2_platform_t;
 
+static void reset_IOP()
+{
+    SifInitRpc(0);
+    while (!SifIopReset(NULL, 0)) {
+    }
+    while (!SifIopSync()) {
+    }
+}
+
+static void prepare_IOP()
+{
+    reset_IOP();
+    SifInitRpc(0);
+    sbv_patch_enable_lmb();
+    sbv_patch_disable_prefix_check();
+    sbv_patch_fileio();
+}
+
+static void init_drivers()
+{
+	init_ps2_filesystem_driver();
+}
+
+static void deinit_drivers()
+{
+	deinit_ps2_filesystem_driver();
+}
+
 static void *ps2_init(void) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)calloc(1, sizeof(ps2_platform_t));
+
+    prepare_IOP();
+    init_drivers();
+
 	return ps2;
 }
 
 static void ps2_free(void *data) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
+
+    deinit_drivers();
+
 	free(ps2);
 }
 

@@ -262,7 +262,7 @@ INCDIR += -I$(PS2DEV)/gsKit/include -I$(PS2SDK)/ports/include
 # Library
 #------------------------------------------------------------------------------
 
-LIBS = -lz
+LIBS = -lpatches -lgskit -ldmakit -lps2_drivers -lz
 
 ifeq ($(LARGE_MEMORY), 1)
 endif
