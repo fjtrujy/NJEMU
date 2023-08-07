@@ -39,6 +39,9 @@ video_driver_t *video_drivers[] = {
 #ifdef PSP
 	&video_psp,
 #endif
+#ifdef PS2
+	&video_ps2,
+#endif
 	&video_null,
 	NULL,
 };

@@ -468,10 +468,9 @@ int main(int argc, char *argv[]) {
 	pad_init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
-	#if VIDEO_32BPP
-	video_driver->setMode(video_data, 32);
-#else
 	video_data = video_driver->init();
+#if VIDEO_32BPP
+	video_driver->setMode(video_data, 32);
 #endif
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
