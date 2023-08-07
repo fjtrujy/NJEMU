@@ -443,21 +443,30 @@ void save_snapshot(void)
 
 
 int main(int argc, char *argv[]) {
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	platform_data = platform_driver->init();
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	getcwd(launchDir, MAX_PATH - 1);
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	strcat(launchDir, "/");
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	memset(screenshotDir, 0x00, sizeof(screenshotDir));
 
 	// Call main platform-specific entry point
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	platform_driver->main(platform_data, argc, argv);
 
 	mkdir(screenshotDir,0777); // スクショ用フォルダ作成
 
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	power_driver->setLowestCpuClock(NULL);
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	ui_text_data = ui_text_driver->init();
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	pad_init();
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	#if VIDEO_32BPP
 	video_driver->setMode(video_data, 32);
@@ -465,13 +474,19 @@ int main(int argc, char *argv[]) {
 	video_data = video_driver->init();
 #endif
 
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	// Platform system buttom
 	systembuttons_available = platform_driver->startSystemButtons(platform_data);
 
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	file_browser();
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	video_driver->free(video_data);
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	ui_text_driver->free(ui_text_data);
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	pad_exit();
+	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	// Platform exit
 	platform_driver->free(platform_data);

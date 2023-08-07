@@ -32,6 +32,7 @@ typedef struct power_driver
 extern int platform_cpuclock;
 
 extern power_driver_t power_psp;
+extern power_driver_t power_ps2;
 extern power_driver_t power_null;
 
 extern power_driver_t *power_drivers[];
