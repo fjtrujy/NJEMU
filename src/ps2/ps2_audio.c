@@ -18,6 +18,9 @@ static void *ps2_init(void) {
 
 static void ps2_free(void *data) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
+
+	// deinit_audio_driver();
+
 	free(ps2);
 }
 
@@ -27,9 +30,14 @@ static int32_t ps2_volumeMax(void *data) {
 
 static bool ps2_chSRCReserve(void *data, int32_t samples, int32_t freqency, int32_t channels) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
-	// ps2->channel = sceAudioSRCChReserve(samples, freqency, channels);
-	// return ps2->channel >= 0;
-	return false;
+	struct audsrv_fmt_t format;
+    format.bits = 16;
+    format.freq = freqency;
+    format.channels = channels;
+
+    ps2->channel = audsrv_set_format(&format);
+    audsrv_set_volume(MAX_VOLUME);
+	return ps2->channel >= 0;
 }
 
 static bool ps2_chReserve(void *data, int32_t samplecount, int32_t channels) {
@@ -41,7 +49,7 @@ static bool ps2_chReserve(void *data, int32_t samplecount, int32_t channels) {
 }
 
 static void ps2_release(void *data) {
-	// sceAudioSRCChRelease();
+	audsrv_stop_audio();
 }
 
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer) {
