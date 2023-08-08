@@ -26,6 +26,9 @@ thread_driver_t *thread_drivers[] = {
 #ifdef PSP
 	&thread_psp,
 #endif
+#ifdef PS2
+	&thread_ps2,
+#endif
 	&thread_null,
 	NULL,
 };
