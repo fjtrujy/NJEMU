@@ -156,8 +156,8 @@ OSOBJS += \
 	$(OS)/$(OS)_input.o \
 	$(OS)/$(OS)_video.o \
 	$(OS)/$(OS)_audio.o \
+	$(OS)/$(OS)_ticker.o \
 # 	$(OS)/$(OS)_thread.o \
-# 	$(OS)/$(OS)_ticker.o \
 
 ifeq ($(ADHOC), 1)
 OSOBJS += $(OS)/adhoc.o

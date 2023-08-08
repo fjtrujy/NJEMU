@@ -18,6 +18,9 @@ ticker_driver_t *ticker_drivers[] = {
 #ifdef PSP
 	&ticker_psp,
 #endif
+#ifdef PS2
+	&ticker_ps2,
+#endif
 	&ticker_null,
 	NULL,
 };
