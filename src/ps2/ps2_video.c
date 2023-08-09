@@ -8,6 +8,13 @@
 
 #include "emumain.h"
 
+#include <kernel.h>
+#include <malloc.h>
+#include <gsKit.h>
+#include <dmaKit.h>
+#include <gsToolkit.h>
+
+#include <gsInline.h>
 
 /******************************************************************************
 	ローカル変数/構造体
@@ -22,20 +29,104 @@
 // 	{ 15,  7, 13,  5 }
 // };
 
-// static int pixel_format;
-
 
 /******************************************************************************
 	グローバル関数
 ******************************************************************************/
 
+/* turn black GS Screen */
+#define GS_BLACK GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x80)
+/* Size of Persistent drawbuffer (Single Buffered) */
+#define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
+/* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
+#define RENDER_QUEUE_OS_POOLSIZE 1024 * 1024 * 2 // 2048K of oneshot renderqueue
+
 typedef struct ps2_video {
+	GSGLOBAL *gsGlobal;
+    uint64_t drawColor;
+    int32_t vsync_callback_id;
+    uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
+	uint8_t pixel_format;
 } ps2_video_t;
+
+static int vsync_sema_id = 0;
+
+/* PRIVATE METHODS */
+static int vsync_handler()
+{
+   iSignalSema(vsync_sema_id);
+
+   ExitHandler();
+   return 0;
+}
+
+/* Copy of gsKit_sync_flip, but without the 'flip' */
+static void gsKit_sync(GSGLOBAL *gsGlobal)
+{
+   if (!gsGlobal->FirstFrame) WaitSema(vsync_sema_id);
+   while (PollSema(vsync_sema_id) >= 0)
+   	;
+}
+
+/* Copy of gsKit_sync_flip, but without the 'sync' */
+static void gsKit_flip(GSGLOBAL *gsGlobal)
+{
+   if (!gsGlobal->FirstFrame)
+   {
+      if (gsGlobal->DoubleBuffering == GS_SETTING_ON)
+      {
+         GS_SET_DISPFB2( gsGlobal->ScreenBuffer[
+               gsGlobal->ActiveBuffer & 1] / 8192,
+               gsGlobal->Width / 64, gsGlobal->PSM, 0, 0 );
+
+         gsGlobal->ActiveBuffer ^= 1;
+      }
+
+   }
+
+   gsKit_setactive(gsGlobal);
+}
 
 /*--------------------------------------------------------
 	ビデオ処理初期化
 --------------------------------------------------------*/
 static void ps2_start(void *data) {
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+
+	GSGLOBAL *gsGlobal;
+	
+	gsGlobal = gsKit_init_global();
+
+	gsGlobal->Mode = GS_MODE_NTSC;
+    gsGlobal->Height = 448;
+
+	gsGlobal->PSM  = GS_PSM_CT24;
+	gsGlobal->PSMZ = GS_PSMZ_16S;
+	gsGlobal->ZBuffering = GS_SETTING_OFF;
+	gsGlobal->DoubleBuffering = GS_SETTING_ON;
+	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
+	gsGlobal->Dithering = GS_SETTING_OFF;
+
+	gsKit_set_primalpha(gsGlobal, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
+
+	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
+	dmaKit_chan_init(DMA_CHANNEL_GIF);
+
+	gsKit_set_clamp(gsGlobal, GS_CMODE_REPEAT);
+
+	gsKit_vram_clear(gsGlobal);
+
+	gsKit_init_screen(gsGlobal);
+
+	gsKit_TexManager_init(gsGlobal);
+
+	ps2->vsync_callback_id = gsKit_add_vsync_handler(vsync_handler);
+
+	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+
+    gsKit_clear(gsGlobal, GS_BLACK);
+	ps2->gsGlobal = gsGlobal;
+
 // 	#if VIDEO_32BPP
 // 	if (video_mode == 32)
 // 	{
@@ -120,16 +211,21 @@ static void *ps2_init(void)
 	ビデオ処理終了(共通)
 --------------------------------------------------------*/
 
-static void ps2_exit() {
-	// sceGuDisplay(GU_FALSE);
-	// sceGuTerm();
+static void ps2_exit(ps2_video_t *ps2) {
+	gsKit_clear(ps2->gsGlobal, GS_BLACK);
+	gsKit_vram_clear(ps2->gsGlobal);
+	gsKit_deinit_global(ps2->gsGlobal);
+	gsKit_remove_vsync_handler(ps2->vsync_callback_id);
+
+	if (vsync_sema_id >= 0)
+        DeleteSema(vsync_sema_id);
 }
 
 static void ps2_free(void *data)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	
-	ps2_exit();
+	ps2_exit(ps2);
 	free(ps2);
 }
 
@@ -140,10 +236,11 @@ static void ps2_free(void *data)
 
 static void ps2_setMode(void *data, int mode)
 {
+	ps2_video_t *ps2 = (ps2_video_t*)data;
 #if VIDEO_32BPP
 	if (video_mode != mode)
 	{
-		if (video_mode) ps2_exit();
+		if (video_mode) ps2_exit(ps2);
 
 		video_mode = mode;
 
@@ -158,7 +255,7 @@ static void ps2_setMode(void *data, int mode)
 
 static void ps2_waitVsync(void *data)
 {
-	// sceDisplayWaitVblankStart();
+	gsKit_vsync_wait();
 }
 
 
@@ -168,9 +265,15 @@ static void ps2_waitVsync(void *data)
 
 static void ps2_flipScreen(void *data, bool vsync)
 {
-	// if (vsync) sceDisplayWaitVblankStart();
-	// show_frame = draw_frame;
-	// draw_frame = sceGuSwapBuffers();
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gsKit_queue_exec(ps2->gsGlobal);
+	gsKit_finish();
+
+	if (vsync) gsKit_vsync_wait();
+
+	gsKit_flip(ps2->gsGlobal);
+	gsKit_TexManager_nextFrame(ps2->gsGlobal);
+    gsKit_clear(ps2->gsGlobal, GS_BLACK);
 }
 
 
