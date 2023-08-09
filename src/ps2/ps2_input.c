@@ -24,9 +24,10 @@ struct JoyInfo
     int8_t opened;
 } __attribute__((aligned(64)));
 
+struct JoyInfo joyInfo[MAX_CONTROLLERS];
+
 typedef struct ps2_input {
 	uint8_t enabled_pads;
-	struct JoyInfo joyInfo[MAX_CONTROLLERS];
 } ps2_input_t;
 
 static void *ps2_init(void) {
@@ -36,7 +37,8 @@ static void *ps2_init(void) {
     uint32_t slot = 0;
 
     if (init_joystick_driver(true) < 0) {
-        return -1;
+		free(ps2);
+        return NULL;
     }
 
     for (port = 0; port < PS2_MAX_PORT; port++) {
@@ -57,7 +59,7 @@ static void *ps2_init(void) {
             Port 1,3 -> Connector 8
             */
 
-            struct JoyInfo *info = &ps2->joyInfo[ps2->enabled_pads];
+            struct JoyInfo *info = &joyInfo[ps2->enabled_pads];
             if (padPortOpen(port, slot, (void *)info->padBuf) > 0) {
                 info->port = (uint8_t)port;
                 info->slot = (uint8_t)slot;
@@ -72,22 +74,44 @@ static void *ps2_init(void) {
 
 static void ps2_free(void *data) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
+	uint32_t i = 0;
+
+	for (i = 0; i < MAX_CONTROLLERS; i++) {
+		struct JoyInfo *info = &joyInfo[i];
+		if (info->opened) {
+			padPortClose(info->port, info->slot);
+		}
+	}
+
+	deinit_joystick_driver(true);
+
 	free(ps2);
 }
 
-static inline int16_t convert_u8_to_s16(uint8_t val)
-{
-    if (val == 0) {
-        return -0x7fff;
-    }
-    return val * 0x0101 - 0x8000;
+static struct  JoyInfo *getFirstJoyInfo(uint32_t pad){
+	uint32_t i;
+	struct JoyInfo *info = NULL;
+
+	for (i = 0; i < MAX_CONTROLLERS; i++) {
+		info = &joyInfo[i];
+		if (info->opened) {
+				return info;
+		}
+	}
+
+	return NULL;	
 }
 
-static uint32_t basicPoll(struct padButtonStatus *paddata) {
+static uint32_t basicPoll(struct padButtonStatus *paddata, bool exclusive) {
 	uint32_t data = 0;
+	struct JoyInfo *info = NULL;
 
-	// Read just 0, 0 for now
-	if (padRead(0, 0, paddata)) {
+	info = getFirstJoyInfo(0);
+	if (info == NULL) {
+		return data;
+	}
+	// Read just first controller for now
+	if (padRead(info->port, info->slot, paddata) == 0) {
 		data |= (paddata->btns & PAD_UP) ? PLATFORM_PAD_UP : 0;
 		data |= (paddata->btns & PAD_DOWN) ? PLATFORM_PAD_DOWN : 0;
 		data |= (paddata->btns & PAD_LEFT) ? PLATFORM_PAD_LEFT : 0;
@@ -103,6 +127,11 @@ static uint32_t basicPoll(struct padButtonStatus *paddata) {
 		
 		data |= (paddata->btns & PAD_START) ? PLATFORM_PAD_START : 0;
 		data |= (paddata->btns & PAD_SELECT) ? PLATFORM_PAD_SELECT : 0;
+
+		if ((paddata->ljoy_v >= 0xd0) && !(exclusive && (paddata->btns & PAD_UP))) data |=  PLATFORM_PAD_DOWN;
+		if ((paddata->ljoy_v <= 0x30) && !(exclusive && (paddata->btns & PAD_DOWN))) data |=  PLATFORM_PAD_UP;
+		if ((paddata->ljoy_h <= 0x30) && !(exclusive && (paddata->btns & PAD_LEFT))) data |=  PLATFORM_PAD_LEFT;
+		if ((paddata->ljoy_h >= 0xd0) && !(exclusive && (paddata->btns & PAD_RIGHT))) data |=  PLATFORM_PAD_RIGHT;
 	}
 
 	return data;
@@ -117,12 +146,9 @@ static uint32_t ps2_poll(void *data) {
 		return btnsData;
 	}
 
-	btnsData = basicPoll(&paddata);
+	btnsData = basicPoll(&paddata, false);
 
-	if (convert_u8_to_s16(paddata.ljoy_v) < -tolerance) btnsData |= PLATFORM_PAD_DOWN;
-	if (convert_u8_to_s16(paddata.ljoy_v) > tolerance) btnsData |= PLATFORM_PAD_UP;
-	if (convert_u8_to_s16(paddata.ljoy_h) < -tolerance) btnsData |= PLATFORM_PAD_LEFT;
-	if (convert_u8_to_s16(paddata.ljoy_h) > tolerance) btnsData |= PLATFORM_PAD_RIGHT;
+	printf("paddata.ljoy_v: %d\n", paddata.ljoy_v);
 
 	return btnsData;
 }
@@ -132,12 +158,7 @@ static uint32_t ps2_pollFatfursp(void *data) {
 	struct padButtonStatus paddata;
 	uint32_t btnsData = 0;
 
-	btnsData = basicPoll(&paddata);
-
-	if (!(paddata.btns & PAD_UP)    && convert_u8_to_s16(paddata.ljoy_v) < -tolerance) btnsData |= PLATFORM_PAD_DOWN;
-	if (!(paddata.btns & PAD_DOWN)  && convert_u8_to_s16(paddata.ljoy_v) > tolerance) btnsData |= PLATFORM_PAD_UP;
-	if (!(paddata.btns & PAD_RIGHT) && convert_u8_to_s16(paddata.ljoy_h) < -tolerance) btnsData |= PLATFORM_PAD_LEFT;
-	if (!(paddata.btns & PAD_LEFT)  && convert_u8_to_s16(paddata.ljoy_h) > tolerance) btnsData |= PLATFORM_PAD_RIGHT;
+	btnsData = basicPoll(&paddata, true);
 
 	return btnsData;
 }
@@ -146,12 +167,7 @@ static uint32_t ps2_pollAnalog(void *data) {
 	uint32_t btnsData;
 	struct padButtonStatus paddata;
 
-	btnsData = basicPoll(&paddata);
-
-	if (convert_u8_to_s16(paddata.ljoy_v) < -tolerance) btnsData |= PLATFORM_PAD_DOWN;
-	if (convert_u8_to_s16(paddata.ljoy_v) > tolerance) btnsData |= PLATFORM_PAD_UP;
-	if (convert_u8_to_s16(paddata.ljoy_h) < -tolerance) btnsData |= PLATFORM_PAD_LEFT;
-	if (convert_u8_to_s16(paddata.ljoy_h) > tolerance) btnsData |= PLATFORM_PAD_RIGHT;
+	btnsData = basicPoll(&paddata, false);
 
 	btnsData  = paddata.btns & 0xffff;
 	btnsData |= paddata.ljoy_h << 16;
