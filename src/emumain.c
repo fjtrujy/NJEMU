@@ -49,6 +49,7 @@ char launchDir[MAX_PATH];
 char screenshotDir[MAX_PATH];  // スクリーンショト保存PATH
 bool systembuttons_available;
 void *platform_data = NULL;
+void *power_data = NULL;
 
 /******************************************************************************
 	ローカル変数
@@ -131,9 +132,9 @@ static void show_fps(void)
 
 static void show_battery_warning(void)
 {
-	if (!power_driver->isBatteryCharging(0))
+	if (!power_driver->isBatteryCharging(power_data))
 	{
-		int bat = power_driver->batteryLifePercent(0);
+		int bat = power_driver->batteryLifePercent(power_data);
 
 		if (bat < 10)
 		{
@@ -445,6 +446,7 @@ void save_snapshot(void)
 int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	platform_data = platform_driver->init();
+	power_data = power_driver->init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	getcwd(launchDir, MAX_PATH - 1);
@@ -461,7 +463,7 @@ int main(int argc, char *argv[]) {
 	mkdir(screenshotDir,0777); // スクショ用フォルダ作成
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	power_driver->setLowestCpuClock(NULL);
+	power_driver->setLowestCpuClock(power_data);
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	ui_text_data = ui_text_driver->init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
@@ -488,6 +490,7 @@ int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	// Platform exit
+	power_driver->free(power_data);
 	platform_driver->free(platform_data);
 
 	return 0;

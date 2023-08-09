@@ -529,7 +529,7 @@ void commandlist(int flag)
 #endif
 		sound_thread_enable(0);
 		video_driver->setMode(video_data, 32);
-		power_driver->setLowestCpuClock(NULL);
+		power_driver->setLowestCpuClock(power_data);
 	}
 
 	pad_wait_clear();
@@ -762,7 +762,7 @@ void commandlist(int flag)
 	{
 		ui_popup_reset();
 
-		power_driver->setCpuClock(NULL, platform_cpuclock);
+		power_driver->setCpuClock(power_data, platform_cpuclock);
 
 		video_driver->setMode(video_data, 16);
 		autoframeskip_reset();

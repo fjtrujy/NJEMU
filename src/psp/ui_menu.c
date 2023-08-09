@@ -2168,9 +2168,9 @@ static int state_save_slot(void)
 		state_refresh_screen(0);
 		video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
 
-		power_driver->setCpuClock(NULL, platform_cpuclock);
+		power_driver->setCpuClock(power_data, platform_cpuclock);
 		res = state_save(state_sel);
-		power_driver->setLowestCpuClock(NULL);
+		power_driver->setLowestCpuClock(power_data);
 
 		load_background(WP_STATE);
 
@@ -2195,9 +2195,9 @@ static int state_load_slot(void)
 		state_refresh_screen(0);
 		video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
 
-		power_driver->setCpuClock(NULL, platform_cpuclock);
+		power_driver->setCpuClock(power_data, platform_cpuclock);
 		res = state_load(state_sel);
-		power_driver->setLowestCpuClock(NULL);
+		power_driver->setLowestCpuClock(power_data);
 
 		if (res)
 		{
@@ -2466,7 +2466,7 @@ void showmenu(void)
 	}
 	mainmenu_num = i;
 
-	power_driver->setLowestCpuClock(NULL);
+	power_driver->setLowestCpuClock(power_data);
 	video_driver->clearScreen(video_data);
 	load_background(WP_LOGO);
 	ui_popup_reset();
@@ -2634,7 +2634,7 @@ void showmenu(void)
 #if (EMU_SYSTEM != CPS2)
 	sound_set_samplerate();
 #endif
-	power_driver->setCpuClock(NULL, platform_cpuclock);
+	power_driver->setCpuClock(power_data, platform_cpuclock);
 
 #if USE_CACHE
 	cache_sleep(0);

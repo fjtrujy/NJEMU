@@ -1051,7 +1051,7 @@ void file_browser(void)
 			}
 
 			emu_main();
-			power_driver->setLowestCpuClock(NULL);
+			power_driver->setLowestCpuClock(power_data);
 
 #ifdef ADHOC
 			if (adhoc_enable)

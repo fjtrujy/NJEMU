@@ -616,7 +616,7 @@ int memory_init(void)
 	{
 		/* AdHoc通信時は一部オプションで固定の設定を使用 */
 		cps_raster_enable    = 1;
-		platform_cpuclock    = power_driver->getHighestCpuClock(NULL);
+		platform_cpuclock    = power_driver->getHighestCpuClock(power_data);
 		option_vsync         = 0;
 		option_autoframeskip = 0;
 		option_frameskip     = 0;
@@ -636,7 +636,7 @@ int memory_init(void)
 #endif
 	}
 
-	power_driver->setCpuClock(NULL, platform_cpuclock);
+	power_driver->setCpuClock(power_data, platform_cpuclock);
 
 	if (load_rom_cpu1() == 0) return 0;
 	if (load_rom_cpu2() == 0) return 0;

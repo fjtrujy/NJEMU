@@ -376,7 +376,7 @@ int memory_init(void)
 	load_commandlist(game_name, NULL);
 #endif
 
-	power_driver->setCpuClock(NULL, platform_cpuclock);
+	power_driver->setCpuClock(power_data, platform_cpuclock);
 
 	{
 		uint32_t fd;
