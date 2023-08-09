@@ -148,8 +148,6 @@ static uint32_t ps2_poll(void *data) {
 
 	btnsData = basicPoll(&paddata, false);
 
-	printf("paddata.ljoy_v: %d\n", paddata.ljoy_v);
-
 	return btnsData;
 }
 
