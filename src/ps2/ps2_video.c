@@ -127,26 +127,26 @@ static void ps2_start(void *data) {
     gsKit_clear(gsGlobal, GS_BLACK);
 	ps2->gsGlobal = gsGlobal;
 
-// 	#if VIDEO_32BPP
-// 	if (video_mode == 32)
-// 	{
-// 		pixel_format = GU_PSM_8888;
+	#if VIDEO_32BPP
+	if (video_mode == 32)
+	{
+		ps2->pixel_format = GS_PSM_CT32;
 
 // 		show_frame = (void *)(FRAMESIZE32 * 0);
 // 		draw_frame = (void *)(FRAMESIZE32 * 1);
 // 		work_frame = (void *)(FRAMESIZE32 * 2);
 // 		tex_frame  = (void *)(FRAMESIZE32 * 3);
-// 	}
-// 	else
-// #endif
-// 	{
-// 		pixel_format = GU_PSM_5551;
+	}
+	else
+#endif
+	{
+		ps2->pixel_format = GS_PSM_CT16;
 
 // 		show_frame = (void *)(FRAMESIZE * 0);
 // 		draw_frame = (void *)(FRAMESIZE * 1);
 // 		work_frame = (void *)(FRAMESIZE * 2);
 // 		tex_frame  = (void *)(FRAMESIZE * 3);
-// 	}
+	}
 
 // 	sceGuDisplay(GU_FALSE);
 // 	sceGuInit();

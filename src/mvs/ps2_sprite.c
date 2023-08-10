@@ -129,100 +129,100 @@ static const int ALIGN_DATA swizzle_table_8bit[16] =
 	FIXテクスチャからスプライト番号を取得
 ------------------------------------------------------------------------*/
 
-// static int fix_get_sprite(uint32_t key)
-// {
-// 	SPRITE *p = fix_head[key & FIX_HASH_MASK];
+static int fix_get_sprite(uint32_t key)
+{
+	SPRITE *p = fix_head[key & FIX_HASH_MASK];
 
-// 	while (p)
-// 	{
-// 		if (p->key == key)
-// 		{
-// 			p->used = frames_displayed;
-// 			return p->index;
-// 	 	}
-// 		p = p->next;
-// 	}
-// 	return -1;
-// }
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return p->index;
+	 	}
+		p = p->next;
+	}
+	return -1;
+}
 
 
 /*------------------------------------------------------------------------
 	FIXテクスチャにスプライトを登録
 ------------------------------------------------------------------------*/
 
-// static int fix_insert_sprite(uint32_t key)
-// {
-// 	uint16_t hash = key & FIX_HASH_MASK;
-// 	SPRITE *p = fix_head[hash];
-// 	SPRITE *q = fix_free_head;
+static int fix_insert_sprite(uint32_t key)
+{
+	uint16_t hash = key & FIX_HASH_MASK;
+	SPRITE *p = fix_head[hash];
+	SPRITE *q = fix_free_head;
 
-// 	if (!q) return -1;
+	if (!q) return -1;
 
-// 	fix_free_head = fix_free_head->next;
+	fix_free_head = fix_free_head->next;
 
-// 	q->next = NULL;
-// 	q->key  = key;
-// 	q->used = frames_displayed;
+	q->next = NULL;
+	q->key  = key;
+	q->used = frames_displayed;
 
-// 	if (!p)
-// 	{
-// 		fix_head[hash] = q;
-// 	}
-// 	else
-// 	{
-// 		while (p->next) p = p->next;
-// 		p->next = q;
-// 	}
+	if (!p)
+	{
+		fix_head[hash] = q;
+	}
+	else
+	{
+		while (p->next) p = p->next;
+		p->next = q;
+	}
 
-// 	fix_texture_num++;
+	fix_texture_num++;
 
-// 	return q->index;
-// }
+	return q->index;
+}
 
 
 /*------------------------------------------------------------------------
 	FIXテクスチャから一定時間を経過したスプライトを削除
 ------------------------------------------------------------------------*/
 
-// static void fix_delete_sprite(void)
-// {
-// 	int i;
-// 	SPRITE *p, *prev_p;
+static void fix_delete_sprite(void)
+{
+	int i;
+	SPRITE *p, *prev_p;
 
-// 	for (i = 0; i < FIX_HASH_SIZE; i++)
-// 	{
-// 		prev_p = NULL;
-// 		p = fix_head[i];
+	for (i = 0; i < FIX_HASH_SIZE; i++)
+	{
+		prev_p = NULL;
+		p = fix_head[i];
 
-// 		while (p)
-// 		{
-// 			if (frames_displayed != p->used)
-// 			{
-// 				fix_texture_num--;
+		while (p)
+		{
+			if (frames_displayed != p->used)
+			{
+				fix_texture_num--;
 
-// 				if (!prev_p)
-// 				{
-// 					fix_head[i] = p->next;
-// 					p->next = fix_free_head;
-// 					fix_free_head = p;
-// 					p = fix_head[i];
-// 				}
-// 				else
-// 				{
-// 					prev_p->next = p->next;
-// 					p->next = fix_free_head;
-// 					fix_free_head = p;
-// 					p = prev_p->next;
-// 				}
-// 			}
-// 			else
-// 			{
-// 				prev_p = p;
-// 				p = p->next;
-// 			}
-// 		}
-// 	}
-// }
+				if (!prev_p)
+				{
+					fix_head[i] = p->next;
+					p->next = fix_free_head;
+					fix_free_head = p;
+					p = fix_head[i];
+				}
+				else
+				{
+					prev_p->next = p->next;
+					p->next = fix_free_head;
+					fix_free_head = p;
+					p = prev_p->next;
+				}
+			}
+			else
+			{
+				prev_p = p;
+				p = p->next;
+			}
+		}
+	}
+}
 
 
 /******************************************************************************
@@ -233,59 +233,59 @@ static const int ALIGN_DATA swizzle_table_8bit[16] =
 	SPRテクスチャからスプライト番号を取得
 ------------------------------------------------------------------------*/
 
-// static int spr_get_sprite(uint32_t key)
-// {
-// 	SPRITE *p = spr_head[key & SPR_HASH_MASK];
+static int spr_get_sprite(uint32_t key)
+{
+	SPRITE *p = spr_head[key & SPR_HASH_MASK];
 
-// 	while (p)
-// 	{
-// 		if (p->key == key)
-// 		{
-// 			if (p->used != frames_displayed)
-// 			{
-// 				update_cache(key << 7);
-// 				p->used = frames_displayed;
-// 			}
-// 			return p->index;
-// 		}
-// 		p = p->next;
-// 	}
-// 	return -1;
-// }
+	while (p)
+	{
+		if (p->key == key)
+		{
+			if (p->used != frames_displayed)
+			{
+				update_cache(key << 7);
+				p->used = frames_displayed;
+			}
+			return p->index;
+		}
+		p = p->next;
+	}
+	return -1;
+}
 
 
 /*------------------------------------------------------------------------
 	SPRテクスチャにスプライトを登録
 ------------------------------------------------------------------------*/
 
-// static int spr_insert_sprite(uint32_t key)
-// {
-// 	uint16_t hash = key & SPR_HASH_MASK;
-// 	SPRITE *p = spr_head[hash];
-// 	SPRITE *q = spr_free_head;
+static int spr_insert_sprite(uint32_t key)
+{
+	uint16_t hash = key & SPR_HASH_MASK;
+	SPRITE *p = spr_head[hash];
+	SPRITE *q = spr_free_head;
 
-// 	if (!q) return -1;
+	if (!q) return -1;
 
-// 	spr_free_head = spr_free_head->next;
+	spr_free_head = spr_free_head->next;
 
-// 	q->next = NULL;
-// 	q->key  = key;
-// 	q->used = frames_displayed;
+	q->next = NULL;
+	q->key  = key;
+	q->used = frames_displayed;
 
-// 	if (!p)
-// 	{
-// 		spr_head[hash] = q;
-// 	}
-// 	else
-// 	{
-// 		while (p->next) p = p->next;
-// 		p->next = q;
-// 	}
+	if (!p)
+	{
+		spr_head[hash] = q;
+	}
+	else
+	{
+		while (p->next) p = p->next;
+		p->next = q;
+	}
 
-// 	spr_texture_num++;
+	spr_texture_num++;
 
-// 	return q->index;
-// }
+	return q->index;
+}
 
 
 /*------------------------------------------------------------------------
@@ -294,42 +294,42 @@ static const int ALIGN_DATA swizzle_table_8bit[16] =
 
 static void spr_delete_sprite(void)
 {
-	// int i;
-	// SPRITE *p, *prev_p;
+	int i;
+	SPRITE *p, *prev_p;
 
-	// for (i = 0; i < SPR_HASH_SIZE; i++)
-	// {
-	// 	prev_p = NULL;
-	// 	p = spr_head[i];
+	for (i = 0; i < SPR_HASH_SIZE; i++)
+	{
+		prev_p = NULL;
+		p = spr_head[i];
 
-	// 	while (p)
-	// 	{
-	// 		if (frames_displayed != p->used)
-	// 		{
-	// 			spr_texture_num--;
+		while (p)
+		{
+			if (frames_displayed != p->used)
+			{
+				spr_texture_num--;
 
-	// 			if (!prev_p)
-	// 			{
-	// 				spr_head[i] = p->next;
-	// 				p->next = spr_free_head;
-	// 				spr_free_head = p;
-	// 				p = spr_head[i];
-	// 			}
-	// 			else
-	// 			{
-	// 				prev_p->next = p->next;
-	// 				p->next = spr_free_head;
-	// 				spr_free_head = p;
-	// 				p = prev_p->next;
-	// 			}
-	// 		}
-	// 		else
-	// 		{
-	// 			prev_p = p;
-	// 			p = p->next;
-	// 		}
-	// 	}
-	// }
+				if (!prev_p)
+				{
+					spr_head[i] = p->next;
+					p->next = spr_free_head;
+					spr_free_head = p;
+					p = spr_head[i];
+				}
+				else
+				{
+					prev_p->next = p->next;
+					p->next = spr_free_head;
+					spr_free_head = p;
+					p = prev_p->next;
+				}
+			}
+			else
+			{
+				prev_p = p;
+				p = p->next;
+			}
+		}
+	}
 }
 
 
@@ -343,18 +343,18 @@ static void spr_delete_sprite(void)
 
 static void blit_clear_fix_sprite(void)
 {
-	// int i;
+	int i;
 
-	// for (i = 0; i < FIX_TEXTURE_SIZE - 1; i++)
-	// 	fix_data[i].next = &fix_data[i + 1];
+	for (i = 0; i < FIX_TEXTURE_SIZE - 1; i++)
+		fix_data[i].next = &fix_data[i + 1];
 
-	// fix_data[i].next = NULL;
-	// fix_free_head = &fix_data[0];
+	fix_data[i].next = NULL;
+	fix_free_head = &fix_data[0];
 
-	// memset(fix_head, 0, sizeof(SPRITE *) * FIX_HASH_SIZE);
+	memset(fix_head, 0, sizeof(SPRITE *) * FIX_HASH_SIZE);
 
-	// fix_texture_num = 0;
-	// clear_fix_texture = 0;
+	fix_texture_num = 0;
+	clear_fix_texture = 0;
 }
 
 
@@ -364,18 +364,18 @@ static void blit_clear_fix_sprite(void)
 
 static void blit_clear_spr_sprite(void)
 {
-	// int i;
+	int i;
 
-	// for (i = 0; i < SPR_TEXTURE_SIZE - 1; i++)
-	// 	spr_data[i].next = &spr_data[i + 1];
+	for (i = 0; i < SPR_TEXTURE_SIZE - 1; i++)
+		spr_data[i].next = &spr_data[i + 1];
 
-	// spr_data[i].next = NULL;
-	// spr_free_head = &spr_data[0];
+	spr_data[i].next = NULL;
+	spr_free_head = &spr_data[0];
 
-	// memset(spr_head, 0, sizeof(SPRITE *) * SPR_HASH_SIZE);
+	memset(spr_head, 0, sizeof(SPRITE *) * SPR_HASH_SIZE);
 
-	// spr_texture_num = 0;
-	// clear_spr_texture = 0;
+	spr_texture_num = 0;
+	clear_spr_texture = 0;
 }
 
 
@@ -497,7 +497,7 @@ void blit_finish(void)
 
 void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 {
-	// s16 idx;
+	// int16_t idx;
 	// struct Vertex *vertices;
 	// uint32_t key = MAKE_FIX_KEY(code, attr);
 
@@ -570,7 +570,7 @@ void blit_finish_fix(void)
 
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 {
-	// s16 idx;
+	// int16_t idx;
 	// struct Vertex *vertices;
 	// uint32_t key;
 

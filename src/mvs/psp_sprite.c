@@ -497,7 +497,7 @@ void blit_finish(void)
 
 void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 {
-	s16 idx;
+	int16_t idx;
 	struct Vertex *vertices;
 	uint32_t key = MAKE_FIX_KEY(code, attr);
 
@@ -570,7 +570,7 @@ void blit_finish_fix(void)
 
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 {
-	s16 idx;
+	int16_t idx;
 	struct Vertex *vertices;
 	uint32_t key;
 
