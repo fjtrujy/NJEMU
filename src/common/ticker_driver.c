@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include "ticker_driver.h"
 
+void *ticker_data;
+
 ticker_driver_t ticker_null = {
 	"null",
 	NULL,

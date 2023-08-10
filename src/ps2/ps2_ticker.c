@@ -20,17 +20,13 @@ static void ps2_free(void *data) {
 	free(ps2);
 }
 
-static TICKER ps2_ticker(void *data) {
-	uint64_t current_ticks;
-
-
-	current_ticks = ps2_clock();
-	return current_ticks;
+static u_int64_t ps2_currentMs(void *data) {
+    return GetTimerSystemTime() / (kBUSCLK / CLOCKS_PER_SEC);
 }
 
 ticker_driver_t ticker_ps2 = {
 	"ps2",
 	ps2_init,
 	ps2_free,
-	ps2_ticker,
+	ps2_currentMs,
 };

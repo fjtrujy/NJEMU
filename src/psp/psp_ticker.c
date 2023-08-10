@@ -19,16 +19,13 @@ static void psp_free(void *data) {
 	free(psp);
 }
 
-static TICKER psp_ticker(void *data) {
-	uint64_t current_ticks;
-
-	sceRtcGetCurrentTick(&current_ticks);
-	return current_ticks;
+static uint64_t psp_currentMs(void *data) {
+	return sceKernelGetSystemTimeWide();
 }
 
 ticker_driver_t ticker_psp = {
 	"psp",
 	psp_init,
 	psp_free,
-	psp_ticker,
+	psp_currentMs,
 };

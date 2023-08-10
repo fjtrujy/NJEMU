@@ -59,8 +59,8 @@ static int frameskip;
 static int frameskipadjust;
 static int frameskip_counter;
 
-static TICKER last_skipcount0_time;
-static TICKER this_frame_base;
+static uint64_t last_skipcount0_time;
+static uint64_t this_frame_base;
 static int warming_up;
 
 static int frames_since_last_fps;
@@ -236,7 +236,7 @@ void update_screen(void)
 	if (warming_up)
 	{
 		video_driver->waitVsync(video_data);
-		last_skipcount0_time = ticker_driver->ticker(NULL) - (int)((float)FRAMESKIP_LEVELS * TICKS_PER_FRAME);
+		last_skipcount0_time = ticker_driver->currentMs(ticker_data) - (int)((float)FRAMESKIP_LEVELS * TICKS_PER_FRAME);
 		warming_up = 0;
 	}
 
@@ -248,12 +248,12 @@ void update_screen(void)
 
 	if (!skipped_it)
 	{
-		TICKER curr = ticker_driver->ticker(NULL);
+		uint64_t curr = ticker_driver->currentMs(ticker_data);
 		int flip = 0;
 
 		if (option_speedlimit)
 		{
-			TICKER target = this_frame_base + (int)((float)frameskip_counter * TICKS_PER_FRAME);
+			uint64_t target = this_frame_base + (int)((float)frameskip_counter * TICKS_PER_FRAME);
 
 			if (option_vsync)
 			{
@@ -264,8 +264,8 @@ void update_screen(void)
 				}
 			}
 
-			while (curr < target)
-				curr = ticker_driver->ticker(NULL);
+			msSleep(target - curr);
+			curr = ticker_driver->currentMs(ticker_data);
 		}
 		if (!flip) video_driver->flipScreen(video_data, 0);
 
@@ -446,6 +446,7 @@ void save_snapshot(void)
 int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	platform_data = platform_driver->init();
+	ticker_data = ticker_driver->init();
 	power_data = power_driver->init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
@@ -491,6 +492,7 @@ int main(int argc, char *argv[]) {
 
 	// Platform exit
 	power_driver->free(power_data);
+	ticker_driver->free(ticker_data);
 	platform_driver->free(platform_data);
 
 	return 0;
