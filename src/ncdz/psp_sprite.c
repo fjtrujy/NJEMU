@@ -413,7 +413,7 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = video_driver->frameAddr(video_data, work_frame, 0, 0);
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_spr[0] = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
 	tex_spr[1] = tex_spr[0] + BUF_WIDTH * TEXTURE_HEIGHT;
 	tex_spr[2] = tex_spr[1] + BUF_WIDTH * TEXTURE_HEIGHT;

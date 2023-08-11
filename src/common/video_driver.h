@@ -99,6 +99,7 @@ typedef struct video_driver
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);
+	void *(*workFrame)(void *data);
 	void (*clearScreen)(void *data);
 	void (*clearFrame)(void *data, void *frame);
 	void (*fillFrame)(void *data, void *frame, uint32_t color);

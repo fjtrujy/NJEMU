@@ -291,6 +291,11 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 // 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 }
 
+static void *ps2_workFrame(void *data)
+{
+	return NULL;
+}
+
 
 /*--------------------------------------------------------
 	描画/表示フレームをクリア
@@ -298,8 +303,8 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 
 static void ps2_clearScreen(void *data)
 {
-	// video_driver->clearFrame(data, show_frame);
-	// video_driver->clearFrame(data, draw_frame);
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gsKit_clear(ps2->gsGlobal, GS_BLACK);
 }
 
 /*--------------------------------------------------------
@@ -608,6 +613,7 @@ video_driver_t video_ps2 = {
 	ps2_waitVsync,
 	ps2_flipScreen,
 	ps2_frameAddr,
+	ps2_workFrame,
 	ps2_clearScreen,
 	ps2_clearFrame,
 	ps2_fillFrame,

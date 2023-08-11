@@ -442,23 +442,25 @@ void blit_reset(void)
 
 void blit_start(int start, int end)
 {
-	// clip_min_y = start;
-	// clip_max_y = end + 1;
+	clip_min_y = start;
+	clip_max_y = end + 1;
 
-	// spr_num   = 0;
-	// spr_index = 0;
+	spr_num   = 0;
+	spr_index = 0;
 
-	// if (start == FIRST_VISIBLE_LINE)
-	// {
-	// 	clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palettebank[palette_bank]);
+	if (start == FIRST_VISIBLE_LINE)
+	{
+		clut = (uint16_t *)&video_palettebank[palette_bank];
 
-	// 	fix_num = 0;
-	// 	spr_disable = 0;
+		fix_num = 0;
+		spr_disable = 0;
 
-	// 	if (clear_spr_texture) blit_clear_spr_sprite();
-	// 	if (clear_fix_texture) blit_clear_fix_sprite();
+		if (clear_spr_texture) blit_clear_spr_sprite();
+		if (clear_fix_texture) blit_clear_fix_sprite();
 
-	// 	sceGuStart(GU_DIRECT, gulist);
+		video_driver->clearScreen(video_data);
+
+		// sceGuStart(GU_DIRECT, gulist);
 	// 	sceGuDrawBufferList(GU_PSM_5551, draw_frame, BUF_WIDTH);
 	// 	sceGuScissor(0, 0, BUF_WIDTH, SCR_WIDTH);
 	// 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
@@ -477,7 +479,7 @@ void blit_start(int start, int end)
 
 	// 	sceGuFinish();
 	// 	sceGuSync(0, GU_SYNC_FINISH);
-	// }
+	}
 }
 
 

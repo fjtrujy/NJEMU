@@ -1441,7 +1441,7 @@ void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *p
 {
 	int i;
 
-	scrbitmap   = (uint16_t *)video_driver->frameAddr(video_data, work_frame, 0, 0);
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_scrollh = scrbitmap + BUF_WIDTH * SCR_HEIGHT;
 	tex_object  = (uint8_t *)(tex_scrollh + BUF_WIDTH * SCROLLH_MAX_HEIGHT);
 	tex_scroll1 = tex_object  + BUF_WIDTH * TEXTURE_HEIGHT;

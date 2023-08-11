@@ -996,7 +996,7 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap   = (uint16_t *)video_driver->frameAddr(video_data, work_frame, 0, 0);
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_object  = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
 	tex_scroll1 = tex_object  + BUF_WIDTH * TEXTURE_HEIGHT;
 	tex_scroll2 = tex_scroll1 + BUF_WIDTH * TEXTURE_HEIGHT;

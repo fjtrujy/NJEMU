@@ -188,6 +188,11 @@ static void *psp_frameAddr(void *data, void *frame, int x, int y)
 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 }
 
+static void *psp_workFrame(void *data)
+{
+	return psp_frameAddr(data, work_frame, 0, 0);
+}
+
 
 /*--------------------------------------------------------
 	描画/表示フレームをクリア
@@ -503,6 +508,7 @@ video_driver_t video_psp = {
 	psp_waitVsync,
 	psp_flipScreen,
 	psp_frameAddr,
+	psp_workFrame,
 	psp_clearScreen,
 	psp_clearFrame,
 	psp_fillFrame,
