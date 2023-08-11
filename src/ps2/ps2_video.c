@@ -8,6 +8,7 @@
 
 #include "emumain.h"
 
+#include <stdlib.h>
 #include <kernel.h>
 #include <malloc.h>
 #include <gsKit.h>
@@ -36,6 +37,8 @@
 
 /* turn black GS Screen */
 #define GS_BLACK GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x80)
+/* Generic tint color */
+#define GS_TEXT GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80)
 /* Size of Persistent drawbuffer (Single Buffered) */
 #define RENDER_QUEUE_PER_POOLSIZE 1024 * 256 // 256K of persistent renderqueue
 /* Size of Oneshot drawbuffer (Double Buffered, so it uses this size * 2) */
@@ -47,7 +50,7 @@ typedef struct ps2_video {
     int32_t vsync_callback_id;
     uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
 	uint8_t pixel_format;
-	void *work_frame;
+	GSTEXTURE *workTexture;
 } ps2_video_t;
 
 static int vsync_sema_id = 0;
@@ -128,18 +131,27 @@ static void ps2_start(void *data) {
     gsKit_clear(gsGlobal, GS_BLACK);
 	ps2->gsGlobal = gsGlobal;
 
+	GSTEXTURE *workTexture = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
+	workTexture->Width = BUF_WIDTH;
+	workTexture->Height = SCR_HEIGHT;
+	workTexture->PSM = ps2->pixel_format;
 	#if VIDEO_32BPP
 	if (video_mode == 32)
 	{
 		ps2->pixel_format = GS_PSM_CT32;
-		ps2->work_frame = malloc(FRAMESIZE32);
+		workTexture->PSM = ps2->pixel_format;
 	}
 	else
 #endif
 	{
 		ps2->pixel_format = GS_PSM_CT16;
-		ps2->work_frame = malloc(FRAMESIZE);
+		workTexture->PSM = ps2->pixel_format;
 	}
+
+	workTexture->Mem = memalign(128, gsKit_texture_size_ee(workTexture->Width, workTexture->Height, workTexture->PSM));
+	ps2->workTexture = workTexture;
+	work_frame = workTexture->Mem;
+
 
 // 	sceGuDisplay(GU_FALSE);
 // 	sceGuInit();
@@ -213,7 +225,8 @@ static void ps2_exit(ps2_video_t *ps2) {
 	if (vsync_sema_id >= 0)
         DeleteSema(vsync_sema_id);
 	
-	free(ps2->work_frame);
+	free(ps2->workTexture->Mem);
+	free(ps2->workTexture);
 }
 
 static void ps2_free(void *data)
@@ -290,7 +303,7 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 static void *ps2_workFrame(void *data)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	return ps2->work_frame;
+	return ps2->workTexture->Mem;
 }
 
 
@@ -336,16 +349,39 @@ static void ps2_fillFrame(void *data, void *frame, uint32_t color)
 	矩形範囲をコピー
 --------------------------------------------------------*/
 
-static void ps2_transferWorkFrame(void *data, void *dst, RECT *src_rect, RECT *dst_rect)
+static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
 	// We assume that src is work_frame and dst is draw_frame
+	int j, sw, dw, sh, dh;
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	ps2->draw_frame = frame;
+
+	sw = src_rect->right - src_rect->left;
+	dw = dst_rect->right - dst_rect->left;
+	sh = src_rect->bottom - src_rect->top;
+	dh = dst_rect->bottom - dst_rect->top;
+
+	ps2->workTexture->Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
+	gsKit_TexManager_invalidate(ps2->gsGlobal, ps2->workTexture);
+	gsKit_TexManager_bind(ps2->gsGlobal, ps2->workTexture);
+
+	gsKit_prim_sprite_texture(ps2->gsGlobal, ps2->workTexture,
+		dst_rect->left,		/* X1 */
+		dst_rect->top,		/* Y1 */
+		src_rect->left,		/* U1 */
+		src_rect->top,		/* V1 */
+		dst_rect->right,	/* X2 */
+		dst_rect->bottom,	/* Y2 */
+		src_rect->right,	/* U2 */
+		src_rect->bottom,	/* V2 */
+		1,					/* Z  */
+		GS_TEXT
+	);
 }
 
 static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
 {
-	printf("%s\n", __func__);
+	// TODO: FJTRUJY so far just used by the menu, adhoc, and state
+	// It is also used in the biosmenu but let's ignore it for now
 
 	// int j, sw, dw, sh, dh;
 	// struct Vertex *vertices;
