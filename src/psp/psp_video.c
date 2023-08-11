@@ -232,22 +232,6 @@ static void psp_fillFrame(void *data, void *frame, uint32_t color)
 
 
 /*--------------------------------------------------------
-	指定した矩形範囲を塗りつぶし
---------------------------------------------------------*/
-
-static void psp_fillRect(void *data, void *frame, uint32_t color, RECT *rect)
-{
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
-	sceGuScissor(rect->left, rect->top, rect->right, rect->bottom);
-	sceGuClearColor(color);
-	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
-}
-
-
-/*--------------------------------------------------------
 	矩形範囲をコピー
 --------------------------------------------------------*/
 
@@ -522,7 +506,6 @@ video_driver_t video_psp = {
 	psp_clearScreen,
 	psp_clearFrame,
 	psp_fillFrame,
-	psp_fillRect,
 	psp_copyRect,
 	psp_copyRectFlip,
 	psp_copyRectRotate,

@@ -324,25 +324,11 @@ static void ps2_clearFrame(void *data, void *frame)
 
 static void ps2_fillFrame(void *data, void *frame, uint32_t color)
 {
+	// TODO: FJTRUJY so far just used by the menu
+
 	// sceGuStart(GU_DIRECT, gulist);
 	// sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
 	// sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
-	// sceGuClearColor(color);
-	// sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
-}
-
-
-/*--------------------------------------------------------
-	Žw’è‚µ‚½‹éŒ`”ÍˆÍ‚ð“h‚è‚Â‚Ô‚µ
---------------------------------------------------------*/
-
-static void ps2_fillRect(void *data, void *frame, uint32_t color, RECT *rect)
-{
-	// sceGuStart(GU_DIRECT, gulist);
-	// sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
-	// sceGuScissor(rect->left, rect->top, rect->right, rect->bottom);
 	// sceGuClearColor(color);
 	// sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
 	// sceGuFinish();
@@ -625,7 +611,6 @@ video_driver_t video_ps2 = {
 	ps2_clearScreen,
 	ps2_clearFrame,
 	ps2_fillFrame,
-	ps2_fillRect,
 	ps2_copyRect,
 	ps2_copyRectFlip,
 	ps2_copyRectRotate,

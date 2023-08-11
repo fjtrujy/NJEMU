@@ -30,7 +30,6 @@ struct font_t
 #define UI_COLOR(no)	ui_palette[no].r,ui_palette[no].g,ui_palette[no].b
 
 #define ui_fill_frame(frame, no)		video_driver->fillFrame(video_data, frame, MAKECOL32(ui_palette[no].r,ui_palette[no].g,ui_palette[no].b))
-#define ui_fill_rect(frame, no, rect)	video_driver->fillRect(video_data, frame, MAKECOL32(ui_palette[no].r,ui_palette[no].g,ui_palette[no].b), rect)
 
 
 /*------------------------------------------------------
