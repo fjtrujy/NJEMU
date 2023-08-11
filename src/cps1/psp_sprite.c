@@ -1525,7 +1525,7 @@ void blit_finish(void)
 		if (cps_flip_screen)
 			video_driver->copyRectFlip(video_data, work_frame, draw_frame, &cps_src_clip, &cps_clip[option_stretch]);
 		else
-			video_driver->copyRect(video_data, work_frame, draw_frame, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->transferWorkFrame(video_data, &cps_src_clip, &cps_clip[option_stretch]);
 	}
 }
 

@@ -261,7 +261,7 @@ void adhoc_pause(void)
 				if (sel == 1) Loop = LOOP_BROWSER;
 			}
 
-			video_driver->copyRect(video_data, work_frame, draw_frame, &rect, &rect);
+			video_driver->transferWorkFrame(video_data, &rect, &rect);
 
 			draw_dialog(140, 96, 340, 176);
 

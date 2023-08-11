@@ -119,7 +119,7 @@ static void adhoc_init_progress(int total, const char *text)
 	char buf[32];
 
 	load_background(WP_LOGO);
-	video_driver->copyRect(video_data, work_frame, draw_frame, &full_rect, &full_rect);
+	video_driver->transferWorkFrame(video_data, &full_rect, &full_rect);
 
 	small_icon(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 	sprintf(buf, "AdHoc - %s", game_name);

@@ -103,6 +103,7 @@ typedef struct video_driver
 	void (*clearScreen)(void *data);
 	void (*clearFrame)(void *data, void *frame);
 	void (*fillFrame)(void *data, void *frame, uint32_t color);
+	void (*transferWorkFrame)(void *data, RECT *src_rect, RECT *dst_rect);
 	void (*copyRect)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectFlip)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectRotate)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);

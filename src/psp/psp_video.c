@@ -301,7 +301,9 @@ static void psp_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT 
 	sceGuSync(0, GU_SYNC_FINISH);
 }
 
-
+static void psp_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect) {
+	psp_copyRect(data, work_frame, draw_frame, src_rect, dst_rect);
+}
 /*--------------------------------------------------------
 	矩形範囲を左右反転してコピー
 --------------------------------------------------------*/
@@ -512,6 +514,7 @@ video_driver_t video_psp = {
 	psp_clearScreen,
 	psp_clearFrame,
 	psp_fillFrame,
+	psp_transferWorkFrame,
 	psp_copyRect,
 	psp_copyRectFlip,
 	psp_copyRectRotate,

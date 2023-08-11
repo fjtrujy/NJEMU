@@ -67,7 +67,7 @@ void load_background(int number)
 
 void show_background(void)
 {
-	video_driver->copyRect(video_data, work_frame, draw_frame, &full_rect, &full_rect);
+	video_driver->transferWorkFrame(video_data, &full_rect, &full_rect);
 }
 
 

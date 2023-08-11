@@ -489,7 +489,7 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	video_driver->copyRect(video_data, work_frame, draw_frame, &mvs_src_clip, &mvs_clip[option_stretch]);
+	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &mvs_clip[option_stretch]);
 }
 
 

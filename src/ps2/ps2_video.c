@@ -310,13 +310,7 @@ static void ps2_clearScreen(void *data)
 
 static void ps2_clearFrame(void *data, void *frame)
 {
-	// sceGuStart(GU_DIRECT, gulist);
-	// sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
-	// sceGuScissor(0, 0, BUF_WIDTH, SCR_HEIGHT);
-	// sceGuClearColor(0);
-	// sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	ps2_clearScreen(data);
 }
 
 
@@ -342,8 +336,17 @@ static void ps2_fillFrame(void *data, void *frame, uint32_t color)
 	矩形範囲をコピー
 --------------------------------------------------------*/
 
+static void ps2_transferWorkFrame(void *data, void *dst, RECT *src_rect, RECT *dst_rect)
+{
+	// We assume that src is work_frame and dst is draw_frame
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	ps2->draw_frame = frame;
+}
+
 static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
 {
+	printf("%s\n", __func__);
+
 	// int j, sw, dw, sh, dh;
 	// struct Vertex *vertices;
 
@@ -410,6 +413,9 @@ static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT 
 
 static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
 {
+	// TODO: FJTRUJY not used so far in MVS
+
+
 	// int16_t j, sw, dw, sh, dh;
 	// struct Vertex *vertices;
 
@@ -476,6 +482,7 @@ static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, R
 
 static void ps2_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
 {
+	// TODO: FJTRUJY not used so far in MVS (juat in state.c, but not used in the game)
 	// int16_t j, sw, dw, sh, dh;
 	// struct Vertex *vertices;
 
@@ -544,6 +551,8 @@ static void ps2_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
 
 static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
 {
+	// TODO: FJTRUJY so far just used by the menu
+
 	// int j, sw, dw, sh, dh;
 	// struct Vertex *vertices;
 
@@ -614,6 +623,7 @@ video_driver_t video_ps2 = {
 	ps2_clearScreen,
 	ps2_clearFrame,
 	ps2_fillFrame,
+	ps2_transferWorkFrame,
 	ps2_copyRect,
 	ps2_copyRectFlip,
 	ps2_copyRectRotate,
