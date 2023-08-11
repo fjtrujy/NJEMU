@@ -416,23 +416,23 @@ void blit_set_spr_clear_flag(void)
 
 void blit_reset(void)
 {
-	// int i;
+	int i;
 
-	// scrbitmap  = (uint16_t *)video_driver->frameAddr(video_data, work_frame, 0, 0);
-	// tex_spr[0] = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
-	// tex_spr[1] = tex_spr[0] + BUF_WIDTH * TEXTURE_HEIGHT;
-	// tex_spr[2] = tex_spr[1] + BUF_WIDTH * TEXTURE_HEIGHT;
-	// tex_fix    = tex_spr[2] + BUF_WIDTH * TEXTURE_HEIGHT;
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
+	tex_spr[0] = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
+	tex_spr[1] = tex_spr[0] + BUF_WIDTH * TEXTURE_HEIGHT;
+	tex_spr[2] = tex_spr[1] + BUF_WIDTH * TEXTURE_HEIGHT;
+	tex_fix    = tex_spr[2] + BUF_WIDTH * TEXTURE_HEIGHT;
 
-	// for (i = 0; i < FIX_TEXTURE_SIZE; i++) fix_data[i].index = i;
-	// for (i = 0; i < SPR_TEXTURE_SIZE; i++) spr_data[i].index = i;
+	for (i = 0; i < FIX_TEXTURE_SIZE; i++) fix_data[i].index = i;
+	for (i = 0; i < SPR_TEXTURE_SIZE; i++) spr_data[i].index = i;
 
-	// clip_min_y = FIRST_VISIBLE_LINE;
-	// clip_max_y = LAST_VISIBLE_LINE;
+	clip_min_y = FIRST_VISIBLE_LINE;
+	clip_max_y = LAST_VISIBLE_LINE;
 
-	// clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palettebank[palette_bank]);
+	clut = (uint16_t *)&video_palettebank[palette_bank];
 
-	// blit_clear_all_sprite();
+	blit_clear_all_sprite();
 }
 
 

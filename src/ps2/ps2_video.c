@@ -47,6 +47,7 @@ typedef struct ps2_video {
     int32_t vsync_callback_id;
     uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
 	uint8_t pixel_format;
+	void *work_frame;
 } ps2_video_t;
 
 static int vsync_sema_id = 0;
@@ -131,21 +132,13 @@ static void ps2_start(void *data) {
 	if (video_mode == 32)
 	{
 		ps2->pixel_format = GS_PSM_CT32;
-
-// 		show_frame = (void *)(FRAMESIZE32 * 0);
-// 		draw_frame = (void *)(FRAMESIZE32 * 1);
-// 		work_frame = (void *)(FRAMESIZE32 * 2);
-// 		tex_frame  = (void *)(FRAMESIZE32 * 3);
+		ps2->work_frame = malloc(FRAMESIZE32);
 	}
 	else
 #endif
 	{
 		ps2->pixel_format = GS_PSM_CT16;
-
-// 		show_frame = (void *)(FRAMESIZE * 0);
-// 		draw_frame = (void *)(FRAMESIZE * 1);
-// 		work_frame = (void *)(FRAMESIZE * 2);
-// 		tex_frame  = (void *)(FRAMESIZE * 3);
+		ps2->work_frame = malloc(FRAMESIZE);
 	}
 
 // 	sceGuDisplay(GU_FALSE);
@@ -219,6 +212,8 @@ static void ps2_exit(ps2_video_t *ps2) {
 
 	if (vsync_sema_id >= 0)
         DeleteSema(vsync_sema_id);
+	
+	free(ps2->work_frame);
 }
 
 static void ps2_free(void *data)
@@ -283,6 +278,7 @@ static void ps2_flipScreen(void *data, bool vsync)
 
 static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 {
+	// TODO: FJTRUJY so far just used by the menu
 // #if VIDEO_32BPP
 // 	if (video_mode == 32)
 // 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 2));
@@ -293,7 +289,8 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 
 static void *ps2_workFrame(void *data)
 {
-	return NULL;
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	return ps2->work_frame;
 }
 
 
