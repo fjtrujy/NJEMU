@@ -13,8 +13,6 @@
 	¶¨Êý/¥Þ¥¯¥íµÈ
 ******************************************************************************/
 
-#define TEXTURE_HEIGHT	512
-
 #define MAKE_FIX_KEY(code, attr)	(code | (attr << 28))
 #define MAKE_SPR_KEY(code, attr)	(code | ((attr & 0x0f00) << 20))
 #define PSP_UNCACHE_PTR(p)			(((uint32_t)(p)) | 0x40000000)
@@ -418,11 +416,11 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
-	tex_spr[0] = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
-	tex_spr[1] = tex_spr[0] + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_spr[2] = tex_spr[1] + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_fix    = tex_spr[2] + BUF_WIDTH * TEXTURE_HEIGHT;
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data, SCRBITMAP);
+	tex_spr[0] = video_driver->workFrame(video_data, TEX_SPR0);
+	tex_spr[1] = video_driver->workFrame(video_data, TEX_SPR1);
+	tex_spr[2] = video_driver->workFrame(video_data, TEX_SPR2);
+	tex_fix    = video_driver->workFrame(video_data, TEX_FIX);
 
 	for (i = 0; i < FIX_TEXTURE_SIZE; i++) fix_data[i].index = i;
 	for (i = 0; i < SPR_TEXTURE_SIZE; i++) spr_data[i].index = i;
@@ -442,6 +440,7 @@ void blit_reset(void)
 
 void blit_start(int start, int end)
 {
+	printf("blit_start(%d, %d)\n", start, end);
 	clip_min_y = start;
 	clip_max_y = end + 1;
 
@@ -489,6 +488,7 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
+	printf("blit_finish\n");
 	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &mvs_clip[option_stretch]);
 }
 
@@ -499,6 +499,7 @@ void blit_finish(void)
 
 void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 {
+	printf("blit_draw_fix\n");
 	// int16_t idx;
 	// struct Vertex *vertices;
 	// uint32_t key = MAKE_FIX_KEY(code, attr);
@@ -547,6 +548,7 @@ void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 
 void blit_finish_fix(void)
 {
+	printf("blit_finish_fix\n");
 	// struct Vertex *vertices;
 
 	// if (!fix_num) return;
@@ -572,65 +574,65 @@ void blit_finish_fix(void)
 
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 {
-	// int16_t idx;
-	// struct Vertex *vertices;
-	// uint32_t key;
+	int16_t idx;
+	struct Vertex *vertices;
+	uint32_t key;
 
-	// if (spr_disable) return;
+	if (spr_disable) return;
 
-	// key = MAKE_SPR_KEY(code, attr);
+	key = MAKE_SPR_KEY(code, attr);
 
-	// if ((idx = spr_get_sprite(key)) < 0)
-	// {
-	// 	uint32_t col, tile;
-	// 	uint8_t *src, *dst, lines = 16;
+	if ((idx = spr_get_sprite(key)) < 0)
+	{
+		uint32_t col, tile;
+		uint8_t *src, *dst, lines = 16;
 
-	// 	if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
-	// 	{
-	// 		spr_delete_sprite();
+		if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
+		{
+			spr_delete_sprite();
 
-	// 		if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
-	// 		{
-	// 			spr_disable = 1;
-	// 			return;
-	// 		}
-	// 	}
+			if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
+			{
+				spr_disable = 1;
+				return;
+			}
+		}
 
-	// 	idx = spr_insert_sprite(key);
-	// 	dst = SWIZZLED8_16x16(tex_spr[0], idx);
-	// 	src = &memory_region_gfx3[(*read_cache)(code << 7)];
-	// 	col = color_table[(attr >> 8) & 0x0f];
+		idx = spr_insert_sprite(key);
+		dst = SWIZZLED8_16x16(tex_spr[0], idx);
+		src = &memory_region_gfx3[(*read_cache)(code << 7)];
+		col = color_table[(attr >> 8) & 0x0f];
 
-	// 	while (lines--)
-	// 	{
-	// 		tile = *(uint32_t *)(src + 0);
-	// 		*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-	// 		*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-	// 		tile = *(uint32_t *)(src + 4);
-	// 		*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
-	// 		*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
-	// 		src += 8;
-	// 		dst += swizzle_table_8bit[lines];
-	// 	}
-	// }
+		while (lines--)
+		{
+			tile = *(uint32_t *)(src + 0);
+			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
+			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
+			tile = *(uint32_t *)(src + 4);
+			*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
+			*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
+			src += 8;
+			dst += swizzle_table_8bit[lines];
+		}
+	}
 
-	// vertices = &vertices_spr[spr_num];
-	// spr_num += 2;
+	vertices = &vertices_spr[spr_num];
+	spr_num += 2;
 
-	// spr_flags[spr_index] = (idx >> 10) | ((attr & 0xf000) >> 4);
-	// spr_index++;
+	spr_flags[spr_index] = (idx >> 10) | ((attr & 0xf000) >> 4);
+	spr_index++;
 
-	// vertices[0].x = vertices[1].x = x;
-	// vertices[0].y = vertices[1].y = y;
-	// vertices[0].u = vertices[1].u = (idx & 0x001f) << 4;
-	// vertices[0].v = vertices[1].v = (idx & 0x03e0) >> 1;
+	vertices[0].x = vertices[1].x = x;
+	vertices[0].y = vertices[1].y = y;
+	vertices[0].u = vertices[1].u = (idx & 0x001f) << 4;
+	vertices[0].v = vertices[1].v = (idx & 0x03e0) >> 1;
 
-	// attr ^= 0x03;
-	// vertices[(attr & 0x01) >> 0].u += 16;
-	// vertices[(attr & 0x02) >> 1].v += 16;
+	attr ^= 0x03;
+	vertices[(attr & 0x01) >> 0].u += 16;
+	vertices[(attr & 0x02) >> 1].v += 16;
 
-	// vertices[1].x += w;
-	// vertices[1].y += h;
+	vertices[1].x += w;
+	vertices[1].y += h;
 }
 
 
@@ -640,11 +642,12 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 
 void blit_finish_spr(void)
 {
-	// int i, total_sprites = 0;
-	// uint16_t flags, *pflags = spr_flags;
-	// struct Vertex *vertices, *vertices_tmp;
+	printf("blit_finish_spr\n");
+	int i, total_sprites = 0;
+	uint16_t flags, *pflags = spr_flags;
+	struct Vertex *vertices, *vertices_tmp;
 
-	// if (!spr_index) return;
+	if (!spr_index) return;
 
 	// flags = *pflags;
 

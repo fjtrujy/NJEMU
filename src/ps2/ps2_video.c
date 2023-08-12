@@ -50,7 +50,11 @@ typedef struct ps2_video {
     int32_t vsync_callback_id;
     uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
 	uint8_t pixel_format;
-	GSTEXTURE *workTexture;
+	GSTEXTURE *scrbitmap;
+	GSTEXTURE *tex_spr0;
+	GSTEXTURE *tex_spr1;
+	GSTEXTURE *tex_spr2;
+	GSTEXTURE *tex_fix;
 } ps2_video_t;
 
 static int vsync_sema_id = 0;
@@ -94,6 +98,17 @@ static void gsKit_flip(GSGLOBAL *gsGlobal)
 /*--------------------------------------------------------
 	ƒrƒfƒIˆ—‰Šú‰»
 --------------------------------------------------------*/
+static GSTEXTURE *initializeTexture() {
+	GSTEXTURE *tex = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
+	tex->Width = BUF_WIDTH;
+	tex->Height = SCR_HEIGHT;
+	tex->PSM = GS_PSM_T8;
+	tex->ClutPSM = GS_PSM_CT16;
+	tex->Mem = memalign(128, gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM));
+
+	return tex;
+}
+
 static void ps2_start(void *data) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 
@@ -131,26 +146,12 @@ static void ps2_start(void *data) {
     gsKit_clear(gsGlobal, GS_BLACK);
 	ps2->gsGlobal = gsGlobal;
 
-	GSTEXTURE *workTexture = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
-	workTexture->Width = BUF_WIDTH;
-	workTexture->Height = SCR_HEIGHT;
-	workTexture->PSM = ps2->pixel_format;
-	#if VIDEO_32BPP
-	if (video_mode == 32)
-	{
-		ps2->pixel_format = GS_PSM_CT32;
-		workTexture->PSM = ps2->pixel_format;
-	}
-	else
-#endif
-	{
-		ps2->pixel_format = GS_PSM_CT16;
-		workTexture->PSM = ps2->pixel_format;
-	}
-
-	workTexture->Mem = memalign(128, gsKit_texture_size_ee(workTexture->Width, workTexture->Height, workTexture->PSM));
-	ps2->workTexture = workTexture;
-	work_frame = workTexture->Mem;
+	// Initialize textures
+	ps2->scrbitmap = initializeTexture();
+	ps2->tex_spr0 = initializeTexture();
+	ps2->tex_spr1 = initializeTexture();
+	ps2->tex_spr2 = initializeTexture();
+	ps2->tex_fix = initializeTexture();
 
 
 // 	sceGuDisplay(GU_FALSE);
@@ -225,8 +226,20 @@ static void ps2_exit(ps2_video_t *ps2) {
 	if (vsync_sema_id >= 0)
         DeleteSema(vsync_sema_id);
 	
-	free(ps2->workTexture->Mem);
-	free(ps2->workTexture);
+	free(ps2->scrbitmap->Mem);
+	free(ps2->scrbitmap);
+
+	free(ps2->tex_spr0->Mem);
+	free(ps2->tex_spr0);
+
+	free(ps2->tex_spr1->Mem);
+	free(ps2->tex_spr1);
+
+	free(ps2->tex_spr2->Mem);
+	free(ps2->tex_spr2);
+
+	free(ps2->tex_fix->Mem);
+	free(ps2->tex_fix);
 }
 
 static void ps2_free(void *data)
@@ -300,10 +313,22 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 // 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 }
 
-static void *ps2_workFrame(void *data)
+static void *ps2_workFrame(void *data, enum WorkBuffer buffer)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	return ps2->workTexture->Mem;
+	switch (buffer)
+	{
+		case SCRBITMAP:
+			return ps2->scrbitmap->Mem;
+		case TEX_SPR0:
+			return ps2->tex_spr0->Mem;
+		case TEX_SPR1:
+			return ps2->tex_spr1->Mem;
+		case TEX_SPR2:
+			return ps2->tex_spr2->Mem;
+		case TEX_FIX:
+			return ps2->tex_fix->Mem;
+	}
 }
 
 
@@ -360,11 +385,11 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	ps2->workTexture->Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
-	gsKit_TexManager_invalidate(ps2->gsGlobal, ps2->workTexture);
-	gsKit_TexManager_bind(ps2->gsGlobal, ps2->workTexture);
+	ps2->scrbitmap->Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
+	gsKit_TexManager_invalidate(ps2->gsGlobal, ps2->scrbitmap);
+	gsKit_TexManager_bind(ps2->gsGlobal, ps2->scrbitmap);
 
-	gsKit_prim_sprite_texture(ps2->gsGlobal, ps2->workTexture,
+	gsKit_prim_sprite_texture(ps2->gsGlobal, ps2->scrbitmap,
 		dst_rect->left,		/* X1 */
 		dst_rect->top,		/* Y1 */
 		src_rect->left,		/* U1 */

@@ -84,6 +84,14 @@ typedef struct rect_t
 	int16_t bottom;
 } RECT;
 
+enum WorkBuffer {
+	SCRBITMAP,
+	TEX_SPR0,
+	TEX_SPR1,
+	TEX_SPR2,
+	TEX_FIX,
+};
+
 typedef struct video_driver
 {
 	/* Human-readable identifier. */
@@ -99,7 +107,7 @@ typedef struct video_driver
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);
-	void *(*workFrame)(void *data);
+	void *(*workFrame)(void *data, enum WorkBuffer buffer);
 	void (*clearScreen)(void *data);
 	void (*clearFrame)(void *data, void *frame);
 	void (*fillFrame)(void *data, void *frame, uint32_t color);

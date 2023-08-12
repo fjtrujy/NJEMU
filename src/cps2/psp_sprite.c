@@ -13,7 +13,6 @@
 	íËêî/É}ÉNÉçìô
 ******************************************************************************/
 
-#define TEXTURE_HEIGHT	512
 
 #define MAKE_KEY(code, attr)	(code | ((attr & 0x0f) << 28))
 #define PSP_UNCACHE_PTR(p)		(((uint32_t)(p)) | 0x40000000)
@@ -996,11 +995,11 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
-	tex_object  = (uint8_t *)(scrbitmap + BUF_WIDTH * SCR_HEIGHT);
-	tex_scroll1 = tex_object  + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_scroll2 = tex_scroll1 + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_scroll3 = tex_scroll2 + BUF_WIDTH * TEXTURE_HEIGHT;
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data, SCRBITMAP);
+	tex_object  = video_driver->workFrame(video_data, TEX_SPR0);
+	tex_scroll1 = video_driver->workFrame(video_data, TEX_SPR1);
+	tex_scroll2 = video_driver->workFrame(video_data, TEX_SPR2);
+	tex_scroll3 = video_driver->workFrame(video_data, TEX_FIX);
 
 	for (i = 0; i < OBJECT_TEXTURE_SIZE; i++) object_data[i].index = i;
 	for (i = 0; i < SCROLL1_TEXTURE_SIZE; i++) scroll1_data[i].index = i;

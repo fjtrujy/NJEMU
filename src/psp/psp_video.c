@@ -188,9 +188,28 @@ static void *psp_frameAddr(void *data, void *frame, int x, int y)
 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 }
 
-static void *psp_workFrame(void *data)
+static void *psp_workFrame(void *data, enum WorkBuffer buffer)
 {
-	return psp_frameAddr(data, work_frame, 0, 0);
+	uint16_t *scrbitmap_tmp  = (uint16_t *)psp_frameAddr(data, work_frame, 0, 0);
+	uint8_t *tex_spr0 = (uint8_t *)(scrbitmap_tmp + BUF_WIDTH * SCR_HEIGHT);
+	uint8_t *tex_spr1 = tex_spr0 + BUF_WIDTH * TEXTURE_HEIGHT;
+	uint8_t *tex_spr2 = tex_spr1 + BUF_WIDTH * TEXTURE_HEIGHT;
+	uint8_t *tex_fix = tex_spr2 + BUF_WIDTH * TEXTURE_HEIGHT;
+	switch (buffer)
+	{
+		case SCRBITMAP:
+			return scrbitmap_tmp;
+		case TEX_SPR0:
+			return tex_spr0;
+		case TEX_SPR1:
+			return tex_spr1;
+		case TEX_SPR2:
+			return tex_spr2;
+		case TEX_FIX:
+			return tex_fix;
+	}
+
+	return NULL;
 }
 
 
@@ -501,6 +520,20 @@ static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void
 	sceGuSync(0, GU_SYNC_FINISH);
 }
 
+static void psp_blitFinishFix(void *data, void *clut, uint32_t vertices_count, void *vertices) {
+	uint8_t *tex_fix = psp_workFrame(data, TEX_FIX);
+	sceGuStart(GU_DIRECT, gulist);
+	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
+	sceGuScissor(24, 16, 336, 240);
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_fix);
+	sceGuClutLoad(256/8, clut);
+
+	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
+
+	sceGuFinish();
+	sceGuSync(0, GU_SYNC_FINISH);
+}
+
 
 video_driver_t video_psp = {
 	"psp",
@@ -519,4 +552,5 @@ video_driver_t video_psp = {
 	psp_copyRectFlip,
 	psp_copyRectRotate,
 	psp_drawTexture,
+	psp_blitFinishFix,
 };
