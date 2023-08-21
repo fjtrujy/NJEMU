@@ -62,12 +62,6 @@ struct Vertex
 	int16_t x, y, z;
 };
 
-typedef struct Vertex16_t
-{
-	uint32_t color;
-	int16_t x, y, z;
-} Vertex16;
-
 struct rectangle
 {
 	int min_x;
@@ -116,6 +110,8 @@ typedef struct video_driver
 	void (*copyRectFlip)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectRotate)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
+	void *(*getNativeObjects)(void *data, int index);
+	void (*blitFinishFix)(void *data, enum WorkBuffer buffer, void *clut, uint32_t vertices_count, void *vertices);
 
 } video_driver_t;
 

@@ -14,6 +14,12 @@
 	協方/マクロ
 ******************************************************************************/
 
+typedef struct Vertex16_t
+{
+	uint32_t color;
+	int16_t x, y, z;
+} Vertex16;
+
 #define MAKECOL16(r, g, b)	(((b >> 4) << 8) | ((g >> 4) << 4) | (r >> 4))
 #define GETR16(color)		(color & 0x0f)
 #define GETG16(color)		((color >> 4) & 0x0f)

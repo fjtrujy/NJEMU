@@ -34,6 +34,8 @@ video_driver_t video_null = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
+	NULL,
 };
 
 video_driver_t *video_drivers[] = {

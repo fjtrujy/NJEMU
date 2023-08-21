@@ -549,18 +549,9 @@ void blit_finish_fix(void)
 
 	if (!fix_num) return;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(24, 16, 336, 240);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_fix);
-	sceGuClutLoad(256/8, clut);
-
 	vertices = (struct Vertex *)sceGuGetMemory(fix_num * sizeof(struct Vertex));
 	memcpy(vertices, vertices_fix, fix_num * sizeof(struct Vertex));
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, fix_num, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
+	video_driver->blitFinishFix(video_data, TEX_FIX, clut, fix_num, vertices);
 }
 
 

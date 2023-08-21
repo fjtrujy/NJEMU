@@ -389,18 +389,18 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	gsKit_TexManager_invalidate(ps2->gsGlobal, ps2->scrbitmap);
 	gsKit_TexManager_bind(ps2->gsGlobal, ps2->scrbitmap);
 
-	gsKit_prim_sprite_texture(ps2->gsGlobal, ps2->scrbitmap,
-		dst_rect->left,		/* X1 */
-		dst_rect->top,		/* Y1 */
-		src_rect->left,		/* U1 */
-		src_rect->top,		/* V1 */
-		dst_rect->right,	/* X2 */
-		dst_rect->bottom,	/* Y2 */
-		src_rect->right,	/* U2 */
-		src_rect->bottom,	/* V2 */
-		1,					/* Z  */
-		GS_TEXT
-	);
+	// gsKit_prim_sprite_texture(ps2->gsGlobal, ps2->scrbitmap,
+	// 	dst_rect->left,		/* X1 */
+	// 	dst_rect->top,		/* Y1 */
+	// 	src_rect->left,		/* U1 */
+	// 	src_rect->top,		/* V1 */
+	// 	dst_rect->right,	/* X2 */
+	// 	dst_rect->bottom,	/* Y2 */
+	// 	src_rect->right,	/* U2 */
+	// 	src_rect->bottom,	/* V2 */
+	// 	1,					/* Z  */
+	// 	GS_TEXT
+	// );
 }
 
 static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -671,6 +671,57 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void
 	// sceGuSync(0, GU_SYNC_FINISH);
 }
 
+static GSTEXTURE *ps2_getTexture(void *data, enum WorkBuffer buffer) {
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	switch (buffer)
+	{
+		case SCRBITMAP:
+			return ps2->scrbitmap->Mem;
+		case TEX_SPR0:
+			return ps2->tex_spr0->Mem;
+		case TEX_SPR1:
+			return ps2->tex_spr1->Mem;
+		case TEX_SPR2:
+			return ps2->tex_spr2->Mem;
+		case TEX_FIX:
+			return ps2->tex_fix->Mem;
+		default:
+			return NULL;
+	}
+}
+
+static void *ps2_getNativeObjects(void *data, int index) {
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	switch ( index) {
+	case 0:
+		return ps2->gsGlobal;
+	case 1: 
+		return ps2->scrbitmap;
+	case 2:
+		return ps2->tex_spr0;
+	case 3:
+		return ps2->tex_spr1;
+	case 4:
+		return ps2->tex_spr2;
+	case 5:
+		return ps2->tex_fix;
+	default:
+		return NULL;
+	}
+}
+
+static void ps2_blitFinishFix(void *data, enum WorkBuffer buffer, void *clut, uint32_t vertices_count, void *vertices) {
+	
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSTEXTURE *tex_fix = ps2_getTexture(data, buffer);
+	tex_fix->Clut = clut;
+
+	gsKit_TexManager_invalidate(ps2->gsGlobal, ps2->scrbitmap);
+	gsKit_TexManager_bind(ps2->gsGlobal, ps2->scrbitmap);
+
+	gskit_prim_list_sprite_texture_uv_3d(ps2->gsGlobal, tex_fix, vertices_count, vertices);
+}
+
 
 video_driver_t video_ps2 = {
 	"ps2",
@@ -689,4 +740,6 @@ video_driver_t video_ps2 = {
 	ps2_copyRectFlip,
 	ps2_copyRectRotate,
 	ps2_drawTexture,
+	ps2_getNativeObjects,
+	ps2_blitFinishFix,
 };
