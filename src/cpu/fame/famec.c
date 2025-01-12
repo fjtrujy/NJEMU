@@ -32,7 +32,7 @@
 
 #define USE_CYCLONE_TIMING
 #define USE_CYCLONE_TIMING_DIV
-#define PICODRIVE_HACK
+//#define PICODRIVE_HACK
 // Options //
 
 #ifndef FAMEC_NO_GOTOS
