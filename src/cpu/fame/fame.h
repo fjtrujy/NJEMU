@@ -11,9 +11,9 @@
 
 // uintptr_t
 #include <stdlib.h>
-#ifndef _MSC_VER
 #include <stdint.h>
-#endif
+
+#include "fame_memory.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,20 +94,48 @@ extern "C" {
 #endif
 
 
-/*******************/
-/* Data definition */
-/*******************/
+// There's no standard way to determine endianess at compile time. Try using
+// some well known non-standard macros for detection.
+#if defined __BYTE_ORDER__
+#define    CPU_IS_LE    __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#elif defined __BYTE_ORDER
+#define    CPU_IS_LE    __BYTE_ORDER == __LITTLE_ENDIAN
+#elif defined __BIG_ENDIAN__ || defined _M_PPC // Windows on PPC was big endian
+#define    CPU_IS_LE    0
+#elif defined __LITTLE_ENDIAN__ || defined _WIN32 // all other Windows is LE
+#define    CPU_IS_LE    1
+#else
+#warning "can't detect byte order, assume little endian"
+#define    CPU_IS_LE    1
+#endif
+// NB mixed endian integer platforms are not supported.
 
-#include <pico/pico_port.h>
+#if CPU_IS_LE
+// address/offset operations
+#define MEM_BE2(a)    ((a)^1)        // addr/offs of u8 in u16, or u16 in u32
+#define MEM_BE4(a)    ((a)^3)        // addr/offs of u8 in u32
+#define MEM_LE2(a)    (a)
+#define MEM_LE4(a)    (a)
+// swapping
+#define CPU_BE2(v)    ((u32)((u64)(v)<<16)|((u32)(v)>>16))
+#define CPU_BE4(v)    (((u32)(v)>>24)|(((v)>>8)&0x00ff00)| \
+            (((v)<<8)&0xff0000)|(u32)((v)<<24))
+#define CPU_LE2(v)    (v)        // swap of 2*u16 in u32
+#define CPU_LE4(v)    (v)        // swap of 4*u8  in u32
+#else
+// address/offset operations
+#define MEM_BE2(a)    (a)
+#define MEM_BE4(a)    (a)
+#define MEM_LE2(a)    ((a)^1)
+#define MEM_LE4(a)    ((a)^3)
+// swapping
+#define CPU_BE2(v)    (v)
+#define CPU_BE4(v)    (v)
+#define CPU_LE2(v)    ((u32)((u64)(v)<<16)|((u32)(v)>>16))
+#define CPU_LE4(v)    (((u32)(v)>>24)|(((v)>>8)&0x00ff00)| \
+            (((v)<<8)&0xff0000)|(u32)((v)<<24))
+#endif
 
-/*
-typedef unsigned char	u8;
-typedef signed char	s8;
-typedef unsigned short	u16;
-typedef signed short	s16;
-typedef unsigned int	u32;
-typedef signed int	s32;
-*/
 
 typedef union
 {

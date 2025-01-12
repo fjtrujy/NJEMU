@@ -239,6 +239,8 @@ if (${TARGET} STREQUAL "MVS")
         src/mvs
     )
     set(TARGET_SRC ${TARGET_SRC}
+        cpu/fame/fame_types.h
+        cpu/fame/fame_memory.h
         cpu/fame/fame.h
         cpu/fame/famec_opcodes.h
         cpu/fame/famec.c
