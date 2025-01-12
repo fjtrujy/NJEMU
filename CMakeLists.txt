@@ -233,11 +233,15 @@ set(OS_SRC ${OS_SRC}
 # Add specific target source files
 if (${TARGET} STREQUAL "MVS")
     include_directories(
+        src/cpu/fame
         src/cpu/m68000
         src/cpu/z80
         src/mvs
     )
     set(TARGET_SRC ${TARGET_SRC}
+        cpu/fame/fame.h
+        cpu/fame/famec_opcodes.h
+        cpu/fame/famec.c
         cpu/m68000/m68000.h
         cpu/m68000/m68000.c
         cpu/m68000/c68k.h
