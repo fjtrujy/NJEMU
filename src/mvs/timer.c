@@ -139,7 +139,7 @@ void timer_reset(void)
 	memset(&timer, 0, sizeof(timer));
 
 	cpu[CPU_M68000].execute   = m68000_execute;
-	cpu[CPU_M68000].icount    = &C68K.ICount;
+	cpu[CPU_M68000].icount    = &F68K.io_cycle_counter;
 	cpu[CPU_M68000].cycles    = 0;
 	cpu[CPU_M68000].suspended = 0;
 	cpu[CPU_M68000].cycles_per_usec = 12000000 / 1000000;

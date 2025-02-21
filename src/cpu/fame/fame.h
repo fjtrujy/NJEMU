@@ -150,8 +150,8 @@ typedef union
 /* M68K CPU CONTEXT */
 typedef struct
 {
-	unsigned int   (*read_byte )(unsigned int a);
-	unsigned int   (*read_word )(unsigned int a);
+	unsigned char  (*read_byte )(unsigned int a);
+	unsigned short (*read_word )(unsigned int a);
 	unsigned int   (*read_long )(unsigned int a);
 	void           (*write_byte)(unsigned int a,unsigned char  d);
 	void           (*write_word)(unsigned int a,unsigned short d);

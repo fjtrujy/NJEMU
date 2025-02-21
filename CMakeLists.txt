@@ -234,7 +234,7 @@ set(OS_SRC ${OS_SRC}
 if (${TARGET} STREQUAL "MVS")
     include_directories(
         src/cpu/fame
-        src/cpu/m68000
+#        src/cpu/m68000
         src/cpu/z80
         src/mvs
     )
@@ -244,11 +244,13 @@ if (${TARGET} STREQUAL "MVS")
         cpu/fame/fame.h
         cpu/fame/famec_opcodes.h
         cpu/fame/famec.c
-        cpu/m68000/m68000.h
-        cpu/m68000/m68000.c
-        cpu/m68000/c68k.h
-        cpu/m68000/c68k.c
-        cpu/m68000/c68kmacro.h
+        cpu/fame/m68000.h
+        cpu/fame/m68000.c
+#        cpu/m68000/m68000.h
+#        cpu/m68000/m68000.c
+#        cpu/m68000/c68k.h
+#        cpu/m68000/c68k.c
+#        cpu/m68000/c68kmacro.h
         cpu/z80/z80.h
         cpu/z80/z80.c
         cpu/z80/cz80.h
