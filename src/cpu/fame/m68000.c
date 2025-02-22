@@ -105,12 +105,12 @@ void m68000_init(void)
 {
 	fm68k_init();
 
-	F68K.read_byte = m68000_read_memory_8;
-	F68K.read_word = m68000_read_memory_16;
-	F68K.read_long = m68000_read_memory_32;
-	F68K.write_byte = m68000_write_memory_8;
-	F68K.write_word = m68000_write_memory_16;
-	F68K.write_long = m68000_write_memory_32;
+	F68K.read_byte = (unsigned char (*)(unsigned int))m68000_read_memory_8;
+	F68K.read_word = (unsigned short (*)(unsigned int))m68000_read_memory_16;
+	F68K.read_long = (unsigned int (*)(unsigned int))m68000_read_memory_32;
+	F68K.write_byte = (void (*)(unsigned int, unsigned char))m68000_write_memory_8;
+	F68K.write_word = (void (*)(unsigned int, unsigned short))m68000_write_memory_16;
+	F68K.write_long = (void (*)(unsigned int, unsigned int))m68000_write_memory_32;
 	F68K.iack_handler = fame_irq_callback;
 
 #if (EMU_SYSTEM == CPS1)
