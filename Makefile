@@ -114,6 +114,7 @@ MAINOBJS = \
 	zip/unzip.o \
 	sound/sndintrf.o \
 	common/cache.o \
+	common/filer.o \
 	common/loadrom.o \
 	common/thread_driver.o \
 	common/audio_driver.o \

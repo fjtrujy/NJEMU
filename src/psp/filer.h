@@ -14,7 +14,6 @@
 extern char startupDir[PATH_MAX];
 
 int file_exist(const char *path);
-char *find_file(char *pattern, char *path);
 #ifdef SAVE_STATE
 void find_state_file(uint8_t *slot);
 #endif

@@ -786,45 +786,6 @@ int file_exist(const char *path)
 
 
 /*--------------------------------------------------------
-	指定したパターンと一致するファイルを検索
---------------------------------------------------------*/
-
-char *find_file(char *pattern, char *path)
-{
-	static struct dirent file;
-	int fd, i, found, len1, len2;
-
-	memset(&dir, 0, sizeof(dir));
-
-	fd = open(path, O_DIRECTORY);
-	found = 0;
-
-	len1 = strlen(pattern);
-
-	while (!found)
-	{
-		if (sceIoDread(fd, &dir) <= 0) break;
-
-		len2 = strlen(dir.d_name);
-
-		for (i = 0; i < len2; i++)
-		{
-			if (strncasecmp(&dir.d_name[i], pattern, len1) == 0)
-			{
-				strcpy(file.name, dir.d_name);
-				found = 1;
-				break;
-			}
-		}
-	}
-
-	close(fd);
-
-	return found ? file.name : NULL;
-}
-
-
-/*--------------------------------------------------------
 	指定したパターンのファイルを削除
 --------------------------------------------------------*/
 

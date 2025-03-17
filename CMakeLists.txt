@@ -165,6 +165,8 @@ set(COMMON_SRC
     sound/sndintrf.c
     common/cache.h
     common/cache.c
+    common/filer.h
+    common/filer.c
     common/loadrom.h
     common/loadrom.c
     common/thread_driver.h
@@ -230,24 +232,29 @@ set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_thread.c
 )
 
+# CPU source files
+include_directories(
+    src/cpu/m68000
+    src/cpu/z80
+)
+
+set(TARGET_SRC ${TARGET_SRC}
+    cpu/m68000/m68000.h
+    cpu/m68000/m68000.c
+    cpu/m68000/c68k.h
+    cpu/m68000/c68k.c
+    cpu/m68000/c68kmacro.h
+    cpu/z80/z80.h
+    cpu/z80/z80.c
+    cpu/z80/cz80.h
+    cpu/z80/cz80.c
+    cpu/z80/cz80macro.h
+)
+
 # Add specific target source files
 if (${TARGET} STREQUAL "MVS")
     include_directories(
-        src/cpu/m68000
-        src/cpu/z80
         src/mvs
-    )
-    set(TARGET_SRC ${TARGET_SRC}
-        cpu/m68000/m68000.h
-        cpu/m68000/m68000.c
-        cpu/m68000/c68k.h
-        cpu/m68000/c68k.c
-        cpu/m68000/c68kmacro.h
-        cpu/z80/z80.h
-        cpu/z80/z80.c
-        cpu/z80/cz80.h
-        cpu/z80/cz80.c
-        cpu/z80/cz80macro.h
     )
 
     set(TARGET_SRC ${TARGET_SRC}
@@ -271,10 +278,81 @@ if (${TARGET} STREQUAL "MVS")
         mvs/neocrypt.c
         mvs/biosmenu.h
         mvs/biosmenu.c
+    )
+
+    # Set SOUND_2610 flag
+    set(SOUND_2610 ON)
+endif()
+
+# Add specific target source files
+if (${TARGET} STREQUAL "NCDZ")
+    include_directories(
+        src/ncdz
+    )
+
+    set(TARGET_SRC ${TARGET_SRC}
+        ncdz/cdda.c
+        ncdz/cdda.h
+        ncdz/cdrom.c
+        ncdz/cdrom.h
+        ncdz/driver.c
+        ncdz/driver.h
+        ncdz/inptport.c
+        ncdz/inptport.h
+        ncdz/memintrf.c
+        ncdz/memintrf.h
+        ncdz/ncdz.c
+        ncdz/ncdz.h
+        ncdz/${PLATFORM_LOWER}_sprite.c
+        ncdz/sprite.h
+        ncdz/startup.c
+        ncdz/timer.c
+        ncdz/timer.h
+        ncdz/vidhrdw.c
+        ncdz/vidhrdw.h
+    )
+
+    # Set SOUND_2610 flag
+    set(SOUND_2610 ON)
+    # Set MP3 flag
+    set(SOUND_MP3 ON)
+    # Set LIB_MAD flag
+    set(LIB_MAD ON)
+endif()
+
+# Add the mp3 sound files if needed
+if (SOUND_MP3)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/mp3.h
+        common/mp3.c
+    )
+endif()
+
+# Add the 2151 sound files if needed
+if (SOUND_2151)
+    set(TARGET_SRC ${TARGET_SRC}
+        sound/2151intf.h
+        sound/2151intf.c
+        sound/ym2151.h
+        sound/ym2151.c
+    )
+endif()
+
+# Add the 2610 sound files if needed use SOUND_2610 flag
+if (SOUND_2610)
+    set(TARGET_SRC ${TARGET_SRC}
         sound/2610intf.h
         sound/2610intf.c
         sound/ym2610.h
         sound/ym2610.c
+    )
+endif()
+
+# Add the qsound sound files if needed use SOUND_QSOUND flag
+if (SOUND_QSOUND)
+    set(TARGET_SRC ${TARGET_SRC}
+        sound/qsound.h
+        sound/qsound.c
     )
 endif()
 
@@ -333,6 +411,13 @@ elseif(PLATFORM STREQUAL "PSP")
         pspaudio
         pspgu
         psppower
+    )
+endif()
+
+# Add libmad library if needed
+if (LIB_MAD)
+    target_link_libraries(${TARGET} PUBLIC
+        mad
     )
 endif()
 

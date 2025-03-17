@@ -145,8 +145,12 @@ static void show_loading_image(void)
 
 	sprintf(path, "%sdata/%s", launchDir, "loading.png");
 
-	if (load_png(path, -1) == 0)
+#if !defined(NO_GUI)
+	if (load_png(path, -1) == 0) 
+#endif
+	{
 		uifont_print_shadow_center(129, COLOR_WHITE, "Now Loading...");
+	}
 
 	video_driver->flipScreen(video_data, 1);
 }
