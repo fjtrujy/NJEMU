@@ -8,6 +8,7 @@
 #include <zlib.h>
 #include <string.h>
 #include "unzip.h"
+#include <sys/stat.h>
 
 #ifndef UNZ_BUFSIZE
 #define UNZ_BUFSIZE (16384)
@@ -228,6 +229,7 @@ unzFile unzOpen(const char *path)
 	unz_s *s;
 	uLong central_pos,uL;
 	FILE *fin;
+	struct stat st;
 
 	uLong number_disk;		  /* number of the current dist, used for
 								   spaning ZIP, unsupported, always 0*/
@@ -240,6 +242,13 @@ unzFile unzOpen(const char *path)
 	int err = UNZ_OK;
 
 	if (unz_copyright[0] != ' ')
+		return NULL;
+
+	// Check if it is not a folder before continuing, using stat
+	if (stat(path, &st) != 0)
+		return NULL;
+
+	if (S_ISDIR(st.st_mode))
 		return NULL;
 
 	fin = fopen(path, "rb");
