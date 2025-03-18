@@ -94,6 +94,10 @@ void file_browser(void) {
 		fclose(fp);
 	}
 
+#if (EMU_SYSTEM == NCDZ)
+	strcat(game_dir, "/");
+	strcat(game_dir, game_name);
+#endif
 	emu_main();
 }
 
