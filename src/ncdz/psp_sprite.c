@@ -13,8 +13,10 @@
 	’è”/ƒ}ƒNƒ“™
 ******************************************************************************/
 
-#define MAKE_FIX_KEY(code, attr)	(code | (attr << 28))
-#define MAKE_SPR_KEY(code, attr)	(code | ((attr & 0x0f00) << 20))
+#define TEXTURE_HEIGHT	512
+
+#define MAKE_FIX_KEY(code, attr)	(uint32_t)(code | (((uint32_t)attr) << 28))
+#define MAKE_SPR_KEY(code, attr)	(uint32_t)(code | (((uint32_t)(attr & 0x0f00)) << 20))
 #define PSP_UNCACHE_PTR(p)			(((uint32_t)(p)) | 0x40000000)
 
 
@@ -36,10 +38,10 @@ static RECT mvs_src_clip = { 24, 16, 24 + 304, 16 + 224 };
 
 static RECT mvs_clip[6] =
 {
-	{ 88, 24, 88 + 304, 24 + 224 },	// option_stretch = 0  (304x224  4:3)
-	{ 66, 24, 66 + 348, 24 + 224 },	// option_stretch = 0  (348x224 14:9)
-	{ 41, 24, 41 + 398, 24 + 224 },	// option_stretch = 0  (398x224 16:9)
-	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 1  (360x270  4:3)
+	{ 88, 24, 88 + 304, 24 + 224 },	// option_stretch = 0  (304x224 19:14)
+	{ 80, 16, 80 + 320, 16 + 240 },	// option_stretch = 1  (320x240  4:3)
+	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 2  (360x270  4:3)
+	{ 57,  1, 57 + 360,  1 + 270 },	// option_stretch = 3  (366x270 19:14)
 	{ 30,  1, 30 + 420,  1 + 270 },	// option_stretch = 4  (420x270 14:9)
 	{  0,  1,  0 + 480,  1 + 270 }	    // option_stretch = 5  (480x270 16:9)
 };
@@ -97,6 +99,7 @@ static uint16_t spr_index;
 ------------------------------------------------------------------------*/
 
 static uint16_t *clut;
+static uint8_t clut_index;
 
 static const uint32_t ALIGN_DATA color_table[16] =
 {
@@ -267,7 +270,7 @@ static int spr_insert_sprite(uint32_t key)
 
 	if (!p)
 	{
-		spr_head[key & SPR_HASH_MASK] = q;
+		spr_head[hash] = q;
 	}
 	else
 	{
@@ -423,7 +426,9 @@ void blit_reset(void)
 	clip_min_y = FIRST_VISIBLE_LINE;
 	clip_max_y = LAST_VISIBLE_LINE;
 
+	video_driver->setClutBaseAddr(video_data, (uint16_t *)&video_palettebank);
 	clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palettebank[palette_bank]);
+	clut_index = palette_bank;
 
 	blit_clear_all_sprite();
 }
@@ -450,25 +455,7 @@ void blit_start(int start, int end)
 		if (clear_spr_texture) blit_clear_spr_sprite();
 		if (clear_fix_texture) blit_clear_fix_sprite();
 
-		sceGuStart(GU_DIRECT, gulist);
-		sceGuDrawBufferList(GU_PSM_5551, draw_frame, BUF_WIDTH);
-		sceGuScissor(0, 0, BUF_WIDTH, SCR_WIDTH);
-		sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-
-		sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-		sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-
-		sceGuScissor(24, 16, 336, 240);
-		sceGuClearColor(CNVCOL15TO32(video_palette[4095]));
-		sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-
-		sceGuClearColor(0);
-		sceGuEnable(GU_ALPHA_TEST);
-		sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
-		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-
-		sceGuFinish();
-		sceGuSync(0, GU_SYNC_FINISH);
+		video_driver->startWorkFrame(video_data, CNVCOL15TO32(video_palette[4095]));
 	}
 }
 
@@ -549,18 +536,9 @@ void blit_finish_fix(void)
 
 	if (!fix_num) return;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(24, 16, 336, 240);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_fix);
-	sceGuClutLoad(256/8, clut);
-
 	vertices = (struct Vertex *)sceGuGetMemory(fix_num * sizeof(struct Vertex));
 	memcpy(vertices, vertices_fix, fix_num * sizeof(struct Vertex));
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, fix_num, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
+	video_driver->blitTexture(video_data, TEX_FIX, clut, clut_index, fix_num, vertices);
 }
 
 
