@@ -96,6 +96,8 @@ void file_browser(void) {
 #if (EMU_SYSTEM == NCDZ)
 	strcat(game_dir, "/");
 	strcat(game_dir, game_name);
+
+	sprintf(mp3_dir, "%s/mp3", game_dir);
 #endif
 	emu_main();
 }

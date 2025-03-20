@@ -22,11 +22,6 @@
 #define MP3_BUFFER_SIZE		(MP3_SAMPLES * 4)
 
 
-#define MP3_get_filesize()								\
-	mp3_fsize = lseek(mp3_fd, 0, SEEK_END);	\
-	lseek(mp3_fd, 0, SEEK_SET);
-
-
 /******************************************************************************
 	ƒ[ƒJƒ‹•Ï”
 ******************************************************************************/
@@ -398,7 +393,8 @@ int mp3_play(const char *name)
 
 		if ((mp3_fd = open(MP3_file, O_RDONLY, 0777)) >= 0)
 		{
-			MP3_get_filesize();
+			mp3_fsize = lseek(mp3_fd, 0, SEEK_END);
+			lseek(mp3_fd, 0, SEEK_SET);
 
 			mp3_status  = MP3_PLAY;
 			mp3_newfile = 1;
