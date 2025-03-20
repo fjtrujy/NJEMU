@@ -36,6 +36,8 @@ static bool psp_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
 
 static void psp_release(void *data) {
 	psp_audio_t *psp = (psp_audio_t*)data;
+
+	sceAudioChRelease(psp->channel);
 }
 
 static void psp_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {

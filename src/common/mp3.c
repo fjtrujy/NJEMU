@@ -325,6 +325,7 @@ int mp3_thread_start(void)
 	if (!audio_driver->chReserve(mp3_handle, MP3_SAMPLES, 2))
 	{
 		fatalerror(TEXT(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_MP3));
+		audio_driver->release(mp3_handle);
 		audio_driver->free(mp3_handle);
 		mp3_handle = NULL;
 		return 0;
