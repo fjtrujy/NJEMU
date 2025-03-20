@@ -5,6 +5,7 @@
 #include <iopcontrol.h>
 #include <sbv_patches.h>
 #include <ps2_filesystem_driver.h>
+#include <ps2_audio_driver.h>
 
 typedef struct ps2_platform {
 } ps2_platform_t;
@@ -29,10 +30,12 @@ static void prepare_IOP()
 static void init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
+	init_audio_driver();
 }
 
 static void deinit_drivers()
 {
+	deinit_audio_driver();
 	deinit_only_boot_ps2_filesystem_driver();
 }
 
