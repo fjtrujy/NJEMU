@@ -18,8 +18,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        target: [MVS] #TOOD: CPS1, CPS2, NCDZ
-        large_memory: [ON, OFF]
+        target: [MVS, NCDZ] #TOOD: CPS1, CPS2
+        large_memory: [OFF] #TODO: ON
         command_list: [OFF] #TODO: ON
         adhoc: [OFF] #TODO: ON
         save_state: [OFF] #TODO: OFF
@@ -44,14 +44,15 @@ jobs:
           wget \
           unzip \
           libbz2-dev \
-          libsdl2-dev
+          libsdl2-dev\
+          libmad0-dev
 
 
     - name: Install Mac dependencies
       if: matrix.os == 'macOS-latest'
       run: |
         brew update
-        brew install cmake sdl2 libzip
+        brew install cmake sdl2 libzip mad
 
     - name: Compile project
       run: |

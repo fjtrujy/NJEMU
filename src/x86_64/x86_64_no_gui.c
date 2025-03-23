@@ -82,19 +82,24 @@ int ui_show_popup(int draw) {
 }
 
 void file_browser(void) {
-    Loop = LOOP_EXEC;
-    strcpy(game_dir, "roms");
+	Loop = LOOP_EXEC;
+	strcpy(game_dir, "roms");
 #if USE_CACHE
-    sprintf(cache_dir, "cache");
+	sprintf(cache_dir, "cache");
 #endif
-    // Get the game name from a file called game_name.ini
-    FILE *fp = fopen("game_name.ini", "r");
-    if (fp) {
-        fgets(game_name, 255, fp);
-        fclose(fp);
-    }
+	// Get the game name from a file called game_name.ini
+	FILE *fp = fopen("game_name.ini", "r");
+	if (fp) {
+		fgets(game_name, 255, fp);
+		fclose(fp);
+	}
+#if (EMU_SYSTEM == NCDZ)
+	strcat(game_dir, "/");
+	strcat(game_dir, game_name);
 
-    emu_main();
+	sprintf(mp3_dir, "%s/mp3", game_dir);
+#endif
+	emu_main();
 }
 
 void small_font_print(int sx, int sy, const char *s, int bg) {

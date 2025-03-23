@@ -463,8 +463,12 @@ int main(int argc, char *argv[]) {
 	option_sound_volume = 10;
 	option_stretch = 0;
 	show_frames_each_second = 0;
+#if defined(BUILD_NCDZ)
+	option_mp3_enable = 1;
+	option_mp3_volume = 10;
+#endif
 
-#if defined(BUILD_MVS)
+#if defined(BUILD_MVS) || defined(BUILD_NCDZ)
 	input_map[P1_UP] = PLATFORM_PAD_UP;
 	input_map[P1_DOWN] = PLATFORM_PAD_DOWN;
 	input_map[P1_LEFT] = PLATFORM_PAD_LEFT;
@@ -474,7 +478,11 @@ int main(int argc, char *argv[]) {
 	input_map[P1_BUTTONC] = PLATFORM_PAD_B3;
 	input_map[P1_BUTTOND] = PLATFORM_PAD_B4;
 	input_map[P1_START] = PLATFORM_PAD_START;
+#if defined(BUILD_MVS)
 	input_map[P1_COIN] = PLATFORM_PAD_SELECT;
+#else
+	input_map[P1_SELECT] = PLATFORM_PAD_SELECT;
+#endif
 #endif
 #endif
 

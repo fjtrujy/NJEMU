@@ -2,7 +2,7 @@
 
 	sprite.c
 
-	NEOGEO CDZ ƒXƒvƒ‰ƒCƒgƒ}ƒl[ƒWƒƒ
+	NEOGEO CDZ ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆãƒãƒãƒ¼ã‚¸ãƒ£
 
 ******************************************************************************/
 
@@ -10,18 +10,15 @@
 
 
 /******************************************************************************
-	’è”/ƒ}ƒNƒ“™
+	å®šæ•°/ãƒã‚¯ãƒ­ç­‰
 ******************************************************************************/
-
-#define TEXTURE_HEIGHT	512
 
 #define MAKE_FIX_KEY(code, attr)	(uint32_t)(code | (((uint32_t)attr) << 28))
 #define MAKE_SPR_KEY(code, attr)	(uint32_t)(code | (((uint32_t)(attr & 0x0f00)) << 20))
-#define PSP_UNCACHE_PTR(p)			(((uint32_t)(p)) | 0x40000000)
 
 
 /******************************************************************************
-	ƒ[ƒJƒ‹•Ï”/\‘¢‘Ì
+	ãƒ­ãƒ¼ã‚«ãƒ«å¤‰æ•°/æ§‹é€ ä½“
 ******************************************************************************/
 
 typedef struct sprite_t SPRITE;
@@ -36,14 +33,15 @@ struct sprite_t
 
 static RECT mvs_src_clip = { 24, 16, 24 + 304, 16 + 224 };
 
-static RECT mvs_clip[6] =
+static RECT mvs_clip[7] =
 {
-	{ 88, 24, 88 + 304, 24 + 224 },	// option_stretch = 0  (304x224 19:14)
-	{ 80, 16, 80 + 320, 16 + 240 },	// option_stretch = 1  (320x240  4:3)
-	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 2  (360x270  4:3)
-	{ 57,  1, 57 + 360,  1 + 270 },	// option_stretch = 3  (366x270 19:14)
-	{ 30,  1, 30 + 420,  1 + 270 },	// option_stretch = 4  (420x270 14:9)
-	{  0,  1,  0 + 480,  1 + 270 }	    // option_stretch = 5  (480x270 16:9)
+	{  0,  0,  0 + 640,  0 + 448 },	// option_stretch = 0  (640 x 448)
+	{ 88, 24, 88 + 304, 24 + 224 },	// option_stretch = 1  (304x224 19:14)
+	{ 80, 16, 80 + 320, 16 + 240 },	// option_stretch = 2  (320x240  4:3)
+	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 3  (360x270  4:3)
+	{ 57,  1, 57 + 360,  1 + 270 },	// option_stretch = 4  (366x270 19:14)
+	{ 30,  1, 30 + 420,  1 + 270 },	// option_stretch = 5  (420x270 14:9)
+	{  0,  1,  0 + 480,  1 + 270 }	    // option_stretch = 8  (480x270 16:9)
 };
 
 static int clip_min_y;
@@ -55,13 +53,15 @@ static uint16_t *scrbitmap;
 
 
 /*------------------------------------------------------------------------
-	FIX: ƒTƒCƒY/ˆÊ’u8pixelŒÅ’è‚ÌƒXƒvƒ‰ƒCƒg
+	FIX: ã‚µã‚¤ã‚º/ä½ç½®8pixelå›ºå®šã®ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆ
 ------------------------------------------------------------------------*/
 
 #define FIX_TEXTURE_SIZE	((BUF_WIDTH/8)*(TEXTURE_HEIGHT/8))
 #define FIX_HASH_MASK		0x1ff
 #define FIX_HASH_SIZE		0x200
 #define FIX_MAX_SPRITES		((320/8) * (240/8))
+#define TILE_8x8_PER_LINE	(BUF_WIDTH/8)
+#define TILE_16x16_PER_LINE	(BUF_WIDTH/16)
 
 static SPRITE ALIGN_DATA *fix_head[FIX_HASH_SIZE];
 static SPRITE ALIGN_DATA fix_data[FIX_TEXTURE_SIZE];
@@ -74,7 +74,7 @@ static uint16_t fix_texture_num;
 
 
 /*------------------------------------------------------------------------
-	SPR: ‰Â•ÏƒTƒCƒY‚ÌƒXƒvƒ‰ƒCƒg
+	SPR: å¯å¤‰ã‚µã‚¤ã‚ºã®ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆ
 ------------------------------------------------------------------------*/
 
 #define SPR_TEXTURE_SIZE	((BUF_WIDTH/16)*((TEXTURE_HEIGHT*3)/16))
@@ -95,11 +95,10 @@ static uint16_t spr_index;
 
 
 /*------------------------------------------------------------------------
-	ƒJƒ‰[ƒ‹ƒbƒNƒAƒbƒvƒe[ƒuƒ‹
+	ã‚«ãƒ©ãƒ¼ãƒ«ãƒƒã‚¯ã‚¢ãƒƒãƒ—ãƒ†ãƒ¼ãƒ–ãƒ«
 ------------------------------------------------------------------------*/
 
 static uint16_t *clut;
-static uint8_t clut_index;
 
 static const uint32_t ALIGN_DATA color_table[16] =
 {
@@ -110,23 +109,12 @@ static const uint32_t ALIGN_DATA color_table[16] =
 };
 
 
-/*------------------------------------------------------------------------
-	'swizzle'ƒeƒNƒXƒ`ƒƒƒAƒhƒŒƒXŒvZƒe[ƒuƒ‹
-------------------------------------------------------------------------*/
-
-static const int ALIGN_DATA swizzle_table_8bit[16] =
-{
-	   0, 16, 16, 16, 16, 16, 16, 16,
-	3984, 16, 16, 16, 16, 16, 16, 16
-};
-
-
 /******************************************************************************
-	FIXƒXƒvƒ‰ƒCƒgŠÇ—
+	FIXã‚¹ãƒ—ãƒ©ã‚¤ãƒˆç®¡ç†
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	FIXƒeƒNƒXƒ`ƒƒ‚©‚çƒXƒvƒ‰ƒCƒg”Ô†‚ğæ“¾
+	FIXãƒ†ã‚¯ã‚¹ãƒãƒ£ã‹ã‚‰ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆç•ªå·ã‚’å–å¾—
 ------------------------------------------------------------------------*/
 
 static int fix_get_sprite(uint32_t key)
@@ -147,7 +135,7 @@ static int fix_get_sprite(uint32_t key)
 
 
 /*------------------------------------------------------------------------
-	FIXƒeƒNƒXƒ`ƒƒ‚ÉƒXƒvƒ‰ƒCƒg‚ğ“o˜^
+	FIXãƒ†ã‚¯ã‚¹ãƒãƒ£ã«ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’ç™»éŒ²
 ------------------------------------------------------------------------*/
 
 static int fix_insert_sprite(uint32_t key)
@@ -181,7 +169,7 @@ static int fix_insert_sprite(uint32_t key)
 
 
 /*------------------------------------------------------------------------
-	FIXƒeƒNƒXƒ`ƒƒ‚©‚çˆê’èŠÔ‚ğŒo‰ß‚µ‚½ƒXƒvƒ‰ƒCƒg‚ğíœ
+	FIXãƒ†ã‚¯ã‚¹ãƒãƒ£ã‹ã‚‰ä¸€å®šæ™‚é–“ã‚’çµŒéã—ãŸã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’å‰Šé™¤
 ------------------------------------------------------------------------*/
 
 static void fix_delete_sprite(void)
@@ -226,11 +214,11 @@ static void fix_delete_sprite(void)
 
 
 /******************************************************************************
-	SPRƒXƒvƒ‰ƒCƒgŠÇ—
+	SPRã‚¹ãƒ—ãƒ©ã‚¤ãƒˆç®¡ç†
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	SPRƒeƒNƒXƒ`ƒƒ‚©‚çƒXƒvƒ‰ƒCƒg”Ô†‚ğæ“¾
+	SPRãƒ†ã‚¯ã‚¹ãƒãƒ£ã‹ã‚‰ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆç•ªå·ã‚’å–å¾—
 ------------------------------------------------------------------------*/
 
 static int spr_get_sprite(uint32_t key)
@@ -251,7 +239,7 @@ static int spr_get_sprite(uint32_t key)
 
 
 /*------------------------------------------------------------------------
-	SPRƒeƒNƒXƒ`ƒƒ‚ÉƒXƒvƒ‰ƒCƒg‚ğ“o˜^
+	SPRãƒ†ã‚¯ã‚¹ãƒãƒ£ã«ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’ç™»éŒ²
 ------------------------------------------------------------------------*/
 
 static int spr_insert_sprite(uint32_t key)
@@ -285,7 +273,7 @@ static int spr_insert_sprite(uint32_t key)
 
 
 /*------------------------------------------------------------------------
-	SPRƒeƒNƒXƒ`ƒƒ‚©‚çˆê’èŠÔ‚ğŒo‰ß‚µ‚½ƒXƒvƒ‰ƒCƒg‚ğíœ
+	SPRãƒ†ã‚¯ã‚¹ãƒãƒ£ã‹ã‚‰ä¸€å®šæ™‚é–“ã‚’çµŒéã—ãŸã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’å‰Šé™¤
 ------------------------------------------------------------------------*/
 
 static void spr_delete_sprite(void)
@@ -330,11 +318,11 @@ static void spr_delete_sprite(void)
 
 
 /******************************************************************************
-	ƒXƒvƒ‰ƒCƒg•`‰æƒCƒ“ƒ^ƒtƒF[ƒXŠÖ”
+	ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆæç”»ã‚¤ãƒ³ã‚¿ãƒ•ã‚§ãƒ¼ã‚¹é–¢æ•°
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	FIXƒXƒvƒ‰ƒCƒg‚ğ‘¦À‚ÉƒNƒŠƒA‚·‚é
+	FIXã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’å³åº§ã«ã‚¯ãƒªã‚¢ã™ã‚‹
 ------------------------------------------------------------------------*/
 
 void blit_clear_fix_sprite(void)
@@ -355,7 +343,7 @@ void blit_clear_fix_sprite(void)
 
 
 /*------------------------------------------------------------------------
-	SPRƒXƒvƒ‰ƒCƒg‚ğ‘¦À‚ÉƒNƒŠƒA‚·‚é
+	å…¨ã¦ã®ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã‚’å³åº§ã«ã‚¯ãƒªã‚¢ã™ã‚‹
 ------------------------------------------------------------------------*/
 
 void blit_clear_spr_sprite(void)
@@ -376,7 +364,7 @@ void blit_clear_spr_sprite(void)
 
 
 /*------------------------------------------------------------------------
-	‘S‚Ä‚ÌƒXƒvƒ‰ƒCƒg‚ğ‘¦À‚ÉƒNƒŠƒA‚·‚é
+	FIXã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã®ã‚¯ãƒªã‚¢ãƒ•ãƒ©ã‚°ã‚’ç«‹ã¦ã‚‹
 ------------------------------------------------------------------------*/
 
 void blit_clear_all_sprite(void)
@@ -387,7 +375,7 @@ void blit_clear_all_sprite(void)
 
 
 /*------------------------------------------------------------------------
-	FIXƒXƒvƒ‰ƒCƒg‚ÌƒNƒŠƒAƒtƒ‰ƒO‚ğ—§‚Ä‚é
+	FIXã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã®ã‚¯ãƒªã‚¢ãƒ•ãƒ©ã‚°ã‚’ç«‹ã¦ã‚‹
 ------------------------------------------------------------------------*/
 
 void blit_set_fix_clear_flag(void)
@@ -397,7 +385,7 @@ void blit_set_fix_clear_flag(void)
 
 
 /*------------------------------------------------------------------------
-	SPRƒXƒvƒ‰ƒCƒg‚ÌƒNƒŠƒAƒtƒ‰ƒO‚ğ—§‚Ä‚é
+	SPRã‚¹ãƒ—ãƒ©ã‚¤ãƒˆã®ã‚¯ãƒªã‚¢ãƒ•ãƒ©ã‚°ã‚’ç«‹ã¦ã‚‹
 ------------------------------------------------------------------------*/
 
 void blit_set_spr_clear_flag(void)
@@ -407,7 +395,7 @@ void blit_set_spr_clear_flag(void)
 
 
 /*------------------------------------------------------------------------
-	ƒXƒvƒ‰ƒCƒgˆ—‚ÌƒŠƒZƒbƒg
+	ã‚¹ãƒ—ãƒ©ã‚¤ãƒˆå‡¦ç†ã®ãƒªã‚»ãƒƒãƒˆ
 ------------------------------------------------------------------------*/
 
 void blit_reset(void)
@@ -427,15 +415,14 @@ void blit_reset(void)
 	clip_max_y = LAST_VISIBLE_LINE;
 
 	video_driver->setClutBaseAddr(video_data, (uint16_t *)&video_palettebank);
-	clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palettebank[palette_bank]);
-	clut_index = palette_bank;
+	clut = (uint16_t *)&video_palettebank[palette_bank];
 
 	blit_clear_all_sprite();
 }
 
 
 /*------------------------------------------------------------------------
-	‰æ–Ê‚ÌXVŠJn
+	ç”»é¢ã®æ›´æ–°é–‹å§‹
 ------------------------------------------------------------------------*/
 
 void blit_start(int start, int end)
@@ -448,7 +435,7 @@ void blit_start(int start, int end)
 
 	if (start == FIRST_VISIBLE_LINE)
 	{
-		clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palettebank[palette_bank]);
+		clut = (uint16_t *)&video_palettebank[palette_bank];
 
 		fix_num = 0;
 
@@ -461,7 +448,7 @@ void blit_start(int start, int end)
 
 
 /*------------------------------------------------------------------------
-	‰æ–Ê‚ÌXVI—¹
+	ç”»é¢ã®æ›´æ–°çµ‚äº†
 ------------------------------------------------------------------------*/
 
 void blit_finish(void)
@@ -471,7 +458,7 @@ void blit_finish(void)
 
 
 /*------------------------------------------------------------------------
-	FIX‚ğ•`‰æƒŠƒXƒg‚É“o˜^
+	FIXã‚’æç”»ãƒªã‚¹ãƒˆã«ç™»éŒ²
 ------------------------------------------------------------------------*/
 
 void blit_draw_fix(int x, int y, uint32_t code, uint32_t attr)
@@ -483,31 +470,27 @@ void blit_draw_fix(int x, int y, uint32_t code, uint32_t attr)
 	if ((idx = fix_get_sprite(key)) < 0)
 	{
 		uint32_t col, tile;
-		uint8_t *src, *dst, lines = 8;
+		uint8_t *src, *dst, lines, row, column;
 		uint32_t datal, datah;
 
 		if (fix_texture_num == FIX_TEXTURE_SIZE - 1)
 			fix_delete_sprite();
 
 		idx = fix_insert_sprite(key);
-		dst = SWIZZLED8_8x8(tex_fix, idx);
 		src = &memory_region_gfx1[code << 5];
 		col = color_table[attr];
 
-		while (lines--)
+		row = idx / TILE_8x8_PER_LINE;
+		column = idx % TILE_8x8_PER_LINE;
+		for (lines = 0; lines < 8; lines++)
 		{
-			tile = *(uint32_t *)(src + 0);
-#if 0
-			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-#else
+			dst = &tex_fix[((row * 8) + lines) * BUF_WIDTH + (column * 8)];
+            tile = *(uint32_t *)(src + 0);
 			datal = ((tile & 0x0000000f) >>  0) | ((tile & 0x000000f0) <<  4) | ((tile & 0x00000f00) <<  8) | ((tile & 0x0000f000) << 12) | col;
 			datah = ((tile & 0x000f0000) >> 16) | ((tile & 0x00f00000) >> 12) | ((tile & 0x0f000000) >>  8) | ((tile & 0xf0000000) >>  4) | col;
 			*(uint32_t *)(dst +  0) = datal;
 			*(uint32_t *)(dst +  4) = datah;
-#endif
 			src += 4;
-			dst += 16;
 		}
 	}
 
@@ -527,23 +510,18 @@ void blit_draw_fix(int x, int y, uint32_t code, uint32_t attr)
 
 
 /*------------------------------------------------------------------------
-	FIX•`‰æI—¹
+	FIXæç”»çµ‚äº†
 ------------------------------------------------------------------------*/
 
 void blit_finish_fix(void)
 {
-	struct Vertex *vertices;
-
 	if (!fix_num) return;
-
-	vertices = (struct Vertex *)sceGuGetMemory(fix_num * sizeof(struct Vertex));
-	memcpy(vertices, vertices_fix, fix_num * sizeof(struct Vertex));
-	video_driver->blitTexture(video_data, TEX_FIX, clut, clut_index, fix_num, vertices);
+	video_driver->blitTexture(video_data, TEX_FIX, clut, 0, fix_num, vertices_fix);
 }
 
 
 /*------------------------------------------------------------------------
-	SPR‚ğ•`‰æƒŠƒXƒg‚É“o˜^
+	SPRã‚’æç”»ãƒªã‚¹ãƒˆã«ç™»éŒ²
 ------------------------------------------------------------------------*/
 
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr)
@@ -556,19 +534,22 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr)
 
 	if ((idx = spr_get_sprite(key)) < 0)
 	{
-		uint32_t col, tile;
-		uint8_t *src, *dst, lines = 16;
+		uint32_t col, tile, offset, gfx3_offset;
+		uint8_t *src, *dst, lines, row, column;
 
 		if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
 			spr_delete_sprite();
 
-		idx = spr_insert_sprite(key);
-		dst = SWIZZLED8_16x16(tex_spr[0], idx);
 		src = &memory_region_gfx2[code << 7];
+		idx = spr_insert_sprite(key);
 		col = color_table[(attr >> 8) & 0x0f];
 
-		while (lines--)
+		row = idx / TILE_16x16_PER_LINE;
+		column = idx % TILE_16x16_PER_LINE;
+		for (lines = 0; lines < 16; lines++)
 		{
+			offset = ((row * 16) + lines) * BUF_WIDTH + (column * 16);
+			dst = &tex_spr[0][offset];
 			tile = *(uint32_t *)(src + 0);
 			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
 			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
@@ -576,7 +557,6 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr)
 			*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
 			*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
 			src += 8;
-			dst += swizzle_table_8bit[lines];
 		}
 	}
 
@@ -601,26 +581,42 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr)
 
 
 /*------------------------------------------------------------------------
-	SPR•`‰æI—¹
+	SPRæç”»çµ‚äº†
 ------------------------------------------------------------------------*/
+
+static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
+	// printf("getWorkBufferForSPR(%i)\n", index);
+	switch (index) {
+		case 0:
+			return TEX_SPR0;
+		case 1:
+			return TEX_SPR1;
+		case 2:
+			return TEX_SPR2;
+		default:
+			return TEX_SPR0;
+	}
+}
 
 void blit_finish_spr(void)
 {
+	// // printf("blit_finish_spr\n");
 	int i, total_sprites = 0;
 	uint16_t flags, *pflags = spr_flags;
 	struct Vertex *vertices, *vertices_tmp;
+	uint16_t *clut_tmp;
+	enum WorkBuffer workBuffer;
 
 	if (!spr_index) return;
+	// printf("blit_finish_spr has spr_index\n");
+
+	struct Vertex vertex_buffer[spr_num];
 
 	flags = *pflags;
+	workBuffer = getWorkBufferForSPR(flags & 3);
+	clut_tmp = &clut[flags & 0xf00];
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(24, clip_min_y, 336, clip_max_y);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_spr[flags & 3]);
-	sceGuClutLoad(256/8, &clut[flags & 0xf00]);
-
-	vertices_tmp = vertices = (struct Vertex *)sceGuGetMemory(spr_num * sizeof(struct Vertex));
+	vertices_tmp = vertices = &vertex_buffer[0];
 
 	for (i = 0; i < spr_num; i += 2)
 	{
@@ -628,14 +624,14 @@ void blit_finish_spr(void)
 		{
 			if (total_sprites)
 			{
-				sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, total_sprites, NULL, vertices);
+				video_driver->blitTexture(video_data, workBuffer, clut_tmp, 0, total_sprites, vertices);
 				total_sprites = 0;
 				vertices = vertices_tmp;
 			}
 
 			flags = *pflags;
-			sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_spr[flags & 3]);
-			sceGuClutLoad(256/8, &clut[flags & 0xf00]);
+			workBuffer = getWorkBufferForSPR(flags & 3);
+			clut_tmp = &clut[flags & 0xf00];
 		}
 
 		vertices_tmp[0] = vertices_spr[i + 0];
@@ -647,15 +643,12 @@ void blit_finish_spr(void)
 	}
 
 	if (total_sprites)
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, total_sprites, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
+		video_driver->blitTexture(video_data, workBuffer, clut_tmp, 0, total_sprites, vertices);
 }
 
 
 /******************************************************************************
-	SPR ƒ\ƒtƒgƒEƒFƒA•`‰æ
+	SPR ã‚½ãƒ•ãƒˆã‚¦ã‚§ã‚¢æç”»
 ******************************************************************************/
 
 static void drawgfxline_fixed(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);

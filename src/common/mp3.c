@@ -22,11 +22,6 @@
 #define MP3_BUFFER_SIZE		(MP3_SAMPLES * 4)
 
 
-#define MP3_get_filesize()								\
-	mp3_fsize = lseek(mp3_fd, 0, SEEK_END);	\
-	lseek(mp3_fd, 0, SEEK_SET);
-
-
 /******************************************************************************
 	ƒ[ƒJƒ‹•Ï”
 ******************************************************************************/
@@ -325,6 +320,7 @@ int mp3_thread_start(void)
 	if (!audio_driver->chReserve(mp3_handle, MP3_SAMPLES, 2))
 	{
 		fatalerror(TEXT(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_MP3));
+		audio_driver->release(mp3_handle);
 		audio_driver->free(mp3_handle);
 		mp3_handle = NULL;
 		return 0;
@@ -397,7 +393,8 @@ int mp3_play(const char *name)
 
 		if ((mp3_fd = open(MP3_file, O_RDONLY, 0777)) >= 0)
 		{
-			MP3_get_filesize();
+			mp3_fsize = lseek(mp3_fd, 0, SEEK_END);
+			lseek(mp3_fd, 0, SEEK_SET);
 
 			mp3_status  = MP3_PLAY;
 			mp3_newfile = 1;
