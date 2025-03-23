@@ -416,6 +416,19 @@ endif()
 
 # Add libmad library if needed
 if (LIB_MAD)
+    # Find the libmad library
+    find_path(LIBMAD_INCLUDE_DIR mad.h)
+    find_library(LIBMAD_LIBRARY mad)
+
+    # Get the directory of the library for -L
+    get_filename_component(LIBMAD_LIBRARY_DIR ${LIBMAD_LIBRARY} DIRECTORY)
+    
+    target_include_directories(${TARGET} PUBLIC 
+        ${LIBMAD_INCLUDE_DIR}
+    )
+    target_link_directories(${TARGET} PUBLIC
+        ${LIBMAD_LIBRARY_DIR}
+    )
     target_link_libraries(${TARGET} PUBLIC
         mad
     )
