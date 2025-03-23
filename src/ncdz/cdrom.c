@@ -702,7 +702,7 @@ int cdrom_process_ipl(void)
 
 			if ((f = zopen(fname)) != -1)
 			{
-				uint8_t *mem = memory_region_cpu1 + 0x120000;
+				uint8_t *mem = (uint8_t *)(memory_region_cpu1 + 0x120000);
 
 				length = zread(f, mem, 0x10000);
 				zclose(f);
@@ -734,7 +734,7 @@ int cdrom_process_ipl(void)
 
 	p = buf = (char *)cdrom_cache;
 
-	while ((uint32_t)p - (uint32_t)cdrom_cache < length)
+    while ((uintptr_t)p - (uintptr_t)cdrom_cache < length)
 	{
 		memset(linebuf, 0, 32);
 
