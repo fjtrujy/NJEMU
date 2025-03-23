@@ -140,7 +140,6 @@ int sound_thread_start(void)
 	memset(sound_buffer[1], 0, sizeof(sound_buffer[1]));
 
 	game_audio = audio_driver->init();
-	audio_driver->release(game_audio);
 
 	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency, 2))
 	{
