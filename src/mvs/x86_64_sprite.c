@@ -602,7 +602,6 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 ------------------------------------------------------------------------*/
 
 static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
-	// printf("getWorkBufferForSPR(%i)\n", index);
 	switch (index) {
 		case 0:
 			return TEX_SPR0;
@@ -617,7 +616,6 @@ static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
 
 void blit_finish_spr(void)
 {
-	// // printf("blit_finish_spr\n");
 	int i, total_sprites = 0;
 	uint16_t flags, *pflags = spr_flags;
 	struct Vertex *vertices, *vertices_tmp;
@@ -625,7 +623,6 @@ void blit_finish_spr(void)
 	enum WorkBuffer workBuffer;
 
 	if (!spr_index) return;
-	// printf("blit_finish_spr has spr_index\n");
 
 	struct Vertex vertex_buffer[spr_num];
 

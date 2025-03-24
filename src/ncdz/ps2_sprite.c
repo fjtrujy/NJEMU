@@ -435,8 +435,6 @@ void blit_reset(void)
 	gsGlobal = video_driver->getNativeObjects(video_data, 0);
 	atlas = video_driver->getNativeObjects(video_data, 5);
 
-	printf("===> palette_bank = %d\n", palette_bank);
-
 	blit_clear_all_sprite();
 }
 
@@ -630,7 +628,6 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr)
 ------------------------------------------------------------------------*/
 
 static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
-	// printf("getWorkBufferForSPR(%i)\n", index);
 	switch (index) {
 		case 0:
 			return TEX_SPR0;
@@ -645,7 +642,6 @@ static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
 
 void blit_finish_spr(void)
 {
-	// // printf("blit_finish_spr\n");
 	int i, total_sprites = 0;
 	uint16_t flags, *pflags = spr_flags;
 	GSPRIMUVPOINTFLAT *vertices, *vertices_tmp;
@@ -653,7 +649,6 @@ void blit_finish_spr(void)
 	enum WorkBuffer workBuffer;
 
 	if (!spr_index) return;
-	// printf("blit_finish_spr has spr_index\n");
 
 	GSPRIMUVPOINTFLAT vertex_buffer[spr_num];
 
