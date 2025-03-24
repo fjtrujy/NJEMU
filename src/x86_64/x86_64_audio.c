@@ -109,7 +109,7 @@ static void x86_64_srcOutputBlocking(void *data, int32_t volume, void *buffer, u
         SDL_Delay(100);
 }
 
-static void x86_64_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buf) {
+static void x86_64_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
     // In a stereo configuration, pan the audio manually
     x86_64_audio_t *x86_64 = (x86_64_audio_t*)data;
 
@@ -118,7 +118,7 @@ static void x86_64_outputPannedBlocking(void *data, int leftvol, int rightvol, v
         return;
     }
 
-    float *float_buffer = (float*)buf;
+    float *float_buffer = (float*)buffer;
     int samples = x86_64->spec.samples * x86_64->spec.channels;
     for (int i = 0; i < samples; i += 2) {
         float_buffer[i] *= (leftvol / 100.0f);

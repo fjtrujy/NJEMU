@@ -44,9 +44,9 @@ static void psp_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 	sceAudioSRCOutputBlocking(volume, buffer);
 }
 
-static void psp_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buf) {
+static void psp_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
 	psp_audio_t *psp = (psp_audio_t*)data;
-	sceAudioOutputPannedBlocking(psp->channel, leftvol, rightvol, buf);
+	sceAudioOutputPannedBlocking(psp->channel, leftvol, rightvol, buffer);
 }
 
 audio_driver_t audio_psp = {

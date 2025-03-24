@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <kernel.h>
 #include <audsrv.h>
@@ -51,13 +52,19 @@ static bool ps2_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
 	// ps2->samples = samples;
     // audsrv_set_volume(MAX_VOLUME);
 	// return ps2->channel >= 0;
+
+	// dummy for now till mp3 is implemented
 	channels = 20;
 
 	return ps2->channel >= 0;
 }
 
 static void ps2_release(void *data) {
-	audsrv_stop_audio();
+	ps2_audio_t *ps2 = (ps2_audio_t*)data;
+
+	// dummy for now till mp3 is implemented
+	if (ps2->channel != 20)
+		audsrv_stop_audio();
 }
 
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
@@ -67,8 +74,10 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 	audsrv_play_audio(buffer, size);
 }
 
-static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buf) {
+static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
+	// dummy for now till mp3 is implemented
+	usleep(1000);
 }
 
 audio_driver_t audio_ps2 = {

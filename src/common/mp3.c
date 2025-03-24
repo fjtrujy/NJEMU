@@ -238,7 +238,7 @@ static void MP3Update(void)
 
 				if (OutputPtr == OutputEnd)
 				{
-					audio_driver->outputPannedBlocking(mp3_handle, mp3_volume, mp3_volume, mp3_out[flip]);
+					audio_driver->outputPannedBlocking(mp3_handle, mp3_volume, mp3_volume, mp3_out[flip], MP3_BUFFER_SIZE);
 					flip ^= 1;
 					OutputPtr = (int16_t *)mp3_out[flip];
 					OutputEnd = (int16_t *)(mp3_out[flip] + MP3_BUFFER_SIZE);
@@ -449,7 +449,7 @@ void mp3_pause(int pause)
 					thread_driver->suspendThread(mp3_thread);
 					memset(mp3_out[0], 0, MP3_BUFFER_SIZE);
 					memset(mp3_out[1], 0, MP3_BUFFER_SIZE);
-					audio_driver->outputPannedBlocking(mp3_handle, 0, 0, mp3_out[0]);
+					audio_driver->outputPannedBlocking(mp3_handle, 0, 0, mp3_out[0], MP3_BUFFER_SIZE);
 				}
 			}
 			else
