@@ -75,7 +75,7 @@ static uint32_t finish_sema_id = 0;
 	ƒrƒfƒIˆ—‰Šú‰»
 --------------------------------------------------------*/
 
-static int finish_handler(void)
+static int finish_handler(int reason)
 {
 	if (GS_CSR_FINISH) {
 		iSignalSema(finish_sema_id);
