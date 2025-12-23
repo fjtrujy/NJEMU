@@ -273,6 +273,8 @@ if (${TARGET} STREQUAL "MVS")
         mvs/timer.c
         mvs/vidhrdw.h
         mvs/vidhrdw.c
+        mvs/sprite_common.h
+        mvs/sprite_common.c
         mvs/${PLATFORM_LOWER}_sprite.c
         mvs/pd4990a.h
         mvs/pd4990a.c
