@@ -4,7 +4,7 @@
 class RomConverter {
     constructor() {
         this.selectedFile = null;
-        this.module = null;
+        this.moduleReady = false;
         this.isProcessing = false;
         
         this.initElements();
@@ -88,23 +88,22 @@ class RomConverter {
     }
     
     initEmscripten() {
-        // Check if Emscripten module is loaded
+        // With MODULARIZE=0, Module and FS are global objects
+        // We need to set up Module config BEFORE the script loads
+        window.Module = window.Module || {};
+        window.Module.print = (text) => this.log(text);
+        window.Module.printErr = (text) => this.log(text, 'error');
+        window.Module.onRuntimeInitialized = () => {
+            this.moduleReady = true;
+            this.log('ROM Converter ready!', 'success');
+        };
+        
+        // Check if already initialized
         if (typeof Module !== 'undefined' && Module.calledRun) {
-            this.module = Module;
-            this.setupEmscriptenCallbacks();
+            this.moduleReady = true;
             this.log('ROM Converter ready!', 'success');
         } else {
-            // Module will be loaded, set up callback
-            window.Module = {
-                onRuntimeInitialized: () => {
-                    this.module = Module;
-                    this.setupEmscriptenCallbacks();
-                    this.log('ROM Converter ready!', 'success');
-                },
-                print: (text) => this.log(text),
-                printErr: (text) => this.log(text, 'error')
-            };
-            
+            this.moduleReady = false;
             // Check if WASM file exists
             this.checkWasmAvailability();
         }
@@ -112,7 +111,7 @@ class RomConverter {
     
     async checkWasmAvailability() {
         try {
-            const response = await fetch('romcnv.wasm', { method: 'HEAD' });
+            const response = await fetch('romcnv_mvs.wasm', { method: 'HEAD' });
             if (!response.ok) {
                 this.showWasmUnavailable();
             }
@@ -129,10 +128,10 @@ class RomConverter {
     }
     
     setupEmscriptenCallbacks() {
-        // Override print functions
-        if (this.module) {
-            this.module.print = (text) => this.log(text);
-            this.module.printErr = (text) => this.log(text, 'error');
+        // Override print functions (global Module with MODULARIZE=0)
+        if (typeof Module !== 'undefined') {
+            Module.print = (text) => this.log(text);
+            Module.printErr = (text) => this.log(text, 'error');
         }
     }
     
@@ -196,6 +195,10 @@ class RomConverter {
     
     async startConversion() {
         if (!this.selectedFile || this.isProcessing) return;
+        if (!this.moduleReady) {
+            this.log('WASM module not ready yet', 'error');
+            return;
+        }
         
         this.isProcessing = true;
         this.convertBtn.disabled = true;
@@ -215,9 +218,13 @@ class RomConverter {
             
             this.updateProgress(20, 'Writing to virtual filesystem...');
             
+            // Create directories if they don't exist (FS is global with MODULARIZE=0)
+            try { FS.mkdir('/roms'); } catch (e) { /* ignore if exists */ }
+            try { FS.mkdir('/cache'); } catch (e) { /* ignore if exists */ }
+            
             // Write to Emscripten filesystem
             const fileName = this.selectedFile.name;
-            this.module.FS.writeFile(`/roms/${fileName}`, data);
+            FS.writeFile(`/roms/${fileName}`, data);
             
             this.updateProgress(40, 'Processing ROM...');
             
@@ -225,36 +232,35 @@ class RomConverter {
             const system = this.getSelectedSystem();
             const slim = this.isSlimMode();
             
-            // Build arguments
-            const args = [`/roms/${fileName}`];
-            if (slim) {
-                args.push('-slim');
-            }
-            
             this.log(`Converting ${fileName} for ${system.toUpperCase()}...`);
             this.log(`Options: ${slim ? 'Slim mode enabled' : 'Standard mode'}`);
             this.log('---');
             
-            // Call the conversion function
-            this.updateProgress(50, 'Converting sprites...');
+            // Call main() with command-line arguments
+            this.updateProgress(50, 'Converting ROM...');
             
-            // The actual conversion will be done by the WASM module
-            const result = this.module.ccall(
-                'convert_rom',
-                'number',
-                ['string', 'number'],
-                [fileName, slim ? 1 : 0]
-            );
+            // romcnv expects: romcnv fullpath/gamename.zip
+            const result = Module.callMain([`/roms/${fileName}`]);
             
-            this.updateProgress(90, 'Packaging results...');
+            this.updateProgress(90, 'Checking results...');
             
-            if (result === 0) {
+            // Get the game name from the ROM filename
+            const gameName = fileName.replace('.zip', '').toLowerCase();
+            const cacheDir = `/cache/${gameName}_cache`;
+            
+            // Check if cache was actually created
+            // Note: romcnv returns 1 on success, 0 on failure (opposite of Unix convention)
+            const cacheExists = FS.analyzePath(cacheDir).exists;
+            
+            if (cacheExists) {
                 this.updateProgress(100, 'Conversion complete!');
                 this.log('---');
                 this.log('Conversion completed successfully!', 'success');
                 this.downloadPanel.hidden = false;
             } else {
-                this.log(`Conversion failed with error code: ${result}`, 'error');
+                this.log('---');
+                this.log('No cache files were created. The ROM may not need conversion or is not supported.', 'error');
+                this.log(`Return code: ${result}`, 'error');
             }
             
         } catch (error) {
@@ -270,37 +276,42 @@ class RomConverter {
         try {
             // Get the game name from the ROM filename
             const gameName = this.selectedFile.name.replace('.zip', '').toLowerCase();
+            
+            // romcnv creates output in cache/<gamename>_cache relative to launch dir
             const cacheDir = `/cache/${gameName}_cache`;
             
-            // Check if output exists
-            if (!this.module.FS.analyzePath(cacheDir).exists) {
+            // Check if output exists (FS is global with MODULARIZE=0)
+            if (!FS.analyzePath(cacheDir).exists) {
                 this.log('No cache files found to download', 'error');
+                this.log(`Looked in: ${cacheDir}`, 'error');
+                // Debug: list what's in /cache
+                try {
+                    const files = FS.readdir('/cache');
+                    this.log(`Contents of /cache: ${files.join(', ')}`, 'error');
+                } catch (e) {
+                    this.log('/cache directory does not exist', 'error');
+                }
                 return;
             }
             
             // Create a zip file with the results
             const JSZip = window.JSZip;
             if (!JSZip) {
-                // Fallback: download individual files
+                this.log('JSZip not available, downloading files individually...', 'error');
                 this.downloadIndividualFiles(cacheDir, gameName);
                 return;
             }
             
             const zip = new JSZip();
-            const folder = zip.folder(`${gameName}_cache`);
             
-            // Read all files from the cache directory
-            const files = this.module.FS.readdir(cacheDir);
-            for (const file of files) {
-                if (file === '.' || file === '..') continue;
-                
-                const filePath = `${cacheDir}/${file}`;
-                const data = this.module.FS.readFile(filePath);
-                folder.file(file, data);
-            }
+            // Recursively add entire folder to zip
+            this.log('Packaging cache folder into zip...');
+            this.addFolderToZip(zip, cacheDir, `${gameName}_cache`);
             
             // Generate and download the zip
+            this.log('Generating zip file...');
             const content = await zip.generateAsync({ type: 'blob' });
+            this.log(`Downloading ${gameName}_cache.zip (${(content.size / 1024 / 1024).toFixed(2)} MB)`);
             this.downloadBlob(content, `${gameName}_cache.zip`);
             
         } catch (error) {
@@ -309,15 +320,37 @@ class RomConverter {
         }
     }
     
+    addFolderToZip(zip, fsPath, zipPath) {
+        const entries = FS.readdir(fsPath);
+        
+        for (const entry of entries) {
+            if (entry === '.' || entry === '..') continue;
+            
+            const fullFsPath = `${fsPath}/${entry}`;
+            const fullZipPath = `${zipPath}/${entry}`;
+            const stat = FS.stat(fullFsPath);
+            
+            if (FS.isDir(stat.mode)) {
+                // Recursively add subdirectory
+                this.addFolderToZip(zip, fullFsPath, fullZipPath);
+            } else {
+                // Add file
+                const data = FS.readFile(fullFsPath);
+                zip.file(fullZipPath, data);
+                this.log(`  Added: ${fullZipPath} (${data.length} bytes)`);
+            }
+        }
+    }
+    
     downloadIndividualFiles(cacheDir, gameName) {
         try {
-            const files = this.module.FS.readdir(cacheDir);
+            const files = FS.readdir(cacheDir);
             
             for (const file of files) {
                 if (file === '.' || file === '..') continue;
                 
                 const filePath = `${cacheDir}/${file}`;
-                const data = this.module.FS.readFile(filePath);
+                const data = FS.readFile(filePath);
                 const blob = new Blob([data], { type: 'application/octet-stream' });
                 this.downloadBlob(blob, file);
             }

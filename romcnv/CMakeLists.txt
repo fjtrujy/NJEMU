@@ -150,13 +150,14 @@ if(EMSCRIPTEN)
     target_link_options(${BINARY_TARGET} PUBLIC
         "SHELL:-s WASM=1"
         "SHELL:-s EXPORTED_FUNCTIONS=['_main','_malloc','_free']"
-        "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']"
+        "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS','callMain']"
         "SHELL:-s ALLOW_MEMORY_GROWTH=1"
         "SHELL:-s INITIAL_MEMORY=134217728"
         "SHELL:-s FORCE_FILESYSTEM=1"
         "SHELL:-s MODULARIZE=0"
         "SHELL:-s ENVIRONMENT='web'"
         "SHELL:-s NO_EXIT_RUNTIME=1"
+        "SHELL:-s INVOKE_RUN=0"
         "SHELL:-s USE_ZLIB=1"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}@/rominfo.${TARGET_LOWER}"
     )

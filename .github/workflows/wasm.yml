@@ -52,20 +52,16 @@ jobs:
         cp web/style.css dist/
         cp web/app.js dist/
         
-        # Copy WASM files if they exist (binary is named romcnv_mvs)
+        # Copy WASM files (keep original names so JS can find .wasm and .data)
         if [ -f romcnv/build_wasm/romcnv_mvs.js ]; then
-          cp romcnv/build_wasm/romcnv_mvs.js dist/romcnv.js
-        fi
-        if [ -f romcnv/build_wasm/romcnv_mvs.wasm ]; then
-          cp romcnv/build_wasm/romcnv_mvs.wasm dist/romcnv.wasm
-        fi
-        if [ -f romcnv/build_wasm/romcnv_mvs.data ]; then
-          cp romcnv/build_wasm/romcnv_mvs.data dist/romcnv.data
+          cp romcnv/build_wasm/romcnv_mvs.js dist/
+          cp romcnv/build_wasm/romcnv_mvs.wasm dist/
+          cp romcnv/build_wasm/romcnv_mvs.data dist/
         fi
         
         # Create placeholder if WASM build failed
-        if [ ! -f dist/romcnv.wasm ]; then
-          echo "console.log('WASM module not available - build in progress');" > dist/romcnv.js
+        if [ ! -f dist/romcnv_mvs.wasm ]; then
+          echo "console.log('WASM module not available - build in progress');" > dist/romcnv_mvs.js
         fi
 
     - name: Upload artifact
