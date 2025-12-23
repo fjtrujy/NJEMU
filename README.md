@@ -1,130 +1,303 @@
-NJEmu 2.3.5 is based on NJEmu 2.3.1.
+# NJEMU - Multi-Platform Arcade Emulator
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-----------------------------------------------
+## Overview
 
-how to use:
+**NJEMU** is an open-source arcade emulator that provides emulation for classic arcade systems from Capcom and SNK. Originally developed exclusively for the **PSP (PlayStation Portable)**, this project is now being ported to additional platforms.
 
+**Current Version:** 2.4.0  
+**Based on:** NJEmu 2.3.5
 
-O: OK
+### Porting Project
 
-X: Cancel
+This repository contains the ongoing effort to bring NJEMU to multiple platforms:
 
-Help: select
+- **PSP** - Original platform, fully supported
+- **PS2** - Primary porting target, actively developed
+- **PC (x86_64/SDL)** - Development platform for easier debugging and testing
 
-HOME(PS): emulator menu
+The PC port using SDL serves primarily as a development and debugging tool, making it easier to test changes before deploying to the target console platforms (PSP and PS2).
 
-On PSV or PPSSPP,HOME(PS) button can't use,you can delete "SystemButtons.prx"
+### Architecture
 
-SELECT+START: emulator menu
+The porting effort involved encapsulating platform-agnostic code and creating specific **drivers** for each platform. This abstraction layer allows the emulation core to run on different hardware while platform-specific code handles:
 
-----------------------------------------------
+- Video rendering
+- Audio output
+- Input handling
+- Threading
+- File I/O
 
+### Current Porting Status
 
-CPS1PSP
+| Emulator | PSP | PS2 | PC |
+|----------|-----|-----|-----|
+| **MVS** | ✅ Full | ✅ Core | ✅ Core |
+| **CPS1** | ✅ Full | ❌ | ❌ |
+| **CPS2** | ✅ Full | ❌ | ❌ |
+| **NCDZ** | ✅ Full | ✅ Core | ✅ Core |
 
-Capcom System 1 Emulator
+> **Note:** Currently MVS and NCDZ cores have been ported to PS2 and PC. The menu/GUI system has not been ported yet - only the emulation core runs on the new platforms.
 
+📋 See [PORTING_PLAN.md](PORTING_PLAN.md) for detailed roadmap and remaining work.
 
+---
 
-CPS2PSP
+## Supported Arcade Systems
 
-Capcom System 2 Emulator
+| Target | Name | Description |
+|--------|------|-------------|
+| **CPS1** | CPS1PSP | Capcom Play System 1 Emulator |
+| **CPS2** | CPS2PSP | Capcom Play System 2 Emulator |
+| **MVS** | MVSPSP | Neo-Geo MVS/AES Emulator |
+| **NCDZ** | NCDZPSP | Neo-Geo CD Emulator |
 
+## Supported Platforms
 
+| Platform | Description | Status |
+|----------|-------------|--------|
+| **PSP** | Sony PlayStation Portable | ✅ Original platform |
+| **PS2** | Sony PlayStation 2 | 🔄 Active development |
+| **X86_64** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
 
-MVSPSP
+---
 
-Neo-Geo MVS/AES Emulator
+## How to Use
 
+### Controls
 
+| Button | Action |
+|--------|--------|
+| O (Circle) | OK / Confirm |
+| X (Cross) | Cancel |
+| SELECT | Help |
+| HOME / PS | Emulator menu |
+| SELECT + START | Emulator menu (alternative) |
+| R Trigger | BIOS menu (MVS) |
 
-NCDZPSP
+> **Note:** On PS Vita or PPSSPP, the HOME/PS button may not work. You can delete `SystemButtons.prx` and use SELECT+START instead.
 
-neogeo Emulator
+### Directory Structure
 
+Place your files in the following structure:
 
----------------------------------------------
+```
+[EMULATOR]/
+├── roms/           # ROM files (ZIP format)
+├── cache/          # ROM cache files
+├── cheats/         # Cheat files (.ini)
+├── config/         # Configuration files
+├── memcard/        # Memory card saves
+├── nvram/          # NVRAM saves
+├── state/          # Save states
+└── PICTURE/        # Screenshots and backgrounds
+```
 
-NJEmu 2.3.5 change log
+---
 
+## Features
 
-romset use MAME0.152
-
-font use simhei(CHARSET:GBK)
-
-Japanese command list must use GBK charset,you can use notepad++ convert
-
-fix png format bug
-
-change help to select
-
-change bios menu to R trigger
-
-support multi language
-
-added command hotkey
-
-gamelist to 512
-
-support cheat
-
-added some romset(hack/bootleg)
-
----------------------------------------------
-
-CPS1PSP
-
-fix dipswitch
-
-fix Mercs can't use player3
-
-added some hack roms button3
-
-fix Warriors of Fate (bootleg)
-
-fix Huo Feng Huang(Chinese bootleg of Sangokushi II) sound
-
----------------------------------------------
-
-CPS2PSP
-
----------------------------------------------
-
-MVSPSP
-
-fix dip menu
-
-fix Jockey Grand Prix
-
-fix King of Gladiator (KOF'97 bootleg)
-
-support 128MB crom cache
-
-support unibios 1.0-3.0 and neogit bios
-
-support m1 decrypt
-
-fix 000-lo.lo length
-
----------------------------------------------
-
-NCDZPSP
-
-fix 000-lo.lo length(fix sleep mode)
-
----------------------------------------------
-
-Thanks to
-
-cheat code: davex
-
-hbl/multi language support: 173210
-
-mame team
-
-and NJ's emulator
-
-
----------------------------------------------
-Starting crossplatform support for NJEmu 2.3.5
+- High-quality arcade emulation
+- ROM caching system for improved performance
+- Save state support
+- Cheat support with extensive cheat databases
+- Multiple language support
+- DIP switch configuration (CPS1, MVS)
+- BIOS menu with UniBIOS 1.0-3.0 support (MVS)
+- Ad Hoc multiplayer (PSP)
+- Command list display
+
+---
+
+## Building
+
+### Prerequisites
+
+- CMake 3.12 or higher
+- Platform-specific toolchain:
+  - **PSP**: PSPSDK
+  - **PS2**: PS2DEV toolchain
+  - **PC**: GCC/Clang with SDL2
+
+### Build Commands
+
+Building requires specifying both `TARGET` and `PLATFORM`:
+
+```bash
+# Build MVS for PSP
+cmake -DTARGET=MVS -DPLATFORM=PSP -B build_psp
+cmake --build build_psp
+
+# Build MVS for PS2
+cmake -DTARGET=MVS -DPLATFORM=PS2 -B build_ps2
+cmake --build build_ps2
+
+# Build MVS for PC
+cmake -DTARGET=MVS -DPLATFORM=X86_64 -B build_pc
+cmake --build build_pc
+
+# Build CPS1 for PSP
+cmake -DTARGET=CPS1 -DPLATFORM=PSP -B build_psp_cps1
+cmake --build build_psp_cps1
+```
+
+### Build Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `LARGE_MEMORY` | Enable large memory mode (PSP-2000+) | OFF |
+| `KERNEL_MODE` | Enable kernel mode (PSP) | OFF |
+| `COMMAND_LIST` | Enable command list display | OFF |
+| `ADHOC` | Enable Ad Hoc multiplayer | OFF |
+| `NO_GUI` | Disable GUI (headless mode) | ON |
+| `SAVE_STATE` | Enable save state support | OFF |
+| `UI_32BPP` | Enable 32-bit color UI | ON |
+| `RELEASE` | Release build | OFF |
+
+---
+
+## ROM Compatibility
+
+- ROMs must be in **MAME 0.152** compatible format
+- Place ROMs in ZIP format in the `roms/` directory
+- Clone sets require the parent ROM in the same directory
+- Some games require ROM conversion using the `romcnv` tools
+
+### Supported Games
+
+- **CPS1**: 113+ games (Street Fighter II, Final Fight, Ghouls'n Ghosts, etc.)
+- **CPS2**: Capcom CPS2 arcade games
+- **MVS**: 270+ games (King of Fighters, Metal Slug, Samurai Shodown, etc.)
+- **NCDZ**: Neo-Geo CD games with MP3 audio support
+
+See the `docs/` folder for complete game lists.
+
+---
+
+## Project Structure
+
+```
+NJEMU/
+├── CMakeLists.txt          # Main CMake build configuration
+├── src/
+│   ├── common/             # Platform-agnostic code & driver interfaces
+│   │   ├── audio_driver.c/h    # Audio abstraction
+│   │   ├── video_driver.c/h    # Video abstraction
+│   │   ├── input_driver.c/h    # Input abstraction
+│   │   ├── thread_driver.c/h   # Threading abstraction
+│   │   └── platform_driver.c/h # Platform abstraction
+│   │
+│   ├── cpu/                # CPU emulation cores
+│   │   ├── m68000/         # Motorola 68000 (C68K)
+│   │   └── z80/            # Zilog Z80 (CZ80)
+│   │
+│   ├── sound/              # Sound chip emulation
+│   │   ├── ym2151.c/h      # Yamaha YM2151
+│   │   ├── ym2610.c/h      # Yamaha YM2610
+│   │   └── qsound.c/h      # QSound DSP
+│   │
+│   ├── mvs/                # MVS/Neo-Geo emulation
+│   ├── cps1/               # CPS1 emulation
+│   ├── cps2/               # CPS2 emulation
+│   ├── ncdz/               # Neo-Geo CD emulation
+│   │
+│   ├── psp/                # PSP platform drivers
+│   ├── ps2/                # PS2 platform drivers
+│   └── x86_64/             # PC/SDL platform drivers
+│
+├── romcnv/                 # ROM conversion tools
+└── docs/                   # Documentation and game lists
+```
+
+### Driver Architecture
+
+Each platform implements the same driver interfaces:
+
+| Driver | Purpose |
+|--------|---------|
+| `*_platform.c` | Platform initialization and main loop |
+| `*_video.c` | Screen rendering and sprite drawing |
+| `*_audio.c` | Sound output and mixing |
+| `*_input.c` | Controller/keyboard input |
+| `*_thread.c` | Threading and synchronization |
+| `*_ticker.c` | Timing and frame pacing |
+| `*_power.c` | Power management |
+
+---
+
+## Changelog
+
+### Version 2.4.0 (Cross-Platform Port)
+- Refactored codebase with platform abstraction layers (drivers)
+- Ported **MVS core** to PS2 (PlayStation 2)
+- Ported **MVS core** to PC/SDL2 for development and debugging
+- Introduced CMake build system for unified cross-platform builds
+- Maintained full PSP compatibility
+- Note: Menu/GUI not yet ported to PS2 and PC (core emulation only)
+
+### Version 2.3.5
+
+**General:**
+- ROM set updated to MAME 0.152
+- Font uses simhei (CHARSET: GBK)
+- Japanese command list must use GBK charset
+- Fixed PNG format bug
+- Changed help button to SELECT
+- Changed BIOS menu to R trigger
+- Multi-language support
+- Added command hotkey
+- Game list expanded to 512
+- Cheat support
+- Added hack/bootleg ROM sets
+
+**CPS1PSP:**
+- Fixed DIP switch
+- Fixed Mercs player 3 support
+- Added hack ROMs button 3
+- Fixed Warriors of Fate (bootleg)
+- Fixed Huo Feng Huang (Chinese bootleg of Sangokushi II) sound
+
+**MVSPSP:**
+- Fixed DIP menu
+- Fixed Jockey Grand Prix
+- Fixed King of Gladiator (KOF'97 bootleg)
+- Support 128MB CROM cache
+- Support UniBIOS 1.0-3.0 and NeoGit BIOS
+- Support M1 decrypt
+- Fixed 000-lo.lo length
+
+**NCDZPSP:**
+- Fixed 000-lo.lo length (fix sleep mode)
+
+---
+
+## Credits
+
+### Original NJEMU
+- **NJ's Emulator** - Original PSP development
+- **Cheat codes:** davex
+- **HBL/Multi-language support:** 173210
+- **MAME Team** for reference implementations
+
+### Cross-Platform Port
+- Multi-platform porting and CMake build system
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** - see the [Licence.txt](Licence.txt) file for details.
+
+**Important:** This emulator does not include any copyrighted ROM files. Users must provide their own legally obtained ROM files.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please ensure your code follows the existing style and includes appropriate documentation.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
