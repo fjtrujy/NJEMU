@@ -22,8 +22,8 @@ platform_driver_t *platform_drivers[] = {
 #ifdef PS2
 	&platform_ps2,
 #endif
-#ifdef X86_64
-	&platform_x86_64,
+#ifdef DESKTOP
+	&platform_desktop,
 #endif
 	&platform_null,
 	NULL,

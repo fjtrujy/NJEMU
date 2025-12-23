@@ -54,7 +54,7 @@ The emulator cores should be ported first since this is the primary functionalit
 
 **Files to create:**
 - `src/cps1/ps2_sprite.c`
-- `src/cps1/x86_64_sprite.c`
+- `src/cps1/desktop_sprite.c`
 
 **Reference:** Use `src/cps1/psp_sprite.c` as template
 
@@ -62,7 +62,7 @@ The emulator cores should be ported first since this is the primary functionalit
 1. Study `psp_sprite.c` to understand the sprite rendering logic
 2. Look at how MVS sprite rendering was adapted for PS2/PC
 3. Create `ps2_sprite.c` using PS2 GSKit for rendering
-4. Create `x86_64_sprite.c` using SDL2 for rendering
+4. Create `desktop_sprite.c` using SDL2 for rendering
 5. Update `CMakeLists.txt` to include new files conditionally
 
 **Estimated effort:** 2-3 days per platform
@@ -71,7 +71,7 @@ The emulator cores should be ported first since this is the primary functionalit
 
 **Files to create:**
 - `src/cps2/ps2_sprite.c`
-- `src/cps2/x86_64_sprite.c`
+- `src/cps2/desktop_sprite.c`
 
 **Reference:** Use `src/cps2/psp_sprite.c` as template
 
@@ -139,7 +139,7 @@ void gui_end_frame(void);
 
 **Files to create:**
 - `src/ps2/ps2_gui.c` - PS2 GSKit implementation
-- `src/x86_64/x86_64_gui.c` - SDL2 implementation
+- `src/desktop/desktop_gui.c` - SDL2 implementation
 
 ---
 
@@ -287,11 +287,11 @@ Once the GUI abstraction is in place, port the actual menu system.
 
 ### CPS1 Porting
 - [ ] `src/cps1/ps2_sprite.c`
-- [ ] `src/cps1/x86_64_sprite.c`
+- [ ] `src/cps1/desktop_sprite.c`
 
 ### CPS2 Porting
 - [ ] `src/cps2/ps2_sprite.c`
-- [ ] `src/cps2/x86_64_sprite.c`
+- [ ] `src/cps2/desktop_sprite.c`
 
 ### GUI Abstraction
 - [ ] `src/common/gui_driver.h`
@@ -304,8 +304,8 @@ Once the GUI abstraction is in place, port the actual menu system.
 - [ ] `src/ps2/ps2_font.c`
 
 ### PC GUI
-- [ ] `src/x86_64/x86_64_gui.c`
-- [ ] `src/x86_64/x86_64_font.c`
+- [ ] `src/desktop/desktop_gui.c`
+- [ ] `src/desktop/desktop_font.c`
 
 ---
 
@@ -348,5 +348,5 @@ This is a valid approach for a "debug/development" platform.
 
 ### Reference Implementations
 - `src/mvs/ps2_sprite.c` - PS2 sprite rendering example
-- `src/mvs/x86_64_sprite.c` - SDL2 sprite rendering example
+- `src/mvs/desktop_sprite.c` - SDL2 sprite rendering example
 

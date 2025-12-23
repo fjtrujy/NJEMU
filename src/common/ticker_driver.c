@@ -23,8 +23,8 @@ ticker_driver_t *ticker_drivers[] = {
 #ifdef PS2
 	&ticker_ps2,
 #endif
-#ifdef X86_64
-	&ticker_x86_64,
+#ifdef DESKTOP
+	&ticker_desktop,
 #endif
 	&ticker_null,
 	NULL,

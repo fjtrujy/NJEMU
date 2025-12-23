@@ -9,10 +9,10 @@
 #include <stdlib.h>
 #include "emumain.h"
 
-typedef struct x86_64_ui_text {
+typedef struct desktop_ui_text {
 	uint32_t lang;
 	const char *ui_text[UI_TEXT_MAX];
-} x86_64_ui_text_t;
+} desktop_ui_text_t;
 
 static const char *text_ENGLISH[UI_TEXT_MAX] =
 {
@@ -2811,70 +2811,70 @@ static int configGetLanguage() {
 	return LANGUAGE_ENGLISH;
 }
 
-static void *x86_64_init(void)
+static void *desktop_init(void)
 {
-	x86_64_ui_text_t *x86_64 = (x86_64_ui_text_t*)calloc(1, sizeof(x86_64_ui_text_t));
+	desktop_ui_text_t *desktop = (desktop_ui_text_t*)calloc(1, sizeof(desktop_ui_text_t));
 	int i;
 
     switch (configGetLanguage())
 	{
 	case LANGUAGE_SIMPL_CHINESE:
-		x86_64->lang = LANG_CHINESE_SIMPLIFIED;
+		desktop->lang = LANG_CHINESE_SIMPLIFIED;
 		for (i = 0; i < UI_TEXT_MAX; i++)
-			x86_64->ui_text[i] = text_CHINESE_SIMPLIFIED[i];
+			desktop->ui_text[i] = text_CHINESE_SIMPLIFIED[i];
 		break;
 
 	case LANGUAGE_TRAD_CHINESE:
-		x86_64->lang = LANG_CHINESE_TRADITIONAL;
+		desktop->lang = LANG_CHINESE_TRADITIONAL;
 		for (i = 0; i < UI_TEXT_MAX; i++)
-			x86_64->ui_text[i] = text_CHINESE_TRADITIONAL[i];
+			desktop->ui_text[i] = text_CHINESE_TRADITIONAL[i];
 		break;
 
 	case LANGUAGE_JAPANESE:
-		x86_64->lang = LANG_JAPANESE;
+		desktop->lang = LANG_JAPANESE;
 		for (i = 0; i < UI_TEXT_MAX; i++)
-			x86_64->ui_text[i] = text_JAPANESE[i];
+			desktop->ui_text[i] = text_JAPANESE[i];
 		break;
 
 	case LANGUAGE_SPANISH:
-		x86_64->lang = LANG_SPANISH;
+		desktop->lang = LANG_SPANISH;
 		for (i = 0; i < UI_TEXT_MAX; i++)
-			x86_64->ui_text[i] = text_SPANISH[i];
+			desktop->ui_text[i] = text_SPANISH[i];
 		break;
 
 	default:
-		x86_64->lang = LANG_ENGLISH;
+		desktop->lang = LANG_ENGLISH;
 		for (i = 0; i < UI_TEXT_MAX; i++)
-			x86_64->ui_text[i] = text_ENGLISH[i];
+			desktop->ui_text[i] = text_ENGLISH[i];
 		break;
 	}
 
-	return x86_64;
+	return desktop;
 }
 
-static void x86_64_free(void *data)
+static void desktop_free(void *data)
 {
-	x86_64_ui_text_t *x86_64 = (x86_64_ui_text_t*)data;
-	free(x86_64);
+	desktop_ui_text_t *desktop = (desktop_ui_text_t*)data;
+	free(desktop);
 }
 
-static int32_t x86_64_getLanguage(void *data)
+static int32_t desktop_getLanguage(void *data)
 {
-	x86_64_ui_text_t *x86_64 = (x86_64_ui_text_t*)data;
-	return x86_64->lang;
+	desktop_ui_text_t *desktop = (desktop_ui_text_t*)data;
+	return desktop->lang;
 }
 
-static const char *x86_64_getText(void *data, int32_t id)
+static const char *desktop_getText(void *data, int32_t id)
 {
-	x86_64_ui_text_t *x86_64 = (x86_64_ui_text_t*)data;
-	return x86_64->ui_text[id];
+	desktop_ui_text_t *desktop = (desktop_ui_text_t*)data;
+	return desktop->ui_text[id];
 }
 
 
-ui_text_driver_t ui_text_x86_64 = {
-	"x86_64",
-	x86_64_init,
-	x86_64_free,
-	x86_64_getLanguage,
-	x86_64_getText,
+ui_text_driver_t ui_text_desktop = {
+	"desktop",
+	desktop_init,
+	desktop_free,
+	desktop_getLanguage,
+	desktop_getText,
 };

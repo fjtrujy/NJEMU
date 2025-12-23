@@ -227,8 +227,8 @@ input_driver_t *input_drivers[] = {
 #ifdef PS2
 	&input_ps2,
 #endif
-#ifdef X86_64
-	&input_x86_64,
+#ifdef DESKTOP
+	&input_desktop,
 #endif
 	&input_null,
 	NULL,

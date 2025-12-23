@@ -29,8 +29,8 @@ thread_driver_t *thread_drivers[] = {
 #ifdef PS2
 	&thread_ps2,
 #endif
-#ifdef X86_64
-	&thread_x86_64,
+#ifdef DESKTOP
+	&thread_desktop,
 #endif
 	&thread_null,
 	NULL,

@@ -31,9 +31,9 @@ endif()
 
 # Different platform availables
 set(PLATFORM_VALUES 
-    "PSP"    # 0
-    "PS2"    # 1 
-    "X86_64" # 2
+    "PSP"     # 0
+    "PS2"     # 1 
+    "DESKTOP" # 2
 )
 list(FIND PLATFORM_VALUES ${PLATFORM} PLATFORM_INDEX)
 if (PLATFORM_INDEX EQUAL -1)
@@ -95,7 +95,8 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # Common Flags options
 set(COMMON_FLAGS
-    -Ofast
+    -O3 
+    -ffast-math
 )
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND COMMON_FLAGS
@@ -132,7 +133,7 @@ elseif (PLATFORM STREQUAL "PS2")
         -Wno-strict-aliasing
         -Wno-format
     )
-elseif (PLATFORM STREQUAL "X86_64")
+elseif (PLATFORM STREQUAL "DESKTOP")
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         list(APPEND WARNING_OPTIONS
             -Wno-unused-result
@@ -388,7 +389,7 @@ target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASA
 target_link_options(${TARGET} PUBLIC ${ASAN_OPTIONS})
 
 # Add platform specific libraries
-if (PLATFORM STREQUAL "X86_64")
+if (PLATFORM STREQUAL "DESKTOP")
     find_package(SDL2 REQUIRED)
     target_include_directories(${TARGET} PUBLIC 
         ${SDL2_INCLUDE_DIRS}

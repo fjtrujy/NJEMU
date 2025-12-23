@@ -15,7 +15,7 @@ This repository contains the ongoing effort to bring NJEMU to multiple platforms
 
 - **PSP** - Original platform, fully supported
 - **PS2** - Primary porting target, actively developed
-- **PC (x86_64/SDL)** - Development platform for easier debugging and testing
+- **DESKTOP** - Development platform for easier debugging and testing
 
 The PC port using SDL serves primarily as a development and debugging tool, making it easier to test changes before deploying to the target console platforms (PSP and PS2).
 
@@ -59,7 +59,7 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 |----------|-------------|--------|
 | **PSP** | Sony PlayStation Portable | ✅ Original platform |
 | **PS2** | Sony PlayStation 2 | 🔄 Active development |
-| **X86_64** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
+| **DESKTOP** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
 
 ---
 
@@ -134,7 +134,7 @@ cmake -DTARGET=MVS -DPLATFORM=PS2 -B build_ps2
 cmake --build build_ps2
 
 # Build MVS for PC
-cmake -DTARGET=MVS -DPLATFORM=X86_64 -B build_pc
+cmake -DTARGET=MVS -DPLATFORM=DESKTOP -B build_pc
 cmake --build build_pc
 
 # Build CPS1 for PSP
@@ -204,7 +204,7 @@ NJEMU/
 │   │
 │   ├── psp/                # PSP platform drivers
 │   ├── ps2/                # PS2 platform drivers
-│   └── x86_64/             # PC/SDL platform drivers
+│   └── desktop/            # PC/SDL platform drivers
 │
 ├── romcnv/                 # ROM conversion tools
 └── docs/                   # Documentation and game lists

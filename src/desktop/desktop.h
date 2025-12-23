@@ -1,12 +1,12 @@
 /******************************************************************************
 
-	x86_64.h
+	desktop.h
 
 
 ******************************************************************************/
 
-#ifndef X86_64_H
-#define X86_64_H
+#ifndef DESKTOP_H
+#define DESKTOP_H
 
 #define SCR_WIDTH			480
 #define SCR_HEIGHT			272
@@ -16,4 +16,4 @@
 
 #define FONTSIZE			14
 
-#endif /* X86_64_H */
+#endif /* DESKTOP_H */

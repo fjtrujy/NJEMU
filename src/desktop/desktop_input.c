@@ -3,19 +3,19 @@
 #include <SDL.h>
 #include "common/input_driver.h"
 
-typedef struct x86_64_input {
-} x86_64_input_t;
+typedef struct desktop_input {
+} desktop_input_t;
 
-static void *x86_64_init(void) {
-	x86_64_input_t *x86_64 = (x86_64_input_t*)calloc(1, sizeof(x86_64_input_t));
-	return x86_64;
+static void *desktop_init(void) {
+	desktop_input_t *desktop = (desktop_input_t*)calloc(1, sizeof(desktop_input_t));
+	return desktop;
 }
 
-static void x86_64_free(void *data) {
+static void desktop_free(void *data) {
 	free(data);
 }
 
-static uint32_t x86_64_poll(void *data) {
+static uint32_t desktop_poll(void *data) {
 	uint32_t btnsData = 0;
 	SDL_Event event;
 	SDL_PollEvent(&event);
@@ -40,25 +40,25 @@ static uint32_t x86_64_poll(void *data) {
 }
 
 #if (EMU_SYSTEM == MVS)
-static uint32_t x86_64_pollFatfursp(void *data) {
+static uint32_t desktop_pollFatfursp(void *data) {
 	uint32_t btnsData = 0;
 	return btnsData;
 }
 
-static uint32_t x86_64_pollAnalog(void *data) {
+static uint32_t desktop_pollAnalog(void *data) {
 	uint32_t btnsData;
 	return btnsData;
 }
 #endif
 
 
-input_driver_t input_x86_64 = {
-	"x86_64",
-	x86_64_init,
-	x86_64_free,
-	x86_64_poll,
+input_driver_t input_desktop = {
+	"desktop",
+	desktop_init,
+	desktop_free,
+	desktop_poll,
 #if (EMU_SYSTEM == MVS)
-	x86_64_pollFatfursp,
-	x86_64_pollAnalog,
+	desktop_pollFatfursp,
+	desktop_pollAnalog,
 #endif
 };

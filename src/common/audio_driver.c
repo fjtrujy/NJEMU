@@ -26,8 +26,8 @@ audio_driver_t *audio_drivers[] = {
 #ifdef PS2
 	&audio_ps2,
 #endif
-#ifdef X86_64
-	&audio_x86_64,
+#ifdef DESKTOP
+	&audio_desktop,
 #endif
 	&audio_null,
 	NULL,

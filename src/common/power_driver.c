@@ -27,8 +27,8 @@ power_driver_t *power_drivers[] = {
 #ifdef PS2
 	&power_ps2,
 #endif
-#ifdef X86_64
-	&power_x86_64,
+#ifdef DESKTOP
+	&power_desktop,
 #endif
 	&power_null,
 	NULL,

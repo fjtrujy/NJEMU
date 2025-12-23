@@ -58,7 +58,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake -DPLATFORM="X86_64" \
+        cmake -DPLATFORM="DESKTOP" \
           -DTARGET="${{ matrix.target }}" \
           -DLARGE_MEMORY=${{ matrix.large_memory }} \
           -DCOMMAND_LIST=${{ matrix.command_list }} \

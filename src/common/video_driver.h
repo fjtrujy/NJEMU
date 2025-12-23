@@ -123,7 +123,7 @@ extern int platform_cpuclock;
 
 extern video_driver_t video_psp;
 extern video_driver_t video_ps2;
-extern video_driver_t video_x86_64;
+extern video_driver_t video_desktop;
 extern video_driver_t video_null;
 
 extern video_driver_t *video_drivers[];
