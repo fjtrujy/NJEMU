@@ -175,6 +175,64 @@ See the `docs/` folder for complete game lists.
 
 ---
 
+## ROM Conversion Tool (romcnv)
+
+The `romcnv` tool is a separate utility that converts and splits ROM files into smaller cache files. This is essential for platforms with limited RAM (PSP, PS2) where the full ROM cannot be loaded into memory at once.
+
+### Web Interface (Experimental)
+
+A web-based ROM converter is available at: **[https://fjtrujy.github.io/NJEMU/](https://fjtrujy.github.io/NJEMU/)**
+
+This allows you to convert ROMs directly in your browser without installing any software. 
+
+> **Note:** The web converter is experimental and under active development.
+
+### Why is it needed?
+
+Many arcade ROMs (especially MVS and CPS2 games) have sprite/graphics data that exceeds the available RAM on PSP (~24-64MB) and PS2 (~32MB). The `romcnv` tool:
+
+1. Extracts and processes sprite data from ROM files
+2. Creates optimized cache files split into manageable chunks
+3. Decrypts encrypted ROMs (for newer Neo-Geo games)
+
+### Building romcnv
+
+```bash
+cd romcnv
+mkdir build && cd build
+cmake -DTARGET=MVS ..    # For MVS ROM conversion
+cmake --build .
+
+# Or for CPS2:
+cmake -DTARGET=CPS2 ..
+cmake --build .
+```
+
+### Usage
+
+```bash
+# Convert a single ROM
+./romcnv_mvs /path/to/rom.zip
+
+# Convert all ROMs in a directory
+./romcnv_mvs /path/to/roms -all
+
+# For PSP-2000 (slim) - skip PCM cache for unencrypted games
+./romcnv_mvs /path/to/rom.zip -slim
+```
+
+### Output
+
+The tool creates a `cache/` directory containing:
+- `[game]_cache/` folder with processed sprite and sound data
+- Cache files that the emulator loads instead of the full ROM
+
+Copy the generated cache folder to your emulator's `cache/` directory alongside the original ROM in `roms/`.
+
+See `romcnv/readme_mvs.txt` and `romcnv/readme_cps2.txt` for detailed instructions.
+
+---
+
 ## Project Structure
 
 ```
@@ -207,6 +265,10 @@ NJEMU/
 │   └── desktop/            # PC/SDL platform drivers
 │
 ├── romcnv/                 # ROM conversion tools
+│   ├── CMakeLists.txt      # romcnv build configuration
+│   └── src/                # romcnv source code
+│       ├── mvs/            # MVS ROM conversion
+│       └── cps2/           # CPS2 ROM conversion
 └── docs/                   # Documentation and game lists
 ```
 

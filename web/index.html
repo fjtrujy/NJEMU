@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NJEMU ROM Converter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🎮</span>
+                <h1>NJEMU ROM Converter</h1>
+            </div>
+            <p class="subtitle">Convert arcade ROMs for PSP & PS2 emulation</p>
+        </header>
+
+        <main>
+            <section class="info-panel">
+                <h2>Why Convert ROMs?</h2>
+                <p>
+                    Many arcade ROMs have graphics data larger than the available RAM on PSP (~24-64MB) 
+                    and PS2 (~32MB). This tool processes ROMs to create optimized cache files that can 
+                    be loaded in chunks.
+                </p>
+            </section>
+
+            <section class="converter-panel">
+                <div class="system-selector">
+                    <label>Target System:</label>
+                    <div class="radio-group">
+                        <input type="radio" id="mvs" name="system" value="mvs" checked>
+                        <label for="mvs" class="radio-label">
+                            <span class="radio-icon">🕹️</span>
+                            <span>Neo-Geo MVS</span>
+                        </label>
+                        
+                        <input type="radio" id="cps2" name="system" value="cps2">
+                        <label for="cps2" class="radio-label">
+                            <span class="radio-icon">👊</span>
+                            <span>CPS2</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="options-panel">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="slim-mode">
+                        <span class="checkmark"></span>
+                        <span>PSP Slim Mode</span>
+                        <span class="hint">(Skip PCM cache for unencrypted games)</span>
+                    </label>
+                </div>
+
+                <div class="upload-zone" id="upload-zone">
+                    <div class="upload-content">
+                        <div class="upload-icon">📁</div>
+                        <p class="upload-text">Drop your ROM ZIP file here</p>
+                        <p class="upload-hint">or click to browse</p>
+                        <input type="file" id="rom-input" accept=".zip" hidden>
+                    </div>
+                    <div class="file-info" id="file-info" hidden>
+                        <span class="file-icon">📦</span>
+                        <span class="file-name" id="file-name"></span>
+                        <button class="clear-btn" id="clear-file">✕</button>
+                    </div>
+                </div>
+
+                <button class="convert-btn" id="convert-btn" disabled>
+                    <span class="btn-icon">⚙️</span>
+                    <span>Convert ROM</span>
+                </button>
+            </section>
+
+            <section class="progress-panel" id="progress-panel" hidden>
+                <h3>Processing...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Initializing...</p>
+            </section>
+
+            <section class="output-panel" id="output-panel" hidden>
+                <h3>Console Output</h3>
+                <div class="console" id="console"></div>
+            </section>
+
+            <section class="download-panel" id="download-panel" hidden>
+                <h3>✅ Conversion Complete!</h3>
+                <p>Your cache files are ready for download.</p>
+                <button class="download-btn" id="download-btn">
+                    <span class="btn-icon">💾</span>
+                    <span>Download Cache Files</span>
+                </button>
+            </section>
+        </main>
+
+        <footer>
+            <p>
+                Part of the <a href="https://github.com/fjtrujy/NJEMU" target="_blank">NJEMU Project</a>
+                <span class="separator">•</span>
+                <a href="https://github.com/fjtrujy/NJEMU/blob/main/romcnv/readme_mvs.txt" target="_blank">MVS Documentation</a>
+                <span class="separator">•</span>
+                <a href="https://github.com/fjtrujy/NJEMU/blob/main/romcnv/readme_cps2.txt" target="_blank">CPS2 Documentation</a>
+            </p>
+            <p class="copyright">Licensed under GPL-3.0</p>
+        </footer>
+    </div>
+
+    <script src="romcnv.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
