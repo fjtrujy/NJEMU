@@ -6,7 +6,7 @@ project(ROMCNV)
 # Different target availables
 set(TARGET_VALUES 
     "CPS2"  # 0
-    "MVS"   # §
+    "MVS"   # 1
 )
 
 # Ensure TARGET is set or provide a default
@@ -29,6 +29,17 @@ option(USE_ASAN "Use ASAN" OFF)
 # Add options to compiler definitions
 if (USE_CHINESE)
     add_definitions(-DCHINESE)
+endif()
+
+# Emscripten/WASM build configuration
+if(EMSCRIPTEN)
+    message(STATUS "Building for WebAssembly (Emscripten)")
+    add_definitions(-DWASM_BUILD)
+    
+    set(CMAKE_EXECUTABLE_SUFFIX ".js")
+    
+    # USE_ZLIB needed at compile time for headers
+    add_compile_options("-sUSE_ZLIB=1")
 endif()
 
 # Version
@@ -121,18 +132,41 @@ if (USE_ASAN)
     )
 endif()
 
-# Copy rominfo.mvs or rominfo.cps2 to the build directory
-add_custom_command(
-    TARGET ${BINARY_TARGET} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}
-        ${CMAKE_BINARY_DIR}/rominfo.${TARGET_LOWER}
-)
+# Copy rominfo.mvs or rominfo.cps2 to the build directory (not needed for Emscripten - uses preload)
+if(NOT EMSCRIPTEN)
+    add_custom_command(
+        TARGET ${BINARY_TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}
+            ${CMAKE_BINARY_DIR}/rominfo.${TARGET_LOWER}
+    )
+endif()
 
 target_compile_options(${BINARY_TARGET} PUBLIC ${WARNING_OPTIONS} ${ASAN_OPTIONS})
-target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
 
-# Add common libraries
-target_link_libraries(${BINARY_TARGET} PUBLIC
-    z
-)
+# Platform-specific link options
+if(EMSCRIPTEN)
+    # Emscripten link flags
+    target_link_options(${BINARY_TARGET} PUBLIC
+        "SHELL:-s WASM=1"
+        "SHELL:-s EXPORTED_FUNCTIONS=['_main','_malloc','_free']"
+        "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','FS']"
+        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+        "SHELL:-s INITIAL_MEMORY=134217728"
+        "SHELL:-s FORCE_FILESYSTEM=1"
+        "SHELL:-s MODULARIZE=0"
+        "SHELL:-s ENVIRONMENT='web'"
+        "SHELL:-s NO_EXIT_RUNTIME=1"
+        "SHELL:-s USE_ZLIB=1"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}@/rominfo.${TARGET_LOWER}"
+    )
+else()
+    target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
+endif()
+
+# Add common libraries (zlib handled by Emscripten port for WASM builds)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${BINARY_TARGET} PUBLIC
+        z
+    )
+endif()
