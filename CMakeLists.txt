@@ -288,6 +288,43 @@ if (${TARGET} STREQUAL "MVS")
 endif()
 
 # Add specific target source files
+if (${TARGET} STREQUAL "CPS1")
+
+    include_directories(
+        src/cps1
+    )
+
+    set(TARGET_SRC ${TARGET_SRC}
+        common/coin.h
+        common/coin.c
+        cps1/cps1.h
+        cps1/cps1.c
+        cps1/driver.h
+        cps1/driver.c
+        cps1/memintrf.h
+        cps1/memintrf.c
+        cps1/inptport.h
+        cps1/inptport.c
+        cps1/dipsw.h
+        cps1/dipsw.c
+        cps1/timer.h
+        cps1/timer.c
+        cps1/vidhrdw.h
+        cps1/vidhrdw.c
+        cps1/sprite.h
+        cps1/${PLATFORM_LOWER}_sprite.c
+        cps1/eeprom.h
+        cps1/eeprom.c
+        cps1/kabuki.c
+    )
+
+    # Set SOUND_2151 flag for CPS1
+    set(SOUND_2151 ON)
+    # Set SOUND_QSOUND flag for CPS1
+    set(SOUND_QSOUND ON)
+endif()
+
+# Add specific target source files
 if (${TARGET} STREQUAL "NCDZ")
     include_directories(
         src/ncdz
