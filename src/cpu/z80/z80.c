@@ -21,10 +21,10 @@ void z80_init(void)
 {
 	Cz80_Init(&CZ80);
 #if (EMU_SYSTEM == CPS1)
-	Cz80_Set_Fetch(&CZ80, 0x0000, 0xffff, (uint32_t)memory_region_cpu2);
+	Cz80_Set_Fetch(&CZ80, 0x0000, 0xffff, (uintptr_t)memory_region_cpu2);
 	if (memory_region_user2)
 	{
-		Cz80_Set_Encrypt_Range(&CZ80, 0x0000, 0x8000, (uint32_t)memory_region_user2);
+		Cz80_Set_Encrypt_Range(&CZ80, 0x0000, 0x8000, (uintptr_t)memory_region_user2);
 	}
 	Cz80_Set_ReadB(&CZ80, z80_read_memory_8);
 	Cz80_Set_WriteB(&CZ80, z80_write_memory_8);
