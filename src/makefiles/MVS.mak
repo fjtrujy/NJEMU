@@ -47,6 +47,7 @@ COREOBJS = \
 	mvs/dipsw.o \
 	mvs/timer.o \
 	mvs/vidhrdw.o \
+	mvs/sprite_common.o \
 	mvs/$(OS)_sprite.o \
 	mvs/pd4990a.o \
 	mvs/neocrypt.o \
