@@ -32,6 +32,9 @@ jobs:
     - name: Verify Emscripten
       run: emcc -v
 
+    - name: Install pandoc
+      run: sudo apt-get update && sudo apt-get install -y pandoc
+
     - name: Build romcnv WASM MVS
       run: |
         cd romcnv
@@ -62,6 +65,21 @@ jobs:
         cp web/index.html dist/
         cp web/style.css dist/
         cp web/app.js dist/
+
+        # Generate documentation HTML from markdown using pandoc
+        pandoc romcnv/README_MVS.md \
+          --template=web/doc_template.html \
+          --metadata title="MVS ROM Converter" \
+          --metadata subtitle="Documentation for Neo-Geo MVS ROM conversion" \
+          --metadata icon="🕹️" \
+          -o dist/doc_mvs.html
+
+        pandoc romcnv/README_CPS2.md \
+          --template=web/doc_template.html \
+          --metadata title="CPS2 ROM Converter" \
+          --metadata subtitle="Documentation for Capcom CPS2 ROM conversion" \
+          --metadata icon="👊" \
+          -o dist/doc_cps2.html
 
         # Extract version from CMakeLists.txt
         VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' romcnv/CMakeLists.txt | sed 's/[^0-9]*//g')

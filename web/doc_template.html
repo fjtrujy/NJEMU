@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$title$ - Documentation</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .doc-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .doc-content h1 {
+            color: var(--accent-primary);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .doc-content h2 {
+            color: var(--accent-primary);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .doc-content h2:first-child {
+            margin-top: 0;
+        }
+        .doc-content h3 {
+            color: var(--accent-secondary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .doc-content p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.7;
+        }
+        .doc-content ul, .doc-content ol {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+        .doc-content li {
+            margin-bottom: 0.5rem;
+        }
+        .doc-content code {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-tertiary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .doc-content pre {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+        }
+        .doc-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .doc-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        .doc-content th, .doc-content td {
+            padding: 0.75rem;
+            text-align: left;
+            border: 1px solid var(--border-color);
+        }
+        .doc-content th {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        .doc-content td {
+            color: var(--text-secondary);
+        }
+        .doc-content a {
+            color: var(--accent-primary);
+        }
+        .doc-content a:hover {
+            color: var(--accent-secondary);
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent-primary);
+            text-decoration: none;
+            margin-bottom: 1.5rem;
+        }
+        .back-link:hover {
+            color: var(--accent-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">$icon$</span>
+                <h1>NJEMU ROM Converter</h1>
+            </div>
+            <p class="subtitle">$subtitle$</p>
+        </header>
+
+        <main>
+            <a href="index.html" class="back-link">← Back to Converter</a>
+
+            <div class="doc-content">
+$body$
+            </div>
+        </main>
+
+        <footer>
+            <p>
+                Part of the <a href="https://github.com/fjtrujy/NJEMU" target="_blank">NJEMU Project</a>
+                <span class="separator">•</span>
+                <a href="index.html">Back to Converter</a>
+            </p>
+            <p class="copyright">Licensed under GPL-3.0</p>
+        </footer>
+    </div>
+</body>
+</html>
