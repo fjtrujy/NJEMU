@@ -6,10 +6,12 @@ class RomConverter {
         this.selectedFile = null;
         this.moduleReady = false;
         this.isProcessing = false;
-        
+        this.loadedSystem = null;
+        this.loadingModule = false;
+
         this.initElements();
         this.initEventListeners();
-        this.initEmscripten();
+        // Module will be loaded when user selects a system
     }
     
     initElements() {
@@ -80,59 +82,89 @@ class RomConverter {
         this.convertBtn.addEventListener('click', () => {
             this.startConversion();
         });
-        
+
         // Download button
         this.downloadBtn.addEventListener('click', () => {
             this.downloadResults();
         });
-    }
-    
-    initEmscripten() {
-        // With MODULARIZE=0, Module and FS are global objects
-        // We need to set up Module config BEFORE the script loads
-        window.Module = window.Module || {};
-        window.Module.print = (text) => this.log(text);
-        window.Module.printErr = (text) => this.log(text, 'error');
-        window.Module.onRuntimeInitialized = () => {
-            this.moduleReady = true;
-            this.log('ROM Converter ready!', 'success');
-        };
-        
-        // Check if already initialized
-        if (typeof Module !== 'undefined' && Module.calledRun) {
-            this.moduleReady = true;
-            this.log('ROM Converter ready!', 'success');
-        } else {
-            this.moduleReady = false;
-            // Check if WASM file exists
-            this.checkWasmAvailability();
+
+        // System selector change
+        for (const radio of this.systemRadios) {
+            radio.addEventListener('change', () => {
+                const system = this.getSelectedSystem();
+                if (system !== this.loadedSystem) {
+                    this.loadModuleForSystem(system);
+                }
+            });
         }
     }
-    
-    async checkWasmAvailability() {
+
+    async loadModuleForSystem(system) {
+        if (this.loadingModule) return;
+
+        this.loadingModule = true;
+        this.moduleReady = false;
+        this.convertBtn.disabled = true;
+
+        // Clear previous module
+        if (this.loadedSystem) {
+            this.log(`Switching from ${this.loadedSystem.toUpperCase()} to ${system.toUpperCase()}...`);
+        }
+
+        const scriptName = `romcnv_${system}.js`;
+        const wasmName = `romcnv_${system}.wasm`;
+
+        // Check if WASM file exists
         try {
-            const response = await fetch('romcnv_mvs.wasm', { method: 'HEAD' });
+            const response = await fetch(wasmName, { method: 'HEAD' });
             if (!response.ok) {
-                this.showWasmUnavailable();
+                this.showWasmUnavailable(system);
+                this.loadingModule = false;
+                return;
             }
         } catch (error) {
-            this.showWasmUnavailable();
+            this.showWasmUnavailable(system);
+            this.loadingModule = false;
+            return;
         }
+
+        // Remove existing script if any
+        const existingScript = document.getElementById('romcnv-script');
+        if (existingScript) {
+            existingScript.remove();
+        }
+
+        // Reset Module object
+        window.Module = {
+            print: (text) => this.log(text),
+            printErr: (text) => this.log(text, 'error'),
+            onRuntimeInitialized: () => {
+                this.moduleReady = true;
+                this.loadedSystem = system;
+                this.loadingModule = false;
+                this.log(`${system.toUpperCase()} ROM Converter ready!`, 'success');
+                if (this.selectedFile) {
+                    this.convertBtn.disabled = false;
+                }
+            }
+        };
+
+        // Load the new script
+        const script = document.createElement('script');
+        script.id = 'romcnv-script';
+        script.src = scriptName;
+        script.onerror = () => {
+            this.showWasmUnavailable(system);
+            this.loadingModule = false;
+        };
+        document.body.appendChild(script);
     }
-    
-    showWasmUnavailable() {
-        this.log('WASM module not yet available.', 'error');
+
+    showWasmUnavailable(system) {
+        this.log(`${system.toUpperCase()} WASM module not yet available.`, 'error');
         this.log('The web converter is under development.', 'error');
         this.log('Please use the command-line romcnv tool for now.', 'error');
         this.convertBtn.disabled = true;
-    }
-    
-    setupEmscriptenCallbacks() {
-        // Override print functions (global Module with MODULARIZE=0)
-        if (typeof Module !== 'undefined') {
-            Module.print = (text) => this.log(text);
-            Module.printErr = (text) => this.log(text, 'error');
-        }
     }
     
     handleFile(file) {
@@ -140,13 +172,13 @@ class RomConverter {
             this.log('Please select a ZIP file', 'error');
             return;
         }
-        
+
         this.selectedFile = file;
         this.fileName.textContent = file.name;
         this.fileInfo.hidden = false;
         document.querySelector('.upload-content').hidden = true;
-        this.convertBtn.disabled = false;
-        
+        this.convertBtn.disabled = !this.moduleReady;
+
         // Reset panels
         this.progressPanel.hidden = true;
         this.outputPanel.hidden = true;
@@ -199,9 +231,22 @@ class RomConverter {
             this.log('WASM module not ready yet', 'error');
             return;
         }
-        
+
+        const selectedSystem = this.getSelectedSystem();
+        if (this.loadedSystem !== selectedSystem) {
+            this.log(`Loading ${selectedSystem.toUpperCase()} module...`);
+            await this.loadModuleForSystem(selectedSystem);
+            if (!this.moduleReady) {
+                return;
+            }
+        }
+
         this.isProcessing = true;
         this.convertBtn.disabled = true;
+        // Disable system selector during conversion
+        for (const radio of this.systemRadios) {
+            radio.disabled = true;
+        }
         this.clearConsole();
         
         // Show progress panel
@@ -269,6 +314,10 @@ class RomConverter {
         } finally {
             this.isProcessing = false;
             this.convertBtn.disabled = false;
+            // Re-enable system selector
+            for (const radio of this.systemRadios) {
+                radio.disabled = false;
+            }
         }
     }
     

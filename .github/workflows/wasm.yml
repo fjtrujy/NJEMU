@@ -32,36 +32,59 @@ jobs:
     - name: Verify Emscripten
       run: emcc -v
 
-    - name: Build romcnv WASM (experimental)
+    - name: Build romcnv WASM MVS
       run: |
         cd romcnv
-        mkdir -p build_wasm
-        cd build_wasm
+        mkdir -p build_wasm_mvs
+        cd build_wasm_mvs
         emcmake cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DTARGET=MVS \
           ..
         emmake make -j$(nproc)
-        
+
+    - name: Build romcnv WASM CPS2
+      run: |
+        cd romcnv
+        mkdir -p build_wasm_cps2
+        cd build_wasm_cps2
+        emcmake cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DTARGET=CPS2 \
+          ..
+        emmake make -j$(nproc)
+
     - name: Prepare web files
       run: |
         mkdir -p dist
-        
+
         # Copy web interface files
         cp web/index.html dist/
         cp web/style.css dist/
         cp web/app.js dist/
-        
-        # Copy WASM files (keep original names so JS can find .wasm and .data)
-        if [ -f romcnv/build_wasm/romcnv_mvs.js ]; then
-          cp romcnv/build_wasm/romcnv_mvs.js dist/
-          cp romcnv/build_wasm/romcnv_mvs.wasm dist/
-          cp romcnv/build_wasm/romcnv_mvs.data dist/
+
+        # Copy MVS WASM files
+        if [ -f romcnv/build_wasm_mvs/romcnv_mvs.js ]; then
+          cp romcnv/build_wasm_mvs/romcnv_mvs.js dist/
+          cp romcnv/build_wasm_mvs/romcnv_mvs.wasm dist/
+          cp romcnv/build_wasm_mvs/romcnv_mvs.data dist/
         fi
-        
-        # Create placeholder if WASM build failed
+
+        # Copy CPS2 WASM files
+        if [ -f romcnv/build_wasm_cps2/romcnv_cps2.js ]; then
+          cp romcnv/build_wasm_cps2/romcnv_cps2.js dist/
+          cp romcnv/build_wasm_cps2/romcnv_cps2.wasm dist/
+          cp romcnv/build_wasm_cps2/romcnv_cps2.data dist/
+        fi
+
+        # Create placeholder if MVS WASM build failed
         if [ ! -f dist/romcnv_mvs.wasm ]; then
-          echo "console.log('WASM module not available - build in progress');" > dist/romcnv_mvs.js
+          echo "console.log('MVS WASM module not available - build in progress');" > dist/romcnv_mvs.js
+        fi
+
+        # Create placeholder if CPS2 WASM build failed
+        if [ ! -f dist/romcnv_cps2.wasm ]; then
+          echo "console.log('CPS2 WASM module not available - build in progress');" > dist/romcnv_cps2.js
         fi
 
     - name: Upload artifact
