@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#include "common/memory_sizes.h"
 
 
 #define IRQ2CTRL_ENABLE				0x10
@@ -171,7 +172,7 @@ static uint32_t z80_bank[4];
 
 static uint16_t *neogeo_cpu1_second_bank;
 
-static uint8_t ALIGN_DATA neogeo_game_vectors[0x80];
+static uint8_t ALIGN_DATA neogeo_game_vectors[NEOGEO_VECTORS_SIZE];
 static uint8_t *neogeo_vectors[2];
 
 static uint16_t neogeo_rng = 0x2345;

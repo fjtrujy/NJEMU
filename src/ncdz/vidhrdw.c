@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "ncdz.h"
+#include "common/memory_sizes.h"
 #include <unistd.h>
 
 
@@ -14,17 +15,17 @@
 	ÉOÉçÅ[ÉoÉãïœêî
 ******************************************************************************/
 
-uint16_t ALIGN_DATA neogeo_videoram[0x20000 / 2];
+uint16_t ALIGN_DATA neogeo_videoram[NEOGEO_VRAM_SIZE / 2];
 uint16_t videoram_read_buffer;
 uint16_t videoram_offset;
 uint16_t videoram_modulo;
 
-uint16_t ALIGN_DATA palettes[2][0x2000 / 2];
+uint16_t ALIGN_DATA palettes[2][NEOGEO_PALETTE_SIZE / 2];
 uint32_t palette_bank;
 
 uint16_t *video_palette;
-uint16_t ALIGN16_DATA video_palettebank[2][0x2000 / 2];
-uint16_t ALIGN_DATA video_clut16[0x8000];
+uint16_t ALIGN16_DATA video_palettebank[2][NEOGEO_PALETTE_SIZE / 2];
+uint16_t ALIGN_DATA video_clut16[NEOGEO_CLUT_SIZE];
 
 uint8_t fix_pen_usage[0x20000 / 32];
 uint8_t spr_pen_usage[0x400000 / 128];

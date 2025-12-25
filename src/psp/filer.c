@@ -13,6 +13,7 @@
 #include <psptypes.h>
 #include <pspwlan.h>
 #include "emumain.h"
+#include "common/memory_sizes.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -247,7 +248,7 @@ static void check_neocd_bios(void)
 
 	bios_error = 0;
 
-	if ((temp_mem = (uint8_t *)malloc(0x80000)) == NULL)
+	if ((temp_mem = (uint8_t *)malloc(FILE_TEMP_BUFFER_SIZE)) == NULL)
 	{
 		bios_error = 1;
 		return;

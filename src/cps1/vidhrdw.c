@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "cps1.h"
+#include "common/memory_sizes.h"
 
 
 /******************************************************************************
@@ -46,8 +47,8 @@ static int16_t cps_scroll2x, cps_scroll2y;
 static int16_t cps_scroll3x, cps_scroll3y;
 static uint32_t cps1_object_num;									/* object total sprites num */
 static uint8_t  *cps1_object_pen_usage;							/* object sprites pen usage */
-static uint8_t  ALIGN_DATA cps1_scroll2_pen_usage[0x10000];		/* scroll2 sprites pen usage */
-static uint16_t ALIGN_DATA cps1_scroll_pen_usage[4][0x10000];	/* scroll sprites pen usage */
+static uint8_t  ALIGN_DATA cps1_scroll2_pen_usage[CPS1_PEN_USAGE_SIZE];		/* scroll2 sprites pen usage */
+static uint16_t ALIGN_DATA cps1_scroll_pen_usage[4][CPS1_PEN_USAGE_SIZE];	/* scroll sprites pen usage */
 
 #define cps1_obj_size			0x800
 #define cps1_max_obj			(cps1_obj_size >> 3)

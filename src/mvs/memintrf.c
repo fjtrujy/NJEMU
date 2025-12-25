@@ -9,9 +9,10 @@
 #include <fcntl.h>
 #include <limits.h>
 #include "mvs.h"
+#include "common/memory_sizes.h"
 
-#define M68K_AMASK 0x00ffffff
-#define Z80_AMASK 0x0000ffff
+#define M68K_AMASK M68K_ADDR_MASK
+#define Z80_AMASK Z80_ADDR_MASK
 
 #define READ_BYTE(mem, offset)							mem[offset ^ 1]
 #define WRITE_BYTE(mem, offset, data)					mem[offset ^ 1] = data
@@ -101,9 +102,9 @@ uint32_t memory_length_user2;
 #endif
 uint32_t memory_length_user3;
 
-uint8_t ALIGN_DATA neogeo_memcard[0x800];
-uint8_t ALIGN_DATA neogeo_ram[0x10000];
-uint16_t ALIGN_DATA neogeo_sram16[0x8000];
+uint8_t ALIGN_DATA neogeo_memcard[NEOGEO_MEMCARD_SIZE];
+uint8_t ALIGN_DATA neogeo_ram[NEOGEO_RAM_SIZE];
+uint16_t ALIGN_DATA neogeo_sram16[NEOGEO_SRAM_SIZE];
 
 int neogeo_machine_mode;
 
@@ -315,12 +316,12 @@ static int build_zoom_tables(void)
 	uint8_t *tile_fullmode1;
 	int zoom_y;
 
-	if ((memory_region_user3 = malloc(0x10000)) == NULL)
+	if ((memory_region_user3 = malloc(Z80_RAM_SIZE)) == NULL)
 	{
 		error_memory("REGION_USER3");
 		return 0;
 	}
-	memset(memory_region_user3, 0, 0x10000);
+	memset(memory_region_user3, 0, Z80_RAM_SIZE);
 
 	skip_fullmode0 = &memory_region_user3[0x100*0x40*0];
 	tile_fullmode0 = &memory_region_user3[0x100*0x40*1];

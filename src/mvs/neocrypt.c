@@ -5,6 +5,7 @@ Mod Update by phoe-nix
                                                 2013.12.07
 ***************************************************************************/
 #include "mvs.h"
+#include "common/memory_sizes.h"
 /***************************************************************************
 
 NeoGeo 'M' ROM encryption
@@ -205,7 +206,7 @@ int kof98_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x200000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
 #endif
 	uint32_t i, j, k;
 	const uint32_t sec[]={0x000000,0x100000,0x000004,0x100004,0x10000a,0x00000a,0x10000e,0x00000e};
@@ -438,7 +439,7 @@ int kof2002_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x400000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
 #endif
 	if (dst)
 	{
@@ -464,7 +465,7 @@ int matrim_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x400000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
 #endif
 	if (dst)
 	{
@@ -490,7 +491,7 @@ int samsho5_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x800000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 	if (dst)
 	{
@@ -515,7 +516,7 @@ int samsh5sp_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x800000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 	if (dst)
 	{
@@ -560,7 +561,7 @@ int mslug5_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -629,7 +630,7 @@ int svc_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -690,7 +691,7 @@ int kf2k3pcb_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -758,7 +759,7 @@ int kof2003_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -831,7 +832,7 @@ int kof2003h_decrypt_68k(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -899,13 +900,13 @@ int kf2k3pcb_sp1_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint16_t *buf = (uint16_t *)psp2k_mem_offset;
 #else
-	uint16_t *buf = (uint16_t *)malloc(0x80000/2);
+	uint16_t *buf = (uint16_t *)malloc(DECRYPT_BUFFER_1MB/2);
 #endif
 	uint32_t i, addr;
 
 	if (buf)
 	{
-		for (i = 0; i < 0x80000/2; i++)
+		for (i = 0; i < DECRYPT_BUFFER_1MB/2; i++)
 		{
 		//address xor
 		addr = i ^ 0x0020;
@@ -962,7 +963,7 @@ int kog_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x600000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
 #endif
 	uint16_t *rom = (uint16_t *)memory_region_cpu1;
 	uint32_t i;
@@ -1040,7 +1041,7 @@ int kof97oro_px_decode(void)
 #ifdef LARGE_MEMORY
 	uint16_t *dst = (uint16_t *)psp2k_mem_offset;
 #else
-	uint16_t *dst = (uint16_t *)malloc(0x500000);
+	uint16_t *dst = (uint16_t *)malloc(DECRYPT_BUFFER_5MB);
 #endif
 	if (dst)
 	{
@@ -1066,7 +1067,7 @@ int kof10th_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x900000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_9MB);
 #endif
 	uint8_t *src = memory_region_cpu1;
 	uint16_t *mem16 = (uint16_t *)memory_region_cpu1;
@@ -1111,7 +1112,7 @@ int kf10thep_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x200000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
 #endif
 
 	if (dst)
@@ -1155,7 +1156,7 @@ int kf2k5uni_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x80);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_128B);
 #endif
 	uint16_t *mem16 = (uint16_t *)memory_region_cpu1;
 
@@ -1193,7 +1194,7 @@ int kf2k2mp_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x80);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_128B);
 #endif
 
 	if (dst)
@@ -1223,7 +1224,7 @@ int kf2k2mp2_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x600000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
 #endif
 
 	if (dst)
@@ -1247,7 +1248,7 @@ int kof2k4se_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x400000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
 #endif
 	uint32_t i;
 	const uint32_t sec[] = { 0x300000, 0x200000, 0x100000, 0x000000 };
@@ -1276,7 +1277,7 @@ int lans2004_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x600000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
 #endif
 	uint16_t *rom = (uint16_t*)memory_region_cpu1;
 
@@ -1473,7 +1474,7 @@ int kf2k3bl_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *buf = (uint8_t *)malloc(0x800000);
+	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
 #endif
 
 	if (buf)
@@ -1498,7 +1499,7 @@ int kf2k3pl_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint16_t *buf = (uint16_t *)psp2k_mem_offset;
 #else
-	uint16_t *buf = (uint16_t *)malloc(0x100000);
+	uint16_t *buf = (uint16_t *)malloc(DECRYPT_BUFFER_1MB);
 #endif
 	uint16_t *rom = (uint16_t*)memory_region_cpu1;
 
@@ -1604,7 +1605,7 @@ int cthd2k3a_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x500000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_5MB);
 #endif
 
 	if (dst)
@@ -1628,7 +1629,7 @@ int kf2k4pls_px_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = (uint8_t *)malloc(0x200000);
+	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
 #endif
 
 	if (dst)
@@ -1728,7 +1729,7 @@ void matrimbl_mx_decrypt(void)
 #ifdef LARGE_MEMORY
 	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
 #else
-	uint8_t *dst = malloc(0x20000);
+	uint8_t *dst = malloc(DECRYPT_BUFFER_128KB);
 #endif
 	uint32_t i, j = 0;
 

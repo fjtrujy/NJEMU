@@ -229,7 +229,88 @@ The tool creates a `cache/` directory containing:
 
 Copy the generated cache folder to your emulator's `cache/` directory alongside the original ROM in `roms/`.
 
-See `romcnv/readme_mvs.txt` and `romcnv/readme_cps2.txt` for detailed instructions.
+See [romcnv/README_MVS.md](romcnv/README_MVS.md) and [romcnv/README_CPS2.md](romcnv/README_CPS2.md) for detailed instructions.
+
+---
+
+## Memory Requirements
+
+Understanding memory allocation is crucial for PSP and PS2 platforms where RAM is limited.
+
+### Platform Memory Constraints
+
+| Platform | Available RAM | Notes |
+|----------|--------------|-------|
+| PSP (Fat) | ~24 MB | User memory only |
+| PSP (Slim/2000+) | ~64 MB | With LARGE_MEMORY builds |
+| PS2 | ~32 MB | Main RAM |
+| Desktop | Unlimited | System dependent |
+
+### Total Memory Requirements by System
+
+| System | CPU/ROM | GFX ROM | Sound ROM | Cache | Static RAM | Estimated Total |
+|--------|---------|---------|-----------|-------|------------|-----------------|
+| CPS1   | 1-4 MB  | 2-8 MB  | 0.5-2 MB  | -     | ~128 KB    | 4-15 MB         |
+| CPS2   | 2-8 MB  | 4-16 MB | 1-4 MB    | 0-20 MB | ~128 KB  | 7-48 MB         |
+| MVS    | 1-4 MB  | 8-64 MB | 1-8 MB    | 0-32 MB + 3 MB PCM | ~98 KB | 13-111 MB |
+| NCDZ   | 1-2 MB  | 16-128 MB | 0-2 MB  | -     | ~512 B     | 17-132 MB       |
+
+### Why Cache is Required
+
+Many arcade games have graphics data larger than available RAM:
+- **MVS games** can have 64+ MB of sprite data
+- **CPS2 games** can have 16+ MB of sprite data
+- **PSP/PS2** only have 24-64 MB available
+
+The cache system streams graphics from storage in 64 KB blocks, allowing large games to run on memory-constrained platforms.
+
+### Cache Configuration
+
+| Constant | Normal Memory | LARGE_MEMORY |
+|----------|---------------|--------------|
+| MAX_CACHE_SIZE | 20 MB | 32 MB |
+| MIN_CACHE_SIZE | 2 MB | 4 MB |
+| BLOCK_SIZE | 64 KB | 64 KB |
+
+### PSP Extended Memory (Slim/2000+)
+
+PSP Slim models have 32 MB of additional memory accessible via `LARGE_MEMORY` builds:
+
+```c
+#define PSP2K_MEM_SIZE   0x2000000  // 32 MB
+#define PSP2K_MEM_TOP    0xa000000
+#define PSP2K_MEM_BOTTOM 0xbffffff
+```
+
+This extended memory is used primarily for large sprite ROMs in MVS games but cannot be freed once allocated.
+
+### Static RAM Allocations (per system)
+
+**CPS1/CPS2:**
+- Main RAM: 64 KB
+- Graphics RAM: 48 KB
+- Object RAM (CPS2): 8 KB
+
+**MVS:**
+- Main RAM: 64 KB
+- SRAM: 32 KB
+- Memory Card: 2 KB
+
+### GPU Command List Size
+
+| System | GULIST_SIZE |
+|--------|-------------|
+| CPS1   | 48 KB |
+| CPS2   | 48 KB |
+| MVS    | 300 KB |
+| NCDZ   | 300 KB |
+
+### Sound Buffer Sizes
+
+| System | Buffer Size | Total (stereo) |
+|--------|-------------|----------------|
+| CPS2 | 2,944 samples | ~12 KB |
+| MVS/Others | 1,600 samples | ~6 KB |
 
 ---
 
