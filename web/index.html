@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NJEMU ROM Converter</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
@@ -31,14 +32,14 @@
 
             <section class="converter-panel">
                 <div class="system-selector">
-                    <label>Target System:</label>
+                    <label>Select Target System:</label>
                     <div class="radio-group">
-                        <input type="radio" id="mvs" name="system" value="mvs" checked>
+                        <input type="radio" id="mvs" name="system" value="mvs">
                         <label for="mvs" class="radio-label">
                             <span class="radio-icon">🕹️</span>
                             <span>Neo-Geo MVS</span>
                         </label>
-                        
+
                         <input type="radio" id="cps2" name="system" value="cps2">
                         <label for="cps2" class="radio-label">
                             <span class="radio-icon">👊</span>
@@ -47,33 +48,42 @@
                     </div>
                 </div>
 
-                <div class="options-panel">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="slim-mode">
-                        <span class="checkmark"></span>
-                        <span>PSP Slim Mode</span>
-                        <span class="hint">(Skip PCM cache for unencrypted games)</span>
-                    </label>
+                <div class="loading-overlay" id="loading-overlay" hidden>
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text" id="loading-text">Loading module...</p>
                 </div>
 
-                <div class="upload-zone" id="upload-zone">
-                    <div class="upload-content">
-                        <div class="upload-icon">📁</div>
-                        <p class="upload-text">Drop your ROM ZIP file here</p>
-                        <p class="upload-hint">or click to browse</p>
-                        <input type="file" id="rom-input" accept=".zip" hidden>
+                <div class="converter-content" id="converter-content" hidden>
+                    <div class="options-panel">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="slim-mode">
+                            <span class="checkmark"></span>
+                            <span>PSP Slim Mode</span>
+                            <span class="hint">(Skip PCM cache for unencrypted games)</span>
+                        </label>
                     </div>
-                    <div class="file-info" id="file-info" hidden>
-                        <span class="file-icon">📦</span>
-                        <span class="file-name" id="file-name"></span>
-                        <button class="clear-btn" id="clear-file">✕</button>
-                    </div>
-                </div>
 
-                <button class="convert-btn" id="convert-btn" disabled>
-                    <span class="btn-icon">⚙️</span>
-                    <span>Convert ROM</span>
-                </button>
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-content">
+                            <div class="upload-icon">📁</div>
+                            <p class="upload-text">Drop your ROM ZIP files here</p>
+                            <p class="upload-hint">or click to browse (multiple files supported)</p>
+                            <input type="file" id="rom-input" accept=".zip" multiple hidden>
+                        </div>
+                        <div class="file-list" id="file-list" hidden>
+                            <div class="file-list-header">
+                                <span class="file-count" id="file-count"></span>
+                                <button class="clear-btn" id="clear-files">Clear All</button>
+                            </div>
+                            <div class="file-list-items" id="file-list-items"></div>
+                        </div>
+                    </div>
+
+                    <button class="convert-btn" id="convert-btn" disabled>
+                        <span class="btn-icon">⚙️</span>
+                        <span>Convert ROMs</span>
+                    </button>
+                </div>
             </section>
 
             <section class="progress-panel" id="progress-panel" hidden>
