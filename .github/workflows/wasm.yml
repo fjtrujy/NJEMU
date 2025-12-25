@@ -63,6 +63,25 @@ jobs:
         cp web/style.css dist/
         cp web/app.js dist/
 
+        # Extract version from CMakeLists.txt
+        VERSION_MAJOR=$(grep 'set(VERSION_MAJOR' romcnv/CMakeLists.txt | sed 's/[^0-9]*//g')
+        VERSION_MINOR=$(grep 'set(VERSION_MINOR' romcnv/CMakeLists.txt | sed 's/[^0-9]*//g')
+        VERSION_BUILD=$(grep 'set(VERSION_BUILD' romcnv/CMakeLists.txt | sed 's/[^0-9]*//g')
+
+        if [ "$VERSION_BUILD" = "0" ]; then
+          VERSION_STR="${VERSION_MAJOR}.${VERSION_MINOR}"
+        else
+          VERSION_STR="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}"
+        fi
+
+        BUILD_DATE=$(date -u +"%Y-%m-%d")
+
+        # Generate version.js (overwrites the dev fallback from web/)
+        cat > dist/version.js << EOF
+        window.ROMCNV_VERSION = "${VERSION_STR}";
+        window.ROMCNV_BUILD_DATE = "${BUILD_DATE}";
+        EOF
+
         # Copy MVS WASM files
         if [ -f romcnv/build_wasm_mvs/romcnv_mvs.js ]; then
           cp romcnv/build_wasm_mvs/romcnv_mvs.js dist/

@@ -58,3 +58,6 @@ dkms.conf
 *.prx
 
 build/
+
+# Auto-generated web files
+web/version.js

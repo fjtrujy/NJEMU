@@ -110,6 +110,11 @@
         </main>
 
         <footer>
+            <div class="version-info">
+                <span id="version-text">ROMCNV</span>
+                <span class="separator">•</span>
+                <span id="date-text">Loading...</span>
+            </div>
             <p>
                 Part of the <a href="https://github.com/fjtrujy/NJEMU" target="_blank">NJEMU Project</a>
                 <span class="separator">•</span>
@@ -122,7 +127,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- WASM modules are loaded dynamically based on system selection -->
+    <script src="version.js" onerror="/* version.js not found - using fallback values */"></script>
     <script src="app.js"></script>
 </body>
 </html>

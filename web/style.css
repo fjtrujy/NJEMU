@@ -528,6 +528,17 @@ footer p {
     font-size: 0.9rem;
 }
 
+.version-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
 footer a {
     color: var(--accent-primary);
     text-decoration: none;

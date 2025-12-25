@@ -516,5 +516,12 @@ class RomConverter {
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.romConverter = new RomConverter();
+
+    // Populate version info from version.js globals (fallback for local dev)
+    const versionText = document.getElementById('version-text');
+    const dateText = document.getElementById('date-text');
+
+    versionText.textContent = `ROMCNV v${window.ROMCNV_VERSION || 'dev'}`;
+    dateText.textContent = `Last updated: ${window.ROMCNV_BUILD_DATE || 'dev'}`;
 });
 
