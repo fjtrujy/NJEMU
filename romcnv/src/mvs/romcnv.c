@@ -49,7 +49,7 @@ enum
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 uint8_t *memory_region_gfx2;
@@ -62,7 +62,7 @@ uint32_t memory_length_sound1;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static uint32_t gfx_total_elements[TILE_TYPE_MAX];
@@ -214,7 +214,7 @@ struct cacheinfo_t MVS_cacheinfo[] =
 
 
 /******************************************************************************
-	MVS用関数
+	MVS Functions
 ******************************************************************************/
 
 static void neogeo_decode_spr(uint8_t *mem, uint32_t length, uint8_t *usage)
@@ -496,7 +496,7 @@ static int load_rom_info(const char *game_name)
 			{
 				if (buf[0] == '\r' || buf[0] == '\n')
 				{
-					// 改行
+					// Newline
 					continue;
 				}
 				else if (str_cmp(buf, "FILENAME(") == 0)

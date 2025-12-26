@@ -222,7 +222,7 @@ enum
 	INIT_kof2003h,		// 20
 	INIT_samsh5sp,		// 21
 
-	// SNK“‘Õ‚
+	// Non-SNK
 	INIT_nitd,			// 22
 	INIT_s1945p,		// 23
 	INIT_pnyaa,			// 24
