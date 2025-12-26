@@ -272,17 +272,110 @@ The cache system streams graphics from storage in 64 KB blocks, allowing large g
 | MIN_CACHE_SIZE | 2 MB | 4 MB |
 | BLOCK_SIZE | 64 KB | 64 KB |
 
-### PSP Extended Memory (Slim/2000+)
+### PSP Extended Memory (LARGE_MEMORY - Slim/2000+)
 
-PSP Slim models have 32 MB of additional memory accessible via `LARGE_MEMORY` builds:
+PSP Slim (2000/3000) models have 32 MB of additional memory that's not accessible to standard PSP applications. NJEMU can use this extended memory when built with `-DLARGE_MEMORY=ON`.
+
+#### Memory Address Space
 
 ```c
-#define PSP2K_MEM_SIZE   0x2000000  // 32 MB
-#define PSP2K_MEM_TOP    0xa000000
-#define PSP2K_MEM_BOTTOM 0xbffffff
+#define PSP2K_MEM_TOP    0xa000000   // Start of extended memory
+#define PSP2K_MEM_BOTTOM 0xbffffff   // End of extended memory
+#define PSP2K_MEM_SIZE   0x2000000   // 32 MB total
 ```
 
-This extended memory is used primarily for large sprite ROMs in MVS games but cannot be freed once allocated.
+#### Custom Allocator
+
+A custom allocator manages this extended memory region:
+
+```c
+static void *psp2k_mem_alloc(int32_t size);   // Allocate from extended memory
+static void *psp2k_mem_move(void *mem, int32_t size);  // Move data to extended memory
+static void psp2k_mem_free(void *mem);        // Free (only works for standard memory)
+```
+
+**Important Limitations:**
+- Memory allocated in the extended region **cannot be freed** (causes system freeze)
+- Allocations are linear - no fragmentation management
+- Once a game uses extended memory, system must restart to reclaim it
+
+#### Concrete Usage in Code
+
+**Direct Allocation with `psp2k_mem_alloc()`:**
+
+| Location | Region | Purpose | Size |
+|----------|--------|---------|------|
+| `src/mvs/memintrf.c:847` | `memory_region_gfx3` | Sprite ROM data (unencrypted games) | 8-64 MB |
+| `src/mvs/memintrf.c:966` | `memory_region_sound1` | YM2610 ADPCM samples (fallback when malloc fails) | 1-8 MB |
+
+**Memory Migration with `psp2k_mem_move()`:**
+
+When SOUND1 allocation triggers extended memory use (`psp2k_mem_left != PSP2K_MEM_SIZE`), regions are moved to free main RAM for cache (`src/mvs/memintrf.c:1775-1785`):
+
+| Region | Data Type | Typical Size |
+|--------|-----------|--------------|
+| `memory_region_user3` | Protection/banking data | Variable |
+| `memory_region_gfx4` | Fixed layer sprites (FIX) | 128 KB - 1 MB |
+| `memory_region_gfx2` | Zoom table data | 128 KB |
+| `memory_region_gfx1` | Fixed layer ROM | 128 KB - 512 KB |
+| `memory_region_cpu2` | Z80 program ROM | 128 KB - 512 KB |
+| `memory_region_user1` | BIOS ROM | 128 KB |
+| `memory_region_cpu1` | M68000 program ROM | 1-4 MB |
+| `gfx_pen_usage[0-2]` | Sprite transparency tables | Variable |
+
+**Cache Buffer Direct Assignment (`src/common/cache.c:710`):**
+
+When no extended memory has been used yet, the cache buffer is placed directly at the start of extended memory:
+```c
+if (psp2k_mem_left == PSP2K_MEM_SIZE) {
+    GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;  // Direct pointer, up to 32 MB
+}
+```
+
+**Safe Deallocation with `psp2k_mem_free()`:**
+
+At shutdown (`src/mvs/memintrf.c:2025-2039`), all regions are passed through `psp2k_mem_free()` which only calls `free()` for standard memory addresses:
+```c
+// Only frees if address < PSP2K_MEM_TOP (0xa000000)
+// Extended memory regions are silently ignored to prevent freeze
+```
+
+#### What Gets Placed in Extended Memory
+
+**MVS (Priority order):**
+1. **GFX3 (Sprite ROMs)** - Large sprite data (8-64 MB) goes directly to extended memory
+2. **Cache buffer** - If GFX3 uses cache, the cache buffer uses extended memory (up to 32 MB)
+3. **SOUND1 (ADPCM)** - If normal malloc fails, ADPCM data moves to extended memory
+4. **Other regions** - CPU1, CPU2, GFX1, GFX2, GFX4, USER1, USER3 can be moved to free main RAM
+
+**CPS2:**
+- Disables the cache system entirely (`USE_CACHE=0`)
+- Graphics data loaded directly into memory
+- Only suitable for games with smaller graphics data
+
+#### Impact on Cache System
+
+| Setting | Normal (PSP Fat) | LARGE_MEMORY (PSP Slim) |
+|---------|------------------|-------------------------|
+| USE_CACHE (CPS2) | Enabled | **Disabled** |
+| USE_CACHE (MVS) | Enabled | Enabled |
+| MIN_CACHE_SIZE | 2 MB (0x20 blocks) | 4 MB (0x40 blocks) |
+| MAX_CACHE_SIZE | 20 MB (0x140 blocks) | 32 MB (0x200 blocks) |
+| Cache location | Main RAM | Extended memory (if available) |
+
+#### Memory Optimization Strategy
+
+When MVS detects that SOUND1 had to use extended memory (indicating main RAM pressure), it automatically moves previously allocated regions to extended memory in reverse allocation order:
+
+```
+USER3 → GFX4 → GFX2 → GFX1 → CPU2 → USER1 → CPU1 → pen_usage tables
+```
+
+This frees contiguous blocks in main RAM for the cache system.
+
+#### Power Management
+
+Extended memory state is preserved during PSP sleep/resume cycles. The system stores the last 4 MB of extended memory (`PSP2K_MEM_TOP + 0x1c00000`) to handle sleep mode properly.
 
 ### Static RAM Allocations (per system)
 
