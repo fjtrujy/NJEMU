@@ -2,7 +2,7 @@
 
 	video.c
 
-	PS2ビデオ制御関数
+	Desktop Video Control Functions
 
 ******************************************************************************/
 
@@ -39,7 +39,7 @@ typedef struct desktop_video {
 } desktop_video_t;
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 static void desktop_start(void *data) {
@@ -148,7 +148,7 @@ static void *desktop_init(void)
 
 
 /*--------------------------------------------------------
-	ビデオ処理終了(共通)
+	Video Processing Termination (Common)
 --------------------------------------------------------*/
 
 static void desktop_exit(desktop_video_t *desktop) {
@@ -208,7 +208,7 @@ static void desktop_free(void *data)
 }
 
 /*--------------------------------------------------------
-	ビデオモード設定
+	Video Mode Setting
 --------------------------------------------------------*/
 
 
@@ -233,7 +233,7 @@ static void desktop_setClutBaseAddr(void *data, uint16_t *clut_base)
 }
 
 /*--------------------------------------------------------
-	VSYNCを待つ
+	Wait for VSYNC
 --------------------------------------------------------*/
 
 static void desktop_waitVsync(void *data)
@@ -242,7 +242,7 @@ static void desktop_waitVsync(void *data)
 
 
 /*--------------------------------------------------------
-	スクリーンをフリップ
+	Flip Screen
 --------------------------------------------------------*/
 
 static void desktop_flipScreen(void *data, bool vsync)
@@ -253,7 +253,7 @@ static void desktop_flipScreen(void *data, bool vsync)
 
 
 /*--------------------------------------------------------
-	VRAMのアドレスを取得
+	Get VRAM Address
 --------------------------------------------------------*/
 
 static void *desktop_frameAddr(void *data, void *frame, int x, int y)
@@ -282,7 +282,7 @@ static void *desktop_workFrame(void *data, enum WorkBuffer buffer)
 
 
 /*--------------------------------------------------------
-	描画/表示フレームをクリア
+	Clear Draw/Display Frame
 --------------------------------------------------------*/
 
 static void desktop_clearScreen(void *data) {
@@ -293,7 +293,7 @@ static void desktop_clearScreen(void *data) {
 }
 
 /*--------------------------------------------------------
-	指定したフレームをクリア
+	Clear Specified Frame
 --------------------------------------------------------*/
 
 static void desktop_clearFrame(void *data, void *frame)
@@ -302,7 +302,7 @@ static void desktop_clearFrame(void *data, void *frame)
 
 
 /*--------------------------------------------------------
-	指定したフレームを塗りつぶし
+	Fill Specified Frame
 --------------------------------------------------------*/
 
 static void desktop_fillFrame(void *data, void *frame, uint32_t color)
@@ -311,7 +311,7 @@ static void desktop_fillFrame(void *data, void *frame, uint32_t color)
 
 
 /*--------------------------------------------------------
-	矩形範囲をコピー
+	Copy Rectangular Area
 --------------------------------------------------------*/
 
 static void desktop_startWorkFrame(void *data, uint32_t color) {
@@ -385,7 +385,7 @@ static void desktop_copyRect(void *data, void *src, void *dst, RECT *src_rect, R
 
 
 /*--------------------------------------------------------
-	矩形範囲を左右反転してコピー
+	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
 static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -394,7 +394,7 @@ static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rec
 
 
 /*--------------------------------------------------------
-	矩形範囲を270度回転してコピー
+	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
 static void desktop_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -403,7 +403,7 @@ static void desktop_copyRectRotate(void *data, void *src, void *dst, RECT *src_r
 
 
 /*--------------------------------------------------------
-	テクスチャを矩形範囲を指定して描画
+	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
 static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)

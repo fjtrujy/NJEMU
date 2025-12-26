@@ -2,7 +2,7 @@
 
 	zfile.c
 
-	ZIPファイル操作関数
+	ZIP File Operation Functions
 
 ******************************************************************************/
 
@@ -13,7 +13,7 @@
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static unzFile unzfile = NULL;
@@ -29,11 +29,11 @@ static int  zip_filepos;
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	ZIPファイルを開く
+	Open ZIP File
 ------------------------------------------------------*/
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
@@ -56,7 +56,7 @@ int zip_open(const char *path)
 #pragma GCC diagnostic pop
 
 /*------------------------------------------------------
-	ZIPファイルを閉じる
+	Close ZIP File
 ------------------------------------------------------*/
 
 void zip_close(void)
@@ -70,7 +70,7 @@ void zip_close(void)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルを検索 (初回)
+	Search for File in ZIP Archive (First)
 ------------------------------------------------------*/
 
 int zip_findfirst(struct zip_find_t *file)
@@ -92,7 +92,7 @@ int zip_findfirst(struct zip_find_t *file)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルを検索 (2回目以降)
+	Search for File in ZIP Archive (Subsequent)
 ------------------------------------------------------*/
 
 int zip_findnext(struct zip_find_t *file)
@@ -114,7 +114,7 @@ int zip_findnext(struct zip_find_t *file)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルを開く
+	Open File in ZIP Archive
 ------------------------------------------------------*/
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
@@ -144,7 +144,7 @@ int64_t zopen(const char *filename)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルを閉じる
+	Close File in ZIP Archive
 ------------------------------------------------------*/
 
 int zclose(int64_t fd)
@@ -161,7 +161,7 @@ int zclose(int64_t fd)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルを読み込む
+	Read File from ZIP Archive
 ------------------------------------------------------*/
 
 size_t zread(int64_t fd, void *buf, size_t size)
@@ -174,7 +174,7 @@ size_t zread(int64_t fd, void *buf, size_t size)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルから1バイト読み込む
+	Read 1 Byte from File in ZIP Archive
 ------------------------------------------------------*/
 
 int zgetc(int64_t fd)
@@ -194,7 +194,7 @@ int zgetc(int64_t fd)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルのサイズを取得
+	Get File Size in ZIP Archive
 ------------------------------------------------------*/
 
 size_t zsize(int64_t fd)
@@ -218,8 +218,8 @@ size_t zsize(int64_t fd)
 
 
 /*------------------------------------------------------
-	ZIPファイル内のファイルのサイズを取得
-	(ZIPファイルを開かずにファイル名指定で取得)
+	Get File Size in ZIP Archive
+	(By Filename Without Opening ZIP File)
 ------------------------------------------------------*/
 
 #if (EMU_SYSTEM == NCDZ)

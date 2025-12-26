@@ -2,7 +2,7 @@
 
 	video.c
 
-	PS2ビデオ制御関数
+	PS2 Video Control Functions
 
 ******************************************************************************/
 
@@ -20,7 +20,7 @@
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 /* turn black GS Screen */
@@ -72,7 +72,7 @@ typedef struct ps2_video {
 static uint32_t finish_sema_id = 0;
 
 /*--------------------------------------------------------
-	ビデオ処理初期化
+	Video Processing Initialization
 --------------------------------------------------------*/
 
 static int finish_handler(int reason)
@@ -417,7 +417,7 @@ static void *ps2_init(void)
 
 
 /*--------------------------------------------------------
-	ビデオ処理終了(共通)
+	Video Processing Termination (Common)
 --------------------------------------------------------*/
 
 static void ps2_exit(ps2_video_t *ps2) {
@@ -459,7 +459,7 @@ static void ps2_free(void *data)
 }
 
 /*--------------------------------------------------------
-	ビデオモード設定
+	Video Mode Setting
 --------------------------------------------------------*/
 
 
@@ -484,7 +484,7 @@ static void ps2_setClutBaseAddr(void *data, uint16_t *clut_base)
 }
 
 /*--------------------------------------------------------
-	VSYNCを待つ
+	Wait for VSYNC
 --------------------------------------------------------*/
 
 static void ps2_waitVsync(void *data)
@@ -496,7 +496,7 @@ static void ps2_waitVsync(void *data)
 
 
 /*--------------------------------------------------------
-	スクリーンをフリップ
+	Flip Screen
 --------------------------------------------------------*/
 
 static void ps2_flipScreen(void *data, bool vsync)
@@ -515,7 +515,7 @@ static void ps2_flipScreen(void *data, bool vsync)
 
 
 /*--------------------------------------------------------
-	VRAMのアドレスを取得
+	Get VRAM Address
 --------------------------------------------------------*/
 
 static void *ps2_frameAddr(void *data, void *frame, int x, int y)
@@ -532,7 +532,7 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 
 
 /*--------------------------------------------------------
-	描画/表示フレームをクリア
+	Clear Draw/Display Frame
 --------------------------------------------------------*/
 
 static void ps2_clearScreen(void *data) {
@@ -541,7 +541,7 @@ static void ps2_clearScreen(void *data) {
 }
 
 /*--------------------------------------------------------
-	指定したフレームをクリア
+	Clear Specified Frame
 --------------------------------------------------------*/
 
 static void ps2_clearFrame(void *data, void *frame)
@@ -551,7 +551,7 @@ static void ps2_clearFrame(void *data, void *frame)
 
 
 /*--------------------------------------------------------
-	指定したフレームを塗りつぶし
+	Fill Specified Frame
 --------------------------------------------------------*/
 
 static void ps2_fillFrame(void *data, void *frame, uint32_t color)
@@ -569,7 +569,7 @@ static void ps2_fillFrame(void *data, void *frame, uint32_t color)
 
 
 /*--------------------------------------------------------
-	矩形範囲をコピー
+	Copy Rectangular Area
 --------------------------------------------------------*/
 
 static void ps2_startWorkFrame(void *data, uint32_t color) {
@@ -714,7 +714,7 @@ static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT 
 
 
 /*--------------------------------------------------------
-	矩形範囲を左右反転してコピー
+	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
 static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -783,7 +783,7 @@ static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, R
 
 
 /*--------------------------------------------------------
-	矩形範囲を270度回転してコピー
+	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
 static void ps2_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -852,7 +852,7 @@ static void ps2_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
 
 
 /*--------------------------------------------------------
-	テクスチャを矩形範囲を指定して描画
+	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
 static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
