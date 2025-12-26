@@ -2,7 +2,7 @@
 
 	memintrf.c
 
-	MVSメモリインタフェース関数
+	MVS Memory Interface Functions
 
 ******************************************************************************/
 
@@ -71,7 +71,7 @@ enum
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 uint8_t *memory_region_cpu1;
@@ -120,7 +120,7 @@ int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
 
 
 /******************************************************************************
-	ローカル構造体/変数
+	Local Structures/Variables
 ******************************************************************************/
 
 static struct rom_t cpu1rom[MAX_CPU1ROM];
@@ -158,7 +158,7 @@ static uint8_t *neogeo_sram;
 
 
 /******************************************************************************
-	プロトタイプ
+	Prototypes
 ******************************************************************************/
 
 static uint16_t (*neogeo_protection_r)(uint32_t offset, uint16_t mem_mask);
@@ -454,7 +454,7 @@ static int build_zoom_tables(void)
 
 
 /******************************************************************************
-	PSP-2000用メモリ管理
+	PSP-2000 Memory Management
 ******************************************************************************/
 
 #ifdef LARGE_MEMORY
@@ -462,7 +462,7 @@ static int build_zoom_tables(void)
 #define MEMORY_IS_PSP2K(mem)	((uint32_t)mem >= PSP2K_MEM_TOP)
 
 /*--------------------------------------------------------
-	拡張された領域からメモリを確保
+	Allocate Memory from Extended Region
 --------------------------------------------------------*/
 
 static void *psp2k_mem_alloc(int32_t size)
@@ -480,7 +480,7 @@ static void *psp2k_mem_alloc(int32_t size)
 
 
 /*--------------------------------------------------------
-	拡張された領域へメモリを移動
+	Move Memory to Extended Region
 --------------------------------------------------------*/
 
 static void *psp2k_mem_move(void *mem, int32_t size)
@@ -501,13 +501,13 @@ static void *psp2k_mem_move(void *mem, int32_t size)
 
 
 /*--------------------------------------------------------
-	メモリ範囲を確認してfree()
+	Check Memory Range and free()
 --------------------------------------------------------*/
 
 static void psp2k_mem_free(void *mem)
 {
 	if (!mem || MEMORY_IS_PSP2K(mem))
-		return;	// 拡張メモリは解放しない(フリーズする)
+		return;	// Do not free extended memory (will freeze)
 
 	free(mem);
 }
@@ -516,7 +516,7 @@ static void psp2k_mem_free(void *mem)
 
 
 /******************************************************************************
-	ROM読み込み
+	ROM Loading
 ******************************************************************************/
 
 /*--------------------------------------------------------
@@ -1174,7 +1174,7 @@ static int load_rom_user1(int reload)
 }
 
 /*--------------------------------------------------------
-	USER2 (kof10th/kf10thep専用)
+	USER2 (for kof10th/kf10thep only)
 --------------------------------------------------------*/
 
 #if !RELEASE
@@ -1222,7 +1222,7 @@ static int load_rom_user2(void)
 #endif
 
 /*--------------------------------------------------------
-	ROM情報をデータベースで解析
+	Analyze ROM Information from Database
 --------------------------------------------------------*/
 
 static int load_rom_info(const char *game_name)
@@ -1266,7 +1266,7 @@ static int load_rom_info(const char *game_name)
 		if ((buf = (char *)malloc(size)) == NULL)
 		{
 			close(fd);
-			return 3;	// 手抜き
+			return 3;	// Quick and dirty
 		}
 
 		read(fd, buf, size);
@@ -1291,9 +1291,9 @@ static int load_rom_info(const char *game_name)
 			if (linebuf[0] != '\t')
 			{
 				if (linebuf[0] == '\r' || linebuf[0] == '\n')
-				{
-					// 改行
-					continue;
+			{
+				// Newline
+				continue;
 				}
 				else if (str_cmp(linebuf, "FILENAME(") == 0)
 				{
@@ -1563,11 +1563,11 @@ static int load_rom_info(const char *game_name)
 
 
 /******************************************************************************
-	メモリインタフェース関数
+	Memory Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	メモリインタフェース初期化
+	Memory Interface Initialization
 -----------------------------------------------------*/
 
 int memory_init(void)
@@ -1635,7 +1635,7 @@ int memory_init(void)
 #ifdef ADHOC
 	if (adhoc_enable)
 	{
-		/* AdHoc通信時は一部オプションで固定の設定を使用 */
+		/* Use fixed settings for some options during AdHoc communication */
 		neogeo_raster_enable = 0;
 		platform_cpuclock    = power_driver->getHighestCpuClock(power_data);
 		option_vsync         = 0;
@@ -1766,11 +1766,11 @@ int memory_init(void)
 #ifdef LARGE_MEMORY
 	if (psp2k_mem_left != PSP2K_MEM_SIZE)
 	{
-		// sound1で拡張メモリに確保した場合
+		// If sound1 was allocated in extended memory
 
-		// キャッシュ領域を極力多く取るためにこれまで確保したメモリで移動可能なものを
-		// 拡張メモリに移動する。
-		// 極力連続した大きな領域を空けたいので、確保したのと逆の順で移動。
+		// To maximize cache area, move movable memory that has been allocated so far
+		// to extended memory.
+		// Move in reverse order of allocation to create the largest contiguous free area.
 
 		memory_region_user3 = psp2k_mem_move(memory_region_user3, memory_length_user3);
 		memory_region_gfx4  = psp2k_mem_move(memory_region_gfx4,  memory_length_gfx4);
@@ -1799,7 +1799,7 @@ int memory_init(void)
 		neogeo_save_sound_flag = 0;
 	}
 
-	// FIXバンクタイプ設定
+	// Set FIX bank type
 	switch (machine_init_type)
 	{
 	case INIT_garou:
@@ -2011,7 +2011,7 @@ int memory_init(void)
 
 
 /*------------------------------------------------------
-	メモリインタフェース終了
+	Memory Interface Shutdown
 ------------------------------------------------------*/
 
 void memory_shutdown(void)
@@ -2069,11 +2069,11 @@ void memory_shutdown(void)
 
 
 /******************************************************************************
-	M68000 メモリリード/ライト関数
+	M68000 Memory Read/Write Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	M68000メモリリード (byte)
+	M68000 Memory Read (byte)
 ------------------------------------------------------*/
 
 uint8_t m68000_read_memory_8(uint32_t offset)
@@ -2110,7 +2110,7 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 
 
 /*------------------------------------------------------
-	M68000リードメモリ (word)
+	M68000 Read Memory (word)
 ------------------------------------------------------*/
 
 uint16_t m68000_read_memory_16(uint32_t offset)
@@ -2144,7 +2144,7 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 
 
 /*------------------------------------------------------
-	M68000ライトメモリ (byte)
+	M68000 Write Memory (byte)
 ------------------------------------------------------*/
 
 void m68000_write_memory_8(uint32_t offset, uint8_t data)
@@ -2178,7 +2178,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 
 
 /*------------------------------------------------------
-	M68000ライトメモリ (word)
+	M68000 Write Memory (word)
 ------------------------------------------------------*/
 
 void m68000_write_memory_16(uint32_t offset, uint16_t data)
@@ -2209,11 +2209,11 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 
 
 /******************************************************************************
-	Z80 メモリリード/ライト関数
+	Z80 Memory Read/Write Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	Z80リードメモリ (byte)
+	Z80 Read Memory (byte)
 ------------------------------------------------------*/
 
 uint8_t z80_read_memory_8(uint32_t offset)
@@ -2223,7 +2223,7 @@ uint8_t z80_read_memory_8(uint32_t offset)
 
 
 /*------------------------------------------------------
-	Z80ライトメモリ (byte)
+	Z80 Write Memory (byte)
 ------------------------------------------------------*/
 
 void z80_write_memory_8(uint32_t offset, uint8_t data)
@@ -2236,7 +2236,7 @@ void z80_write_memory_8(uint32_t offset, uint8_t data)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

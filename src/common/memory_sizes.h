@@ -62,9 +62,43 @@
 #define NEOGEO_PALETTE_SIZE		0x2000		/* 8 KB - Palette RAM (per bank) */
 #define NEOGEO_CLUT_SIZE		0x8000		/* 32 KB - Color lookup table */
 
-/* Sprite limits */
+/*
+ * Neo Geo VRAM Layout (word addresses)
+ * Reference: https://wiki.neogeodev.org/index.php?title=VRAM
+ *
+ * Lower VRAM (64KB):
+ *   $0000-$6FFF: SCB1 - Sprite tilemaps and attributes (28KB)
+ *   $7000-$74FF: Fix layer tilemap (40x32 tiles)
+ *   $7500-$7FFF: Extension/bankswitching area
+ *
+ * Upper VRAM (4KB):
+ *   $8000-$81FF: SCB2 - Sprite shrinking coefficients
+ *   $8200-$83FF: SCB3 - Sprite Y position and size
+ *   $8400-$85FF: SCB4 - Sprite X position
+ *   $8600-$86FF: Sprite render list (active sprite evaluation)
+ *   $8700-$87FF: Unused
+ */
+#define NEOGEO_VRAM_SCB1		0x0000		/* Sprite Control Block 1: tilemaps */
+#define NEOGEO_VRAM_SCB1_END	0x6FFF
+#define NEOGEO_VRAM_FIX			0x7000		/* Fix layer tilemap */
+#define NEOGEO_VRAM_FIX_END		0x74FF
+#define NEOGEO_VRAM_EXT			0x7500		/* Extension/bankswitching */
+#define NEOGEO_VRAM_SCB2		0x8000		/* Sprite Control Block 2: shrink */
+#define NEOGEO_VRAM_SCB3		0x8200		/* Sprite Control Block 3: Y pos/size */
+#define NEOGEO_VRAM_SCB4		0x8400		/* Sprite Control Block 4: X position */
+#define NEOGEO_VRAM_SPRLIST		0x8600		/* Sprite render list */
+
+/* Sprite limits (hardware enforced) */
 #define NEOGEO_SPR_MAX			0x3000		/* Maximum sprites */
+#define NEOGEO_SPR_PER_FRAME	381			/* Max sprites rendered per frame */
+#define NEOGEO_SPR_PER_LINE		96			/* Max sprites rendered per scanline */
 #define CPS1_OBJ_MAX			0x1000		/* Maximum CPS1 objects */
+
+/* Neo Geo palette system */
+#define NEOGEO_PALETTE_BANKS	2			/* Two palette banks (switchable) */
+#define NEOGEO_PALETTES_PER_BANK 256		/* 256 palettes per bank */
+#define NEOGEO_COLORS_PER_PAL	16			/* 16 colors per palette (index 0 = transparent) */
+#define NEOGEO_FIX_PALETTES		16			/* Fix layer can only use first 16 palettes */
 
 /******************************************************************************
 	Decryption buffer sizes (neocrypt.c)

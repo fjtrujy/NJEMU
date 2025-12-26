@@ -2,7 +2,19 @@
 
 	vidhrdw.c
 
-	MVS ビデオエミュレーション
+	MVS Video Emulation
+
+	Neo Geo Video System Reference:
+	https://wiki.neogeodev.org/index.php?title=Sprites
+	https://wiki.neogeodev.org/index.php?title=Fix_layer
+	https://wiki.neogeodev.org/index.php?title=VRAM
+
+	Hardware Capabilities:
+	- 381 sprites max per frame, 96 per scanline
+	- Sprites are 16 pixels wide, up to 512 pixels tall (32 tiles)
+	- Sprites can only SHRINK (not zoom/scale up)
+	- Fix layer: 40x32 tiles of 8x8 pixels, uses first 16 palettes only
+	- 2 palette banks with 256 palettes each (16 colors per palette)
 
 ******************************************************************************/
 
@@ -11,7 +23,7 @@
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 uint16_t ALIGN_DATA neogeo_videoram[NEOGEO_VRAM_SIZE / 2];
@@ -37,7 +49,7 @@ uint16_t max_sprite_number;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static uint32_t high_tile_mask;
@@ -45,9 +57,16 @@ static uint32_t sprite_gfx_code_mask;
 static int next_update_first_line;
 
 static uint8_t *spr_pen_usage;
-static uint16_t *sprite_zoom_control = &neogeo_videoram[0x8000];
-static uint16_t *sprite_y_control = &neogeo_videoram[0x8200];
-static uint16_t *sprite_x_control = &neogeo_videoram[0x8400];
+
+/*
+ * Sprite Control Block pointers (reference: VRAM layout in memory_sizes.h)
+ * SCB2: Shrink coefficients - lower byte = vertical ($FF=full), upper nibble = horizontal ($F=full)
+ * SCB3: Y position (bits 7-15) and sprite height/sticky bit (bits 0-6)
+ * SCB4: X position (bits 7-15)
+ */
+static uint16_t *sprite_zoom_control = &neogeo_videoram[NEOGEO_VRAM_SCB2];
+static uint16_t *sprite_y_control = &neogeo_videoram[NEOGEO_VRAM_SCB3];
+static uint16_t *sprite_x_control = &neogeo_videoram[NEOGEO_VRAM_SCB4];
 
 static const uint8_t *skip_fullmode0;
 static const uint8_t *skip_fullmode1;
@@ -59,11 +78,16 @@ static void (*draw_fixed_layer)(void);
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	FIXスプライト描画
+	Fix Layer Drawing
+
+	The fix layer is a non-scrollable 40x32 tile layer (8x8 pixels each)
+	that overlays all sprites. It's typically used for score, timer, HUD.
+	Fix tiles can only use the first 16 palettes.
+	VRAM layout: $7000-$74FF, each word = palette (4 bits) + tile number (12 bits)
 ------------------------------------------------------*/
 
 static void draw_fixed_layer_type0(void)
@@ -72,7 +96,7 @@ static void draw_fixed_layer_type0(void)
 
 	for (x = 8/8; x < 312/8; x++)
 	{
-		uint16_t *vram = &neogeo_videoram[0x7002 + (x << 5)];
+		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
 		for (y = 16/8; y < 240/8; y++)
 		{
@@ -96,12 +120,13 @@ static void draw_fixed_layer_type1(void)
 	int garoubank = 0;
 	int i = 0;
 
+	/* Garou: Mark of the Wolves uses extended fix bankswitching at $7500+ */
 	y = 0;
 	while (y < 32)
 	{
-		if (neogeo_videoram[0x7500 + i] == 0x0200 && (neogeo_videoram[0x7580 + i] & 0xff00) == 0xff00)
+		if (neogeo_videoram[NEOGEO_VRAM_EXT + i] == 0x0200 && (neogeo_videoram[NEOGEO_VRAM_EXT + 0x80 + i] & 0xff00) == 0xff00)
 		{
-			garoubank = neogeo_videoram[0x7580 + i] & 3;
+			garoubank = neogeo_videoram[NEOGEO_VRAM_EXT + 0x80 + i] & 3;
 			garouoffsets[y++] = garoubank;
 		}
 		garouoffsets[y++] = garoubank;
@@ -110,7 +135,7 @@ static void draw_fixed_layer_type1(void)
 
 	for (x = 8/8; x < 312/8; x++)
 	{
-		uint16_t *vram = &neogeo_videoram[0x7002 + (x << 5)];
+		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
 		for (y = 16/8; y < 240/8; y++)
 		{
@@ -135,7 +160,7 @@ static void draw_fixed_layer_type2(void)
 
 	for (x = 8/8; x < 312/8; x++)
 	{
-		uint16_t *vram = &neogeo_videoram[0x7002 + (x << 5)];
+		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
 		for (y = 16/8; y < 240/8; y++)
 		{
@@ -143,7 +168,8 @@ static void draw_fixed_layer_type2(void)
 			attr = code >> 12;
 			code &= 0x0fff;
 
-			code += (((neogeo_videoram[0x7500 + ((y - 1) & 31) + ((x / 6) << 5)] >> (5 - (x % 6)) * 2) & 3) ^ 3) << 12;
+			/* KOF2000+ style fix bankswitching via extension area */
+			code += (((neogeo_videoram[NEOGEO_VRAM_EXT + ((y - 1) & 31) + ((x / 6) << 5)] >> (5 - (x % 6)) * 2) & 3) ^ 3) << 12;
 
 			if (fix_usage[code])
 				blit_draw_fix((x << 3) + 16, y << 3, code, attr);
@@ -155,18 +181,33 @@ static void draw_fixed_layer_type2(void)
 
 
 /*------------------------------------------------------
-	SPRスプライト描画
+	Sprite Drawing
+
+	Neo Geo sprites are 16 pixels wide and can be up to 512 pixels tall.
+	They consist of vertical strips of 16x16 tiles that can be chained
+	horizontally via the "sticky bit" (bit 6 of SCB3).
+
+	Sprite Shrinking (NOT zooming - sprites can only get smaller):
+	- Horizontal: 4-bit value ($F=full 16px, $0=1px) in SCB2 upper nibble
+	- Vertical: 8-bit value ($FF=full, $00=smallest) in SCB2 lower byte
+
+	The hardware uses pixel-skipping for shrinking (no interpolation).
+	Each shrink level has a specific pattern of which pixels to show.
 ------------------------------------------------------*/
 
 typedef struct
 {
 	int16_t  x;
-	uint16_t zoom_x;
-	uint16_t *base;
+	uint16_t zoom_x;		/* Horizontal shrink: 1-16 pixels */
+	uint16_t *base;			/* Pointer to sprite's SCB1 data */
 } SPRITE_LIST;
 
 static SPRITE_LIST sprite_list[MAX_SPRITES_PER_LINE];
 
+/*
+ * Hardware-accelerated sprite rendering
+ * Used for full-screen updates (>15 lines changed)
+ */
 static void draw_sprites_hardware(int min_y, int max_y)
 {
 	int y = 0;
@@ -317,6 +358,11 @@ static inline int sprite_on_scanline(int scanline, int y, int rows)
 }
 
 
+/*
+ * Software sprite rendering (scanline-by-scanline)
+ * Used for partial updates (<15 lines) and shrunk sprites
+ * This path uses zoom_x_tables for pixel-skip patterns
+ */
 static void draw_sprites_software(int min_y, int max_y)
 {
 	int y = 0;
@@ -455,11 +501,11 @@ static void draw_sprites_software(int min_y, int max_y)
 
 
 /******************************************************************************
-	MVS ビデオ描画処理
+	MVS Video Drawing Processing
 ******************************************************************************/
 
 /*------------------------------------------------------
-	ビデオエミュレーション初期化
+	Video Emulation Initialization
 ------------------------------------------------------*/
 
 void neogeo_video_init(void)
@@ -490,10 +536,10 @@ void neogeo_video_init(void)
 	high_tile_mask  = (no_of_tiles > 0x10000) ? 0x10000 : 0;
 	high_tile_mask |= (no_of_tiles > 0x20000) ? 0x20000 : 0;
 	high_tile_mask |= (no_of_tiles > 0x40000) ? 0x40000 : 0;
-	high_tile_mask |= (no_of_tiles > 0x60000) ? 0x60000 : 0;//支持扩容CROM
-	high_tile_mask |= (no_of_tiles > 0x80000) ? 0x80000 : 0;//支持扩容CROM
-	high_tile_mask |= (no_of_tiles > 0xa0000) ? 0xa0000 : 0;//支持扩容CROM
-	high_tile_mask |= (no_of_tiles > 0xc0000) ? 0xc0000 : 0;//支持扩容CROM
+	high_tile_mask |= (no_of_tiles > 0x60000) ? 0x60000 : 0;// Support extended CROM
+	high_tile_mask |= (no_of_tiles > 0x80000) ? 0x80000 : 0;// Support extended CROM
+	high_tile_mask |= (no_of_tiles > 0xa0000) ? 0xa0000 : 0;// Support extended CROM
+	high_tile_mask |= (no_of_tiles > 0xc0000) ? 0xc0000 : 0;// Support extended CROM
 
 	sprite_gfx_code_mask = 0xffffffff;
 
@@ -525,7 +571,7 @@ void neogeo_video_init(void)
 
 
 /*------------------------------------------------------
-	ビデオエミュレーション終了
+	Video Emulation Shutdown
 ------------------------------------------------------*/
 
 void neogeo_video_exit(void)
@@ -534,7 +580,7 @@ void neogeo_video_exit(void)
 
 
 /*------------------------------------------------------
-	ビデオエミュレーションリセット
+	Video Emulation Reset
 ------------------------------------------------------*/
 
 void neogeo_video_reset(void)
@@ -579,7 +625,7 @@ void neogeo_video_reset(void)
 
 
 /******************************************************************************
-	FIXレイヤーバンク処理
+	FIX Layer Bank Processing
 ******************************************************************************/
 
 /*------------------------------------------------------
@@ -599,11 +645,11 @@ void neogeo_set_fixed_layer_source(uint8_t data)
 
 
 /******************************************************************************
-	画面更新処理
+	Screen Update Processing
 ******************************************************************************/
 
 /*------------------------------------------------------
-	スクリーン更新
+	Screen Update
 ------------------------------------------------------*/
 
 void neogeo_screenrefresh(void)
@@ -627,7 +673,7 @@ void neogeo_screenrefresh(void)
 
 
 /*------------------------------------------------------
-	スクリーン部分更新
+	Partial Screen Update
 ------------------------------------------------------*/
 
 void neogeo_partial_screenrefresh(int current_line)
@@ -653,7 +699,7 @@ void neogeo_partial_screenrefresh(int current_line)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

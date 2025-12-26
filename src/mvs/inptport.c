@@ -2,7 +2,7 @@
 
 	inptport.c
 
-	MVS 入力ポートエミュレーション
+	MVS Input Port Emulation
 
 ******************************************************************************/
 
@@ -10,7 +10,7 @@
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 int option_controller;
@@ -26,7 +26,7 @@ int input_analog_value[2];
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static const uint8_t hotkey_mask[11] =
@@ -59,11 +59,11 @@ static uint32_t (*poll_pad)(void);
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	入力ポートタイプのチェック
+	Input Port Type Check
 ------------------------------------------------------*/
 
 void check_input_mode(void)
@@ -118,7 +118,7 @@ void check_input_mode(void)
 
 
 /*------------------------------------------------------
-	連射フラグを更新
+	Update Autofire Flag
 ------------------------------------------------------*/
 
 static uint32_t update_autofire(uint32_t buttons)
@@ -153,7 +153,7 @@ static uint32_t update_autofire(uint32_t buttons)
 
 
 /*------------------------------------------------------
-	ホットキーフラグを反映
+	Apply Hotkey Flag
 ------------------------------------------------------*/
 
 static uint8_t apply_hotkey(uint8_t value)
@@ -172,7 +172,7 @@ static uint8_t apply_hotkey(uint8_t value)
 
 
 /*------------------------------------------------------
-	MVS コントローラ1
+	MVS Controller 1
 ------------------------------------------------------*/
 
 static void update_inputport0(void)
@@ -233,7 +233,7 @@ static void update_inputport0(void)
 
 
 /*------------------------------------------------------
-	MVS コントローラ2
+	MVS Controller 2
 ------------------------------------------------------*/
 
 static void update_inputport1(void)
@@ -293,7 +293,7 @@ static void update_inputport1(void)
 
 
 /*------------------------------------------------------
-	MVS スタートボタン
+	MVS Start Button
 ------------------------------------------------------*/
 
 static void update_inputport2(void)
@@ -339,7 +339,7 @@ static void update_inputport2(void)
 
 
 /*------------------------------------------------------
-	MVS コイン/サービススイッチ
+	MVS Coin/Service Switch
 ------------------------------------------------------*/
 
 static void update_inputport4(void)
@@ -358,12 +358,12 @@ static void update_inputport4(void)
 				if (input_flag[P1_COIN])
 				{
 					value &= ~0x01;
-					coin_wait = 12;	// コイン投入ウェイト
+					coin_wait = 12;	// Coin insert wait
 				}
 			}
 			else if (coin_wait)
 			{
-				// コイン投入ウェイト処理
+				// Coin insert wait processing
 				if (coin_wait > 4) value &= ~0x01;
 				coin_wait--;
 			}
@@ -400,7 +400,7 @@ static void update_inputport4(void)
 
 
 /*------------------------------------------------------
-	MVS テストスイッチ
+	MVS Test Switch
 ------------------------------------------------------*/
 
 static void update_inputport5(void)
@@ -422,7 +422,7 @@ static void update_inputport5(void)
 
 
 /*------------------------------------------------------
-	irrmaze アナログ入力ポート
+	irrmaze Analog Input Port
 ------------------------------------------------------*/
 
 static void irrmaze_update_analog_port(uint16_t value)
@@ -506,7 +506,7 @@ static void irrmaze_update_analog_port(uint16_t value)
 
 
 /*------------------------------------------------------
-	popbounc アナログ入力ポート
+	popbounc Analog Input Port
 ------------------------------------------------------*/
 
 static void popbounc_update_analog_port(uint16_t value)
@@ -579,11 +579,11 @@ static void popbounc_update_analog_port(uint16_t value)
 
 
 /******************************************************************************
-	入力ポートインタフェース関数
+	Input Port Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	入力ポートの初期化
+	Initialize Input Port
 ------------------------------------------------------*/
 
 int input_init(void)
@@ -628,7 +628,7 @@ int input_init(void)
 
 
 /*------------------------------------------------------
-	入力ポートの終了
+	Shutdown Input Port
 ------------------------------------------------------*/
 
 void input_shutdown(void)
@@ -641,7 +641,7 @@ void input_shutdown(void)
 
 
 /*------------------------------------------------------
-	入力ポートをリセット
+	Reset Input Port
 ------------------------------------------------------*/
 
 void input_reset(void)
@@ -666,7 +666,7 @@ void input_reset(void)
 
 
 /*------------------------------------------------------
-	連射フラグを設定
+	Set Autofire Flag
 ------------------------------------------------------*/
 
 void setup_autofire(void)
@@ -682,7 +682,7 @@ void setup_autofire(void)
 
 
 /*------------------------------------------------------
-	入力ポートを更新
+	Update Input Port
 ------------------------------------------------------*/
 
 void update_inputport(void)
@@ -841,7 +841,7 @@ void update_inputport(void)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

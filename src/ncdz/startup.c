@@ -2,8 +2,7 @@
 
 	startup.c
 
-	startup.bin(NEOGEO CDの初期化が終わった状態のメモリをファイル化したもの)
-	をCソース化したもの
+	startup.bin (NEOGEO CD memory dump after initialization converted to C source)
 
 ******************************************************************************/
 

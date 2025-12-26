@@ -36,6 +36,11 @@ uint8_t *tex_fix;
 uint8_t *tex_spr[3];
 uint16_t *clut;
 
+/*
+ * Color table for palette index encoding
+ * Each entry broadcasts a 4-bit palette offset to all bytes of a 32-bit word
+ * Used when rendering tiles to texture cache
+ */
 const uint32_t ALIGN_DATA color_table[16] =
 {
 	0x00000000, 0x10101010, 0x20202020, 0x30303030,
@@ -44,25 +49,48 @@ const uint32_t ALIGN_DATA color_table[16] =
 	0xc0c0c0c0, 0xd0d0d0d0, 0xe0e0e0e0, 0xf0f0f0f0
 };
 
+/*
+ * Horizontal shrink pixel-skip tables
+ * Reference: https://wiki.neogeodev.org/index.php?title=Sprite_shrinking
+ *
+ * Neo Geo sprites can only SHRINK (not zoom). The hardware uses pixel-skipping
+ * with no interpolation. Each table entry indicates which of the 16 pixels
+ * in a sprite row should be displayed (1) or skipped (0).
+ *
+ * Hardware SCB2 upper nibble values:
+ *   $F = full size (16 pixels) - uses fixed rendering path, not this table
+ *   $E = 15 pixels
+ *   ...
+ *   $1 = 2 pixels
+ *   $0 = 1 pixel (at position 8)
+ *
+ * Table indexing: hardware_value + 1, so:
+ *   - Index 0 is unused (hardware $0 maps to index 1)
+ *   - Index 1 = 1 pixel (hardware $0)
+ *   - Index 15 = 15 pixels (hardware $E)
+ *   - Index 16 would be full size, but that uses drawgfxline_fixed() instead
+ *
+ * The pixel positions in each table are optimized for even visual distribution.
+ */
 const uint8_t zoom_x_tables[][16] =
 {
-	{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0 },
-	{ 0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-	{ 0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0 },
-	{ 0,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0 },
-	{ 0,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0 },
-	{ 0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-	{ 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },
-	{ 1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0 },
-	{ 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0 },
-	{ 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1 },
-	{ 1,0,1,1,1,0,1,1,1,1,1,0,1,0,1,1 },
-	{ 1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-	{ 1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },
-	{ 1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1 },
-//	{ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 }
+	{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },  /* Index 0: unused (never accessed) */
+	{ 0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0 },  /* Index 1: 1 pixel at center (hardware $0) */
+	{ 0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0 },  /* Index 2: 2 pixels */
+	{ 0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0 },  /* Index 3: 3 pixels */
+	{ 0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0 },  /* Index 4: 4 pixels */
+	{ 0,0,1,0,1,0,0,0,1,0,0,0,1,0,1,0 },  /* Index 5: 5 pixels */
+	{ 0,0,1,0,1,0,1,0,1,0,0,0,1,0,1,0 },  /* Index 6: 6 pixels */
+	{ 0,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },  /* Index 7: 7 pixels (alternating) */
+	{ 1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0 },  /* Index 8: 8 pixels (every other) */
+	{ 1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0 },  /* Index 9: 9 pixels */
+	{ 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0 },  /* Index 10: 10 pixels */
+	{ 1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1 },  /* Index 11: 11 pixels */
+	{ 1,0,1,1,1,0,1,1,1,1,1,0,1,0,1,1 },  /* Index 12: 12 pixels */
+	{ 1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },  /* Index 13: 13 pixels */
+	{ 1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,1 },  /* Index 14: 14 pixels */
+	{ 1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1 },  /* Index 15: 15 pixels (hardware $E) */
+	/* Index 16 (hardware $F = full) uses drawgfxline_fixed() instead */
 };
 
 void ALIGN_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom) =

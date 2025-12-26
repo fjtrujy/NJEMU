@@ -2,11 +2,11 @@
 
 	timer.c
 
-	タイマー管理
+	Timer Management
 
-	※速度を向上させるため、精度を落としてint型で全て処理しています。
-	  float/doubleだと、クロススォードの速度が大幅に低下します。
-	  (YM2610のタイマ割り込み回数が極端に多いため)
+	For high performance, all processing uses int type to avoid speed penalty.
+	Using float/double would significantly degrade performance in Crossword.
+	(YM2610 timer interrupt count would become extremely slow)
 
 ******************************************************************************/
 
@@ -17,11 +17,11 @@
 
 
 /******************************************************************************
-	マクロ
+	Macros
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CPUの消費した時間を取得 (単位:マイクロ秒)
+	Get CPU elapsed time (unit: microseconds)
 ------------------------------------------------------*/
 
 #define cpu_elapsed_time(cpunum)	\
@@ -29,7 +29,7 @@
 
 
 /******************************************************************************
-	ローカル構造体
+	Local Structures
 ******************************************************************************/
 
 typedef struct timer_t
@@ -55,7 +55,7 @@ static CPUINFO ALIGN_DATA cpu[MAX_CPU];
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static int global_offset;
@@ -68,7 +68,7 @@ static int scanline;
 
 
 /******************************************************************************
-	プロトタイプ
+	Prototypes
 ******************************************************************************/
 
 void (*timer_update_cpu)(void);
@@ -77,11 +77,11 @@ static void timer_update_cpu_raster(void);
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CPUを実行
+	Execute CPU
 ------------------------------------------------------*/
 
 static void cpu_execute(int cpunum)
@@ -97,7 +97,7 @@ static void cpu_execute(int cpunum)
 
 
 /*------------------------------------------------------
-	CPUのスピンを解除(トリガ)
+	CPU spin trigger
 ------------------------------------------------------*/
 
 static void cpu_spin_trigger(int param)
@@ -107,7 +107,7 @@ static void cpu_spin_trigger(int param)
 
 
 /*------------------------------------------------------
-	現在の秒以下の時間を取得 (単位:マイクロ秒)
+	Get current time below seconds (unit: microseconds)
 ------------------------------------------------------*/
 
 static int getabsolutetime(void)
@@ -122,11 +122,11 @@ static int getabsolutetime(void)
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	タイマーをリセット
+	Reset timer
 ------------------------------------------------------*/
 
 void timer_reset(void)
@@ -153,7 +153,7 @@ void timer_reset(void)
 
 
 /*------------------------------------------------------
-	CPU更新ハンドラを設定
+	Set CPU update handler
 ------------------------------------------------------*/
 
 void timer_set_update_handler(void)
@@ -166,7 +166,7 @@ void timer_set_update_handler(void)
 
 
 /*------------------------------------------------------
-	CPUをサスペンドする
+	Suspend CPU
 ------------------------------------------------------*/
 
 void timer_suspend_cpu(int cpunum, int state, int reason)
@@ -179,7 +179,7 @@ void timer_suspend_cpu(int cpunum, int state, int reason)
 
 
 /*------------------------------------------------------
-	タイマーを有効/無効にする
+	Enable/disable timer
 ------------------------------------------------------*/
 
 int timer_enable(int which, int enable)
@@ -192,7 +192,7 @@ int timer_enable(int which, int enable)
 
 
 /*------------------------------------------------------
-	タイマーをセット
+	Set timer
 ------------------------------------------------------*/
 
 void timer_adjust(int which, int duration, int param, void (*callback)(int param))
@@ -205,7 +205,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 
 	if (active_cpu != CPU_NOTACTIVE)
 	{
-		// CPU実行中の場合は、残りサイクルを破棄
+		// If CPU is executing, discard remaining cycles
 		int cycles_left = *cpu[active_cpu].icount;
 		int time_left = cycles_left / cpu[active_cpu].cycles_per_usec;
 
@@ -217,7 +217,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 
 			if (active_cpu == CPU_Z80)
 			{
-				// CPU2の場合はCPU1を停止しCPU1が消費した余分なサイクルを調整する
+				// If CPU2, stop CPU1 and adjust CPU1's remaining cycles
 				if (!timer[CPUSPIN_TIMER].enable)
 				{
 					timer_suspend_cpu(CPU_M68000, 0, SUSPEND_REASON_SPIN);
@@ -233,7 +233,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 
 
 /*------------------------------------------------------
-	タイマーをセット
+	Set timer
 ------------------------------------------------------*/
 
 void timer_set(int which, int duration, int param, void (*callback)(int param))
@@ -244,7 +244,7 @@ void timer_set(int which, int duration, int param, void (*callback)(int param))
 
 
 /*------------------------------------------------------
-	現在のエミュレーション時間を取得 (単位:秒)
+	Get current emulation time (unit: seconds)
 ------------------------------------------------------*/
 
 float timer_get_time(void)
@@ -256,7 +256,7 @@ float timer_get_time(void)
 
 
 /*------------------------------------------------------
-	現在のスキャンラインを取得
+	Get current scanline
 ------------------------------------------------------*/
 
 int timer_getscanline(void)
@@ -269,7 +269,7 @@ int timer_getscanline(void)
 
 
 /*------------------------------------------------------
-	CPUを更新
+	Update CPU
 ------------------------------------------------------*/
 
 static void timer_update_cpu_normal(void)
@@ -330,7 +330,7 @@ static void timer_update_cpu_normal(void)
 
 
 /*------------------------------------------------------
-	CPUを更新 (ラスタドライバ用)
+	Update CPU (for raster driver)
 ------------------------------------------------------*/
 
 static void timer_update_cpu_raster(void)
@@ -396,7 +396,7 @@ static void timer_update_cpu_raster(void)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

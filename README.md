@@ -867,6 +867,51 @@ This allows storing a 4-bit palette index in the upper nibble of each 8-bit text
 
 **Files:** `src/mvs/psp_sprite.c`, `src/mvs/ps2_sprite.c`, `src/mvs/desktop_sprite.c`, `src/mvs/sprite_common.c`
 
+**Hardware Reference:** https://wiki.neogeodev.org/
+
+#### Hardware Specifications
+
+| Feature | Specification |
+|---------|---------------|
+| Max sprites per frame | 381 |
+| Max sprites per scanline | 96 |
+| Sprite width | Fixed 16 pixels |
+| Sprite height | Up to 512 pixels (32 tiles) |
+| Sprite scaling | Shrink only (no magnification) |
+| Fix layer tiles | 4,096 (12-bit addressing) |
+| Palettes | 2 banks × 256 palettes × 16 colors |
+| Fix layer palettes | First 16 only |
+
+#### VRAM Layout
+
+The Neo Geo VRAM is organized into Sprite Control Blocks (SCB):
+
+```
+VRAM Address Map (word addresses):
+─────────────────────────────────────────
+$0000-$6FFF  SCB1 - Sprite tilemaps (28KB)
+             - 64 words per sprite × 448 sprites
+             - Even words: tile number (bits 0-15)
+             - Odd words: palette, tile MSB, flip, auto-anim
+
+$7000-$74FF  FIX Layer - 40×32 tilemap
+             - Each word: palette (4 bits) | tile (12 bits)
+
+$7500-$7FFF  Extension area (bankswitching)
+
+$8000-$81FF  SCB2 - Shrink coefficients
+             - Lower byte: Y shrink ($FF=full, $00=min)
+             - Upper nibble: X shrink ($F=full, $0=min)
+
+$8200-$83FF  SCB3 - Y position and size
+             - Bits 7-15: Y position (496 - actual)
+             - Bit 6: Sticky bit (chain to previous)
+             - Bits 0-5: Height in tiles
+
+$8400-$85FF  SCB4 - X position
+             - Bits 7-15: X position
+```
+
 #### Code Organization
 
 MVS uses a shared sprite management architecture:
@@ -905,12 +950,30 @@ tile = *(uint32_t *)(src + 0);
 *(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;  // pixels 1,3,5,7
 ```
 
+#### Sprite Shrinking (NOT Zooming)
+
+**Important:** Neo Geo sprites can only SHRINK, not magnify. The hardware uses pixel-skipping with no interpolation:
+
+```
+Horizontal shrink (4-bit value in SCB2):
+  $F = Full size (16 pixels)
+  $7 = Half size (8 pixels, alternating)
+  $0 = Minimum (1 pixel at center)
+
+Vertical shrink (8-bit value in SCB2):
+  $FF = Full size
+  $00 = Minimum
+```
+
+The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to display for each shrink level. Full-size sprites use an optimized `drawgfxline_fixed()` path.
+
 #### Sprite Rendering Features
 
-- **Hardware zoom:** SPR layer supports per-sprite X/Y zoom
-- **Software fallback:** Line-by-line rendering for zoomed sprites
+- **Hardware path:** Used for full-screen updates (>15 scanlines)
+- **Software path:** Scanline-by-scanline for partial updates and shrunk sprites
 - **Palette banking:** Two palette banks for raster effects
 - **ROM caching:** Large sprite ROMs can be cached to storage
+- **Sprite chaining:** Horizontal chaining via "sticky bit" for wide objects
 
 #### Screen Resolution
 
@@ -1053,6 +1116,52 @@ CPS2 uses the same interleaved planar format as CPS1 (see CPS1 section above).
 
 **Files:** `src/ncdz/psp_sprite.c`, `src/ncdz/ps2_sprite.c`, `src/ncdz/desktop_sprite.c`, `src/ncdz/sprite_common.c`
 
+**Hardware Reference:** https://wiki.neogeodev.org/
+
+#### Hardware Specifications
+
+| Feature | Specification |
+|---------|---------------|
+| Max sprites per frame | 381 |
+| Max sprites per scanline | 96 |
+| Sprite width | Fixed 16 pixels |
+| Sprite height | Up to 512 pixels (32 tiles) |
+| Sprite scaling | Shrink only (no magnification) |
+| Fix layer tiles | 4,096 (12-bit addressing) |
+| Palettes | 2 banks × 256 palettes × 16 colors |
+| Fix layer palettes | First 16 only |
+| Tile addressing | 15-bit (vs MVS 20-bit) |
+
+#### VRAM Layout
+
+The Neo Geo CD uses the same VRAM layout as MVS:
+
+```
+VRAM Address Map (word addresses):
+─────────────────────────────────────────
+$0000-$6FFF  SCB1 - Sprite tilemaps (28KB)
+             - 64 words per sprite × 448 sprites
+             - Even words: tile number (bits 0-14 for CD)
+             - Odd words: palette, tile MSB, flip, auto-anim
+
+$7000-$74FF  FIX Layer - 40×32 tilemap
+             - Each word: palette (4 bits) | tile (12 bits)
+
+$7500-$7FFF  Extension area (bankswitching)
+
+$8000-$81FF  SCB2 - Shrink coefficients
+             - Lower byte: Y shrink ($FF=full, $00=min)
+             - Upper nibble: X shrink ($F=full, $0=min)
+
+$8200-$83FF  SCB3 - Y position and size
+             - Bits 7-15: Y position (496 - actual)
+             - Bit 6: Sticky bit (chain to previous)
+             - Bits 0-5: Height in tiles
+
+$8400-$85FF  SCB4 - X position
+             - Bits 7-15: X position
+```
+
 #### Code Organization
 
 NCDZ uses a shared sprite management architecture similar to MVS:
@@ -1079,6 +1188,42 @@ NCDZ uses a shared sprite management architecture similar to MVS:
 | FIX | 0x200 | 512×512 / 8×8 | 1,200 |
 | SPR | 0x200 | 512×1536 / 16×16 | 12,288 |
 
+#### Graphics Data Format
+
+NCDZ uses the same nibble-packed format as MVS:
+- Each 32-bit word contains 8 pixels (4 bits per pixel)
+- Decoding extracts odd/even nibbles separately:
+
+```c
+tile = *(uint32_t *)(src + 0);
+*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;  // pixels 0,2,4,6
+*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;  // pixels 1,3,5,7
+```
+
+#### Sprite Shrinking (NOT Zooming)
+
+**Important:** Like MVS, Neo Geo CD sprites can only SHRINK, not magnify. The hardware uses pixel-skipping with no interpolation:
+
+```
+Horizontal shrink (4-bit value in SCB2):
+  $F = Full size (16 pixels)
+  $7 = Half size (8 pixels, alternating)
+  $0 = Minimum (1 pixel at center)
+
+Vertical shrink (8-bit value in SCB2):
+  $FF = Full size
+  $00 = Minimum
+```
+
+The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to display for each shrink level. Full-size sprites use an optimized `drawgfxline_fixed()` path.
+
+#### Sprite Rendering Features
+
+- **Hardware path:** Used for full-screen updates (>15 scanlines)
+- **Software path:** Scanline-by-scanline for partial updates and shrunk sprites
+- **Palette banking:** Two palette banks for raster effects
+- **Sprite chaining:** Horizontal chaining via "sticky bit" for wide objects
+
 #### NCDZ vs MVS Differences
 
 NCDZ is similar to MVS but with key differences:
@@ -1086,10 +1231,12 @@ NCDZ is similar to MVS but with key differences:
 - **Larger RAM:** Can hold more graphics data
 - **Same graphics format:** Uses MVS-compatible tile format
 - **Audio from CD:** MP3/CDDA instead of ROM-based audio
+- **15-bit tile addressing:** Uses `code & 0x7fff` vs MVS's 20-bit addressing
 
 #### Screen Resolution
 
 - **Native:** 304×224 (same as MVS)
+- **With borders:** 320×224 (visible area starts at x=24, y=16)
 
 ---
 
@@ -1127,6 +1274,220 @@ column = idx % TILES_PER_LINE;
 offset = ((row * TILE_HEIGHT) + line) * BUF_WIDTH + (column * TILE_WIDTH);
 dst = &texture[offset];
 ```
+
+---
+
+## Internal Systems Documentation
+
+This section provides detailed documentation of the emulator's internal systems, useful for developers and advanced users.
+
+### Sound System Architecture
+
+The sound system uses a multi-threaded architecture to ensure smooth audio output without blocking the main emulation loop.
+
+#### Sound Thread (`src/common/sound.c`)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Sound Thread Flow                         │
+├─────────────────────────────────────────────────────────────┤
+│  Main Thread                    Sound Thread                 │
+│  ───────────                    ────────────                 │
+│  1. Initialize sound info       1. Wait for enable           │
+│  2. Start sound thread          2. Call sound->update()      │
+│  3. Enable sound output   ───►  3. Fill buffer with samples  │
+│  4. Run emulation               4. Output via audio driver   │
+│  5. Disable on pause      ───►  5. Loop or sleep             │
+│  6. Stop thread on exit         6. Clean exit                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Configuration | CPS2 | MVS/NCDZ/CPS1 |
+|--------------|------|---------------|
+| Sample Rate | 24 KHz | 44.1 KHz |
+| Buffer Size | 1,600 samples | 2,944 samples |
+| Channels | 2 (stereo) | 2 (stereo) |
+
+#### MP3 Thread (`src/common/mp3.c`) - NCDZ Only
+
+The Neo-Geo CD emulator uses a separate thread for MP3 decoding (using libmad):
+
+| Feature | Description |
+|---------|-------------|
+| Decoder | libmad (MPEG Audio Decoder) |
+| Buffer | Double-buffered (736×2 samples each) |
+| Auto-loop | Configurable track looping |
+| Seek Support | Frame-based seeking for state load |
+| Sleep Handling | File re-open after PSP sleep mode |
+
+### State Save/Load System
+
+The state system (`src/common/state.c`) provides save state functionality with thumbnails.
+
+#### State File Format
+
+```
+┌─────────────────────────────────────────┐
+│ Offset    │ Size      │ Content         │
+├───────────┼───────────┼─────────────────┤
+│ 0x00      │ 8 bytes   │ Version string  │
+│ 0x08      │ 16 bytes  │ Timestamp       │
+│ 0x18      │ 34,048 B  │ Thumbnail       │
+│ Variable  │ Variable  │ Emulator state  │
+└─────────────────────────────────────────┘
+```
+
+| System | Buffer Size | Compression |
+|--------|-------------|-------------|
+| CPS1 | 320 KB | None |
+| CPS2 | 336 KB | None |
+| MVS | 320 KB | None |
+| NCDZ | 3 MB | zlib |
+
+#### Thumbnail Dimensions
+
+| Screen Type | Width | Height |
+|-------------|-------|--------|
+| Horizontal | 152 | 112 |
+| Vertical (CPS1/CPS2) | 112 | 152 |
+
+#### AdHoc State Synchronization
+
+For multiplayer, states are synchronized between PSPs:
+
+```
+Server                           Client
+──────                           ──────
+1. Serialize state          
+2. Send state (0x400 chunks) ──► 3. Receive state
+4. Wait for ACK             ◄── 5. Send ACK
+                                 6. Deserialize state
+```
+
+### Command List System
+
+The command list viewer (`src/common/cmdlist.c`) displays move lists from MAME Plus! format `command.dat` files.
+
+#### Supported Character Encodings
+
+| Encoding | Charset Tag | Use Case |
+|----------|-------------|----------|
+| GBK | `$charset=gbk` | Chinese |
+| Shift_JIS | `$charset=shift_jis` | Japanese |
+| ISO-8859-1 | `$charset=latin1` | Western European |
+
+The system auto-detects encoding if not specified by analyzing byte patterns.
+
+#### Command.dat Size Reduction
+
+The emulator includes a utility to reduce `command.dat` size by extracting only the games supported by each emulator:
+
+1. Navigate to File Browser
+2. Access the command list reduction option
+3. Creates backup as `command.org`
+4. Outputs optimized `command.dat`
+
+### Cache System Details
+
+The cache system (`src/common/cache.c`) enables running games with graphics larger than available RAM.
+
+#### Cache Types
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `CACHE_RAWFILE` | Uncompressed cache file | Faster loading |
+| `CACHE_ZIPFILE` | ZIP compressed cache | Saves storage space |
+
+#### Cache Block Management
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LRU Cache Algorithm                       │
+├─────────────────────────────────────────────────────────────┤
+│  Block Request:                                              │
+│  1. Check if block in cache (blocks[] array)                 │
+│  2. If cached: move to tail (most recently used)             │
+│  3. If not cached:                                           │
+│     a. Evict head block (least recently used)                │
+│     b. Load new block from storage                           │
+│     c. Insert at tail                                        │
+│  4. Return memory address                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Block Size | 64 KB | Single cache unit |
+| Max Blocks (Normal) | 320 (20 MB) | PSP Fat |
+| Max Blocks (Large) | 512 (32 MB) | PSP Slim |
+| Safety Margin | 128 KB | Reserved after allocation |
+
+#### PCM Cache (MVS Only)
+
+For MVS games with large ADPCM sound data, a separate PCM cache can be used:
+
+| Parameter | Value |
+|-----------|-------|
+| Max PCM Blocks | 320 |
+| PCM Cache Size | 3 MB (0x30 blocks × 64 KB) |
+
+### Input System
+
+The input system (`src/common/input_driver.c`) provides unified controller handling across platforms.
+
+#### Key Repeat Handling
+
+```c
+Initial Delay: 8 frames (~133ms at 60fps)
+Repeat Acceleration: Decreases by 2 frames each repeat
+Minimum Delay: 2 frames (~33ms)
+```
+
+#### Special Input Modes (MVS)
+
+| Game | Mode | Function |
+|------|------|----------|
+| irrmaze | Analog | Trackball emulation via analog stick |
+| popbounc | Analog | Paddle control via analog stick |
+| fatfursp | Special | Modified input polling |
+
+### ROM Loading System
+
+The ROM loader (`src/common/loadrom.c`) handles ZIP file extraction and ROM verification.
+
+#### ROM Search Order
+
+```
+1. {game_dir}/{game_name}.zip
+2. {game_dir}/{parent_name}.zip
+3. {launchDir}/roms/{parent_name}.zip
+```
+
+#### ROM Types
+
+| Type | Description |
+|------|-------------|
+| `ROM_LOAD` | Standard sequential load |
+| `ROM_CONTINUE` | Continue from previous file |
+| `ROM_WORDSWAP` | Byte-swap during load |
+
+#### Interleaved Loading
+
+For ROMs with interleaved data:
+```c
+group: Number of bytes to read consecutively
+skip: Bytes to skip between groups
+```
+
+Example: `group=2, skip=2` reads 2 bytes, skips 2, repeating.
+
+### Coin Counter System
+
+The coin counter (`src/common/coin.c`) tracks coin insertions for arcade authenticity:
+
+- Supports up to 4 coin counters
+- Lockout support (prevents coin insertion)
+- State is saved/loaded with save states
 
 ---
 

@@ -2,7 +2,7 @@
 
 	state.c
 
-	ステートセーブ/ロード
+	State Save/Load
 
 ******************************************************************************/
 
@@ -25,7 +25,7 @@ typedef struct {
 } stateTime;
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 char date_str[16];
@@ -40,7 +40,7 @@ int  state_reload_bios;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 #ifdef ADHOC
@@ -59,11 +59,11 @@ static const char *current_version_str = "NCDZSV23";
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	サムネイルをワーク領域からファイルに保存
+	Save Thumbnail from Work Area to File
 ------------------------------------------------------*/
 
 static void save_thumbnail(void)
@@ -96,7 +96,7 @@ static void save_thumbnail(void)
 
 
 /*------------------------------------------------------
-	サムネイルをファイルからワーク領域に読み込み
+	Load Thumbnail from File to Work Area
 ------------------------------------------------------*/
 
 static void load_thumbnail(FILE *fp)
@@ -133,7 +133,7 @@ static void load_thumbnail(FILE *fp)
 
 
 /*------------------------------------------------------
-	ワーク領域のサムネイルをクリア
+	Clear Thumbnail in Work Area
 ------------------------------------------------------*/
 
 static void clear_thumbnail(void)
@@ -166,11 +166,11 @@ static void clear_thumbnail(void)
 
 
 /******************************************************************************
-	ステートセーブ/ロード関数
+	State Save/Load Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	ステートセーブ
+	State Save
 ------------------------------------------------------*/
 
 static inline void tm_to_stateTime(stateTime *st, struct tm *t)
@@ -374,7 +374,7 @@ error:
 
 
 /*------------------------------------------------------
-	ステートロード
+	State Load
 ------------------------------------------------------*/
 
 int state_load(int slot)
@@ -617,7 +617,7 @@ error:
 
 
 /*------------------------------------------------------
-	サムネイル作成
+	Create Thumbnail
 ------------------------------------------------------*/
 
 void state_make_thumbnail(void)
@@ -649,7 +649,7 @@ void state_make_thumbnail(void)
 
 
 /*------------------------------------------------------
-	サムネイル読み込み
+	Load Thumbnail
 ------------------------------------------------------*/
 
 int state_load_thumbnail(int slot)
@@ -688,7 +688,7 @@ int state_load_thumbnail(int slot)
 
 
 /*------------------------------------------------------
-	サムネイル消去
+	Clear Thumbnail
 ------------------------------------------------------*/
 
 void state_clear_thumbnail(void)
@@ -703,15 +703,15 @@ void state_clear_thumbnail(void)
 }
 
 /******************************************************************************
-	AdHoc用ステート送受信関数
+	AdHoc State Send/Receive Functions
 ******************************************************************************/
 
 #ifdef ADHOC
 
 /*
-	データサイズは ((実データサイズ / 0x3ff) + 1) * 0x3ff で求めること
+	Data size is calculated as ((actual data size / 0x3ff) + 1) * 0x3ff
 
-	0x3ff = 0x400 bytes (送信バッファサイズ) - 1 byte(データ識別コード)
+	0x3ff = 0x400 bytes (send buffer size) - 1 byte (data identifier code)
 */
 
 #if (EMU_SYSTEM == CPS1)
@@ -723,7 +723,7 @@ void state_clear_thumbnail(void)
 #endif
 
 /*------------------------------------------------------
-	ステート送信
+	State Transmission
 ------------------------------------------------------*/
 
 int adhoc_send_state(uint32_t *frame)
@@ -790,7 +790,7 @@ retry:
 	}
 	if ((error = adhocSendRecvAck(state_buffer_base, ADHOC_STATE_SIZE, ADHOC_TIMEOUT, ADHOC_DATATYPE_STATE)) != ADHOC_STATE_SIZE)
 	{
-		if (error == (int)0x80410715)	// タイムアウト
+		if (error == (int)0x80410715)	// Timeout
 		{
 			if (Loop != LOOP_EXEC) return 1;
 			if (--retry_count) goto retry;
@@ -803,7 +803,7 @@ retry:
 
 
 /*------------------------------------------------------
-	ステート受信
+	State Reception
 ------------------------------------------------------*/
 
 int adhoc_recv_state(uint32_t *frame)
@@ -824,9 +824,9 @@ retry:
 		if (error == -1)
 		{
 			if (Loop != LOOP_EXEC) return 1;
-			goto retry;	// データタイプ不一致
+			goto retry;	// Data type mismatch
 		}
-		else if (error == (int)0x80410715)	// タイムアウト
+		else if (error == (int)0x80410715)	// Timeout
 		{
 			if (Loop != LOOP_EXEC) return 1;
 			if (--retry_count) goto retry;

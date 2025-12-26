@@ -2,7 +2,7 @@
 
 	cache.c
 
-	メモリキャッシュインタフェース関数
+	Memory Cache Interface Functions
 
 ******************************************************************************/
 
@@ -12,34 +12,34 @@
 
 #if USE_CACHE
 #ifdef LARGE_MEMORY
-#define MIN_CACHE_SIZE		0x40		// 下限  原始0x40,4MB
+#define MIN_CACHE_SIZE		0x40		// Lower limit, original 0x40, 4MB
 #else
-#define MIN_CACHE_SIZE		0x20		// 下限  原始0x40,4MB
+#define MIN_CACHE_SIZE		0x20		// Lower limit, original 0x40, 4MB
 #endif
 /*
 32MB 0x200 660CFW exit pspfiler and tempgba,crash.
 26MB 0x1a0 620CFW push vol and screen button crash.
 */
 #ifdef LARGE_MEMORY
-#define MAX_CACHE_SIZE		0x200		// 上限 32MB 0x200  
+#define MAX_CACHE_SIZE		0x200		// Upper limit 32MB 0x200  
 #else
-#define MAX_CACHE_SIZE		0x140		// 上限 20MB 0x140
+#define MAX_CACHE_SIZE		0x140		// Upper limit 20MB 0x140
 #endif
-#define CACHE_SAFETY		0x20000		// キャッシュ確保後の空きメモリサイズ 128KB
-#define BLOCK_SIZE			0x10000		// 1ブロックのサイズ = 64KB 0x10000 图像有关
+#define CACHE_SAFETY		0x20000		// Free memory size after cache allocation 128KB
+#define BLOCK_SIZE			0x10000		// Size of 1 block = 64KB 0x10000 (related to images)
 #define BLOCK_MASK			0xffff
 #define BLOCK_SHIFT			16			// 16
 #define BLOCK_NOT_CACHED	0xffff
 #define BLOCK_EMPTY			0xffffffff
 
 #if (EMU_SYSTEM == MVS)
-#define MAX_PCM_BLOCKS		0x140		// 0x100 3xx用PCM
-#define MAX_PCM_SIZE		0x30		// 0x30 数值越小剩余内存越大
+#define MAX_PCM_BLOCKS		0x140		// 0x100 PCM for 3xx
+#define MAX_PCM_SIZE		0x30		// 0x30 smaller value = more remaining memory
 #endif
 
 
 /******************************************************************************
-	グローバル構造体/変数
+	Global Structures/Variables
 ******************************************************************************/
 
 uint32_t (*read_cache)(uint32_t offset);
@@ -51,7 +51,7 @@ uint8_t  *block_empty = (uint8_t *)block_offset;
 
 
 /******************************************************************************
-	ローカル構造体/変数
+	Local Structures/Variables
 ******************************************************************************/
 
 typedef struct cache_s
@@ -90,14 +90,14 @@ static char spr_cache_name[PATH_MAX];
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 #if (EMU_SYSTEM == MVS)
 #ifndef LARGE_MEMORY
 
 /*------------------------------------------------------
-	PCMキャッシュを読み込む
+	Read PCM Cache
 ------------------------------------------------------*/
 
 uint8_t *pcm_cache_read(uint16_t new_block)
@@ -150,7 +150,7 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 #else
 
 /*------------------------------------------------------
-	ZIPキャッシュファイル内のデータファイルを開く
+	Open Data File in ZIP Cache File
 ------------------------------------------------------*/
 
 static int zip_cache_open(int number)
@@ -174,7 +174,7 @@ static int zip_cache_open(int number)
 
 
 /*------------------------------------------------------
-	ZIPキャッシュファイル内のデータファイル読み込み
+	Read Data File from ZIP Cache File
 ------------------------------------------------------*/
 
 #define zip_cache_load(offs)							\
@@ -186,11 +186,11 @@ static int zip_cache_open(int number)
 #endif
 
 /*------------------------------------------------------
-	キャッシュをデータで埋める
+	Fill Cache with Data
 
-	3種類のデータが混在しているため、領域を区切って
-	それぞれ適当なサイズを読み込むべきですが、手を
-	抜いて先頭から読み込んでいるだけになっています。
+	Since 3 types of data are mixed, we should divide the area
+	and read each with an appropriate size, but we're just
+	reading from the beginning to simplify.
 ------------------------------------------------------*/
 
 static int fill_cache(void)
@@ -318,10 +318,9 @@ static int fill_cache(void)
 }
 
 /*------------------------------------------------------
-	アドレス変換のみ行う
+	Address Conversion Only
 
-	空き領域を削除した状態で、全てメモリに格納されて
-	いる場合
+	When all data is stored in memory with empty areas removed
 ------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS2)
@@ -335,9 +334,9 @@ static uint32_t read_cache_static(uint32_t offset)
 
 
 /*------------------------------------------------------
-	無圧縮キャッシュを使用
+	Use Uncompressed Cache
 
-	無圧縮のキャッシュファイルからデータを読み込む
+	Read data from uncompressed cache file
 ------------------------------------------------------*/
 
 static uint32_t read_cache_rawfile(uint32_t offset)
@@ -388,9 +387,9 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 
 
 /*------------------------------------------------------
-	ZIP圧縮キャッシュを使用
+	Use ZIP Compressed Cache
 
-	ZIP圧縮のキャッシュファイルからデータを読み込む
+	Read data from ZIP compressed cache file
 ------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS2)
@@ -441,10 +440,10 @@ static uint32_t read_cache_zipfile(uint32_t offset)
 
 
 /*------------------------------------------------------
-	キャッシュのデータを更新する
+	Update Cache Data
 
-	指定されたデータをキャッシュの最後尾に回します。
-	キャッシュを管理しない場合は不要。
+	Moves specified data to the end of cache.
+	Not needed when cache is not managed.
 ------------------------------------------------------*/
 
 static inline void update_cache_dynamic(uint32_t offset)
@@ -480,11 +479,11 @@ static inline void update_cache_dynamic(uint32_t offset)
 
 
 /******************************************************************************
-	キャッシュインタフェース関数
+	Cache Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	キャッシュを初期化する
+	Initialize Cache
 ------------------------------------------------------*/
 
 void cache_init(void)
@@ -518,7 +517,7 @@ void cache_init(void)
 
 
 /*------------------------------------------------------
-	キャッシュ処理開始
+	Start Cache Processing
 ------------------------------------------------------*/
 
 int cache_start(void)
@@ -702,7 +701,7 @@ int cache_start(void)
 #endif
 		update_cache = update_cache_dynamic;
 
-		// 確保可能なサイズをチェック
+		// Check allocatable size
 
 #ifdef LARGE_MEMORY
 		if (psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
@@ -795,7 +794,7 @@ int cache_start(void)
 
 
 /*------------------------------------------------------
-	キャッシュ処理終了
+	End Cache Processing
 ------------------------------------------------------*/
 
 void cache_shutdown(void)
@@ -835,7 +834,7 @@ void cache_shutdown(void)
 
 
 /*------------------------------------------------------
-	キャッシュを一時的に停止/再開する
+	Temporarily Stop/Resume Cache
 ------------------------------------------------------*/
 
 void cache_sleep(int flag)
@@ -878,7 +877,7 @@ void cache_sleep(int flag)
 #ifdef STATE_SAVE
 
 /*------------------------------------------------------
-	ステートセーブ領域を一時的に確保する
+	Temporarily Allocate State Save Area
 ------------------------------------------------------*/
 
 #ifdef LARGE_MEMORY
@@ -916,7 +915,7 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 }
 
 /*------------------------------------------------------
-	セーブ領域を解放し、退避したキャッシュを戻す
+	Free Save Area and Restore Backed Up Cache
 ------------------------------------------------------*/
 
 void cache_free_state_buffer(int32_t size)

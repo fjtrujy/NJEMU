@@ -2,7 +2,7 @@
 
 	cdrom.c
 
-	NEOGEO CDZ CD-ROMエミュレーション
+	NEOGEO CDZ CD-ROM Emulation
 
 ******************************************************************************/
 
@@ -13,7 +13,7 @@
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 int neogeo_loadscreen;
@@ -22,7 +22,7 @@ int neogeo_loadfinished;
 
 
 /******************************************************************************
-	ローカル構造体/変数
+	Local Structures/Variables
 ******************************************************************************/
 
 static struct filelist_t
@@ -67,7 +67,7 @@ static int cdrom_state_count[3];
 
 
 /******************************************************************************
-	プロトタイプ
+	Prototypes
 ******************************************************************************/
 
 #ifdef SAVE_STATE
@@ -81,11 +81,11 @@ static void cdrom_state_insert_pcm(const char *fname, int bank, uint32_t offset,
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	16進数→10進数変換
+	Convert hexadecimal to decimal
 ------------------------------------------------------*/
 
 static int hextodec(char c)
@@ -114,7 +114,7 @@ static int hextodec(char c)
 
 
 /*------------------------------------------------------
-	拡張子からファイルタイプを判別
+	Determine file type from extension
 ------------------------------------------------------*/
 
 static int get_filetype(const char *ext)
@@ -134,7 +134,7 @@ static int get_filetype(const char *ext)
 
 
 /*--------------------------------------------------------
-	ロード画面無効時の "Now loading" 表示
+	Show "Now Loading" when loading screen disabled
 --------------------------------------------------------*/
 
 static void show_loading_image(void)
@@ -157,7 +157,7 @@ static void show_loading_image(void)
 
 
 /*------------------------------------------------------
-	ロード画面の進行度を初期化
+	Initialize loading screen progress
 ------------------------------------------------------*/
 
 static void init_loading_progress(void)
@@ -171,7 +171,7 @@ static void init_loading_progress(void)
 
 
 /*------------------------------------------------------
-	ロード画面の進行度を更新
+	Update loading screen progress
 ------------------------------------------------------*/
 
 static void update_loading_progress(void)
@@ -209,7 +209,7 @@ static void update_loading_progress(void)
 
 
 /*------------------------------------------------------
-	CD-ROMキャッシュからメモリへデータを転送
+	Upload data from CD-ROM cache to memory
 ------------------------------------------------------*/
 
 static void upload_file(int fileno, uint32_t offset, uint32_t length)
@@ -299,7 +299,7 @@ static void upload_file(int fileno, uint32_t offset, uint32_t length)
 
 
 /*------------------------------------------------------
-	CD-ROMキャッシュにファイルを読み込む
+	Load file into CD-ROM cache
 ------------------------------------------------------*/
 
 static int load_file(int fileno)
@@ -354,7 +354,7 @@ static int load_file(int fileno)
 
 
 /*--------------------------------------------------------
-	ロード画面のデータをチェック
+	Check loading screen data
 --------------------------------------------------------*/
 
 static uint32_t check_offset;
@@ -387,7 +387,7 @@ static int check_screen_data(uint32_t offset, int type)
 
 
 /*--------------------------------------------------------
-	ロード画面のFIXスプライトを転送
+	Upload loading screen FIX sprites
 --------------------------------------------------------*/
 
 static void loading_upload_fix(void)
@@ -395,13 +395,13 @@ static void loading_upload_fix(void)
 	uint8_t *src, *dst;
 	uint32_t offset;
 
-	// 現在のFIXスプライトを保存
+	// Save current FIX sprites
 	src = memory_region_gfx1;
 	dst = memory_region_cpu1 + 0x115e06;
 	memcpy(dst, src, 0x6000);
 	neogeo_undecode_fix(dst, 0, 0x6000);
 
-	// デフォルトのロード画面のFIXスプライトを転送
+	// Upload default loading screen FIX sprites
 	src = memory_region_user1 + 0x7c000;
 	dst = memory_region_gfx1;
 	memcpy(dst, src, 0x4000);
@@ -409,7 +409,7 @@ static void loading_upload_fix(void)
 
 	offset = 0x120002;
 
-	// ゲーム独自のロード画面のFIXスプライトを転送
+	// Upload game-specific loading screen FIX sprites
 	while (1)
 	{
 		uint16_t fix_offs, size;
@@ -435,7 +435,7 @@ static void loading_upload_fix(void)
 
 
 /*--------------------------------------------------------
-	ロード画面のパレットを転送
+	Upload loading screen palette
 --------------------------------------------------------*/
 
 static void loading_upload_palette(void)
@@ -443,7 +443,7 @@ static void loading_upload_palette(void)
 	int i;
 	uint32_t src, dst, offset;
 
-	// 現在のパレットを保存
+	// Save current palette
 	src = 0x400000;
 	dst = 0x11be06;
 
@@ -454,7 +454,7 @@ static void loading_upload_palette(void)
 		dst += 4;
 	}
 
-	// BIOSのパレットを転送
+	// Upload BIOS palette
 	src = 0xc1701c;
 	dst = 0x400000;
 
@@ -467,7 +467,7 @@ static void loading_upload_palette(void)
 
 	offset = 0x120002;
 
-	// ゲーム独自のパレットを転送
+	// Upload game-specific palette
 	while (1)
 	{
 		uint16_t palno;
@@ -494,7 +494,7 @@ static void loading_upload_palette(void)
 
 
 /*--------------------------------------------------------
-	ロード画面表示開始
+	Start loading screen display
 --------------------------------------------------------*/
 
 static void loading_screen_start(void)
@@ -583,7 +583,7 @@ static void loading_screen_start(void)
 
 
 /*--------------------------------------------------------
-	ロード画面表示終了
+	End loading screen display
 --------------------------------------------------------*/
 
 static void loading_screen_stop(void)
@@ -633,11 +633,11 @@ static void loading_screen_stop(void)
 
 
 /******************************************************************************
-	CD-ROMインタフェース関数
+	CD-ROM Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CD-ROMインタフェース初期化
+	Initialize CD-ROM interface
 ------------------------------------------------------*/
 
 void cdrom_init(void)
@@ -666,7 +666,7 @@ void cdrom_init(void)
 
 
 /*------------------------------------------------------
-	CD-ROMインタフェース終了
+	Shutdown CD-ROM interface
 ------------------------------------------------------*/
 
 void cdrom_shutdown(void)
@@ -675,7 +675,7 @@ void cdrom_shutdown(void)
 
 
 /*------------------------------------------------------
-	IPL.TXT処理
+	Process IPL.TXT
 ------------------------------------------------------*/
 
 int cdrom_process_ipl(void)
@@ -818,7 +818,7 @@ int cdrom_process_ipl(void)
 
 
 /*------------------------------------------------------
-	ファイル読み込み
+	Load files
 ------------------------------------------------------*/
 
 void cdrom_load_files(void)
@@ -960,7 +960,7 @@ void cdrom_load_files(void)
 
 
 /*------------------------------------------------------
-	SPRスプライトのデコード
+	Decode SPR sprite
 ------------------------------------------------------*/
 
 void neogeo_decode_spr(uint8_t *mem, uint32_t offset, uint32_t length)
@@ -1040,7 +1040,7 @@ void neogeo_decode_spr(uint8_t *mem, uint32_t offset, uint32_t length)
 
 
 /*------------------------------------------------------
-	FIXスプライトのデコード
+	Decode FIX sprite
 ------------------------------------------------------*/
 
 #define decode_fix(n)				\
@@ -1086,7 +1086,7 @@ void neogeo_decode_fix(uint8_t *mem, uint32_t offset, uint32_t length)
 
 
 /*------------------------------------------------------
-	FIXスプライトを展開前の状態に戻す
+	Restore FIX sprite to pre-decoded state
 ------------------------------------------------------*/
 
 #define undecode_fix(n)				\
@@ -1119,7 +1119,7 @@ void neogeo_undecode_fix(uint8_t *mem, uint32_t offset, uint32_t length)
 
 
 /*------------------------------------------------------
-	Z80パッチ処理
+	Apply Z80 patch
 ------------------------------------------------------*/
 
 #define PATCH_Z80(a, b)					\
@@ -1151,7 +1151,7 @@ void neogeo_apply_patch(uint16_t *src, int bank, uint32_t offset)
 
 
 /******************************************************************************
-	セーブ/ロードステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE
@@ -1230,7 +1230,7 @@ STATE_LOAD( cdrom )
 
 
 /*------------------------------------------------------
-	CD-ROMからファイルを読み込む
+	Load file from CD-ROM
 ------------------------------------------------------*/
 
 static void cdrom_state_load_file(int type, const char *fname, int bank, uint32_t offset, uint32_t length)
@@ -1261,7 +1261,7 @@ static void cdrom_state_load_file(int type, const char *fname, int bank, uint32_
 }
 
 /*------------------------------------------------------
-	CD-ROMステートデータをチェック
+	Check CD-ROM state data
 ------------------------------------------------------*/
 
 static int cdrom_state_check_list(int type, uint32_t start, uint32_t end)
@@ -1301,7 +1301,7 @@ static int cdrom_state_check_list(int type, uint32_t start, uint32_t end)
 
 
 /*------------------------------------------------------
-	CD-ROMステートデータにファイル情報を追加
+	Add file info to CD-ROM state data
 ------------------------------------------------------*/
 
 static void cdrom_state_insert_list(int type, const char *fname, int bank, uint32_t offset, uint32_t length, uint32_t start, uint32_t end)
@@ -1345,7 +1345,7 @@ static void cdrom_state_insert_list(int type, const char *fname, int bank, uint3
 
 
 /*------------------------------------------------------
-	FIXファイルをリストに追加
+	Add FIX file to list
 ------------------------------------------------------*/
 
 static void cdrom_state_insert_fix(const char *fname, uint32_t offset, uint32_t length)
@@ -1360,7 +1360,7 @@ static void cdrom_state_insert_fix(const char *fname, uint32_t offset, uint32_t 
 
 
 /*------------------------------------------------------
-	SPRファイルをリストに追加
+	Add SPR file to list
 ------------------------------------------------------*/
 
 static void cdrom_state_insert_spr(const char *fname, int bank, uint32_t offset, uint32_t length)
@@ -1374,7 +1374,7 @@ static void cdrom_state_insert_spr(const char *fname, int bank, uint32_t offset,
 }
 
 /*------------------------------------------------------
-	PCMファイルをリストに追加
+	Add PCM file to list
 ------------------------------------------------------*/
 
 static void cdrom_state_insert_pcm(const char *fname, int bank, uint32_t offset, uint32_t length)

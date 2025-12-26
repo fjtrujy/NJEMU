@@ -2,7 +2,24 @@
 
 	vidhrdw.c
 
-	NEOGEO CDZ ビデオエミュレーション
+	NEOGEO CD/CDZ Video Emulation
+
+	Neo Geo Video System Reference:
+	https://wiki.neogeodev.org/index.php?title=Sprites
+	https://wiki.neogeodev.org/index.php?title=Fix_layer
+	https://wiki.neogeodev.org/index.php?title=VRAM
+
+	The Neo Geo CD uses the same video hardware as the MVS/AES:
+	- 381 sprites max per frame, 96 per scanline
+	- Sprites are 16 pixels wide, up to 512 pixels tall (32 tiles)
+	- Sprites can only SHRINK (not zoom/scale up)
+	- Fix layer: 40x32 tiles of 8x8 pixels, uses first 16 palettes only
+	- 2 palette banks with 256 palettes each (16 colors per palette)
+
+	CD-specific differences:
+	- Graphics loaded from CD to RAM (not ROM)
+	- Supports 32,768 sprite tiles (15-bit addressing vs 20-bit on cart)
+	- 4,096 fix tiles (12-bit addressing)
 
 ******************************************************************************/
 
@@ -12,7 +29,7 @@
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 uint16_t ALIGN_DATA neogeo_videoram[NEOGEO_VRAM_SIZE / 2];
@@ -36,14 +53,20 @@ int fix_disable;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static int next_update_first_line;
 
-static uint16_t *sprite_zoom_control = &neogeo_videoram[0x8000];
-static uint16_t *sprite_y_control = &neogeo_videoram[0x8200];
-static uint16_t *sprite_x_control = &neogeo_videoram[0x8400];
+/*
+ * Sprite Control Block pointers (reference: VRAM layout in memory_sizes.h)
+ * SCB2: Shrink coefficients - lower byte = vertical ($FF=full), upper nibble = horizontal ($F=full)
+ * SCB3: Y position (bits 7-15) and sprite height/sticky bit (bits 0-6)
+ * SCB4: X position (bits 7-15)
+ */
+static uint16_t *sprite_zoom_control = &neogeo_videoram[NEOGEO_VRAM_SCB2];
+static uint16_t *sprite_y_control = &neogeo_videoram[NEOGEO_VRAM_SCB3];
+static uint16_t *sprite_x_control = &neogeo_videoram[NEOGEO_VRAM_SCB4];
 
 static const uint8_t *skip_fullmode0;
 static const uint8_t *skip_fullmode1;
@@ -52,7 +75,7 @@ static const uint8_t *tile_fullmode1;
 
 
 /******************************************************************************
-	プロトタイプ
+	Prototypes
 ******************************************************************************/
 
 static void patch_vram_rbff2(void);
@@ -61,11 +84,16 @@ static void patch_vram_crsword2(void);
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	FIXスプライト描画
+	Fix Layer Drawing
+
+	The fix layer is a non-scrollable 40x32 tile layer (8x8 pixels each)
+	that overlays all sprites. It's typically used for score, timer, HUD.
+	Fix tiles can only use the first 16 palettes.
+	VRAM layout: $7000-$74FF, each word = palette (4 bits) + tile number (12 bits)
 ------------------------------------------------------*/
 
 static void draw_fix(void)
@@ -74,7 +102,7 @@ static void draw_fix(void)
 
 	for (x = 8/8; x < 312/8; x++)
 	{
-		uint16_t *vram = &neogeo_videoram[0x7002 + (x << 5)];
+		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
 		for (y = 16/8; y < 240/8; y++)
 		{
@@ -92,18 +120,35 @@ static void draw_fix(void)
 
 
 /*------------------------------------------------------
-	SPRスプライト描画
+	Sprite Drawing
+
+	Neo Geo sprites are 16 pixels wide and can be up to 512 pixels tall.
+	They consist of vertical strips of 16x16 tiles that can be chained
+	horizontally via the "sticky bit" (bit 6 of SCB3).
+
+	Sprite Shrinking (NOT zooming - sprites can only get smaller):
+	- Horizontal: 4-bit value ($F=full 16px, $0=1px) in SCB2 upper nibble
+	- Vertical: 8-bit value ($FF=full, $00=smallest) in SCB2 lower byte
+
+	The hardware uses pixel-skipping for shrinking (no interpolation).
+	Each shrink level has a specific pattern of which pixels to show.
+
+	NCDZ uses 15-bit tile addressing (code & 0x7fff) vs MVS's 20-bit.
 ------------------------------------------------------*/
 
 typedef struct
 {
 	int16_t  x;
-	uint16_t zoom_x;
-	uint16_t *base;
+	uint16_t zoom_x;		/* Horizontal shrink: 1-16 pixels */
+	uint16_t *base;			/* Pointer to sprite's SCB1 data */
 } SPRITE_LIST;
 
 static SPRITE_LIST sprite_list[MAX_SPRITES_PER_LINE];
 
+/*
+ * Hardware-accelerated sprite rendering
+ * Used for full-screen updates (>15 lines changed)
+ */
 static void draw_sprites_hardware(uint32_t start, uint32_t end, int min_y, int max_y)
 {
 	int y = 0;
@@ -254,6 +299,11 @@ static inline int sprite_on_scanline(int scanline, int y, int rows)
 }
 
 
+/*
+ * Software sprite rendering (scanline-by-scanline)
+ * Used for partial updates (<15 lines) and shrunk sprites
+ * This path uses zoom_x_tables for exact pixel-skip patterns
+ */
 static void draw_sprites_software(uint32_t start, uint32_t end, int min_y, int max_y)
 {
 	int y = 0;
@@ -392,7 +442,7 @@ static void draw_sprites_software(uint32_t start, uint32_t end, int min_y, int m
 
 
 /*------------------------------------------------------
-	SPRスプライト描画 (プライオリティあり/ssrpg専用)
+	SPR Sprite Drawing (priority order / for ssrpg)
 ------------------------------------------------------*/
 
 static void draw_spr_prio(int min_y, int max_y)
@@ -423,11 +473,11 @@ static void draw_spr_prio(int min_y, int max_y)
 
 
 /******************************************************************************
-	NEOGEO CDZ ビデオ描画処理
+	NEOGEO CDZ Video Drawing Processing
 ******************************************************************************/
 
 /*------------------------------------------------------
-	ビデオエミュレーション初期化
+	Video Emulation Initialization
 ------------------------------------------------------*/
 
 void neogeo_video_init(void)
@@ -473,7 +523,7 @@ void neogeo_video_init(void)
 
 
 /*------------------------------------------------------
-	ビデオエミュレーション終了
+	Video Emulation Shutdown
 ------------------------------------------------------*/
 
 void neogeo_video_exit(void)
@@ -482,7 +532,7 @@ void neogeo_video_exit(void)
 
 
 /*------------------------------------------------------
-	ビデオエミュレーションリセット
+	Video Emulation Reset
 ------------------------------------------------------*/
 
 void neogeo_video_reset(void)
@@ -504,11 +554,11 @@ void neogeo_video_reset(void)
 
 
 /******************************************************************************
-	画面更新処理
+	Screen Update Processing
 ******************************************************************************/
 
 /*------------------------------------------------------
-	スクリーン更新
+	Screen Update
 ------------------------------------------------------*/
 
 void neogeo_screenrefresh(void)
@@ -541,7 +591,7 @@ void neogeo_screenrefresh(void)
 
 
 /*------------------------------------------------------
-	スクリーン部分更新
+	Partial Screen Update
 ------------------------------------------------------*/
 
 void neogeo_partial_screenrefresh(int current_line)
@@ -587,7 +637,7 @@ void neogeo_partial_screenrefresh(int current_line)
 
 
 /*------------------------------------------------------
-	スクリーン更新 (CD-ROMロード画面)
+	Screen Update (CD-ROM Loading)
 ------------------------------------------------------*/
 
 int neogeo_loading_screenrefresh(int flag, int draw)
@@ -640,7 +690,7 @@ int neogeo_loading_screenrefresh(int flag, int draw)
 
 
 /*------------------------------------------------------
-	VRAMパッチ (Realbout Fatal Fury 2)
+	VRAM Patch (Realbout Fatal Fury 2)
 ------------------------------------------------------*/
 
 static void patch_vram_rbff2(void)
@@ -662,7 +712,7 @@ static void patch_vram_rbff2(void)
 
 
 /*------------------------------------------------------
-	VRAMパッチ (ADK World)
+	VRAM Patch (ADK World)
 ------------------------------------------------------*/
 
 static void patch_vram_adkworld(void)
@@ -681,7 +731,7 @@ static void patch_vram_adkworld(void)
 
 
 /*------------------------------------------------------
-	VRAMパッチ (Crossed Swords 2)
+	VRAM Patch (Crossed Swords 2)
 ------------------------------------------------------*/
 
 static void patch_vram_crsword2(void)
@@ -700,7 +750,7 @@ static void patch_vram_crsword2(void)
 
 
 /*------------------------------------------------------
-	セーブ/ロード ステート
+	Save/Load State
 ------------------------------------------------------*/
 
 #ifdef SAVE_STATE

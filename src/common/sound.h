@@ -1,8 +1,8 @@
 /******************************************************************************
 
-	sound.c
+	sound.h
 
-	�T�E���h�X���b�h
+	Sound Thread
 
 ******************************************************************************/
 
@@ -14,7 +14,7 @@
 #define SOUND_SAMPLES_48000	(800)
 
 #if (EMU_SYSTEM == CPS2)
-#define SOUND_BUFFER_SIZE	((400*2)*2)	// 24KHz�Œ�
+#define SOUND_BUFFER_SIZE	((400*2)*2)	// 24KHz Fixed
 #else
 #define SOUND_BUFFER_SIZE	((736*2)*2)
 #endif
