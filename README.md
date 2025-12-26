@@ -2,6 +2,51 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+## Table of Contents
+
+- [Overview](#overview)
+  - [Supported Arcade Systems](#supported-arcade-systems)
+  - [Supported Platforms](#supported-platforms)
+- [How to Use](#how-to-use)
+  - [Menu Controls](#menu-controls)
+  - [In-Game Controls](#in-game-controls)
+  - [Directory Structure](#directory-structure)
+- [Features](#features)
+- [Building](#building)
+  - [Build Commands](#build-commands)
+  - [Build Options](#build-options)
+  - [Legacy Build System (Makefile)](#legacy-build-system-makefile)
+- [Platform-Specific Build Instructions](#platform-specific-build-instructions)
+  - [PSP (PlayStation Portable)](#psp-playstation-portable)
+  - [PS2 (PlayStation 2)](#ps2-playstation-2)
+  - [Desktop (PC/SDL2)](#desktop-pcsdl2)
+- [ROM Compatibility](#rom-compatibility)
+  - [MVS-Specific ROM Notes](#mvs-specific-rom-notes)
+  - [CPS2-Specific Cache Notes](#cps2-specific-cache-notes)
+  - [NCDZ-Specific Setup](#ncdz-specific-setup)
+- [ROM Conversion Tool (romcnv)](#rom-conversion-tool-romcnv)
+- [Memory Requirements](#memory-requirements)
+  - [PSP Extended Memory (LARGE_MEMORY)](#psp-extended-memory-large_memory---slim2000)
+- [Project Structure](#project-structure)
+- [Technical Architecture](#technical-architecture---emulator-targets)
+  - [MVS (Neo-Geo) Target](#mvs-neo-geo-target)
+  - [CPS1 Target](#cps1-capcom-play-system-1-target)
+  - [CPS2 Target](#cps2-capcom-play-system-2-target)
+  - [NCDZ (Neo-Geo CD) Target](#ncdz-neo-geo-cd-target)
+  - [Porting Guide](#porting-guide)
+- [Internal Systems Documentation](#internal-systems-documentation)
+  - [Sound System](#sound-system-architecture)
+  - [State Save/Load](#state-saveload-system)
+  - [Cache System](#cache-system-details)
+  - [Input System](#input-system)
+  - [ROM Loading](#rom-loading-system)
+- [Changelog](#changelog)
+- [Credits](#credits)
+- [License](#license)
+- [Contributing](#contributing)
+
+---
+
 ## Overview
 
 **NJEMU** is an open-source arcade emulator that provides emulation for classic arcade systems from Capcom and SNK. Originally developed exclusively for the **PSP (PlayStation Portable)**, this project is now being ported to additional platforms.
@@ -61,38 +106,213 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 | **PS2** | Sony PlayStation 2 | 🔄 Active development |
 | **DESKTOP** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
 
+### PSP Firmware Compatibility
+
+| Build Type | Required Firmware | Target Hardware |
+|------------|-------------------|-----------------|
+| **FW 3.xx** | CFW 3.03+ | PSP-1000/2000/3000 |
+| **FW 1.50 Kernel** | FW 1.50 | PSP-1000 only |
+| **PSP Slim (LARGE_MEMORY)** | CFW 3.71 M33+ | PSP-2000/3000 |
+
+> **Note:** The 1.50 Kernel build does NOT work on PSP-2000 or later models.
+
 ---
 
 ## How to Use
 
-### Controls
+### Menu Controls
 
 | Button | Action |
 |--------|--------|
 | O (Circle) | OK / Confirm |
 | X (Cross) | Cancel |
-| SELECT | Help |
-| HOME / PS | Emulator menu |
+| SELECT | Help (press in any menu except game screen) |
+| HOME / PS | Emulator menu (during gameplay) |
 | SELECT + START | Emulator menu (alternative) |
-| R Trigger | BIOS menu (MVS) |
+| R Trigger | BIOS menu (MVS file browser) |
 
 > **Note:** On PS Vita or PPSSPP, the HOME/PS button may not work. You can delete `SystemButtons.prx` and use SELECT+START instead.
 
+### In-Game Controls
+
+Button layouts automatically flip/rotate when:
+- DIP Switch "Cabinet" is set to Cocktail (2P mode)
+- DIP Switch "Flip Screen" is enabled
+- Vertical games with "Rotate Screen" set to Yes
+
+#### Common Controls (All Emulators)
+
+| Input | Button |
+|-------|--------|
+| Up | D-Pad Up / Analog Up |
+| Down | D-Pad Down / Analog Down |
+| Left | D-Pad Left / Analog Left |
+| Right | D-Pad Right / Analog Right |
+| Start | Start |
+| Coin | Select |
+
+#### CPS1PSP Button Layouts
+
+**2-Button Games:**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Triangle |
+
+**3-Button Games:**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Triangle |
+| Button 3 | Cross |
+
+**Street Fighter II Series (6-Button):**
+| Button | PSP |
+|--------|-----|
+| Light Punch | Square |
+| Medium Punch | Triangle |
+| Heavy Punch | L Trigger |
+| Light Kick | Cross |
+| Medium Kick | Circle |
+| Heavy Kick | R Trigger |
+
+**Quiz Games (No directional controls):**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Triangle |
+| Button 3 | Cross |
+| Button 4 | Circle |
+| Switch Player | L Trigger |
+
+**Forgotten Worlds / Lost Worlds:**
+| Action | PSP |
+|--------|-----|
+| Fire | Square |
+| Rotate Left | L Trigger |
+| Rotate Right | R Trigger |
+
+#### CPS2PSP Button Layouts
+
+**2-Button Games:**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Triangle |
+
+**3-Button Games:**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Triangle |
+| Button 3 | Cross |
+
+**6-Button Games (Fighting Games):**
+| Button | PSP |
+|--------|-----|
+| Light Punch | Square |
+| Medium Punch | Triangle |
+| Heavy Punch | L Trigger |
+| Light Kick | Cross |
+| Medium Kick | Circle |
+| Heavy Kick | R Trigger |
+
+**Quiz Nanairo Dreams (No directional controls):**
+| Button | PSP |
+|--------|-----|
+| Button 1 | Square |
+| Button 2 | Cross |
+| Button 3 | Triangle |
+| Button 4 | Circle |
+| Switch Player | L Trigger |
+
+#### MVSPSP / NCDZPSP Button Layout
+
+| Button | PSP |
+|--------|-----|
+| A | Cross |
+| B | Circle |
+| C | Square |
+| D | Triangle |
+
+> **Note:** NCDZPSP uses the same layout as NeoGeo CD / AES controllers.
+
+#### Special Controls
+
+| Action | Buttons |
+|--------|---------|
+| Open Menu | HOME |
+| Service Switch | L + R + SELECT |
+| 1P & 2P Start | L + R + START |
+
+#### AdHoc Mode
+
+- Press **Square** in the file browser to start a game in AdHoc mode
+- Press **HOME** during AdHoc play to pause and show disconnect dialog
+
 ### Directory Structure
 
-Place your files in the following structure:
+All folders are automatically created on first launch.
+
+#### CPS1PSP / CPS2PSP
 
 ```
-[EMULATOR]/
-├── roms/           # ROM files (ZIP format)
-├── cache/          # ROM cache files
-├── cheats/         # Cheat files (.ini)
-├── config/         # Configuration files
-├── memcard/        # Memory card saves
-├── nvram/          # NVRAM saves
-├── state/          # Save states
-└── PICTURE/        # Screenshots and backgrounds
+/PSP/GAME/CPS1PSP/              (or CPS2PSP/)
+├── EBOOT.PBP                   # Main executable
+├── SystemButtons.prx           # System button handler
+├── cps1psp.ini                 # Settings (auto-created)
+├── rominfo.cps1                # ROM database (REQUIRED)
+├── zipname.cps1                # English game names (REQUIRED)
+├── zipnamej.cps1               # Japanese game names (optional)
+├── command.dat                 # MAME Plus! command list (optional)
+├── roms/                       # ROM files (ZIP format)
+├── cache/                      # Cache files (CPS2 only, REQUIRED)
+├── config/                     # Per-game settings
+├── nvram/                      # EEPROM saves
+├── snap/                       # Screenshots
+└── state/                      # Save states
 ```
+
+#### MVSPSP
+
+```
+/PSP/GAME/MVSPSP/
+├── EBOOT.PBP                   # Main executable
+├── SystemButtons.prx           # System button handler
+├── mvspsp.ini                  # Settings (auto-created)
+├── rominfo.mvs                 # ROM database (REQUIRED)
+├── zipname.mvs                 # English game names (REQUIRED)
+├── zipnamej.mvs                # Japanese game names (optional)
+├── command.dat                 # MAME Plus! command list (optional)
+├── roms/                       # ROM files (ZIP format)
+│   └── neogeo.zip              # BIOS file (REQUIRED)
+├── cache/                      # Cache files (created by romcnv)
+├── config/                     # Per-game settings
+├── memcard/                    # Memory card saves
+├── nvram/                      # SRAM saves
+├── snap/                       # Screenshots
+└── state/                      # Save states
+```
+
+#### NCDZPSP
+
+```
+/PSP/GAME/NCDZPSP/
+├── EBOOT.PBP                   # Main executable
+├── SystemButtons.prx           # System button handler
+├── ncdzpsp.ini                 # Settings (auto-created)
+├── command.dat                 # MAME Plus! command list (optional)
+├── roms/                       # CD-ROM images
+│   └── [Game Name]/            # Game folder
+│       ├── *.PRG, *.SPR, etc.  # CD-ROM files (or single .zip)
+│       └── mp3/                # MP3 audio tracks
+├── config/                     # Per-game settings
+├── data/                       # Custom wallpapers (optional)
+├── snap/                       # Screenshots
+└── state/                      # Save states
+```
+
+> **Note:** For FW 1.5 Kernel, use `/PSP/GAME150/` or `/PSP/GAME3xx/` instead of `/PSP/GAME/`.
 
 ---
 
@@ -102,11 +322,20 @@ Place your files in the following structure:
 - ROM caching system for improved performance
 - Save state support
 - Cheat support with extensive cheat databases
-- Multiple language support
+- Multiple language support (auto-detected from PSP system language)
 - DIP switch configuration (CPS1, MVS)
 - BIOS menu with UniBIOS 1.0-3.0 support (MVS)
-- Ad Hoc multiplayer (PSP)
-- Command list display
+- Ad Hoc multiplayer (PSP, except NCDZPSP)
+- Command list display (MAME Plus! format)
+- Custom wallpaper support (NCDZ)
+
+### Language Support
+
+The UI language is automatically detected from your PSP's system language:
+- **Japanese system language** → Japanese UI
+- **Other languages** → English UI
+
+The `zipnamej.*` files (Japanese game name lists) are optional and can be deleted if not needed.
 
 ---
 
@@ -177,6 +406,60 @@ Each target has a corresponding resource folder named `{TARGET}_RESOURCE` contai
 | NCDZ | `NCDZ_RESOURCE/` |
 
 These resource files are automatically copied to the build directory when running the `cmake` command.
+
+---
+
+## Legacy Build System (Makefile)
+
+> **Note:** The original NJEMU used Makefile-based builds. The modern CMake system (documented above) is recommended, but this legacy information is preserved for reference.
+
+### Original Build Environment
+
+- **PSPSDK 0.11.2 + MSYS**
+
+### Makefile Configuration
+
+Before compiling, edit the Makefile to configure build targets. Lines starting with `#` are disabled; remove `#` to enable.
+
+#### Build Targets
+
+| Option | Description |
+|--------|-------------|
+| `BUILD_CPS1 = 1` | Compile CPS1PSP |
+| `BUILD_CPS2 = 1` | Compile CPS2PSP |
+| `BUILD_MVS = 1` | Compile MVSPSP |
+| `BUILD_NCDZ = 1` | Compile NCDZPSP |
+
+#### Build Options
+
+| Option | Description |
+|--------|-------------|
+| `LARGE_MEMORY = 1` | Compile for PSP-2000+ with CFW 3.71 M33 or higher (user mode) |
+| `KERNEL_MODE = 1` | Compile for FW 1.5 kernel |
+| `ADHOC = 1` | Enable AdHoc multiplayer (not supported by NCDZPSP) |
+| `SAVE_STATE = 1` | Enable save state/load functionality |
+| `COMMAND_LIST = 1` | Enable command list (move list) display |
+| `UI_32BPP = 1` | Use 32-bit color for UI; allows wallpapers but may cause memory issues |
+| `RELEASE = 1` | Release build (code within `#if RELEASE ~ #endif` is enabled) |
+
+#### Version Settings
+
+| Option | Description |
+|--------|-------------|
+| `VERSION_MAJOR = 2` | Major version number (for large-scale updates) |
+| `VERSION_MINOR = 2` | Minor version number (even = stable, odd = development) |
+| `VERSION_BUILD = 0` | Build number (for minor bug fixes) |
+
+> **Note:** Version numbering follows the pattern where the next release after v1.0 would be v1.2 (even numbers for stable releases).
+
+### SystemButtons.prx
+
+SystemButtons.prx is a PRX module that reads system button input in kernel mode via a dedicated thread.
+
+**Building:**
+1. Navigate to the `systembutton_prx` directory
+2. Run `make`
+3. Copy `systembutton.prx` to the same directory as `EBOOT.PBP`
 
 ---
 
@@ -498,15 +781,141 @@ lldb ./{TARGET}
 - Place ROMs in ZIP format in the `roms/` directory
 - Clone sets require the parent ROM in the same directory
 - Some games require ROM conversion using the `romcnv` tools
+- Games shown in **white** in the file browser are fully supported
+- Games shown in **gray** cannot run (usually due to memory limitations)
+
+### ROM Verification
+
+If a game doesn't work, verify your ROM set using tools like:
+- **ClrMame Pro**
+- **RomCenter**
+
+ROM file names inside the ZIP can be anything, but **CRC values must match** MAME 0.152.
 
 ### Supported Games
 
-- **CPS1**: 113+ games (Street Fighter II, Final Fight, Ghouls'n Ghosts, etc.)
-- **CPS2**: Capcom CPS2 arcade games
-- **MVS**: 270+ games (King of Fighters, Metal Slug, Samurai Shodown, etc.)
-- **NCDZ**: Neo-Geo CD games with MP3 audio support
+| System | Supported Games | Notes |
+|--------|-----------------|-------|
+| **CPS1** | 113 games | Street Fighter II, Final Fight, Ghouls'n Ghosts, etc. |
+| **CPS2** | 230+ games | Including Phoenix Edition decrypted sets |
+| **MVS** | 267+ games | Including bootlegs and homebrew |
+| **NCDZ** | All official releases | All officially released Neo-Geo CD games |
 
-See the `docs/` folder for complete game lists.
+See `docs/gamelist_*.txt` for complete game lists.
+
+### MVS-Specific ROM Notes
+
+#### BIOS Setup
+
+Place the BIOS file as `neogeo.zip` in the `roms/` folder. Supported BIOS options include:
+- Standard MVS/AES BIOS
+- UniBIOS 1.0 - 3.0
+- NeoGit BIOS
+
+> **Important:** Configure BIOS settings in the file browser (press START) **before** launching a game.
+
+#### Region/Machine Mode
+
+You can change Region and Machine Mode in the game settings menu, but:
+- Some later games have protection that prevents this from working
+- Running MVS games with AES BIOS may trigger protection
+- For reliable region changes, use **UniBIOS**
+
+#### Memory Card
+
+- Memory card files are created per-game
+- Memory card is always recognized (no need to insert)
+
+#### Unsupported Games
+
+The following games work in MAME but cannot run due to memory constraints:
+
+| ROM Set | Game | Reason |
+|---------|------|--------|
+| svcpcb | SvC Chaos - SNK vs Capcom (JAMMA PCB) | Insufficient memory |
+
+#### Clone Sets with Different Parent Relationships
+
+These ROM sets have different parent/clone relationships than MAME (bootleg-only):
+
+| Parent | Clones |
+|--------|--------|
+| garoup | garoubl |
+| svcboot | svcplus, svcplusa, svcsplus |
+| kof2k4se | kf2k4pls |
+| kof10th | kf10thep, kf2k5uni |
+| kf2k3bl | kf2k3bla, kf2k3pl, kf2k3upl |
+
+### CPS2-Specific Cache Notes
+
+**All CPS2 games require cache files** - create them with `romcnv_cps2`.
+
+#### Special Cases
+
+| Game | Notes |
+|------|-------|
+| **Super Street Fighter II Turbo** (ssf2t) | Parent is ssf2, but has additional graphics. Create cache for ssf2t, not ssf2 |
+| **Mighty! Pang** (mpang/mpangj) | USA and Japan versions have different graphics ROMs - create separate caches |
+
+### NCDZ-Specific Setup
+
+#### Game Files
+
+Neo-Geo CD games can be stored in two ways:
+
+1. **Uncompressed folder:** Create a folder with all CD-ROM files
+2. **ZIP archive:** Compress all files into a single ZIP
+
+#### MP3 Audio Setup
+
+CDDA audio must be converted to MP3 format. Place MP3 files in an `mp3/` subfolder within each game folder.
+
+**File Naming Rules:**
+
+MP3 files must end with the track number: `xx.mp3` (where xx = 02-99)
+
+| ✅ Valid Names | ❌ Invalid Names |
+|----------------|------------------|
+| `mslug-02.mp3` | `02-mslug.mp3` |
+| `track02.mp3` | `track_2.mp3` |
+| `02.mp3` | `mslug_track2.mp3` |
+
+**Recommended encoding:** 96 Kbps (good balance of quality and size)
+
+#### Example Directory Structure
+
+```
+roms/
+├── Metal Slug/
+│   ├── ABS.TXT
+│   ├── *.PRG
+│   ├── *.SPR
+│   └── mp3/
+│       ├── track02.mp3
+│       ├── track03.mp3
+│       └── ...
+└── Samurai Spirits RPG/
+    ├── game.zip          # All CD files in one ZIP
+    └── mp3/
+        ├── ssrpg_track02.mp3
+        └── ...
+```
+
+#### Custom Background Images
+
+Replace default wallpapers with custom PNG images (8-bit or 24-bit color, 480×272 pixels recommended):
+
+| File | Screen |
+|------|--------|
+| `data/logo.png` | Startup / Main menu |
+| `data/filer.png` | File browser |
+| `data/gamecfg.png` | Game settings |
+| `data/keycfg.png` | Button configuration |
+| `data/state.png` | Save/Load state |
+| `data/colorcfg.png` | Color settings |
+| `data/cmdlist.png` | Command list |
+
+> **Note:** Large images may fail to load due to memory constraints.
 
 ---
 
@@ -1501,6 +1910,21 @@ The coin counter (`src/common/coin.c`) tracks coin insertions for arcade authent
 - Maintained full PSP compatibility
 - Note: Menu/GUI not yet ported to PS2 and PC (core emulation only)
 
+### Version 2.3.x (Development Version)
+
+> **Note:** Version 2.3.x was a development version containing experimental code.
+
+**Differences from 2.2.x:**
+
+- **AdHoc Support:** Built-in support for AdHoc multiplayer (except NCDZPSP)
+- **SystemButtons.prx:** Uses extended SystemButtons.prx (based on homehook.prx), even for 1.5 Kernel builds
+  - On CFW 3.52+, supports volume display when pressing VOL +/- buttons
+- **Sound Emulation:** Different sound emulation processing
+- **Video Emulation:** Different video emulation processing for MVS and NCDZ
+- **Memory Usage:** Due to added features, free memory is reduced - more games require cache files, and some games may not boot
+- **VBLANK Sync:** Screen update interval matches PSP's refresh rate for easier VBLANK synchronization
+  - Note: MVS runs slightly faster than real hardware (barely noticeable)
+
 ### Version 2.3.5
 
 **General:**
@@ -1546,7 +1970,7 @@ The coin counter (`src/common/coin.c`) tracks coin insertions for arcade authent
 - **MAME Team** for reference implementations
 
 ### Cross-Platform Port
-- Multi-platform porting and CMake build system
+- **fjtrujy** - For Multi-platform porting, adding the CMake build system, creating a WASM-based ROM converter, and porting the emulator to PS2 and PC plus some other improvements.
 
 ---
 
