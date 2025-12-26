@@ -2,7 +2,7 @@
 
 	timer.c
 
-	タイマー管理
+	Timer Management
 
 ******************************************************************************/
 
@@ -13,11 +13,11 @@
 
 
 /******************************************************************************
-	マクロ
+	Macros
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CPUの消費した時間を取得 (単位:マイクロ秒)
+	Get CPU Elapsed Time (unit: microseconds)
 ------------------------------------------------------*/
 
 #define cpu_elapsed_time(cpunum)	\
@@ -25,7 +25,7 @@
 
 
 /******************************************************************************
-	ローカル構造体
+	Local Structures
 ******************************************************************************/
 
 typedef struct timer_t
@@ -52,7 +52,7 @@ static CPUINFO cpu[MAX_CPU];
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static float time_slice;
@@ -65,11 +65,11 @@ static uint32_t current_frame;
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CPUを実行
+	Execute CPU
 ------------------------------------------------------*/
 
 static void cpu_execute(int cpunum)
@@ -85,7 +85,7 @@ static void cpu_execute(int cpunum)
 
 
 /*------------------------------------------------------
-	CPUのスピンを解除(トリガ)
+	Release CPU Spin (Trigger)
 ------------------------------------------------------*/
 
 static void cpu_spin_trigger(int param)
@@ -95,7 +95,7 @@ static void cpu_spin_trigger(int param)
 
 
 /*------------------------------------------------------
-	現在の秒以下の時間を取得 (単位:マイクロ秒)
+	Get Current Sub-second Time (unit: microseconds)
 ------------------------------------------------------*/
 
 static float getabsolutetime(void)
@@ -110,7 +110,7 @@ static float getabsolutetime(void)
 
 
 /*------------------------------------------------------
-	描画割り込み
+	VBlank Interrupt
 ------------------------------------------------------*/
 
 static void timer_set_vblank_interrupt(void)
@@ -120,7 +120,7 @@ static void timer_set_vblank_interrupt(void)
 
 
 /*------------------------------------------------------
-	サウンド割り込み
+	Sound Interrupt
 ------------------------------------------------------*/
 
 static TIMER_CALLBACK( qsound_interrupt )
@@ -131,11 +131,11 @@ static TIMER_CALLBACK( qsound_interrupt )
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	タイマーをリセット
+	Timer Reset
 ------------------------------------------------------*/
 
 void timer_reset(void)
@@ -173,7 +173,7 @@ void timer_reset(void)
 
 
 /*------------------------------------------------------
-	CPUをサスペンドする
+	Suspend CPU
 ------------------------------------------------------*/
 
 void timer_suspend_cpu(int cpunum, int state, int reason)
@@ -186,7 +186,7 @@ void timer_suspend_cpu(int cpunum, int state, int reason)
 
 
 /*------------------------------------------------------
-	CPUをリセットする
+	Reset CPU
 ------------------------------------------------------*/
 
 void timer_set_resetline(int cpunum, int state)
@@ -199,7 +199,7 @@ void timer_set_resetline(int cpunum, int state)
 
 
 /*------------------------------------------------------
-	CPUのサスペンドの状態を取得
+	Get CPU Suspend Status
 ------------------------------------------------------*/
 
 int timer_get_cpu_status(int cpunum)
@@ -209,7 +209,7 @@ int timer_get_cpu_status(int cpunum)
 
 
 /*------------------------------------------------------
-	タイマーを有効/無効にする
+	Enable/Disable Timer
 ------------------------------------------------------*/
 
 int timer_enable(int which, int enable)
@@ -222,7 +222,7 @@ int timer_enable(int which, int enable)
 
 
 /*------------------------------------------------------
-	タイマーをセット
+	Adjust Timer
 ------------------------------------------------------*/
 
 void timer_adjust(int which, float duration, int param, void (*callback)(int param))
@@ -235,7 +235,7 @@ void timer_adjust(int which, float duration, int param, void (*callback)(int par
 
 	if (active_cpu != CPU_NOTACTIVE)
 	{
-		// CPU実行中の場合は、残りサイクルを破棄
+		// If CPU is running, discard remaining cycles
 		int cycles_left = *cpu[active_cpu].icount;
 		float time_left = cycles_left * cpu[active_cpu].cycles_to_usec;
 
@@ -247,7 +247,7 @@ void timer_adjust(int which, float duration, int param, void (*callback)(int par
 
 			if (active_cpu == CPU_Z80)
 			{
-				// CPU2の場合はCPU1を停止しCPU1が消費した余分なサイクルを調整する
+				// For CPU2, stop CPU1 and adjust the extra cycles consumed by CPU1
 				if (!timer[CPU1_SPIN_TIMER].enable)
 				{
 					timer_suspend_cpu(CPU_M68000, 0, SUSPEND_REASON_SPIN);
@@ -263,7 +263,7 @@ void timer_adjust(int which, float duration, int param, void (*callback)(int par
 
 
 /*------------------------------------------------------
-	タイマーをセット
+	Set Timer
 ------------------------------------------------------*/
 
 void timer_set(int which, float duration, int param, void (*callback)(int param))
@@ -274,7 +274,7 @@ void timer_set(int which, float duration, int param, void (*callback)(int param)
 
 
 /*------------------------------------------------------
-	現在のフレームを取得
+	Get Current Frame
 ------------------------------------------------------*/
 
 uint32_t timer_get_currentframe(void)
@@ -284,7 +284,7 @@ uint32_t timer_get_currentframe(void)
 
 
 /*------------------------------------------------------
-	CPUを更新
+	Update CPU
 ------------------------------------------------------*/
 
 void timer_update_cpu(void)
@@ -343,7 +343,7 @@ void timer_update_cpu(void)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

@@ -1,8 +1,8 @@
 /******************************************************************************
 
-	inptport.c
+	inptport.h
 
-	CPS2 入力ポートエミュレーション
+	CPS2 Input Port Emulation
 
 ******************************************************************************/
 
@@ -72,15 +72,15 @@ enum
 
 enum
 {
-	COIN_NONE = 0,	// 2P 2シューター固定 (チェック必要なし)
-	COIN_2P1C,		// 2P 1シューター
-	COIN_2P2C,		// 2P 2シューター
-	COIN_3P1C,		// 3P 1シューター
-	COIN_3P2C,		// 3P 2シューター
-	COIN_3P3C,		// 3P 3シューター
-	COIN_4P1C,		// 4P 1シューター
-	COIN_4P2C,		// 4P 2シューター
-	COIN_4P4C,		// 4P 4シューター
+	COIN_NONE = 0,	// 2P 2-slot fixed (no check needed)
+	COIN_2P1C,		// 2P 1-slot
+	COIN_2P2C,		// 2P 2-slot
+	COIN_3P1C,		// 3P 1-slot
+	COIN_3P2C,		// 3P 2-slot
+	COIN_3P3C,		// 3P 3-slot
+	COIN_4P1C,		// 4P 1-slot
+	COIN_4P2C,		// 4P 2-slot
+	COIN_4P4C,		// 4P 4-slot
 	COIN_MAX
 };
 

@@ -304,7 +304,7 @@ void EEPROM_write_data(uint32_t address, uint8_t data)
 
 
 /*------------------------------------------------------
-	セーブ/ロード ステート
+	Save/Load State
 ------------------------------------------------------*/
 
 #ifdef SAVE_STATE

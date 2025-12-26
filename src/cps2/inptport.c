@@ -2,7 +2,7 @@
 
 	inptport.c
 
-	CPS2 入力ポートエミュレーション
+	CPS2 Input Port Emulation
 
 ******************************************************************************/
 
@@ -10,7 +10,7 @@
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 int option_controller;
@@ -25,7 +25,7 @@ int af_interval = 1;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static uint8_t ALIGN_DATA input_flag[MAX_INPUTS];
@@ -39,43 +39,43 @@ static int p12_start_pressed;
 
 static uint8_t max_players[COIN_MAX] =
 {
-	2,	// COIN_NONE: 2P 2シューター固定 (チェック必要なし)
+	2,	// COIN_NONE: 2P 2-slot fixed (no check needed)
 
-	2,	// COIN_2P1C: 2P 1シューター
-	2,	// COIN_2P2C: 2P 2シューター
+	2,	// COIN_2P1C: 2P 1-slot
+	2,	// COIN_2P2C: 2P 2-slot
 
-	3,	// COIN_3P1C: 3P 1シューター
-	3,	// COIN_3P2C: 3P 2シューター
-	3,	// COIN_3P3C: 3P 3シューター
+	3,	// COIN_3P1C: 3P 1-slot
+	3,	// COIN_3P2C: 3P 2-slot
+	3,	// COIN_3P3C: 3P 3-slot
 
-	4,	// COIN_4P1C: 4P 1シューター
-	4,	// COIN_4P2C: 4P 2シューター
-	4	// COIN_4P4C: 4P 4シューター
+	4,	// COIN_4P1C: 4P 1-slot
+	4,	// COIN_4P2C: 4P 2-slot
+	4	// COIN_4P4C: 4P 4-slot
 };
 
 static uint8_t coin_chuter[COIN_MAX][4] =
 {
-	{ 1, 2, 0, 0 },	// COIN_NONE: 2P 2シューター固定 (チェック必要なし)
+	{ 1, 2, 0, 0 },	// COIN_NONE: 2P 2-slot fixed (no check needed)
 
-	{ 1, 1, 0, 0 },	// COIN_2P1C: 2P 1シューター
-	{ 1, 2, 0, 0 },	// COIN_2P2C: 2P 2シューター
+	{ 1, 1, 0, 0 },	// COIN_2P1C: 2P 1-slot
+	{ 1, 2, 0, 0 },	// COIN_2P2C: 2P 2-slot
 
-	{ 1, 1, 1, 0 },	// COIN_3P1C: 3P 1シューター
-	{ 1, 1, 2, 0 },	// COIN_3P2C: 3P 2シューター
-	{ 1, 2, 3, 0 },	// COIN_3P3C: 3P 3シューター
+	{ 1, 1, 1, 0 },	// COIN_3P1C: 3P 1-slot
+	{ 1, 1, 2, 0 },	// COIN_3P2C: 3P 2-slot
+	{ 1, 2, 3, 0 },	// COIN_3P3C: 3P 3-slot
 
-	{ 1, 1, 1, 1 },	// COIN_4P1C: 4P 1シューター
-	{ 1, 1, 2, 2 },	// COIN_3P2C: 4P 2シューター
-	{ 1, 2, 3, 4 }	// COIN_3P3C: 4P 4シューター
+	{ 1, 1, 1, 1 },	// COIN_4P1C: 4P 1-slot
+	{ 1, 1, 2, 2 },	// COIN_3P2C: 4P 2-slot
+	{ 1, 2, 3, 4 }	// COIN_3P3C: 4P 4-slot
 };
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	EEPROMのコイン設定をチェック
+	Check EEPROM Coin Settings
 ------------------------------------------------------*/
 
 static void check_eeprom_settings(int popup)
@@ -98,7 +98,7 @@ static void check_eeprom_settings(int popup)
 
 
 /*------------------------------------------------------
-	連射フラグを更新
+	Update Autofire Flag
 ------------------------------------------------------*/
 
 static uint32_t update_autofire(uint32_t buttons)
@@ -133,7 +133,7 @@ static uint32_t update_autofire(uint32_t buttons)
 
 
 /*------------------------------------------------------
-	CPS2 ポート0 (コントローラ1 / 2)
+	CPS2 Port 0 (Controller 1/2)
 ------------------------------------------------------*/
 
 static void update_inputport0(void)
@@ -300,7 +300,7 @@ static void update_inputport0(void)
 
 
 /*------------------------------------------------------
-	CPS2 ポート1 (コントローラ3 / 4 / 追加ボタン)
+	CPS2 Port 1 (Controller 3/4 / Additional Buttons)
 ------------------------------------------------------*/
 
 static void update_inputport1(void)
@@ -434,7 +434,7 @@ static void update_inputport1(void)
 
 
 /*------------------------------------------------------
-	CPS2 ポート2 (START / COIN)
+	CPS2 Port 2 (START / COIN)
 ------------------------------------------------------*/
 
 static void update_inputport2(void)
@@ -521,7 +521,7 @@ static void update_inputport2(void)
 
 
 /*------------------------------------------------------
-	pzloop2 アナログ入力ポート
+	pzloop2 Analog Input Port
 ------------------------------------------------------*/
 
 static void update_inputport3(void)
@@ -558,7 +558,7 @@ static void update_inputport3(void)
 
 
 /*------------------------------------------------------
-	入力ボタンを画面方向に合わせて調整
+	Adjust Input Buttons to Screen Orientation
 ------------------------------------------------------*/
 
 static uint32_t adjust_input(uint32_t buttons)
@@ -630,11 +630,11 @@ static uint32_t adjust_input(uint32_t buttons)
 
 
 /******************************************************************************
-	入力ポートインタフェース関数
+	Input Port Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	入力ポートの初期化
+	Initialize Input Port
 ------------------------------------------------------*/
 
 int input_init(void)
@@ -702,7 +702,7 @@ int input_init(void)
 
 
 /*------------------------------------------------------
-	入力ポートの終了
+	Terminate Input Port
 ------------------------------------------------------*/
 
 void input_shutdown(void)
@@ -715,7 +715,7 @@ void input_shutdown(void)
 
 
 /*------------------------------------------------------
-	入力ポートをリセット
+	Reset Input Port
 ------------------------------------------------------*/
 
 void input_reset(void)
@@ -738,7 +738,7 @@ void input_reset(void)
 
 
 /*------------------------------------------------------
-	連射フラグを設定
+	Set Autofire Flag
 ------------------------------------------------------*/
 
 void setup_autofire(void)
@@ -754,7 +754,7 @@ void setup_autofire(void)
 
 
 /*------------------------------------------------------
-	入力ポートを更新
+	Update Input Port
 ------------------------------------------------------*/
 
 void update_inputport(void)
@@ -914,7 +914,7 @@ void update_inputport(void)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE

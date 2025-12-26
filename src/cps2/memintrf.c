@@ -2,7 +2,7 @@
 
 	memintrf.c
 
-	CPS2メモリインタフェース関数
+	CPS2 Memory Interface Functions
 
 ******************************************************************************/
 
@@ -39,7 +39,7 @@ enum
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 uint8_t *memory_region_cpu1;
@@ -79,7 +79,7 @@ int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
 
 
 /******************************************************************************
-	ローカル構造体/変数
+	Local Structures/Variables
 ******************************************************************************/
 
 static struct rom_t cpu1rom[MAX_CPU1ROM];
@@ -109,7 +109,7 @@ static int phoenix_edition;
 
 
 /******************************************************************************
-	ROM読み込み
+	ROM Loading
 ******************************************************************************/
 
 /*--------------------------------------------------------
@@ -338,7 +338,7 @@ static int load_rom_user1(void)
 
 
 /*--------------------------------------------------------
-	ROM情報をデータベースで解析
+	Parse ROM Information from Database
 --------------------------------------------------------*/
 
 static int load_rom_info(const char *game_name)
@@ -373,7 +373,7 @@ static int load_rom_info(const char *game_name)
 		if ((buf = (char *)malloc(size)) == NULL)
 		{
 			close(fd);
-			return 3;	// 手抜き
+			return 3;	// Shortcut
 		}
 
 		read(fd, buf, size);
@@ -399,7 +399,7 @@ static int load_rom_info(const char *game_name)
 			{
 				if (linebuf[0] == '\r' || linebuf[0] == '\n')
 				{
-					// 改行
+					// Newline
 					continue;
 				}
 				else if (str_cmp(linebuf, "FILENAME(") == 0)
@@ -619,11 +619,11 @@ static int load_rom_info(const char *game_name)
 
 
 /******************************************************************************
-	メモリインタフェース関数
+	Memory Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	メモリインタフェース初期化
+	Memory Interface Initialization
 -----------------------------------------------------*/
 
 int memory_init(void)
@@ -688,7 +688,7 @@ int memory_init(void)
 #if USE_CACHE
 	else if (!strcmp(game_name, "mpangj"))
 	{
-		// 多分日本語版はBAD DUMP(一部スプライトの欠けあり)
+		// Japanese version is probably a BAD DUMP (some sprites are missing)
 		cache_parent_name[0] = '\0';
 	}
 #endif
@@ -776,7 +776,7 @@ int memory_init(void)
 #ifdef ADHOC
 	if (adhoc_enable)
 	{
-		/* AdHoc通信時は一部オプションで固定の設定を使用 */
+		/* Use fixed settings for some options during AdHoc communication */
 #if ENABLE_RASTER_OPTION
 		cps_raster_enable    = 1;
 #endif
@@ -827,7 +827,7 @@ int memory_init(void)
 
 
 /*------------------------------------------------------
-	メモリインタフェース終了
+	Memory Interface Termination
 ------------------------------------------------------*/
 
 void memory_shutdown(void)
@@ -860,11 +860,11 @@ void memory_shutdown(void)
 
 
 /******************************************************************************
-	M68000 メモリリード/ライト関数
+	M68000 Memory Read/Write Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	M68000メモリリード (byte)
+	M68000 Memory Read (byte)
 ------------------------------------------------------*/
 
 uint8_t m68000_read_memory_8(uint32_t offset)
@@ -933,7 +933,7 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 
 
 /*------------------------------------------------------
-	M68000リードメモリ (word)
+	M68000 Memory Read (word)
 ------------------------------------------------------*/
 
 uint16_t m68000_read_memory_16(uint32_t offset)
@@ -996,7 +996,7 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 
 
 /*------------------------------------------------------
-	M68000ライトメモリ (byte)
+	M68000 Memory Write (byte)
 ------------------------------------------------------*/
 
 void m68000_write_memory_8(uint32_t offset, uint8_t data)
@@ -1082,7 +1082,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 
 
 /*------------------------------------------------------
-	M68000ライトメモリ (word)
+	M68000 Memory Write (word)
 ------------------------------------------------------*/
 
 void m68000_write_memory_16(uint32_t offset, uint16_t data)
@@ -1162,11 +1162,11 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 
 
 /******************************************************************************
-	Z80 メモリリード/ライト関数
+	Z80 Memory Read/Write Functions
 ******************************************************************************/
 
 /*------------------------------------------------------
-	Z80リードメモリ (byte)
+	Z80 Memory Read (byte)
 ------------------------------------------------------*/
 
 uint8_t z80_read_memory_8(uint32_t offset)
@@ -1176,7 +1176,7 @@ uint8_t z80_read_memory_8(uint32_t offset)
 
 
 /*------------------------------------------------------
-	Z80ライトメモリ (byte)
+	Z80 Memory Write (byte)
 ------------------------------------------------------*/
 
 void z80_write_memory_8(uint32_t offset, uint8_t data)
@@ -1205,7 +1205,7 @@ void z80_write_memory_8(uint32_t offset, uint8_t data)
 
 
 /******************************************************************************
-	セーブ/ロード ステート
+	Save/Load State
 ******************************************************************************/
 
 #ifdef SAVE_STATE
