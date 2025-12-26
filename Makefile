@@ -206,7 +206,11 @@ CFLAGS = \
 	-Wbad-function-cast \
 	-Wwrite-strings \
 	-Wmissing-prototypes \
-	-Wsign-compare
+	-Wsign-compare \
+	-Wno-implicit-function-declaration \
+	-Wno-incompatible-pointer-types \
+	-Wno-declaration-missing-parameter-type \
+	-Wno-implicit-int
 
 
 #------------------------------------------------------------------------------
