@@ -468,11 +468,12 @@ int main(int argc, char *argv[]) {
 	option_mp3_volume = 10;
 #endif
 
-#if defined(BUILD_MVS) || defined(BUILD_NCDZ)
+#if defined(BUILD_MVS) || defined(BUILD_NCDZ) || defined(BUILD_CPS1) || defined(BUILD_CPS2)
 	input_map[P1_UP] = PLATFORM_PAD_UP;
 	input_map[P1_DOWN] = PLATFORM_PAD_DOWN;
 	input_map[P1_LEFT] = PLATFORM_PAD_LEFT;
 	input_map[P1_RIGHT] = PLATFORM_PAD_RIGHT;
+#if defined(BUILD_MVS) || defined(BUILD_NCDZ)
 	input_map[P1_BUTTONA] = PLATFORM_PAD_B1;
 	input_map[P1_BUTTONB] = PLATFORM_PAD_B2;
 	input_map[P1_BUTTONC] = PLATFORM_PAD_B3;
@@ -482,6 +483,17 @@ int main(int argc, char *argv[]) {
 	input_map[P1_COIN] = PLATFORM_PAD_SELECT;
 #else
 	input_map[P1_SELECT] = PLATFORM_PAD_SELECT;
+#endif
+#endif
+#if defined(BUILD_CPS1) || defined(BUILD_CPS2)
+	input_map[P1_BUTTON1] = PLATFORM_PAD_B1;
+	input_map[P1_BUTTON2] = PLATFORM_PAD_B2;
+	input_map[P1_BUTTON3] = PLATFORM_PAD_B3;
+	input_map[P1_BUTTON4] = PLATFORM_PAD_B4;
+	input_map[P1_DIAL_L] = PLATFORM_PAD_L;
+	input_map[P1_DIAL_R] = PLATFORM_PAD_R;
+	input_map[P1_START] = PLATFORM_PAD_START;
+	input_map[P1_COIN] = PLATFORM_PAD_SELECT;
 #endif
 #endif
 #endif
