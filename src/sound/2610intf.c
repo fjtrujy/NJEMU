@@ -158,7 +158,7 @@ static void TimerHandler(int channel, int count, double stepTime)
 #if 0
 		float time_usec = (float)((double)count * SEC_TO_USEC(stepTime));
 #else
-		// “s‡‚É‚æ‚èAfloat‚Å‚Í‚È‚­int‚ğg—p
+		// For convenience, use int instead of float
 		int time_usec = count * SEC_TO_USEC(stepTime);
 #endif
 

@@ -9,7 +9,7 @@
 
   Version 1.4 (final beta)
 
-  仸MAME偺fm.c傪 YM-2610 1僠僢僾愱梡 偵偟偰偄傑偡
+  Based on MAME's fm.c, specialized for YM-2610 single chip
 
 ***************************************************************************/
 
@@ -2449,7 +2449,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 		case 0x110:
 		case 0x118:
 			adpcma[c].start = ((YM2610.regs[0x118 + c] << 8) | YM2610.regs[0x110 + c]) << ADPCMA_ADDRESS_SHIFT;
-			if ( pcmsizeA > 0x1000000 )	//支持扩容VROM
+			if ( pcmsizeA > 0x1000000 )	// Support expanded VROM
 			{
 				if ( YM2610.regs[0x108 + c] >= 0xf0 )
 				{
@@ -2462,7 +2462,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 		case 0x128:
 			adpcma[c].end  = ((YM2610.regs[0x128 + c] << 8) | YM2610.regs[0x120 + c]) << ADPCMA_ADDRESS_SHIFT;
 			adpcma[c].end += (1 << ADPCMA_ADDRESS_SHIFT) - 1;
-			if ( pcmsizeA > 0x1000000 )	//支持扩容VROM
+			if ( pcmsizeA > 0x1000000 )	// Support expanded VROM
 			{
 				if ( YM2610.regs[0x108 + c] >= 0xf0 )
 				{
