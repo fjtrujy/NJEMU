@@ -390,6 +390,108 @@ ps2client -h <PS2_IP_ADDRESS> execee host:{TARGET}.elf
 
 ---
 
+### Desktop (PC/SDL2)
+
+The Desktop build is primarily intended for development and debugging purposes.
+
+#### Prerequisites
+
+- CMake 3.12 or higher
+- GCC or Clang compiler
+- SDL2 development libraries
+
+On macOS (using Homebrew):
+
+```bash
+brew install sdl2
+```
+
+On Ubuntu/Debian:
+
+```bash
+sudo apt install libsdl2-dev
+```
+
+#### Building
+
+1. Create the build directory and navigate to it:
+
+```bash
+mkdir build_desktop_{target}
+cd build_desktop_{target}
+```
+
+2. Run CMake:
+
+```bash
+cmake -DPLATFORM="Desktop" \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET={TARGET} \
+      ..
+```
+
+Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on Desktop).
+
+3. Build the project:
+
+```bash
+make
+```
+
+#### Example: Building MVS for Desktop
+
+```bash
+mkdir build_desktop_mvs
+cd build_desktop_mvs
+cmake -DPLATFORM="Desktop" \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET=MVS \
+      ..
+make
+```
+
+#### Output
+
+After a successful build, you'll find the following files in the build directory:
+- `{TARGET}` - The main executable
+- Resource files copied from `{TARGET}_RESOURCE/`
+
+#### Configuring the Game (NO_GUI builds)
+
+For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+
+```bash
+echo "mslug" > game_name.ini
+```
+
+#### Running
+
+From the build directory, simply run the executable:
+
+```bash
+./{TARGET}
+```
+
+For example:
+
+```bash
+./MVS
+```
+
+#### Debugging
+
+Use your preferred debugger (GDB, LLDB) for debugging:
+
+```bash
+# Using GDB
+gdb ./{TARGET}
+
+# Using LLDB (macOS)
+lldb ./{TARGET}
+```
+
+---
+
 ## ROM Compatibility
 
 - ROMs must be in **MAME 0.152** compatible format
