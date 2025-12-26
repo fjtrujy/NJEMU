@@ -797,6 +797,339 @@ Each platform implements the same driver interfaces:
 
 ---
 
+## Technical Architecture - Emulator Targets
+
+This section documents the internal architecture of each emulator target, focusing on the sprite rendering systems. This information is essential for understanding the codebase and for porting to new platforms.
+
+### Common Concepts
+
+#### Texture Caching System
+
+All targets use a hash-table based texture caching system to avoid re-decoding sprites every frame:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Texture Cache Flow                        │
+├─────────────────────────────────────────────────────────────┤
+│  1. Generate key from (code, attributes)                    │
+│  2. Look up key in hash table                               │
+│  3. If found: return cached texture index                   │
+│  4. If not found:                                           │
+│     a. Allocate slot in texture atlas                       │
+│     b. Decode tile from ROM to texture memory               │
+│     c. Insert into hash table                               │
+│     d. Return new texture index                             │
+│  5. Mark sprite as "used" this frame                        │
+│  6. At frame end: evict sprites not used this frame         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### PSP Texture Swizzling (PSP-Specific)
+
+The PSP GPU has a specific memory layout for optimal texture cache performance called "swizzling". This rearranges bytes within texture blocks:
+
+```c
+// PSP swizzle table - controls row advancement in swizzled texture
+static const int swizzle_table_8bit[16] = {
+       0, 16, 16, 16, 16, 16, 16, 16,
+    3984, 16, 16, 16, 16, 16, 16, 16
+};
+
+// Swizzled address calculation for 16x16 tile
+dst = SWIZZLED8_16x16(texture_base, tile_index);
+```
+
+**For porting to other platforms:** Replace with linear row/column calculation:
+```c
+row = idx / TILES_PER_LINE;
+column = idx % TILES_PER_LINE;
+dst = &texture[((row * TILE_HEIGHT) + line) * BUF_WIDTH + (column * TILE_WIDTH)];
+```
+
+#### Color Table (CLUT) System
+
+All targets use 4-bit indexed color (16 colors per palette). The `color_table` embeds palette indices into 8-bit texture pixels:
+
+```c
+static const uint32_t color_table[16] = {
+    0x00000000, 0x10101010, 0x20202020, 0x30303030,
+    0x40404040, 0x50505050, 0x60606060, 0x70707070,
+    0x80808080, 0x90909090, 0xa0a0a0a0, 0xb0b0b0b0,
+    0xc0c0c0c0, 0xd0d0d0d0, 0xe0e0e0e0, 0xf0f0f0f0
+};
+```
+
+This allows storing a 4-bit palette index in the upper nibble of each 8-bit texture pixel, which is then used with CLUT (Color Look-Up Table) rendering.
+
+---
+
+### MVS (Neo-Geo) Target
+
+**Files:** `src/mvs/psp_sprite.c`, `src/mvs/ps2_sprite.c`, `src/mvs/desktop_sprite.c`, `src/mvs/sprite_common.c`
+
+#### Code Organization
+
+MVS uses a shared sprite management architecture:
+
+| File | Purpose |
+|------|---------|
+| `sprite_common.h` | Shared declarations, constants, macros, extern variables |
+| `sprite_common.c` | Hash table management, software rendering, shared data |
+| `psp_sprite.c` | PSP-specific: swizzled textures, sceGu* API, ROM caching |
+| `ps2_sprite.c` | PS2-specific: GSKit types, linear textures |
+| `desktop_sprite.c` | Desktop-specific: SDL/linear textures |
+
+#### Graphics Layers
+
+| Layer | Name | Tile Size | Purpose |
+|-------|------|-----------|---------|
+| FIX | Fixed Layer | 8×8 | Text, HUD, static elements |
+| SPR | Sprites | 16×16 | Characters, objects, effects |
+
+#### Texture Cache Configuration
+
+| Layer | Hash Size | Texture Size | Max Sprites/Frame |
+|-------|-----------|--------------|-------------------|
+| FIX | 0x200 | 512×512 / 8×8 tiles | 1,200 |
+| SPR | 0x200 | 512×1536 / 16×16 tiles | 12,288 |
+
+#### Graphics Data Format
+
+MVS graphics are stored with a simple nibble-packed format:
+- Each 32-bit word contains 8 pixels (4 bits per pixel)
+- Decoding extracts odd/even nibbles separately:
+
+```c
+tile = *(uint32_t *)(src + 0);
+*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;  // pixels 0,2,4,6
+*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;  // pixels 1,3,5,7
+```
+
+#### Sprite Rendering Features
+
+- **Hardware zoom:** SPR layer supports per-sprite X/Y zoom
+- **Software fallback:** Line-by-line rendering for zoomed sprites
+- **Palette banking:** Two palette banks for raster effects
+- **ROM caching:** Large sprite ROMs can be cached to storage
+
+#### Screen Resolution
+
+- **Native:** 304×224
+- **With borders:** 320×224 (visible area starts at x=24, y=16)
+
+---
+
+### CPS1 (Capcom Play System 1) Target
+
+**File:** `src/cps1/psp_sprite.c`
+
+#### Graphics Layers
+
+| Layer | Name | Tile Size | Purpose |
+|-------|------|-----------|---------|
+| OBJECT | Sprites | 16×16 | Characters, projectiles |
+| SCROLL1 | Text Layer | 8×8 | Text, score, life bars |
+| SCROLL2 | Main Background | 16×16 | Primary scrolling layer |
+| SCROLL3 | Background | 32×32 | Large background tiles |
+| SCROLLH | High Priority | varies | Overlay effects (uses 16-bit color) |
+| STARS | Star Field | 1×1 | Background stars (specific games) |
+
+#### Texture Cache Configuration
+
+| Layer | Hash Size | Texture Size | Max Sprites/Frame |
+|-------|-----------|--------------|-------------------|
+| OBJECT | 0x200 | 512×512 / 16×16 | 4,096 |
+| SCROLL1 | 0x200 | 512×512 / 8×8 | ~1,500 |
+| SCROLL2 | 0x100 | 512×512 / 16×16 | ~450 |
+| SCROLL3 | 0x40 | 512×512 / 32×32 | ~150 |
+| SCROLLH | 0x200 | 512×192 / varies | ~1,500 |
+
+#### CPS1 Graphics Data Format (Interleaved Planar)
+
+**Important:** CPS1 graphics ROMs use an interleaved planar format. When decoding a 32-bit word, pixels are NOT sequential:
+
+```c
+// 16-bit direct color decoding (SCROLLH layers)
+// Notice the interleaved pattern: 0, 4, 1, 5, 2, 6, 3, 7
+dst[ 0] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
+dst[ 7] = pal[tile & 0x0f];
+```
+
+This pattern corresponds to CPS1's hardware graphics layout where bits are organized as:
+- Bits 0-3: Pixel 0
+- Bits 4-7: Pixel 4
+- Bits 8-11: Pixel 1
+- Bits 12-15: Pixel 5
+- etc.
+
+**This is NOT a PSP optimization - it's inherent to CPS1's graphics format and must be preserved on all platforms.**
+
+#### Rendering Modes
+
+1. **Hardware Rendering:** Uses GPU texture mapping for most layers
+2. **Software Rendering:** Direct pixel writing for SCROLL2 when clipping is complex
+
+```c
+// Selection based on clip region size
+if (scroll2_max_y - scroll2_min_y >= 16) {
+    blit_draw_scroll2 = blit_draw_scroll2_hardware;
+} else {
+    blit_draw_scroll2 = blit_draw_scroll2_software;
+}
+```
+
+#### Layer Priority System
+
+CPS1 has complex layer priority controlled by registers. The SCROLLH (high-priority) layer handles tiles that need to appear above sprites.
+
+#### Screen Resolution
+
+- **Native:** 384×224
+- **With borders:** 512×256 work area (visible at x=64, y=16)
+
+---
+
+### CPS2 (Capcom Play System 2) Target
+
+**File:** `src/cps2/psp_sprite.c`
+
+#### Graphics Layers
+
+| Layer | Name | Tile Size | Purpose |
+|-------|------|-----------|---------|
+| OBJECT | Sprites | 16×16 | Characters, effects (with priority) |
+| SCROLL1 | Text Layer | 8×8 | Text, HUD |
+| SCROLL2 | Main Background | 16×16 | Primary scrolling |
+| SCROLL3 | Background | 32×32 | Large background tiles |
+
+#### Texture Cache Configuration
+
+| Layer | Hash Size | Texture Size | Max Sprites/Frame |
+|-------|-----------|--------------|-------------------|
+| OBJECT | 0x200 | 512×512 / 16×16 | 5,120 |
+| SCROLL1 | 0x200 | 512×512 / 8×8 | ~1,500 |
+| SCROLL2 | 0x100 | 512×512 / 16×16 | ~450 |
+| SCROLL3 | 0x40 | 512×512 / 32×32 | ~150 |
+
+#### CPS2-Specific Features
+
+**Object Priority System:**
+CPS2 has 8 priority levels for sprites. Objects are sorted into priority buckets:
+
+```c
+static OBJECT *vertices_object_head[8];  // 8 priority levels
+static OBJECT *vertices_object_tail[8];
+static uint16_t object_num[8];
+```
+
+**Z-Buffer Rendering:**
+Optional Z-buffer based rendering for complex priority scenes:
+
+```c
+void (*blit_finish_object)(int start_pri, int end_pri);
+// Can be either:
+// - blit_render_object()     - Standard rendering
+// - blit_render_object_zb()  - Z-buffer based
+```
+
+#### Graphics Data Format
+
+CPS2 uses the same interleaved planar format as CPS1 (see CPS1 section above).
+
+#### Screen Resolution
+
+- **Native:** 384×224
+- **With borders:** 512×256 work area
+
+---
+
+### NCDZ (Neo-Geo CD) Target
+
+**Files:** `src/ncdz/psp_sprite.c`, `src/ncdz/ps2_sprite.c`, `src/ncdz/desktop_sprite.c`, `src/ncdz/sprite_common.c`
+
+#### Code Organization
+
+NCDZ uses a shared sprite management architecture similar to MVS:
+
+| File | Purpose |
+|------|---------|
+| `sprite_common.h` | Shared declarations, constants, macros, extern variables |
+| `sprite_common.c` | Hash table management, software rendering, shared data |
+| `psp_sprite.c` | PSP-specific: swizzled textures, sceGu* API |
+| `ps2_sprite.c` | PS2-specific: GSKit types, linear textures |
+| `desktop_sprite.c` | Desktop-specific: SDL/linear textures |
+
+#### Graphics Layers
+
+| Layer | Name | Tile Size | Purpose |
+|-------|------|-----------|---------|
+| FIX | Fixed Layer | 8×8 | Text, HUD |
+| SPR | Sprites | 16×16 | All game graphics |
+
+#### Texture Cache Configuration
+
+| Layer | Hash Size | Texture Size | Max Sprites/Frame |
+|-------|-----------|--------------|-------------------|
+| FIX | 0x200 | 512×512 / 8×8 | 1,200 |
+| SPR | 0x200 | 512×1536 / 16×16 | 12,288 |
+
+#### NCDZ vs MVS Differences
+
+NCDZ is similar to MVS but with key differences:
+- **No ROM caching:** Graphics loaded from CD to RAM
+- **Larger RAM:** Can hold more graphics data
+- **Same graphics format:** Uses MVS-compatible tile format
+- **Audio from CD:** MP3/CDDA instead of ROM-based audio
+
+#### Screen Resolution
+
+- **Native:** 304×224 (same as MVS)
+
+---
+
+### Porting Guide
+
+#### What Must Change Per Platform
+
+| Component | PSP | PS2 | Desktop |
+|-----------|-----|-----|---------|
+| Texture storage | Swizzled (GPU-specific) | Linear | Linear |
+| Texture upload | `sceGuTexImage()` | GSKit | SDL texture |
+| CLUT handling | `sceGuClutLoad()` | GS CLUT | Software lookup |
+| Vertex submission | `sceGuDrawArray()` | GS primitives | SDL render |
+| Frame sync | `sceGuSync()` | GS vsync | SDL_RenderPresent |
+
+#### What Must Stay the Same (All Platforms)
+
+1. **Sprite cache hash tables** - Platform agnostic
+2. **Graphics data decoding** - CPS1/CPS2 interleaved format is hardware-defined
+3. **Tile indexing formulas** - UV coordinate calculations
+4. **Palette/CLUT organization** - 16 colors per palette, 4-bit indices
+
+#### Key Macros for Porting
+
+**PSP (swizzled):**
+```c
+#define SWIZZLED8_8x8(tex, idx)    &tex[((idx & ~1) << 6) | ((idx & 1) << 3)]
+#define SWIZZLED8_16x16(tex, idx)  &tex[((idx & ~31) << 8) | ((idx & 31) << 7)]
+```
+
+**Desktop/PS2 (linear):**
+```c
+row = idx / TILES_PER_LINE;
+column = idx % TILES_PER_LINE;
+offset = ((row * TILE_HEIGHT) + line) * BUF_WIDTH + (column * TILE_WIDTH);
+dst = &texture[offset];
+```
+
+---
+
 ## Changelog
 
 ### Version 2.4.0 (Cross-Platform Port)
