@@ -9,9 +9,11 @@ on:
   pull_request:
   repository_dispatch:
     types: [run_build]
+  workflow_dispatch: {}
 
 jobs:
   build:
+    name: ${{ matrix.emulator }} LARGE_MEMORY=${{ matrix.psp_mode }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -25,10 +27,11 @@ jobs:
             adhoc: ADHOC=1
           - adhoc: ADHOC=1
             save_state: SAVE_STATE=0
+      fail-fast: false
 
     container: pspdev/pspdev:latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
@@ -46,7 +49,7 @@ jobs:
 
     - name: Upload artifacts
       if: ${{ success() }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.psp_mode }}-${{ matrix.command_list }}-${{ matrix.adhoc }}-${{ matrix.save_state }}-${{ matrix.emulator }}
         path: |
