@@ -2,7 +2,7 @@
  *
  * CZ80 (Z80 CPU emulator) version 0.9
  * Compiled with Dev-C++
- * Copyright 2004-2005 St駱hane Dallongeville
+ * Copyright 2004-2005 Stﾃｩphane Dallongeville
  *
  * (Modified by NJ)
  *
@@ -27,21 +27,21 @@
 
 
 /******************************************************************************
-	マクロ
+	Macros
 ******************************************************************************/
 
 #include "cz80macro.h"
 
 
 /******************************************************************************
-	グローバル構造体
+	Global Structures
 ******************************************************************************/
 
 cz80_struc ALIGN_DATA CZ80;
 
 
 /******************************************************************************
-	ローカル変数
+	Local Variables
 ******************************************************************************/
 
 static uint8_t ALIGN_DATA cz80_bad_address[1 << CZ80_FETCH_SFT];
@@ -58,11 +58,11 @@ static uint8_t ALIGN_DATA SZHVC_sub[2*256*256];
 
 
 /******************************************************************************
-	ローカル関数
+	Local Functions
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	割り込みコールバック
+	Interrupt Callback
 --------------------------------------------------------*/
 
 static int32_t Cz80_Interrupt_Callback(int32_t line)
@@ -72,11 +72,11 @@ static int32_t Cz80_Interrupt_Callback(int32_t line)
 
 
 /******************************************************************************
-	CZ80インタフェース関数
+	CZ80 Interface Functions
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	CPU初期化
+	CPU Initialization
 --------------------------------------------------------*/
 
 void Cz80_Init(cz80_struc *CPU)
@@ -176,8 +176,8 @@ void Cz80_Init(cz80_struc *CPU)
 	CPU->pzR8[3] = &zE;
 	CPU->pzR8[4] = &zH;
 	CPU->pzR8[5] = &zL;
-	CPU->pzR8[6] = &zF;	// 処理の都合上、Aと入れ替え
-	CPU->pzR8[7] = &zA;	// 処理の都合上、Fと入れ替え
+	CPU->pzR8[6] = &zF;	// Swapped with A for processing convenience
+	CPU->pzR8[7] = &zA;	// Swapped with F for processing convenience
 
 	CPU->pzR16[0] = pzBC;
 	CPU->pzR16[1] = pzDE;
@@ -191,7 +191,7 @@ void Cz80_Init(cz80_struc *CPU)
 
 
 /*--------------------------------------------------------
-	CPUリセット
+	CPU Reset
 --------------------------------------------------------*/
 
 void Cz80_Reset(cz80_struc *CPU)
@@ -202,7 +202,7 @@ void Cz80_Reset(cz80_struc *CPU)
 }
 
 /*--------------------------------------------------------
-	CPU実行
+	CPU Execution
 --------------------------------------------------------*/
 
 int32_t Cz80_Exec(cz80_struc *CPU, int32_t cycles)
@@ -277,7 +277,7 @@ Cz80_Exec_End:
 
 
 /*--------------------------------------------------------
-	割り込み処理
+	Interrupt Processing
 --------------------------------------------------------*/
 
 void Cz80_Set_IRQ(cz80_struc *CPU, int32_t line, int32_t state)
@@ -305,7 +305,7 @@ void Cz80_Set_IRQ(cz80_struc *CPU, int32_t line, int32_t state)
 
 
 /*--------------------------------------------------------
-	レジスタ取得
+	Get Register
 --------------------------------------------------------*/
 
 uint32_t Cz80_Get_Reg(cz80_struc *CPU, int32_t regnum)
@@ -337,7 +337,7 @@ uint32_t Cz80_Get_Reg(cz80_struc *CPU, int32_t regnum)
 
 
 /*--------------------------------------------------------
-	レジスタ設定
+	Set Register
 --------------------------------------------------------*/
 
 void Cz80_Set_Reg(cz80_struc *CPU, int32_t regnum, uint32_t val)
@@ -376,7 +376,7 @@ void Cz80_Set_Reg(cz80_struc *CPU, int32_t regnum, uint32_t val)
 
 
 /*--------------------------------------------------------
-	フェッチアドレス設定
+	Set Fetch Address
 --------------------------------------------------------*/
 
 void Cz80_Set_Fetch(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintptr_t fetch_adr)
@@ -399,7 +399,7 @@ void Cz80_Set_Fetch(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintpt
 
 
 /*--------------------------------------------------------
-	フェッチアドレス設定 (暗号化ROM対応)
+	Set Fetch Address (Encrypted ROM Support)
 --------------------------------------------------------*/
 
 #if CZ80_ENCRYPTED_ROM
@@ -421,7 +421,7 @@ void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr
 
 
 /*--------------------------------------------------------
-	メモリリード/ライト関数設定
+	Set Memory Read/Write Functions
 --------------------------------------------------------*/
 
 void Cz80_Set_ReadB(cz80_struc *CPU, uint8_t (*Func)(uint32_t address))
@@ -436,7 +436,7 @@ void Cz80_Set_WriteB(cz80_struc *CPU, void (*Func)(uint32_t address, uint8_t dat
 
 
 /*--------------------------------------------------------
-	ポートリード/ライト関数設定
+	Set Port Read/Write Functions
 --------------------------------------------------------*/
 
 void Cz80_Set_INPort(cz80_struc *CPU, uint8_t (*Func)(uint16_t port))
@@ -451,7 +451,7 @@ void Cz80_Set_OUTPort(cz80_struc *CPU, void (*Func)(uint16_t port, uint8_t value
 
 
 /*--------------------------------------------------------
-	コールバック関数設定
+	Set Callback Functions
 --------------------------------------------------------*/
 
 void Cz80_Set_IRQ_Callback(cz80_struc *CPU, int32_t (*Func)(int32_t irqline))

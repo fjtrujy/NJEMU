@@ -1,8 +1,8 @@
 /******************************************************************************
 
-	m68000.c
+	m68000.h
 
-	M68000 CPUインタフェース関数
+	M68000 CPU Interface Functions
 
 ******************************************************************************/
 
@@ -11,7 +11,7 @@
 
 #include "c68k.h"
 
-// MAME互換のレジスタ番号 (一部未対応)
+// MAME compatible register numbers (some not supported)
 enum
 {
 	/* NOTE: M68K_SP fetches the current SP, be it USP, ISP, or MSP */
