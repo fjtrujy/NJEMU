@@ -155,6 +155,239 @@ cmake --build build_psp_cps1
 | `UI_32BPP` | Enable 32-bit color UI | ON |
 | `RELEASE` | Release build | OFF |
 
+### Build Directory Convention
+
+Build directories follow the naming pattern: `build_{platform}_{target}`
+
+Examples:
+- `build_psp_cps1` - PSP build for CPS1
+- `build_psp_mvs` - PSP build for MVS
+- `build_ps2_mvs` - PS2 build for MVS
+- `build_desktop_ncdz` - Desktop build for NCDZ
+
+### Resource Folders
+
+Each target has a corresponding resource folder named `{TARGET}_RESOURCE` containing files required for the emulator to work properly:
+
+| Target | Resource Folder |
+|--------|-----------------|
+| CPS1 | `CPS1_RESOURCE/` |
+| CPS2 | `CPS2_RESOURCE/` |
+| MVS | `MVS_RESOURCE/` |
+| NCDZ | `NCDZ_RESOURCE/` |
+
+These resource files are automatically copied to the build directory when running the `cmake` command.
+
+---
+
+## Platform-Specific Build Instructions
+
+### PSP (PlayStation Portable)
+
+#### Prerequisites
+
+- [PSPDEV Toolchain](https://github.com/pspdev/pspdev) installed
+
+#### Environment Setup
+
+Set up the required environment variables:
+
+```bash
+export PSPDEV=/path/to/pspdev
+export PATH=$PSPDEV/bin:$PATH
+```
+
+> **Note:** Replace `/path/to/pspdev` with your actual PSPDEV installation path (e.g., `/usr/local/pspdev` or `$HOME/pspdev`).
+
+#### Building
+
+1. Create the build directory and navigate to it:
+
+```bash
+mkdir build_psp_{target}
+cd build_psp_{target}
+```
+
+2. Run CMake with the PSP toolchain:
+
+```bash
+cmake -DPLATFORM="PSP" \
+      -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET={TARGET} \
+      ..
+```
+
+Replace `{TARGET}` with one of: `CPS1`, `CPS2`, `MVS`, or `NCDZ`.
+
+3. Build the project:
+
+```bash
+make
+```
+
+#### Example: Building CPS1 for PSP
+
+```bash
+export PSPDEV=/Users/fjtrujy/toolchains/psp/pspdev
+export PATH=$PSPDEV/bin:$PATH
+
+mkdir build_psp_cps1
+cd build_psp_cps1
+cmake -DPLATFORM="PSP" \
+      -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET=CPS1 \
+      ..
+make
+```
+
+#### Output
+
+After a successful build, you'll find the following files in the build directory:
+- `EBOOT.PBP` - The main executable for PSP
+- Resource files copied from `{TARGET}_RESOURCE/`
+
+#### Configuring the Game (NO_GUI builds)
+
+For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+
+```bash
+echo "sf2" > game_name.ini
+```
+
+#### Running on PSP
+
+**On Real Hardware:**
+
+1. Copy the entire build directory contents to your PSP's `PSP/GAME/` folder
+2. Rename the folder appropriately (e.g., `CPS1PSP`)
+3. Launch from the PSP XMB menu
+
+**On PPSSPP Emulator:**
+
+From the build directory, run:
+
+```bash
+/Applications/PPSSPPSDL.app/Contents/MacOS/PPSSPPSDL $(pwd)/EBOOT.PBP
+```
+
+#### Debugging
+
+For debugging on PSP, use `pspsh` and `psplink`:
+
+```bash
+# Start pspsh to connect to PSP running psplink
+pspsh
+
+# Load and run the ELF file
+host0:/> ./EBOOT.ELF
+```
+
+---
+
+### PS2 (PlayStation 2)
+
+#### Prerequisites
+
+- [PS2DEV Toolchain](https://github.com/ps2dev/ps2dev) installed
+
+#### Environment Setup
+
+Set up the required environment variables:
+
+```bash
+export PS2DEV=/path/to/ps2dev
+export PS2SDK=$PS2DEV/ps2sdk
+export PATH=$PATH:$PS2DEV/bin:$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PS2DEV/dvp/bin:$PS2SDK/bin
+```
+
+> **Note:** Replace `/path/to/ps2dev` with your actual PS2DEV installation path (e.g., `/usr/local/ps2dev` or `$HOME/ps2dev`).
+
+#### Building
+
+1. Create the build directory and navigate to it:
+
+```bash
+mkdir build_ps2_{target}
+cd build_ps2_{target}
+```
+
+2. Run CMake with the PS2 toolchain:
+
+```bash
+cmake -DCMAKE_TOOLCHAIN_FILE=${PS2SDK}/ps2dev.cmake \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET={TARGET} \
+      -DPLATFORM=PS2 \
+      ..
+```
+
+Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on PS2).
+
+3. Build the project:
+
+```bash
+make
+```
+
+#### Example: Building MVS for PS2
+
+```bash
+export PS2DEV=/Users/fjtrujy/toolchains/ps2/ps2dev
+export PS2SDK=$PS2DEV/ps2sdk
+export PATH=$PATH:$PS2DEV/bin:$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PS2DEV/dvp/bin:$PS2SDK/bin
+
+mkdir build_ps2_mvs
+cd build_ps2_mvs
+cmake -DCMAKE_TOOLCHAIN_FILE=${PS2SDK}/ps2dev.cmake \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DTARGET=MVS \
+      -DPLATFORM=PS2 \
+      ..
+make
+```
+
+#### Output
+
+After a successful build, you'll find the following files in the build directory:
+- `{TARGET}.elf` - The main executable for PS2
+- Resource files copied from `{TARGET}_RESOURCE/`
+
+#### Configuring the Game (NO_GUI builds)
+
+For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+
+```bash
+echo "mslug" > game_name.ini
+```
+
+#### Running on PS2
+
+**On Real Hardware:**
+
+1. Copy the ELF file and resource files to your PS2 (via USB, network, or memory card)
+2. Launch using a homebrew loader (e.g., uLaunchELF, OPL, or ps2link)
+
+**On PCSX2 Emulator:**
+
+From the build directory, run:
+
+```bash
+/Applications/PCSX2.app/Contents/MacOS/PCSX2 -elf $(pwd)/{TARGET}
+```
+
+Replace `{TARGET}` with the target name (e.g., `MVS`, `NCDZ`).
+
+#### Debugging
+
+For debugging on PS2, use `ps2client` with ps2link:
+
+```bash
+# Send and run the ELF file on PS2 running ps2link
+ps2client -h <PS2_IP_ADDRESS> execee host:{TARGET}.elf
+```
+
 ---
 
 ## ROM Compatibility
