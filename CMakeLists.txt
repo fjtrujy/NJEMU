@@ -418,7 +418,8 @@ endif()
 
 
 # Define the source directory (resources folder)
-set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/${TARGET}_RESOURCE/")
+string(TOLOWER ${TARGET} TARGET_LOWER)
+set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
@@ -426,7 +427,7 @@ set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 # Copy the resources during the configure stage
 file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
 
-message(STATUS "Resources copied to the build directory: ${DESTINATION_DIR}")
+message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
 
 target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASAN_OPTIONS})
 target_link_options(${TARGET} PUBLIC ${ASAN_OPTIONS})
@@ -493,3 +494,26 @@ if(PLATFORM STREQUAL "PSP")
         TITLE "${TARGET}"
     )
 endif()
+
+# ==============================================================================
+# Install rules
+# ==============================================================================
+
+# Set default install prefix if not specified
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Install path prefix" FORCE)
+endif()
+
+# Install the executable
+if(PLATFORM STREQUAL "PSP")
+    install(FILES ${CMAKE_BINARY_DIR}/EBOOT.PBP DESTINATION .)
+elseif(PLATFORM STREQUAL "PS2")
+    install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
+else()
+    install(TARGETS ${TARGET} DESTINATION .)
+endif()
+
+# Install resource files (copy entire directory structure, including README)
+install(DIRECTORY ${RESOURCE_DIR}
+    DESTINATION .
+)

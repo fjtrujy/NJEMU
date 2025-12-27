@@ -61,3 +61,11 @@ build/
 
 # Auto-generated web files
 web/version.js
+
+# ==================================================
+# Emulator-specific exclusions
+# ==================================================
+
+
+# Build artifacts
+build_*/
