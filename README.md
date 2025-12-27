@@ -1393,18 +1393,55 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 
 ### CPS1 (Capcom Play System 1) Target
 
-**File:** `src/cps1/psp_sprite.c`
+**Files:** `src/cps1/psp_sprite.c`, `src/cps1/sprite_common.c`
+
+**Hardware Reference:**
+- [Fabien Sanglard's CPS-1 Graphics Study](https://fabiensanglard.net/cps1_gfx/index.html)
+- [Arcade Hacker CPS1 Technical Analysis](https://arcadehacker.blogspot.com/2015/04/capcom-cps1-part-1.html)
+- [System16 Hardware Database](https://www.system16.com/hardware.php?id=793)
+
+#### Hardware Specifications
+
+| Component | Specification |
+|-----------|---------------|
+| **CPU** | Motorola 68000 @ 10MHz (primary), Zilog Z80 @ 3.579MHz (sound) |
+| **Sound** | Yamaha YM2151 @ 3.579MHz + OKI6295 @ 7.576kHz |
+| **Resolution** | 384×224 pixels @ 59.6294Hz |
+| **Colors** | 65,536 available, 4,096 on-screen (192 palettes × 16 colors) |
+| **Sprites** | 256 per scanline, 16×16 pixels, 16 colors each |
+| **Tilemaps** | 3 layers: 512×512, 1024×1024, 2048×2048 pixels |
+| **Memory** | 64KB work RAM + 192KB VRAM |
+
+**History:** Released 1988 with *Forgotten Worlds*. In production for 12 years (1988-2000), hosting 32 game titles (~137 with revisions). Notable games include *Street Fighter II*, *Final Fight*, *Ghouls'n Ghosts*, and *Strider*.
+
+#### File Organization
+
+| File | Purpose |
+|------|---------|
+| `sprite_common.h` | Shared declarations, constants, macros, extern variables |
+| `sprite_common.c` | Hash table management, software rendering, shared data |
+| `psp_sprite.c` | PSP-specific: swizzled textures, sceGu* API |
+| `ps2_sprite.c` | PS2-specific: GSKit rendering (TODO) |
+| `desktop_sprite.c` | Desktop-specific: SDL2 rendering (TODO) |
 
 #### Graphics Layers
 
-| Layer | Name | Tile Size | Purpose |
-|-------|------|-----------|---------|
-| OBJECT | Sprites | 16×16 | Characters, projectiles |
-| SCROLL1 | Text Layer | 8×8 | Text, score, life bars |
-| SCROLL2 | Main Background | 16×16 | Primary scrolling layer |
-| SCROLL3 | Background | 32×32 | Large background tiles |
-| SCROLLH | High Priority | varies | Overlay effects (uses 16-bit color) |
-| STARS | Star Field | 1×1 | Background stars (specific games) |
+The CPS-1 composites six layers that can be stacked in any order:
+
+| Layer | Name | Tile Size | Tilemap Size | Purpose |
+|-------|------|-----------|--------------|---------|
+| OBJECT | Sprites | 16×16 | N/A | Characters, projectiles (max 256 per scanline) |
+| SCROLL1 | Text Layer | 8×8 | 512×512 | GUI, text, score (finest granularity) |
+| SCROLL2 | Main BG | 16×16 | 1024×1024 | Primary scrolling, **supports per-line parallax** |
+| SCROLL3 | Background | 32×32 | 2048×2048 | Large background tiles |
+| SCROLLH | High Priority | varies | varies | Overlay effects (uses 16-bit direct color) |
+| STAR1/STAR2 | Star Field | 1×1 | N/A | Background stars (Forgotten Worlds, etc.) |
+
+**Layer Notes:**
+- **SCROLL1** is typically used for GUI elements due to its 8×8 tile size offering the finest granularity
+- **SCROLL2** has a special per-line horizontal scrolling feature used for parallax effects (e.g., Street Fighter II stages)
+- **Priority masks** allow specific colors to appear over the OBJ layer, enabling effects like staircases in front of characters (Final Fight)
+- GFX ROM is divided into four areas at hardware level (one per SCROLL layer + OBJ), sizes fixed at manufacturing
 
 #### Texture Cache Configuration
 
@@ -1458,7 +1495,10 @@ if (scroll2_max_y - scroll2_min_y >= 16) {
 
 #### Layer Priority System
 
-CPS1 has complex layer priority controlled by registers. The SCROLLH (high-priority) layer handles tiles that need to appear above sprites.
+CPS1 has a flexible layer priority system controlled by hardware registers:
+- All layers can have their priority set freely (any stacking order)
+- The SCROLLH (high-priority) layer handles tiles that need to appear above sprites
+- **Priority masks** can be assigned to tiles, allowing specific colors (pen values) to appear in front of the OBJ layer instead of behind it. This creates effects like characters appearing "inside" background elements (e.g., staircases in *Final Fight*)
 
 #### Screen Resolution
 

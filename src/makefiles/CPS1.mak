@@ -48,6 +48,7 @@ COREOBJS = \
 	cps1/dipsw.o \
 	cps1/timer.o \
 	cps1/vidhrdw.o \
+	cps1/sprite_common.o \
 	cps1/$(OS)_sprite.o \
 	cps1/eeprom.o \
 	cps1/kabuki.o \

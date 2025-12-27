@@ -312,6 +312,8 @@ if (${TARGET} STREQUAL "CPS1")
         cps1/vidhrdw.h
         cps1/vidhrdw.c
         cps1/sprite.h
+        cps1/sprite_common.h
+        cps1/sprite_common.c
         cps1/${PLATFORM_LOWER}_sprite.c
         cps1/eeprom.h
         cps1/eeprom.c

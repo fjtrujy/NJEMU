@@ -52,32 +52,51 @@ The emulator cores should be ported first since this is the primary functionalit
 
 ### 1.1 Port CPS1 Sprite Rendering
 
+**Current Structure (after refactoring):**
+- `src/cps1/sprite_common.h` - Shared declarations (constants, structures, extern variables)
+- `src/cps1/sprite_common.c` - Platform-agnostic code (hash table management, software rendering)
+- `src/cps1/psp_sprite.c` - PSP-specific rendering (GU commands, swizzling)
+
 **Files to create:**
 - `src/cps1/ps2_sprite.c`
 - `src/cps1/desktop_sprite.c`
 
-**Reference:** Use `src/cps1/psp_sprite.c` as template
+**Reference:** 
+- Use `src/cps1/psp_sprite.c` as template for platform-specific code
+- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` as reference implementations
 
 **Steps:**
-1. Study `psp_sprite.c` to understand the sprite rendering logic
-2. Look at how MVS sprite rendering was adapted for PS2/PC
-3. Create `ps2_sprite.c` using PS2 GSKit for rendering
-4. Create `desktop_sprite.c` using SDL2 for rendering
-5. Update `CMakeLists.txt` to include new files conditionally
+1. The common sprite management code is already in `sprite_common.c`
+2. Only implement the `blit_*` functions for each platform
+3. Create `ps2_sprite.c` using PS2 GSKit for rendering (see MVS example)
+4. Create `desktop_sprite.c` using SDL2 for rendering (see MVS example)
+5. CMakeLists.txt already supports `${PLATFORM_LOWER}_sprite.c`
 
-**Estimated effort:** 2-3 days per platform
+**Estimated effort:** 1-2 days per platform (reduced due to sprite_common.c refactoring)
 
 ### 1.2 Port CPS2 Sprite Rendering
 
-**Files to create:**
+**Current Structure:**
+- `src/cps2/psp_sprite.c` - Currently contains all sprite code (needs refactoring)
+
+**Recommended first step:** Refactor similar to CPS1:
+1. Create `src/cps2/sprite_common.h` - Shared declarations
+2. Create `src/cps2/sprite_common.c` - Platform-agnostic code
+3. Update `src/cps2/psp_sprite.c` - Keep only PSP-specific code
+
+**Files to create after refactoring:**
+- `src/cps2/sprite_common.h`
+- `src/cps2/sprite_common.c`
 - `src/cps2/ps2_sprite.c`
 - `src/cps2/desktop_sprite.c`
 
-**Reference:** Use `src/cps2/psp_sprite.c` as template
+**Reference:** 
+- Use `src/cps1/sprite_common.c` as template for the refactoring
+- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` for platform implementations
 
-**Steps:** Same as CPS1
-
-**Estimated effort:** 2-3 days per platform
+**Estimated effort:** 
+- Refactoring: 0.5 day
+- Per platform: 1-2 days (reduced due to shared code)
 
 ### 1.3 Update CMakeLists.txt
 
@@ -286,10 +305,14 @@ Once the GUI abstraction is in place, port the actual menu system.
 ## File Creation Checklist
 
 ### CPS1 Porting
+- [x] `src/cps1/sprite_common.h` - Created (shared declarations)
+- [x] `src/cps1/sprite_common.c` - Created (platform-agnostic code)
 - [ ] `src/cps1/ps2_sprite.c`
 - [ ] `src/cps1/desktop_sprite.c`
 
 ### CPS2 Porting
+- [ ] `src/cps2/sprite_common.h` - Refactor from psp_sprite.c
+- [ ] `src/cps2/sprite_common.c` - Refactor from psp_sprite.c
 - [ ] `src/cps2/ps2_sprite.c`
 - [ ] `src/cps2/desktop_sprite.c`
 
@@ -349,4 +372,6 @@ This is a valid approach for a "debug/development" platform.
 ### Reference Implementations
 - `src/mvs/ps2_sprite.c` - PS2 sprite rendering example
 - `src/mvs/desktop_sprite.c` - SDL2 sprite rendering example
+- `src/cps1/sprite_common.c` - Example of platform-agnostic sprite code separation
+- `src/ncdz/sprite_common.c` - Another example of sprite code separation
 

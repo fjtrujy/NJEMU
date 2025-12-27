@@ -1,27 +1,33 @@
 /******************************************************************************
 
-	sprite.c
+	psp_sprite.c
 
-	CPS1 スプライトマネージャ
+	CPS1 Sprite Manager - PSP Platform
+
+	This file contains PSP-specific sprite rendering using the GU (Graphics
+	Utility) library. Platform-agnostic code is in sprite_common.c.
+
+	Key PSP-specific features:
+	- Swizzled texture formats for optimal GU performance
+	- sceGu* API calls for hardware-accelerated rendering
+	- CLUT-based palettized textures (8-bit indexed)
+	- Vertex arrays for batched sprite drawing
 
 ******************************************************************************/
 
 #include "cps1.h"
+#include "sprite_common.h"
 
 
 /******************************************************************************
-	定数/マクロ等
+	Constants/Macros
 ******************************************************************************/
 
-#define SCROLLH_MAX_HEIGHT	192
-
-#define MAKE_KEY(code, attr)		(code | ((attr & 0x0f) << 28))
-#define MAKE_HIGH_KEY(code, attr)	(code | ((attr & 0x19f) << 16))
-#define PSP_UNCACHE_PTR(p)			(((uint32_t)(p)) | 0x40000000)
+#define PSP_UNCACHE_PTR(p)	(((uint32_t)(p)) | 0x40000000)
 
 
 /******************************************************************************
-	プロトタイプ
+	Prototypes
 ******************************************************************************/
 
 void (*blit_draw_scroll2)(int16_t x, int16_t y, uint32_t code, uint16_t attr);
@@ -34,20 +40,10 @@ static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uin
 
 
 /******************************************************************************
-	ローカル変数/構造体
+	Local Structures/Variables
 ******************************************************************************/
 
-typedef struct sprite_t SPRITE;
 typedef struct object_t OBJECT;
-
-struct sprite_t
-{
-	uint32_t key;
-	uint32_t used;
-	int16_t index;
-	uint16_t pal;
-	SPRITE *next;
-};
 
 struct object_t
 {
@@ -67,127 +63,9 @@ static RECT cps_clip[6] =
 	{ 138, 0, 138 + 204,     272 }  	// option_stretch = 5  (204x272 3:4 vertical)
 };
 
-static int16_t scroll2_min_y;
-static int16_t scroll2_max_y;
-static int16_t scroll2_sy;
-static int16_t scroll2_ey;
-
-static uint8_t *pen_usage;
-static uint16_t *scrbitmap;
-
 
 /*------------------------------------------------------------------------
-	パレット
-------------------------------------------------------------------------*/
-
-static uint8_t ALIGN_DATA palette_dirty_marks[256];
-
-
-/*------------------------------------------------------------------------
-	OBJECT: キャラクタ等
-------------------------------------------------------------------------*/
-
-#define OBJECT_HASH_SIZE		0x200
-#define OBJECT_HASH_MASK		0x1ff
-#define OBJECT_TEXTURE_SIZE		((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
-#define OBJECT_MAX_SPRITES		0x1000
-
-static SPRITE ALIGN_DATA *object_head[OBJECT_HASH_SIZE];
-static SPRITE ALIGN_DATA object_data[OBJECT_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *object_free_head;
-
-static uint8_t *gfx_object;
-static uint8_t *tex_object;
-static uint16_t object_texture_num;
-
-
-/*------------------------------------------------------------------------
-	SCROLL1: スクロール面1(テキスト等)
-------------------------------------------------------------------------*/
-
-#define SCROLL1_HASH_SIZE		0x200
-#define SCROLL1_HASH_MASK		0x1ff
-#define SCROLL1_TEXTURE_SIZE	((BUF_WIDTH/8)*(TEXTURE_HEIGHT/8))
-#define SCROLL1_MAX_SPRITES		((384/8 + 2) * (224/8 + 2))
-
-static SPRITE ALIGN_DATA *scroll1_head[SCROLL1_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll1_free_head;
-
-static uint8_t *gfx_scroll1;
-static uint8_t *tex_scroll1;
-static uint16_t scroll1_texture_num;
-
-
-/*------------------------------------------------------------------------
-	SCROLL2: スクロール面2
-------------------------------------------------------------------------*/
-
-#define SCROLL2_HASH_SIZE		0x100
-#define SCROLL2_HASH_MASK		0xff
-#define SCROLL2_TEXTURE_SIZE	((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
-#define SCROLL2_MAX_SPRITES		((384/16 + 2) * (224/16 + 2))
-
-static SPRITE ALIGN_DATA *scroll2_head[SCROLL2_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll2_free_head;
-
-static uint8_t *gfx_scroll2;
-static uint8_t *tex_scroll2;
-static uint16_t scroll2_texture_num;
-
-
-/*------------------------------------------------------------------------
-	SCROLL3: スクロール面3
-------------------------------------------------------------------------*/
-
-#define SCROLL3_HASH_SIZE		0x40
-#define SCROLL3_HASH_MASK		0x3f
-#define SCROLL3_TEXTURE_SIZE	((BUF_WIDTH/32)*(TEXTURE_HEIGHT/32))
-#define SCROLL3_MAX_SPRITES		((384/32 + 2) * (224/32 + 2))
-
-static SPRITE ALIGN_DATA *scroll3_head[SCROLL3_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll3_free_head;
-
-static uint8_t *gfx_scroll3;
-static uint8_t *tex_scroll3;
-static uint16_t scroll3_texture_num;
-
-
-/*------------------------------------------------------------------------
-	SCROLLH: スクロール面 (ハイプライオリティ)
-------------------------------------------------------------------------*/
-
-#define SCROLLH_HASH_SIZE		0x200
-#define SCROLLH_HASH_MASK		0x1ff
-#define SCROLLH_TEXTURE_SIZE	((BUF_WIDTH/8)*(SCROLLH_MAX_HEIGHT/8))
-#define SCROLLH_MAX_SPRITES		SCROLL1_MAX_SPRITES
-
-#define SCROLL1H_TEXTURE_SIZE	SCROLLH_TEXTURE_SIZE
-#define SCROLL1H_MAX_SPRITES	SCROLL1_MAX_SPRITES
-#define SCROLL2H_TEXTURE_SIZE	((BUF_WIDTH/16)*(SCROLLH_MAX_HEIGHT/16))
-#define SCROLL2H_MAX_SPRITES	SCROLL2_MAX_SPRITES
-#define SCROLL3H_TEXTURE_SIZE	((BUF_WIDTH/32)*(SCROLLH_MAX_HEIGHT/32))
-#define SCROLL3H_MAX_SPRITES	SCROLL3_MAX_SPRITES
-
-static SPRITE ALIGN_DATA *scrollh_head[SCROLLH_HASH_SIZE];
-static SPRITE ALIGN_DATA scrollh_data[SCROLLH_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scrollh_free_head;
-
-static uint16_t *tex_scrollh;
-static struct Vertex ALIGN_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
-static uint16_t scrollh_num;
-static uint16_t scrollh_texture_num;
-static uint8_t  scrollh_texture_clear;
-static uint8_t  scrollh_layer_number;
-static uint8_t scroll1_palette_is_dirty;
-static uint8_t scroll2_palette_is_dirty;
-static uint8_t scroll3_palette_is_dirty;
-
-
-/*------------------------------------------------------------------------
-	頂点データ
+	Vertex Data
 ------------------------------------------------------------------------*/
 
 static OBJECT ALIGN_DATA vertices_object[OBJECT_MAX_SPRITES];
@@ -196,27 +74,11 @@ static uint16_t object_num;
 static uint16_t object_index;
 
 static struct Vertex ALIGN_DATA vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
+static struct Vertex ALIGN_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
 
 
 /*------------------------------------------------------------------------
-	カラールックアップテーブル
-------------------------------------------------------------------------*/
-
-static uint16_t *clut;
-static uint16_t clut0_num;
-static uint16_t clut1_num;
-
-static const uint32_t ALIGN_DATA color_table[16] =
-{
-	0x00000000, 0x10101010, 0x20202020, 0x30303030,
-	0x40404040, 0x50505050, 0x60606060, 0x70707070,
-	0x80808080, 0x90909090, 0xa0a0a0a0, 0xb0b0b0b0,
-	0xc0c0c0c0, 0xd0d0d0d0, 0xe0e0e0e0, 0xf0f0f0f0
-};
-
-
-/*------------------------------------------------------------------------
-	'swizzle'テクスチャアドレス計算テーブル (8bitカラー)
+	'swizzle' Texture Address Calculation Table (8-bit color)
 ------------------------------------------------------------------------*/
 
 static const int ALIGN_DATA swizzle_table_8bit[32] =
@@ -229,1140 +91,11 @@ static const int ALIGN_DATA swizzle_table_8bit[32] =
 
 
 /******************************************************************************
-	SCROLL2 ソフトウェア描画
-******************************************************************************/
-
-static void drawgfx16_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-static void drawgfx16_16x16_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-static void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-static void drawgfx16h_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-static void drawgfx16h_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-static void drawgfx16h_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-static void drawgfx16h_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-
-static void ALIGN_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines) =
-{
-	drawgfx16_16x16,
-	drawgfx16_16x16_opaque,
-	drawgfx16_16x16_flipx,
-	drawgfx16_16x16_flipx_opaque,
-	drawgfx16_16x16_flipy,
-	drawgfx16_16x16_flipy_opaque,
-	drawgfx16_16x16_flipxy,
-	drawgfx16_16x16_flipxy_opaque
-};
-
-static void ALIGN_DATA (*drawgfx16h[4])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens) =
-{
-	drawgfx16h_16x16,
-	drawgfx16h_16x16_flipx,
-	drawgfx16h_16x16_flipy,
-	drawgfx16h_16x16_flipxy
-};
-
-
-/*------------------------------------------------------------------------
-	16bpp 16x16
-------------------------------------------------------------------------*/
-
-static void drawgfx16_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 0] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 4] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 1] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 5] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 2] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 6] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 3] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 7] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 8] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[12] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 9] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[13] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[10] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[14] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[11] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[15] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[15] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[11] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[14] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[10] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[13] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 9] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[12] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 8] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 7] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 3] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 6] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 2] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 5] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 1] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 4] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 0] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 0] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 4] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 1] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 5] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 2] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 6] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 3] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 7] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 8] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[12] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 9] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[13] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[10] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[14] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[11] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[15] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[15] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[11] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[14] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[10] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[13] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 9] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[12] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 8] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 7] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 3] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 6] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 2] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 5] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 1] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 4] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 0] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	16bpp 16x16 (透過なし)
-------------------------------------------------------------------------*/
-
-static void drawgfx16_16x16_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[ 0] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 7] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 8] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[15] = pal[tile & 0x0f];
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[15] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 8] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 7] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 0] = pal[tile & 0x0f];
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[ 0] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 7] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 8] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[15] = pal[tile & 0x0f];
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-static void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[15] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 8] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 7] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 0] = pal[tile & 0x0f];
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	16bpp 16x16 (ハイレイヤー)
-------------------------------------------------------------------------*/
-
-static void drawgfx16h_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16h_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-static void drawgfx16h_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-static void drawgfx16h_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-
-/******************************************************************************
-	OBJECTスプライト管理
+	Sprite Drawing Interface Functions
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	OBJECTテクスチャからスプライト番号を取得
-------------------------------------------------------------------------*/
-
-static int16_t object_get_sprite(uint32_t key)
-{
-	SPRITE *p = object_head[key & OBJECT_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return p->index;
-	 	}
-		p = p->next;
-	}
-	return -1;
-}
-
-
-/*------------------------------------------------------------------------
-	OBJECTテクスチャにスプライトを登録
-------------------------------------------------------------------------*/
-
-static int16_t object_insert_sprite(uint32_t key)
-{
-	uint16_t hash = key & OBJECT_HASH_MASK;
-	SPRITE *p = object_head[hash];
-	SPRITE *q = object_free_head;
-
-	if (!q) return -1;
-
-	object_free_head = object_free_head->next;
-
-	q->next = NULL;
-	q->key  = key;
-	q->used = frames_displayed;
-
-	if (!p)
-	{
-		object_head[hash] = q;
-	}
-	else
-	{
-		while (p->next) p = p->next;
-		p->next = q;
-	}
-
-	object_texture_num++;
-
-	return q->index;
-}
-
-
-/*------------------------------------------------------------------------
-	OBJECTテクスチャから一定時間を経過したスプライトを削除
-------------------------------------------------------------------------*/
-
-static void object_delete_sprite(void)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < OBJECT_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = object_head[i];
-
-		while (p)
-		{
-			if (frames_displayed != p->used)
-			{
-				object_texture_num--;
-
-				if (!prev_p)
-				{
-					object_head[i] = p->next;
-					p->next = object_free_head;
-					object_free_head = p;
-					p = object_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = object_free_head;
-					object_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/******************************************************************************
-	SCROLL1スプライト管理
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	SCROLL1テクスチャからスプライト番号を取得
-------------------------------------------------------------------------*/
-
-static int16_t scroll1_get_sprite(uint32_t key)
-{
-	SPRITE *p = scroll1_head[key & SCROLL1_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return p->index;
-	 	}
-		p = p->next;
-	}
-	return -1;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL1テクスチャにスプライトを登録
-------------------------------------------------------------------------*/
-
-static int16_t scroll1_insert_sprite(uint32_t key)
-{
-	uint16_t hash = key & SCROLL1_HASH_MASK;
-	SPRITE *p = scroll1_head[hash];
-	SPRITE *q = scroll1_free_head;
-
-	if (!q) return -1;
-
-	scroll1_free_head = scroll1_free_head->next;
-
-	q->next = NULL;
-	q->key  = key;
-	q->used = frames_displayed;
-
-	if (!p)
-	{
-		scroll1_head[hash] = q;
-	}
-	else
-	{
-		while (p->next) p = p->next;
-		p->next = q;
-	}
-
-	scroll1_texture_num++;
-
-	return q->index;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL1テクスチャから一定時間を経過したスプライトを削除
-------------------------------------------------------------------------*/
-
-static void scroll1_delete_sprite(void)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < SCROLL1_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = scroll1_head[i];
-
-		while (p)
-		{
-			if (frames_displayed != p->used)
-			{
-				scroll1_texture_num--;
-
-				if (!prev_p)
-				{
-					scroll1_head[i] = p->next;
-					p->next = scroll1_free_head;
-					scroll1_free_head = p;
-					p = scroll1_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = scroll1_free_head;
-					scroll1_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/******************************************************************************
-	SCROLL2スプライト管理
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	SCROLL2テクスチャからスプライト番号を取得
-------------------------------------------------------------------------*/
-
-static int16_t scroll2_get_sprite(uint32_t key)
-{
-	SPRITE *p = scroll2_head[key & SCROLL2_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return p->index;
-	 	}
-		p = p->next;
-	}
-	return -1;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL2テクスチャにスプライトを登録
-------------------------------------------------------------------------*/
-
-static int16_t scroll2_insert_sprite(uint32_t key)
-{
-	uint16_t hash = key & SCROLL2_HASH_MASK;
-	SPRITE *p = scroll2_head[hash];
-	SPRITE *q = scroll2_free_head;
-
-	if (!q) return -1;
-
-	scroll2_free_head = scroll2_free_head->next;
-
-	q->next = NULL;
-	q->key  = key;
-	q->used = frames_displayed;
-
-	if (!p)
-	{
-		scroll2_head[hash] = q;
-	}
-	else
-	{
-		while (p->next) p = p->next;
-		p->next = q;
-	}
-
-	scroll2_texture_num++;
-
-	return q->index;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL2テクスチャから一定時間を経過したスプライトを削除
-------------------------------------------------------------------------*/
-
-static void scroll2_delete_sprite(void)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < SCROLL2_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = scroll2_head[i];
-
-		while (p)
-		{
-			if (frames_displayed != p->used)
-			{
-				scroll2_texture_num--;
-
-				if (!prev_p)
-				{
-					scroll2_head[i] = p->next;
-					p->next = scroll2_free_head;
-					scroll2_free_head = p;
-					p = scroll2_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = scroll2_free_head;
-					scroll2_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/******************************************************************************
-	SCROLL3スプライト管理
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	SCROLL3テクスチャからスプライト番号を取得
-------------------------------------------------------------------------*/
-
-static int16_t scroll3_get_sprite(uint32_t key)
-{
-	SPRITE *p = scroll3_head[key & SCROLL3_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return p->index;
-	 	}
-		p = p->next;
-	}
-	return -1;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL3テクスチャにスプライトを登録
-------------------------------------------------------------------------*/
-
-static int16_t scroll3_insert_sprite(uint32_t key)
-{
-	uint16_t hash = key & SCROLL3_HASH_MASK;
-	SPRITE *p = scroll3_head[hash];
-	SPRITE *q = scroll3_free_head;
-
-	if (!q) return -1;
-
-	scroll3_free_head = scroll3_free_head->next;
-
-	q->next = NULL;
-	q->key  = key;
-	q->used = frames_displayed;
-
-	if (!p)
-	{
-		scroll3_head[hash] = q;
-	}
-	else
-	{
-		while (p->next) p = p->next;
-		p->next = q;
-	}
-
-	scroll3_texture_num++;
-
-	return q->index;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLL3テクスチャから一定時間を経過したスプライトを削除
-------------------------------------------------------------------------*/
-
-static void scroll3_delete_sprite(void)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < SCROLL3_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = scroll3_head[i];
-
-		while (p)
-		{
-			if (frames_displayed != p->used)
-			{
-				scroll3_texture_num--;
-
-				if (!prev_p)
-				{
-					scroll3_head[i] = p->next;
-					p->next = scroll3_free_head;
-					scroll3_free_head = p;
-					p = scroll3_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = scroll3_free_head;
-					scroll3_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/******************************************************************************
-	SCROLLHスプライト管理
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	SCROLLHテクスチャをリセットする
-------------------------------------------------------------------------*/
-
-static void scrollh_reset_sprite(void)
-{
-	int i;
-
-	for (i = 0; i < SCROLLH_TEXTURE_SIZE - 1; i++)
-		scrollh_data[i].next = &scrollh_data[i + 1];
-
-	scrollh_data[i].next = NULL;
-	scrollh_free_head = &scrollh_data[0];
-
-	memset(scrollh_head, 0, sizeof(SPRITE *) * SCROLLH_HASH_SIZE);
-
-	scrollh_texture_num = 0;
-	scrollh_texture_clear = 0;
-	scrollh_layer_number = 0;
-
-	scroll1_palette_is_dirty = 0;
-	scroll2_palette_is_dirty = 0;
-	scroll3_palette_is_dirty = 0;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLLHテクスチャからスプライト番号を取得
-------------------------------------------------------------------------*/
-
-static int16_t scrollh_get_sprite(uint32_t key)
-{
-	SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return p->index;
-	 	}
-		p = p->next;
-	}
-	return -1;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLLHテクスチャにスプライトを登録
-------------------------------------------------------------------------*/
-
-static int16_t scrollh_insert_sprite(uint32_t key)
-{
-	uint16_t hash = key & SCROLLH_HASH_MASK;
-	SPRITE *p = scrollh_head[hash];
-	SPRITE *q = scrollh_free_head;
-
-	if (!q) return -1;
-
-	scrollh_free_head = scrollh_free_head->next;
-
-	q->next = NULL;
-	q->key  = key;
-	q->pal  = (key >> 16) & 0x1f;
-	q->used = frames_displayed;
-
-	if (!p)
-	{
-		scrollh_head[hash] = q;
-	}
-	else
-	{
-		while (p->next) p = p->next;
-		p->next = q;
-	}
-
-	scrollh_texture_num++;
-
-	return q->index;
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLLHテクスチャから一定時間を経過したスプライトを削除
-------------------------------------------------------------------------*/
-
-static void scrollh_delete_sprite(void)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < SCROLLH_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = scrollh_head[i];
-
-		while (p)
-		{
-			if (frames_displayed != p->used)
-			{
-				scrollh_texture_num--;
-
-				if (!prev_p)
-				{
-					scrollh_head[i] = p->next;
-					p->next = scrollh_free_head;
-					scrollh_free_head = p;
-					p = scrollh_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = scrollh_free_head;
-					scrollh_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLLHキャッシュから指定した透過ペンのテクスチャを削除
-------------------------------------------------------------------------*/
-
-static void scrollh_delete_sprite_tpens(uint16_t tpens)
-{
-	int i;
-	SPRITE *p, *prev_p;
-
-	for (i = 0; i < SCROLLH_HASH_SIZE; i++)
-	{
-		prev_p = NULL;
-		p = scrollh_head[i];
-
-		while (p)
-		{
-			if ((p->key >> 23) == tpens)
-			{
-				scrollh_texture_num--;
-
-				if (!prev_p)
-				{
-					scrollh_head[i] = p->next;
-					p->next = scrollh_free_head;
-					scrollh_free_head = p;
-					p = scrollh_head[i];
-				}
-				else
-				{
-					prev_p->next = p->next;
-					p->next = scrollh_free_head;
-					scrollh_free_head = p;
-					p = prev_p->next;
-				}
-			}
-			else
-			{
-				prev_p = p;
-				p = p->next;
-			}
-		}
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	SCROLLHテクスチャからパレットが変更されたスプライトを削除
-------------------------------------------------------------------------*/
-
-static void scrollh_delete_dirty_palette(void)
-{
-	int palno;
-	uint8_t *dirty_flags = NULL;
-
-	switch (scrollh_layer_number)
-	{
-	case LAYER_SCROLL1: if (scroll1_palette_is_dirty) dirty_flags = &palette_dirty_marks[32]; break;
-	case LAYER_SCROLL2: if (scroll2_palette_is_dirty) dirty_flags = &palette_dirty_marks[64]; break;
-	case LAYER_SCROLL3: if (scroll3_palette_is_dirty) dirty_flags = &palette_dirty_marks[96]; break;
-	}
-
-	scroll1_palette_is_dirty = 0;
-	scroll2_palette_is_dirty = 0;
-	scroll3_palette_is_dirty = 0;
-
-	if (!dirty_flags || !scrollh_texture_num) return;
-
-	for (palno = 0; palno < 32; palno++)
-	{
-		int i;
-		SPRITE *p, *prev_p;
-
-		if (!dirty_flags[palno]) continue;
-
-		for (i = 0; i < SCROLLH_HASH_SIZE; i++)
-		{
-			prev_p = NULL;
-			p = scrollh_head[i];
-
-			while (p)
-			{
-				if (p->pal == palno)
-				{
-					scrollh_texture_num--;
-
-					if (!prev_p)
-					{
-						scrollh_head[i] = p->next;
-						p->next = scrollh_free_head;
-						scrollh_free_head = p;
-						p = scrollh_head[i];
-					}
-					else
-					{
-						prev_p->next = p->next;
-						p->next = scrollh_free_head;
-						scrollh_free_head = p;
-						p = prev_p->next;
-					}
-				}
-				else
-				{
-					prev_p = p;
-					p = p->next;
-				}
-			}
-		}
-	}
-}
-
-
-/******************************************************************************
-	スプライト描画インタフェース関数
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	全てのスプライトを即座にクリアする
+	Clear all sprites immediately
 ------------------------------------------------------------------------*/
 
 void blit_clear_all_sprite(void)
@@ -1409,7 +142,7 @@ void blit_clear_all_sprite(void)
 
 
 /*------------------------------------------------------------------------
-	ハイレイヤーをクリアする
+	Clear high layer
 ------------------------------------------------------------------------*/
 
 void blit_scrollh_clear_sprite(uint16_t tpens)
@@ -1419,7 +152,7 @@ void blit_scrollh_clear_sprite(uint16_t tpens)
 
 
 /*------------------------------------------------------------------------
-	パレット変更フラグを立てる
+	Set palette dirty flag
 ------------------------------------------------------------------------*/
 
 void blit_palette_mark_dirty(int palno)
@@ -1433,7 +166,7 @@ void blit_palette_mark_dirty(int palno)
 
 
 /*------------------------------------------------------------------------
-	スプライト処理のリセット
+	Reset sprite processing
 ------------------------------------------------------------------------*/
 
 void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *pen_usage16)
@@ -1467,7 +200,7 @@ void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *p
 
 
 /*------------------------------------------------------------------------
-	スプライト描画開始
+	Begin sprite drawing
 ------------------------------------------------------------------------*/
 
 void blit_start(int high_layer)
@@ -1505,7 +238,7 @@ void blit_start(int high_layer)
 
 
 /*------------------------------------------------------------------------
-	スプライト描画終了
+	End sprite drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish(void)
@@ -1531,7 +264,7 @@ void blit_finish(void)
 
 
 /*------------------------------------------------------------------------
-	OBJECTテクスチャを更新
+	Update OBJECT texture
 ------------------------------------------------------------------------*/
 
 void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1555,7 +288,7 @@ void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	OBJECTを描画リストに登録
+	Register OBJECT to draw list
 ------------------------------------------------------------------------*/
 
 void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1619,7 +352,7 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	OBJECT描画終了
+	End OBJECT drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_object(void)
@@ -1675,7 +408,7 @@ void blit_finish_object(void)
 
 
 /*------------------------------------------------------------------------
-	SCROLL1テクスチャを更新
+	Update SCROLL1 texture
 ------------------------------------------------------------------------*/
 
 void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1696,7 +429,7 @@ void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL1を描画リストに登録
+	Register SCROLL1 to draw list
 ------------------------------------------------------------------------*/
 
 void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t gfxset)
@@ -1757,7 +490,7 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint1
 
 
 /*------------------------------------------------------------------------
-	SCROLL1描画終了
+	End SCROLL1 drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_scroll1(void)
@@ -1800,7 +533,7 @@ void blit_finish_scroll1(void)
 
 
 /*------------------------------------------------------------------------
-	SCROLL2クリップ範囲設定
+	Set SCROLL2 clip range
 ------------------------------------------------------------------------*/
 
 void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
@@ -1822,7 +555,7 @@ void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
 
 
 /*------------------------------------------------------------------------
-	SCROLL2の描画範囲チェック
+	Check SCROLL2 draw range
 ------------------------------------------------------------------------*/
 
 int blit_check_clip_scroll2(int16_t sy)
@@ -1838,7 +571,7 @@ int blit_check_clip_scroll2(int16_t sy)
 
 
 /*------------------------------------------------------------------------
-	SCROLL2テクスチャを更新
+	Update SCROLL2 texture
 ------------------------------------------------------------------------*/
 
 void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1862,7 +595,7 @@ void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL2(ラインスクロール)を直接VRAMに描画
+	Draw SCROLL2 (line scroll) directly to VRAM
 ------------------------------------------------------------------------*/
 
 static void blit_draw_scroll2_software(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1893,7 +626,7 @@ static void blit_draw_scroll2_software(int16_t x, int16_t y, uint32_t code, uint
 
 
 /*------------------------------------------------------------------------
-	SCROLL2を描画リストに登録
+	Register SCROLL2 to draw list
 ------------------------------------------------------------------------*/
 
 static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -1957,7 +690,7 @@ static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint
 
 
 /*------------------------------------------------------------------------
-	SCROLL2描画終了
+	End SCROLL2 drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_scroll2(void)
@@ -2000,7 +733,7 @@ void blit_finish_scroll2(void)
 
 
 /*------------------------------------------------------------------------
-	SCROLL3テクスチャを更新
+	Update SCROLL3 texture
 ------------------------------------------------------------------------*/
 
 void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -2021,7 +754,7 @@ void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL3を描画リストに登録
+	Register SCROLL3 to draw list
 ------------------------------------------------------------------------*/
 
 void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -2091,7 +824,7 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL3描画終了
+	End SCROLL3 drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_scroll3(void)
@@ -2134,7 +867,7 @@ void blit_finish_scroll3(void)
 
 
 /*------------------------------------------------------------------------
-	SCROLL1(ハイレイヤー)を描画リストに登録
+	Register SCROLL1 (high layer) to draw list
 ------------------------------------------------------------------------*/
 
 void blit_draw_scroll1h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens, uint16_t gfxset)
@@ -2205,7 +938,7 @@ void blit_draw_scroll1h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint
 
 
 /*------------------------------------------------------------------------
-	SCROLL2(ハイレイヤー/ラインスクロール)を直接VRAMに描画
+	Draw SCROLL2 (high layer/line scroll) directly to VRAM
 ------------------------------------------------------------------------*/
 
 static void blit_draw_scroll2h_software(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
@@ -2249,7 +982,7 @@ static void blit_draw_scroll2h_software(int16_t x, int16_t y, uint32_t code, uin
 
 
 /*------------------------------------------------------------------------
-	SCROLL2(ハイレイヤー)テクスチャを更新
+	Update SCROLL2 (high layer) texture
 ------------------------------------------------------------------------*/
 
 void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -2273,7 +1006,7 @@ void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL2(ハイレイヤー)を描画リストに登録
+	Register SCROLL2 (high layer) to draw list
 ------------------------------------------------------------------------*/
 
 static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
@@ -2353,7 +1086,7 @@ static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uin
 
 
 /*------------------------------------------------------------------------
-	SCROLL2(ハイレイヤー)描画終了
+	End SCROLL2 (high layer) drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_scroll2h(void)
@@ -2381,7 +1114,7 @@ void blit_finish_scroll2h(void)
 
 
 /*------------------------------------------------------------------------
-	SCROLL3(ハイレイヤー)を描画リストに登録
+	Register SCROLL3 (high layer) to draw list
 ------------------------------------------------------------------------*/
 
 void blit_draw_scroll3h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
@@ -2479,7 +1212,7 @@ void blit_draw_scroll3h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint
 
 
 /*------------------------------------------------------------------------
-	SCROLL1,3(ハイレイヤー)テクスチャを更新
+	Update SCROLL1,3 (high layer) texture
 ------------------------------------------------------------------------*/
 
 void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -2500,7 +1233,7 @@ void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 
 /*------------------------------------------------------------------------
-	SCROLL1,3(ハイレイヤー)描画終了
+	End SCROLL1,3 (high layer) drawing
 ------------------------------------------------------------------------*/
 
 void blit_finish_scrollh(void)
@@ -2526,7 +1259,7 @@ void blit_finish_scrollh(void)
 
 
 /*------------------------------------------------------------------------
-	STARSレイヤー描画
+	Draw STARS layer
 ------------------------------------------------------------------------*/
 
 void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t *pal)
