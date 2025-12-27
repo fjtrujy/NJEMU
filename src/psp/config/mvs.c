@@ -2,14 +2,14 @@
 
 	config/mvs.c
 
-	アプリケーション設定ファイル管理 (MVS)
+	Application Settings File Management (MVS)
 
 ******************************************************************************/
 
 #if defined(INCLUDE_INIFILENAME)
 
 /******************************************************************************
-	iniファイル名
+	ini Filename
 ******************************************************************************/
 
 static const char *inifile_name = "mvspsp.ini";
@@ -390,7 +390,7 @@ static cfg_type gamecfg_jockeygp[] =
 #elif defined(INCLUDE_SETUP_CONFIG_STRUCT)
 
 /******************************************************************************
-	config構造体の設定
+	config Structure Settings
 ******************************************************************************/
 
 	switch (neogeo_ngh)

@@ -2,7 +2,7 @@
 
 	filer.c
 
-	PSP ファイルブラウザ
+	PSP File Browser
 
 ******************************************************************************/
 
@@ -40,14 +40,14 @@ enum PspModel
 
 
 /******************************************************************************
-	グローバル変数
+	Global Variables
 ******************************************************************************/
 
 char startupDir[PATH_MAX];
 
 
 /******************************************************************************
-	ローカル構造体/変数
+	Local Structures/Variables
 ******************************************************************************/
 
 struct dirent
@@ -88,11 +88,11 @@ static int zipname_num;
 #if (EMU_SYSTEM == NCDZ)
 
 /******************************************************************************
-	ローカル関数 (NCDZPSP)
+	Local Functions (NCDZPSP)
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	title_x.sysをイメージバッファに描画
+	Draw title_x.sys to Image Buffer
 --------------------------------------------------------*/
 
 #if VIDEO_32BPP
@@ -138,7 +138,7 @@ static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int 
 
 
 /*--------------------------------------------------------
-	title_x.sysを読み込む
+	Load title_x.sys
 --------------------------------------------------------*/
 
 static int load_title(const char *path, int number)
@@ -223,7 +223,7 @@ static int load_title(const char *path, int number)
 
 
 /*--------------------------------------------------------
-	title_x.sysを表示
+	Display title_x.sys
 --------------------------------------------------------*/
 
 static void show_title(int sx, int sy)
@@ -237,7 +237,7 @@ static void show_title(int sx, int sy)
 
 
 /*--------------------------------------------------------
-	NEOGEO CDZのBIOSをチェック
+	Check NEOGEO CDZ BIOS
 --------------------------------------------------------*/
 
 static void check_neocd_bios(void)
@@ -273,11 +273,11 @@ static void check_neocd_bios(void)
 #else
 
 /******************************************************************************
-	ローカル関数 (NCDZPSP以外)
+	Local Functions (Non-NCDZPSP)
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	zipname.datからzipファイル名データベースを読み込み
+	Load ZIP Filename Database from zipname.dat
 --------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS1)
@@ -373,7 +373,7 @@ static int load_zipname(void)
 
 
 /*--------------------------------------------------------
-	zipファイル名データベースを解放
+	Free ZIP Filename Database
 --------------------------------------------------------*/
 
 static void free_zipname(void)
@@ -383,7 +383,7 @@ static void free_zipname(void)
 
 
 /*--------------------------------------------------------
-	zipファイル名からゲームタイトル名を取得
+	Get Game Title from ZIP Filename
 --------------------------------------------------------*/
 
 static char *get_zipname(const char *name, int *flag)
@@ -416,11 +416,11 @@ static char *get_zipname(const char *name, int *flag)
 
 
 /******************************************************************************
-	ローカル関数 (共通)
+	Local Functions (Common)
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	ディレクトリの存在チェック
+	Check Directory Existence
 --------------------------------------------------------*/
 
 static void checkDir(const char *name)
@@ -453,7 +453,7 @@ static void checkDir(const char *name)
 
 
 /*--------------------------------------------------------
-	ディレクトリの作成と起動ディレクトリのチェック
+	Create Directory and Check Startup Directory
 --------------------------------------------------------*/
 
 static void checkStartupDir(void)
@@ -494,7 +494,7 @@ static void checkStartupDir(void)
 
 
 /*--------------------------------------------------------
-	ファイルのフラグを設定
+	Set File Flags
 --------------------------------------------------------*/
 
 static int set_file_flags(const char *path, int number)
@@ -558,7 +558,7 @@ static int set_file_flags(const char *path, int number)
 
 
 /*--------------------------------------------------------
-	ディレクトリエントリを取得
+	Get Directory Entries
 --------------------------------------------------------*/
 
 static void getDir(const char *path)
@@ -724,7 +724,7 @@ static void getDir(const char *path)
 
 
 /*--------------------------------------------------------
-	パス文字列を表示領域に合わせて修正
+	Adjust Path String to Fit Display Area
 --------------------------------------------------------*/
 
 static void modify_display_path(char *path, char *org_path, int max_width)
@@ -768,11 +768,11 @@ static void modify_display_path(char *path, char *org_path, int max_width)
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	ファイルの存在チェック
+	Check File Existence
 --------------------------------------------------------*/
 
 int file_exist(const char *path)
@@ -787,7 +787,7 @@ int file_exist(const char *path)
 
 
 /*--------------------------------------------------------
-	指定したパターンのファイルを削除
+	Delete Files Matching Specified Pattern
 --------------------------------------------------------*/
 
 void delete_files(const char *dirname, const char *pattern)
@@ -825,7 +825,7 @@ void delete_files(const char *dirname, const char *pattern)
 
 
 /*--------------------------------------------------------
-	ステートファイルを検索
+	Search for State Files
 --------------------------------------------------------*/
 
 #ifdef SAVE_STATE
@@ -861,7 +861,7 @@ void find_state_file(uint8_t *slot)
 
 
 /*--------------------------------------------------------
-	アプリケーション終了画面を表示
+	Display Application Exit Screen
 --------------------------------------------------------*/
 
 void show_exit_screen(void)
@@ -878,7 +878,7 @@ void show_exit_screen(void)
 
 
 /*--------------------------------------------------------
-	ファイルブラウザ実行
+	Execute File Browser
 --------------------------------------------------------*/
 
 void file_browser(void)

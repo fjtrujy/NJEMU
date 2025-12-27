@@ -2,14 +2,14 @@
 
 	config/ncdz.c
 
-	アプリケーション設定ファイル管理 (NEOGEO CDZ)
+	Application Settings File Management (NEOGEO CDZ)
 
 ******************************************************************************/
 
 #if defined(INCLUDE_INIFILENAME)
 
 /******************************************************************************
-	iniファイル名
+	ini Filename
 ******************************************************************************/
 
 static const char *inifile_name = "ncdzpsp.ini";
@@ -93,7 +93,7 @@ static cfg_type gamecfg_ncdz[] =
 #elif defined(INCLUDE_SETUP_CONFIG_STRUCT)
 
 /******************************************************************************
-	config構造体の設定
+	config Structure Settings
 ******************************************************************************/
 
 	gamecfg = gamecfg_ncdz;

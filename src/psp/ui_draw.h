@@ -2,7 +2,7 @@
 
 	ui_draw.c
 
-	PSP ��`�����󥿥ե��`���軭�v��
+	PSP User Interface Drawing Functions
 
 ******************************************************************************/
 
@@ -33,27 +33,27 @@ struct font_t
 
 
 /*------------------------------------------------------
-	�Ʃ`�֥��
+	Tables
 ------------------------------------------------------*/
 
-// ��`�����󥿥ե��`������`�ǩ`��
+// User Interface Palette Data
 extern UI_PALETTE ui_palette[UI_PAL_MAX];
 
-// ���`�໭���å���`��ե����
+// Small Bitmap Font Data
 extern const uint8_t font_s[];
 
-// �����������Ȥ�Ӱ�ǩ`��
+// Shadow Data
 extern const uint8_t shadow[9][8][4];
 
-// GBK �ե���ȥƩ`�֥�
+// GBK Font Table
 extern const uint16_t gbk_table[];
 
 
 /*------------------------------------------------------
-	�ե���ȹ���
+	Font Functions
 ------------------------------------------------------*/
 
-// �ץ��ݩ`����ʥ�ե����
+// Proportional Font
 int graphic_font_get_gryph(struct font_t *font, uint16_t code);
 int graphic_font_get_pitch(uint16_t code);
 
@@ -66,15 +66,15 @@ int ascii_14p_get_pitch(uint16_t code);
 int gbk_s14p_get_gryph(struct font_t *font, uint16_t code);
 int gbk_s14p_get_pitch(uint16_t code);
 
-// ��������(С)
+// Bitmap Icon (Small)
 int icon_s_get_gryph(struct font_t *font, uint16_t code);
 int icon_s_get_light(struct font_t *font, uint16_t code);
 
-// ��������(��)
+// Bitmap Icon (Large)
 int icon_l_get_gryph(struct font_t *font, uint16_t code);
 int icon_l_get_light(struct font_t *font, uint16_t code);
 
-// �ȷ��ե����
+// Fixed-width Font
 #ifdef COMMAND_LIST
 int command_font_get_gryph(struct font_t *font, uint16_t code);
 int ascii_14_get_gryph(struct font_t *font, uint16_t code);
@@ -85,7 +85,7 @@ int gbk_s14_get_gryph(struct font_t *font, uint16_t code);
 
 
 /*------------------------------------------------------
-	�ե�����軭 (�ƥ����ȱ�ʾ��)
+	Font Drawing (Text Display)
 ------------------------------------------------------*/
 
 #ifdef COMMAND_LIST
@@ -94,7 +94,7 @@ void textfont_print(int sx, int sy, int r, int g, int b, const char *s, int flag
 
 
 /*------------------------------------------------------
-	���������軭 (��`�����󥿥ե��`����)
+	Icon Drawing (User Interface)
 ------------------------------------------------------*/
 
 void small_icon_light(int sx, int sy, int r, int g, int b, int no);
@@ -107,21 +107,21 @@ int ui_light_update(void);
 
 
 /*------------------------------------------------------
-	�ܥ��`���軭 (CFW 3.52�Խ��Υ�`���`��`�ɤΤ�)
+	Volume Drawing (CFW 3.52 Volume Bar Only)
 ------------------------------------------------------*/
 
 void draw_volume(int volume);
 
 
 /*------------------------------------------------------
-	�ե�����軭 (���`�໭����)
+	Font Drawing (Small Text)
 ------------------------------------------------------*/
 
 void debug_font_printf(void *frame, int x, int y, const char *text, ...);
 
 
 /*------------------------------------------------------
-	�����軭 (��`�����󥿥ե��`����)
+	Line Drawing (User Interface)
 ------------------------------------------------------*/
 
 void hline(int sx, int ex, int y, int r, int g, int b);
@@ -141,7 +141,7 @@ void draw_bar_shadow(void);
 void draw_box_shadow(int sx, int sy, int ex, int ey);
 
 /*------------------------------------------------------
-	��`�����󥿥ե��`��ɫ�O��
+	User Interface Color Settings
 ------------------------------------------------------*/
 
 #if VIDEO_32BPP
@@ -150,7 +150,7 @@ void set_ui_color(UI_PALETTE *pal, int r, int g, int b);
 #endif
 
 /*------------------------------------------------------
-	�����軭
+	Logo Drawing
 ------------------------------------------------------*/
 
 void logo(int sx, int sy, int r, int g, int b);

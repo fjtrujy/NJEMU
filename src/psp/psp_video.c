@@ -2,7 +2,7 @@
 
 	video.c
 
-	PSPビデオ制御関数
+	PSP Video Control Functions
 
 ******************************************************************************/
 
@@ -10,7 +10,7 @@
 
 
 /******************************************************************************
-	ローカル変数/構造体
+	Local Variables/Structures
 ******************************************************************************/
 
 static const ScePspIMatrix4 dither_matrix =
@@ -26,7 +26,7 @@ static int pixel_format;
 
 
 /******************************************************************************
-	グローバル関数
+	Global Functions
 ******************************************************************************/
 
 typedef struct psp_video {
@@ -35,7 +35,7 @@ typedef struct psp_video {
 } psp_video_t;
 
 /*--------------------------------------------------------
-	ビデオ処理初期化
+	Video Processing Initialization
 --------------------------------------------------------*/
 static void psp_start(void *data) {
 	#if VIDEO_32BPP
@@ -119,7 +119,7 @@ static void *psp_init(void)
 
 
 /*--------------------------------------------------------
-	ビデオ処理終了(共通)
+	Video Processing Termination (Common)
 --------------------------------------------------------*/
 
 static void psp_exit() {
@@ -136,7 +136,7 @@ static void psp_free(void *data)
 }
 
 /*--------------------------------------------------------
-	ビデオモード設定
+	Video Mode Setting
 --------------------------------------------------------*/
 
 
@@ -161,7 +161,7 @@ static void psp_setClutBaseAddr(void *data, uint16_t *clut_base)
 }
 
 /*--------------------------------------------------------
-	VSYNCを待つ
+	Wait for VSYNC
 --------------------------------------------------------*/
 
 static void psp_waitVsync(void *data)
@@ -171,7 +171,7 @@ static void psp_waitVsync(void *data)
 
 
 /*--------------------------------------------------------
-	スクリーンをフリップ
+	Flip Screen
 --------------------------------------------------------*/
 
 static void psp_flipScreen(void *data, bool vsync)
@@ -183,7 +183,7 @@ static void psp_flipScreen(void *data, bool vsync)
 
 
 /*--------------------------------------------------------
-	VRAMのアドレスを取得
+	Get VRAM Address
 --------------------------------------------------------*/
 
 static void *psp_frameAddr(void *data, void *frame, int x, int y)
@@ -222,7 +222,7 @@ static void *psp_workFrame(void *data, enum WorkBuffer buffer)
 
 
 /*--------------------------------------------------------
-	描画/表示フレームをクリア
+	Clear Draw/Display Frame
 --------------------------------------------------------*/
 
 static void psp_clearScreen(void *data)
@@ -232,7 +232,7 @@ static void psp_clearScreen(void *data)
 }
 
 /*--------------------------------------------------------
-	指定したフレームをクリア
+	Clear Specified Frame
 --------------------------------------------------------*/
 
 static void psp_clearFrame(void *data, void *frame)
@@ -248,7 +248,7 @@ static void psp_clearFrame(void *data, void *frame)
 
 
 /*--------------------------------------------------------
-	指定したフレームを塗りつぶし
+	Fill Specified Frame
 --------------------------------------------------------*/
 
 static void psp_fillFrame(void *data, void *frame, uint32_t color)
@@ -264,7 +264,7 @@ static void psp_fillFrame(void *data, void *frame, uint32_t color)
 
 
 /*--------------------------------------------------------
-	矩形範囲をコピー
+	Copy Rectangular Area
 --------------------------------------------------------*/
 
 static void psp_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -354,7 +354,7 @@ static void psp_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect) {
 	psp_copyRect(data, work_frame, draw_frame, src_rect, dst_rect);
 }
 /*--------------------------------------------------------
-	矩形範囲を左右反転してコピー
+	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
 static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -420,7 +420,7 @@ static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, R
 
 
 /*--------------------------------------------------------
-	矩形範囲を270度回転してコピー
+	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
 static void psp_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
@@ -488,7 +488,7 @@ static void psp_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
 
 
 /*--------------------------------------------------------
-	テクスチャを矩形範囲を指定して描画
+	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
 static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)

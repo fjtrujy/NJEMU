@@ -2,7 +2,7 @@
 
 	wallpaper/cps.c
 
-	CPS1PSP/CPS2PSP用壁紙データ
+	CPS1PSP/CPS2PSP Wallpaper Data
 
 ******************************************************************************/
 

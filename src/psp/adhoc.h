@@ -19,9 +19,9 @@
 #define ADHOC_DATATYPE_USER3	0x40
 #define ADHOC_DATATYPE_USER4	0x80
 
-// データの最小単位
-// 各データのサイズは異なるサイズになるように設定した方が安全
-// データサイズが0x400を超える場合は0x400に設定
+// Minimum data unit
+// It's safer to set each data type to a different size
+// If data size exceeds 0x400, set it to 0x400
 #define ADHOC_DATASIZE_ACK		(1 + sizeof(int))
 #define ADHOC_DATASIZE_SYNC		(1 + sizeof(unsigned char))
 #define ADHOC_DATASIZE_INPUT	(1 + sizeof(ADHOC_DATA))

@@ -2,7 +2,7 @@
 
 	ui_draw.c
 
-	PSP ユーザインタフェース描画関数
+	PSP User Interface Drawing Functions
 
 ******************************************************************************/
 
@@ -1083,7 +1083,7 @@ void uifont_print(int sx, int sy, int r, int g, int b, const char *s)
 
 
 /*------------------------------------------------------
-	文字列を描画 / センタリング処理
+	String Drawing / Centering
 ------------------------------------------------------*/
 
 void uifont_print_center(int sy, int r, int g, int b, const char *s)
@@ -1107,7 +1107,7 @@ void uifont_print_shadow(int sx, int sy, int r, int g, int b, const char *s)
 
 
 /*------------------------------------------------------
-	文字列を描画 / 影付き / センタリング処理
+	String Drawing / Shadow / Centering
 ------------------------------------------------------*/
 
 void uifont_print_shadow_center(int sy, int r, int g, int b, const char *s)

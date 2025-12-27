@@ -2,7 +2,7 @@
 
 	adhoc.c
 
-	PSPアドホック通信制御
+	PSP AdHoc Communication Control
 
 ***************************************************************************/
 
@@ -45,7 +45,7 @@
 #define MATCHING_DISCONNECT   0xa	// A PSP has quit, this does not include when the PSP crashes
 
 /***************************************************************************
-	関数パラメータ (長いので・・・)
+	Function Parameters (long, so...
 ***************************************************************************/
 
 #define MATCHING_CREATE_PARAMS	\
@@ -70,7 +70,7 @@
 
 
 /***************************************************************************
-	ローカル変数
+	Local Variables
 ***************************************************************************/
 
 #ifdef KERNEL_MODE
@@ -107,11 +107,11 @@ static unsigned char adhoc_work[ADHOC_BUFFER_SIZE];
 
 
 /***************************************************************************
-	ローカル関数
+	Local Functions
 ***************************************************************************/
 
 /*--------------------------------------------------------
-	プログレスバー初期化
+	Initialize Progress Bar
 --------------------------------------------------------*/
 
 static void adhoc_init_progress(int total, const char *text)
@@ -132,7 +132,7 @@ static void adhoc_init_progress(int total, const char *text)
 
 
 /*--------------------------------------------------------
-	リスト消去
+	Clear List
 --------------------------------------------------------*/
 
 static void ClearPspList(void)
@@ -144,7 +144,7 @@ static void ClearPspList(void)
 
 
 /*--------------------------------------------------------
-	リストに追加
+	Add to List
 --------------------------------------------------------*/
 
 static int AddPsp(unsigned char *mac, char *name, int length)
@@ -179,7 +179,7 @@ static int AddPsp(unsigned char *mac, char *name, int length)
 
 
 /*--------------------------------------------------------
-	リストから削除
+	Remove from List
 --------------------------------------------------------*/
 
 static int DelPsp(unsigned char *mac)
@@ -212,7 +212,7 @@ static int DelPsp(unsigned char *mac)
 
 
 /*--------------------------------------------------------
-	リストを表示
+	Display List
 --------------------------------------------------------*/
 
 static void DisplayPspList(int top, int rows)
@@ -297,11 +297,11 @@ static void matchingCallback(int unk1, int event, unsigned char *mac, int optLen
 
 
 /***************************************************************************
-	AdHocインタフェース関数
+	AdHoc Interface Functions
 ***************************************************************************/
 
 /*--------------------------------------------------------
-	AdHocモジュールのロード (Kernelモード用)
+	Load AdHoc Module (Kernel Mode)
 --------------------------------------------------------*/
 
 #ifdef KERNEL_MODE
@@ -355,7 +355,7 @@ int pspSdkLoadAdhocModules(void)
 
 
 /*--------------------------------------------------------
-	AdHocモジュールのロード
+	Load AdHoc Module
 --------------------------------------------------------*/
 
 int adhocLoadModules(void)
@@ -381,7 +381,7 @@ int adhocLoadModules(void)
 
 
 /*--------------------------------------------------------
-	AdHocモジュールのアンロード
+	Unload AdHoc Module
 --------------------------------------------------------*/
 
 int adhocUnloadModules(void)
@@ -568,7 +568,7 @@ int adhocTerm(void)
 }
 
 /*--------------------------------------------------------
-	ロビーから切断
+	Disconnect from Lobby
 --------------------------------------------------------*/
 
 static void adhocDisconnect(void)
@@ -609,7 +609,7 @@ static void adhocDisconnect(void)
 
 
 /*--------------------------------------------------------
-	ロビーから切断し、P2P開始
+	Disconnect from Lobby and Start P2P
 --------------------------------------------------------*/
 
 static int adhocStartP2P(void)
@@ -908,7 +908,7 @@ int adhocSelect(void)
 
 
 /*--------------------------------------------------------
-	データを送信
+	Send Data
 --------------------------------------------------------*/
 
 int adhocSend(void *buffer, int length, int type)
@@ -928,7 +928,7 @@ int adhocSend(void *buffer, int length, int type)
 
 
 /*--------------------------------------------------------
-	データを受信
+	Receive Data
 --------------------------------------------------------*/
 
 int adhocRecv(void *buffer, int timeout, int type)
@@ -954,7 +954,7 @@ int adhocRecv(void *buffer, int timeout, int type)
 
 
 /*--------------------------------------------------------
-	データを送信し、ackを受信するまで待つ
+	Send Data and Wait for ACK
 --------------------------------------------------------*/
 
 int adhocSendRecvAck(void *buffer, int length, int timeout, int type)
@@ -988,7 +988,7 @@ int adhocSendRecvAck(void *buffer, int length, int timeout, int type)
 
 
 /*--------------------------------------------------------
-	データの受信を待ち、ackを送信する
+	Wait for Data and Send ACK
 --------------------------------------------------------*/
 
 int adhocRecvSendAck(void *buffer, int length, int timeout, int type)
@@ -1061,7 +1061,7 @@ check_packet:
 
 		if (sceNetAdhocGetPdpStat(&size, &pdpStat) >= 0)
 		{
-			// 余分なパケットを破棄
+			// Discard excess packets
 			if (pdpStat.rcvdData == ADHOC_DATASIZE_SYNC)
 				adhocRecv(adhoc_work, 0, ADHOC_DATATYPE_SYNC);
 			else
@@ -1078,7 +1078,7 @@ check_packet:
 
 
 /*--------------------------------------------------------
-	指定サイズのデータを受信するか、バッファが空に
+	Receive data of specified size or until buffer is empty
 	なるまで待つ
 --------------------------------------------------------*/
 
