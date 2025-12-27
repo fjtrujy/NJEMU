@@ -343,6 +343,8 @@ if (${TARGET} STREQUAL "NCDZ")
         ncdz/memintrf.h
         ncdz/ncdz.c
         ncdz/ncdz.h
+        ncdz/sprite_common.h
+        ncdz/sprite_common.c
         ncdz/${PLATFORM_LOWER}_sprite.c
         ncdz/sprite.h
         ncdz/startup.c

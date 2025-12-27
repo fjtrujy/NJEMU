@@ -54,6 +54,7 @@ COREOBJS = \
 	ncdz/inptport.o \
 	ncdz/timer.o \
 	ncdz/vidhrdw.o \
+	ncdz/sprite_common.o \
 	ncdz/$(OS)_sprite.o \
 	sound/2610intf.o \
 	sound/ym2610.o \
