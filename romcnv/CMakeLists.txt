@@ -132,12 +132,13 @@ if (USE_ASAN)
     )
 endif()
 
-# Copy rominfo.mvs or rominfo.cps2 to the build directory (not needed for Emscripten - uses preload)
+# Copy rominfo file from resources folder to the build directory (not needed for Emscripten - uses preload)
+set(ROMINFO_SOURCE "${CMAKE_SOURCE_DIR}/../resources/${TARGET_LOWER}/rominfo.${TARGET_LOWER}")
 if(NOT EMSCRIPTEN)
     add_custom_command(
         TARGET ${BINARY_TARGET} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}
+            ${ROMINFO_SOURCE}
             ${CMAKE_BINARY_DIR}/rominfo.${TARGET_LOWER}
     )
 endif()
@@ -160,7 +161,7 @@ if(EMSCRIPTEN)
         "SHELL:-s NO_EXIT_RUNTIME=1"
         "SHELL:-s INVOKE_RUN=0"
         "SHELL:-s USE_ZLIB=1"
-        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/rominfo.${TARGET_LOWER}@/rominfo.${TARGET_LOWER}"
+        "SHELL:--preload-file ${ROMINFO_SOURCE}@/rominfo.${TARGET_LOWER}"
     )
 else()
     target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})

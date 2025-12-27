@@ -91,12 +91,17 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 
 ## Supported Arcade Systems
 
-| Target | Name | Description |
-|--------|------|-------------|
-| **CPS1** | CPS1PSP | Capcom Play System 1 Emulator |
-| **CPS2** | CPS2PSP | Capcom Play System 2 Emulator |
-| **MVS** | MVSPSP | Neo-Geo MVS/AES Emulator |
-| **NCDZ** | NCDZPSP | Neo-Geo CD Emulator |
+| Target | Name | Description | Setup Guide |
+|--------|------|-------------|-------------|
+| **CPS1** | CPS1PSP | Capcom Play System 1 Emulator | [README](resources/cps1/README.md) |
+| **CPS2** | CPS2PSP | Capcom Play System 2 Emulator | [README](resources/cps2/README.md) |
+| **MVS** | MVSPSP | Neo-Geo MVS/AES Emulator | [README](resources/mvs/README.md) |
+| **NCDZ** | NCDZPSP | Neo-Geo CD Emulator | [README](resources/ncdz/README.md) |
+
+Each target has specific setup requirements. See the linked README files for:
+- Required files (ROMs, BIOS)
+- Directory structure
+- Troubleshooting tips
 
 ## Supported Platforms
 
@@ -396,16 +401,16 @@ Examples:
 
 ### Resource Folders
 
-Each target has a corresponding resource folder named `{TARGET}_RESOURCE` containing files required for the emulator to work properly:
+Each target has a corresponding resource folder under `resources/` containing files required for the emulator:
 
-| Target | Resource Folder |
-|--------|-----------------|
-| CPS1 | `CPS1_RESOURCE/` |
-| CPS2 | `CPS2_RESOURCE/` |
-| MVS | `MVS_RESOURCE/` |
-| NCDZ | `NCDZ_RESOURCE/` |
+| Target | Resource Folder | Setup Guide |
+|--------|-----------------|-------------|
+| CPS1 | `resources/cps1/` | [README](resources/cps1/README.md) |
+| CPS2 | `resources/cps2/` | [README](resources/cps2/README.md) |
+| MVS | `resources/mvs/` | [README](resources/mvs/README.md) |
+| NCDZ | `resources/ncdz/` | [README](resources/ncdz/README.md) |
 
-These resource files are automatically copied to the build directory when running the `cmake` command.
+These resource files are automatically copied to the build directory and included in release artifacts when running CMake.
 
 ---
 
