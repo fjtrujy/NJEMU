@@ -231,13 +231,6 @@ static inline void gsKit_flip(GSGLOBAL *gsGlobal)
    gsKit_setactive_queue(gsGlobal);
 }
 
-static inline u32 lzw(u32 val)
-{
-	u32 res;
-	__asm__ __volatile__ ("   plzcw   %0, %1    " : "=r" (res) : "r" (val));
-	return(res);
-}
-
 static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 {
 	if (!GS_CSR_FINISH)
@@ -248,13 +241,19 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 
 static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 {
-	*tw = 31 - (lzw(Texture->Width) + 1);
-	if(Texture->Width > (1<<*tw))
-		(*tw)++;
+	int exp;
 
-	*th = 31 - (lzw(Texture->Height) + 1);
-	if(Texture->Height > (1<<*th))
-		(*th)++;
+	// Calculate tw (ceiling of log2 for width)
+	exp = 0;
+	while ((1u << exp) < Texture->Width)
+		exp++;
+	*tw = exp;
+
+	// Calculate th (ceiling of log2 for height)
+	exp = 0;
+	while ((1u << exp) < Texture->Height)
+		exp++;
+	*th = exp;
 }
 
 static inline void gskit_prim_list_sprite_texture_uv_flat_color2(GSGLOBAL *gsGlobal, const GSTEXTURE *Texture, gs_rgbaq color, int count, const GSPRIMUVPOINTFLAT *vertices)
