@@ -90,7 +90,7 @@ if (USE_PG)
 endif()
 
 # Enable interprocedural optimization LTO
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 # Common Flags options
 set(COMMON_FLAGS
@@ -111,6 +111,11 @@ set(WARNING_OPTIONS
     -Wno-unused-but-set-variable
     -Wno-unused-function
     -Wno-deprecated-declarations
+    -Wno-unknown-warning-option
+    -Wno-invalid-source-encoding
+    -Wno-logical-not-parentheses
+    -Wno-int-to-pointer-cast
+    -Wno-void-pointer-to-int-cast
 )
 
 # Disable some warnigns based in platform
