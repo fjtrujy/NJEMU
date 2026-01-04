@@ -1068,7 +1068,7 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	if (cps2_has_mask) video_driver->clearFrame(video_data, draw_frame);
+	if (cps2_has_mask) video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
 	if (cps_rotate_screen)
 	{
@@ -1076,7 +1076,7 @@ void blit_finish(void)
 		{
 			video_driver->copyRectFlip(video_data, work_frame, draw_frame, &cps_src_clip, &cps_src_clip);
 			video_driver->copyRect(video_data, draw_frame, work_frame, &cps_src_clip, &cps_src_clip);
-			video_driver->clearFrame(video_data, draw_frame);
+			video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
 		video_driver->copyRectRotate(video_data, work_frame, draw_frame, &cps_src_clip, &cps_clip[5]);
 	}

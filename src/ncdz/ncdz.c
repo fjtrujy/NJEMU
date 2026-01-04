@@ -17,6 +17,14 @@ void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 int neogeo_boot_bios;
 int neogeo_region;
 
+layer_texture_info_t emu_layer_textures[] =
+{
+	{ 512, 512, 1 }, // TEX_SPR0
+	{ 512, 512, 1 },  // TEX_SPR1
+	{ 512, 512, 1 }, // TEX_SPR2
+	{ 512, 512, 1 },  // TEX_FIX
+};
+uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
 
 /******************************************************************************
 	Local Variables

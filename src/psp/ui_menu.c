@@ -2286,6 +2286,7 @@ static int menu_state(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
+			void *tex_frame = video_driver->textureLayer(video_data, 0);
 			video_driver->copyRect(video_data, draw_frame, tex_frame, &clip1, &clip2);
 			video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, tex_frame, draw_frame, &clip2, &clip1);
@@ -2629,7 +2630,7 @@ void showmenu(void)
 	pad_wait_clear();
 	ui_popup_reset();
 	video_driver->clearScreen(video_data);
-	video_driver->clearFrame(video_data, work_frame);
+	video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
 #if (EMU_SYSTEM != CPS2)
 	sound_set_samplerate();
 #endif

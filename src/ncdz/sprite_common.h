@@ -106,4 +106,9 @@ void drawgfxline_zoom_flip_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, i
 
 extern void ALIGN_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
 
+/* Common sprite interface functions */
+void blit_clear_all_sprite(void);
+void blit_set_fix_clear_flag(void);
+void blit_set_spr_clear_flag(void);
+
 #endif /* NCDZ_SPRITE_COMMON_H */

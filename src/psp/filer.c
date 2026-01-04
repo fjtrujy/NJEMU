@@ -99,6 +99,7 @@ static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int 
 {
 	uint32_t tile, lines = 16;
 	uint32_t *src = (uint32_t *)(spr + tileno * 128);
+	void *tex_frame = video_driver->textureLayer(video_data, 0);
 	uint16_t *dst = (uint16_t *)video_driver->frameAddr(video_data, tex_frame, sx, sy);
 	uint16_t *pal = &palette[tileno << 4];
 
@@ -204,6 +205,7 @@ static void show_title(int sx, int sy)
 	RECT clip2 = { sx, sy, sx + 144, sy + 80 };
 
 	draw_box_shadow(sx, sy, sx + 144, sy + 80);
+	void *tex_frame = video_driver->textureLayer(video_data, 0);
 	video_driver->copyRect(video_data, tex_frame, draw_frame, &clip1, &clip2);
 }
 
@@ -1137,6 +1139,7 @@ void file_browser(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
+			void *tex_frame = video_driver->textureLayer(video_data, 0);
 			video_driver->copyRect(video_data, draw_frame, tex_frame, &clip1, &clip2);
 			video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, tex_frame, draw_frame, &clip2, &clip1);
