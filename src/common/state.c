@@ -47,13 +47,13 @@ static uint8_t state_buffer_base[STATE_BUFFER_SIZE];
 #endif
 
 #if (EMU_SYSTEM == CPS1)
-static const char *current_version_str = "CPS1SV23";
+static const char *current_version_str = "CPS1SV24";
 #elif (EMU_SYSTEM == CPS2)
-static const char *current_version_str = "CPS2SV23";
+static const char *current_version_str = "CPS2SV24";
 #elif (EMU_SYSTEM == MVS)
-static const char *current_version_str = "MVS_SV23";
+static const char *current_version_str = "MVS_SV24";
 #elif (EMU_SYSTEM == NCDZ)
-static const char *current_version_str = "NCDZSV23";
+static const char *current_version_str = "NCDZSV24";
 #endif
 
 

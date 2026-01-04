@@ -73,7 +73,7 @@
 #define USE_CACHE				0
 #else
 #define USE_CACHE				1
-#define CACHE_VERSION			"V23"
+#define CACHE_VERSION			"V24"
 #endif
 #define EEPROM_SIZE				128
 #define GULIST_SIZE				48*1024		// 48KB
@@ -94,7 +94,7 @@
 #define FPS						59.185606
 #define TICKS_PER_FRAME			16896.0
 #define USE_CACHE				1
-#define CACHE_VERSION			"V23"
+#define CACHE_VERSION			"V24"
 #define GULIST_SIZE				300*1024	// 300KB
 
 
