@@ -9,6 +9,7 @@
 #include "emumain.h"
 
 #include <stdlib.h>
+#include <assert.h>
 #include <kernel.h>
 #include <malloc.h>
 #include <gsKit.h>
@@ -37,6 +38,10 @@
 #define RENDER_SCREEN_WIDTH 384
 #define RENDER_SCREEN_HEIGHT 264
 
+typedef struct texture_layer {
+	GSTEXTURE *texture;
+} texture_layer_t;
+
 typedef struct ps2_video {
 	gs_rgbaq vertexColor;
 	gs_rgbaq clearScreenColor;
@@ -44,22 +49,15 @@ typedef struct ps2_video {
 	GSGLOBAL *gsGlobal;
 	bool drawExtraInfo;
 
+	GSTEXTURE *scrbitmap;
+
 	// Base clut starting address
 	uint16_t *clut_base;
+	uint8_t *texturesMem;
+	
+	texture_layer_t *tex_layers;
+	uint8_t tex_layers_count;
 
-	// Original buffers containing clut indexes
-	uint8_t *spr;
-	uint8_t *spr0;
-	uint8_t *spr1;
-	uint8_t *spr2;
-	uint8_t *fix;
-
-
-	GSTEXTURE *scrbitmap;
-	GSTEXTURE *tex_spr0;
-	GSTEXTURE *tex_spr1;
-	GSTEXTURE *tex_spr2;
-	GSTEXTURE *tex_fix;
 	uint32_t offset;
 	uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
 	uint8_t pixel_format;
@@ -128,14 +126,14 @@ static inline gs_texclut ps2_textclutForParameters(void *data, uint16_t *current
 }
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
-void gsKit_clearRenderTexture(GSGLOBAL *gsGlobal, gs_rgbaq color, GSTEXTURE *texture)
+void gsKit_custom_clear(GSGLOBAL *gsGlobal, gs_rgbaq color, uint16_t width, uint16_t height)
 {
 	u8 PrevZState;
 	u8 strips;
 	u8 remain;
 	u8 index;
 	u32 pos;
-	u8 slices = (texture->Width + 63)/ 64;
+	u8 slices = (width + 63)/ 64;
 	u32 count = (slices * 2) + 1;
 	u128 flat_content[count];
 
@@ -146,7 +144,7 @@ void gsKit_clearRenderTexture(GSGLOBAL *gsGlobal, gs_rgbaq color, GSTEXTURE *tex
 	for (index = 0; index < slices; index++)
 	{
 		flat_content[index * 2 + 1] = vertex_to_XYZ2(gsGlobal, index * 64, 0, 0).xyz2;
-		flat_content[index * 2 + 2] = (u128)vertex_to_XYZ2(gsGlobal, MIN((index + 1) * 64, texture->Width) , texture->Height, 0).xyz2;
+		flat_content[index * 2 + 2] = (u128)vertex_to_XYZ2(gsGlobal, MIN((index + 1) * 64, width) , height, 0).xyz2;
 	}
 	gsKit_prim_list_sprite_flat(gsGlobal, count, flat_content);
 
@@ -303,36 +301,25 @@ static inline void gskit_prim_list_sprite_texture_uv_flat_color2(GSGLOBAL *gsGlo
 	memcpy(p_data, vertices, bytes);
 }
 
-static void *ps2_workFrame(void *data, enum WorkBuffer buffer)
+static void *ps2_workFrame(void *data)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	switch (buffer)
-	{
-		case SCRBITMAP:
-			return(void *)ps2->scrbitmap->Vram;
-		case TEX_SPR0:
-			return ps2->spr0;
-		case TEX_SPR1:
-			return ps2->spr1;
-		case TEX_SPR2:
-			return ps2->spr2;
-		case TEX_FIX:
-			return ps2->fix;
-	}
+	return (void *)ps2->scrbitmap->Vram;
+}
 
-	return NULL;
+static void *ps2_textureLayer(void *data, uint8_t layerIndex)
+{
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	return ps2->tex_layers[layerIndex].texture->Mem;
 }
 
 static void ps2_flipScreen(void *data, bool vsync);
 
-static void *ps2_init(void)
+static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count)
 {
 	ee_sema_t sema;
-
 	ps2_video_t *ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
 	GSGLOBAL *gsGlobal = gsKit_init_global();
-	
-	ps2->drawExtraInfo = false;
 
    	sema.init_count = 0;
    	sema.max_count  = 1;
@@ -370,25 +357,23 @@ static void *ps2_init(void)
 	ps2->gsGlobal = gsGlobal;
 
 	// Original buffers containing clut indexes
-	size_t textureSize = BUF_WIDTH * TEXTURE_HEIGHT;
-	uint8_t *spr = (uint8_t*)malloc(textureSize * 3);
-	ps2->spr = spr;
-	ps2->spr0 = spr;
-	ps2->spr1 = spr + textureSize;
-	ps2->spr2 = spr + textureSize * 2;
-	ps2->fix = (uint8_t*)malloc(textureSize);
+	size_t totalTextureSize = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		totalTextureSize += layer_textures[i].width * layer_textures[i].height;
+	}
+	uint8_t *textures = (uint8_t*)malloc(totalTextureSize);
+	ps2->texturesMem = textures;
 
 	// Initialize textures
-	ps2->scrbitmap = initializeRenderTexture(gsGlobal, RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
-	ps2->tex_spr0 = initializeTexture(gsGlobal, BUF_WIDTH, TEXTURE_HEIGHT, ps2->spr0);
-	ps2->tex_spr1 = initializeTexture(gsGlobal, BUF_WIDTH, TEXTURE_HEIGHT, ps2->spr1);
-	ps2->tex_spr2 = initializeTexture(gsGlobal, BUF_WIDTH, TEXTURE_HEIGHT, ps2->spr2);
-	ps2->tex_fix = initializeTexture(gsGlobal, BUF_WIDTH, TEXTURE_HEIGHT, ps2->fix);
+	ps2->tex_layers = (texture_layer_t *)calloc(layer_textures_count, sizeof(texture_layer_t));
+	ps2->tex_layers_count = layer_textures_count;
 
-	// Initialize VRAM directly
-	printf("BUF_WIDTH %i, SCR_HEIGHT %i, gsKit_texture_size %i\n", BUF_WIDTH, SCR_HEIGHT, gsKit_texture_size(BUF_WIDTH, SCR_HEIGHT, GS_PSM_T8));
-	printf("BUF_WIDTH %i, TEXTURE_HEIGHT %i, gsKit_texture_size %i\n", BUF_WIDTH, TEXTURE_HEIGHT, gsKit_texture_size(BUF_WIDTH, TEXTURE_HEIGHT, GS_PSM_T8));
-	printf("width %i, height %i, gsKit_texture_size %i\n", CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT * CLUT_BANKS_COUNT, gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT * CLUT_BANKS_COUNT, GS_PSM_CT16));
+	ps2->scrbitmap = initializeRenderTexture(gsGlobal, RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
+	size_t texOffset = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		ps2->tex_layers[i].texture = initializeTexture(gsGlobal, layer_textures[i].width, layer_textures[i].height, textures + texOffset);
+		texOffset += layer_textures[i].width * layer_textures[i].height;
+	}
 
 	uint32_t clut_vram_size = gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT, GS_PSM_CT16);
 	uint32_t all_clut_vram_size = clut_vram_size * CLUT_BANKS_COUNT;
@@ -403,7 +388,13 @@ static void *ps2_init(void)
 	ui_init();
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
+
+	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER);
+	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
+	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
 	ps2_flipScreen(ps2, true);
+
+	ps2->drawExtraInfo = false;
 
 	return ps2;
 }
@@ -423,23 +414,16 @@ static void ps2_exit(ps2_video_t *ps2) {
 	
 	free(ps2->scrbitmap);
 	ps2->scrbitmap = NULL;
-	free(ps2->tex_spr0);
-	ps2->tex_spr0 = NULL;
-	free(ps2->tex_spr1);
-	ps2->tex_spr1 = NULL;
-	free(ps2->tex_spr2);
-	ps2->tex_spr2 = NULL;
-	free(ps2->tex_fix);
-	ps2->tex_fix = NULL;
 
-	free(ps2->spr);
-	ps2->spr = NULL;
-	ps2->spr0 = NULL;
-	ps2->spr1 = NULL;
-	ps2->spr2 = NULL;
-	free(ps2->fix);
-	ps2->fix = NULL;
-
+	free(ps2->texturesMem);
+	ps2->texturesMem = NULL;
+	for (int i = 0; i < ps2->tex_layers_count; i++) {
+		ps2->tex_layers[i].texture->Mem = NULL;
+		free(ps2->tex_layers[i].texture);
+		ps2->tex_layers[i].texture = NULL;
+	}
+	free(ps2->tex_layers);
+	ps2->tex_layers = NULL;
 	// We don't need to free vram, it's done with gsKit_vram_clear
 }
 
@@ -499,6 +483,12 @@ static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 	return NULL;
 }
 
+static void ps2_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
+{
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gsKit_set_scissor(ps2->gsGlobal, GS_SETREG_SCISSOR(left, right, top, bottom));
+}
+
 
 /*--------------------------------------------------------
 	Clear Draw/Display Frame
@@ -513,9 +503,41 @@ static void ps2_clearScreen(void *data) {
 	Clear Specified Frame
 --------------------------------------------------------*/
 
-static void ps2_clearFrame(void *data, void *frame)
+static void ps2_clearFrame(void *data, int index)
 {
-	ps2_clearScreen(data);
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	uint32_t buffer_width;
+	uint32_t buffer_height;
+	uint32_t fbp = 0;
+	uint8_t psm = GS_PSM_CT16;
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
+		assert("Cannot clear global context");
+		break;
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		fbp = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
+		buffer_width = ps2->gsGlobal->Width;
+		buffer_height = ps2->gsGlobal->Height;
+		psm = ps2->gsGlobal->PSM;
+		break;
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		fbp = ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
+		buffer_width = ps2->gsGlobal->Width;
+		buffer_height = ps2->gsGlobal->Height;
+		psm = ps2->gsGlobal->PSM;
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
+		fbp = ps2->scrbitmap->Vram;
+		buffer_width = ps2->scrbitmap->Width;
+		buffer_height = ps2->scrbitmap->Height;
+		psm = ps2->scrbitmap->PSM;
+		break;
+	default:	
+		assert("Shouldn't clear texture layers");
+		break;
+	}
+
+	// gsKit_setRegFrame(ps2->gsGlobal, fbp, buffer_width, buffer_height, psm);
+	// gsKit_custom_clear(ps2->gsGlobal, ps2->clearScreenColor, buffer_width, buffer_height);
 }
 
 
@@ -551,7 +573,7 @@ static void ps2_startWorkFrame(void *data, uint32_t color) {
 
 	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
 	gsKit_renderToTexture(ps2->gsGlobal, ps2->scrbitmap);
-	gsKit_clearRenderTexture(ps2->gsGlobal, ps2_color, ps2->scrbitmap);
+	gsKit_custom_clear(ps2->gsGlobal, ps2_color, ps2->scrbitmap->Width, ps2->scrbitmap->Height);
 }
 
 static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
@@ -581,7 +603,7 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	gs_rgbaq color = color_to_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
 
 	// Choose texture to print
-	GSTEXTURE *tex = ps2->tex_fix;
+	GSTEXTURE *tex = ps2->tex_layers[0].texture;
 
 	#define LEFT 350
 	#define TOP 20
@@ -888,45 +910,22 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void
 static void *ps2_getNativeObjects(void *data, int index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	switch (index) {
-	case 0:
+	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
 		return ps2->gsGlobal;
-	case 1: 
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		return (void *)ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		return (void *)ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		return ps2->scrbitmap;
-	case 2:
-		return ps2->tex_spr0;
-	case 3:
-		return ps2->tex_spr1;
-	case 4:
-		return ps2->tex_spr2;
-	case 5:
-		return ps2->tex_fix;
 	default:
-		return NULL;
+		return ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
 	}
 }
 
-static GSTEXTURE *ps2_getTexture(void *data, enum WorkBuffer buffer) {
+static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	switch (buffer)
-	{
-		case SCRBITMAP:
-			return ps2->scrbitmap;
-		case TEX_SPR0:
-			return ps2->tex_spr0;
-		case TEX_SPR1:
-			return ps2->tex_spr1;
-		case TEX_SPR2:
-			return ps2->tex_spr2;
-		case TEX_FIX:
-			return ps2->tex_fix;
-		default:
-			return NULL;
-	}
-}
-
-static void ps2_uploadMem(void *data, enum WorkBuffer buffer) {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	GSTEXTURE *tex = ps2_getTexture(data, buffer);
+	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
    	gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, GS_CLUT_TEXTURE);
 }
 
@@ -936,9 +935,9 @@ static void ps2_uploadClut(void *data, uint16_t *bank, uint8_t bank_index) {
    	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)bank, CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT, (u32)vram, GS_PSM_CT16, 1, GS_CLUT_PALLETE);
 }
 
-static void ps2_blitTexture(void *data, enum WorkBuffer buffer, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
+static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	GSTEXTURE *tex = ps2_getTexture(data, buffer);
+	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
 
 	tex->VramClut = (u32)ps2_vramClutForBankIndex(data, bank_index);
 	gs_texclut texclut = ps2_textclutForParameters(data, clut, bank_index);
@@ -950,6 +949,9 @@ static void ps2_blitTexture(void *data, enum WorkBuffer buffer, void *clut, uint
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex, ps2->vertexColor, vertices_count, vertices);
 }
 
+static void ps2_flushCache(void *data, void *addr, size_t size) {
+	// No cache to flush on PS2
+}
 
 video_driver_t video_ps2 = {
 	"ps2",
@@ -960,6 +962,8 @@ video_driver_t video_ps2 = {
 	ps2_flipScreen,
 	ps2_frameAddr,
 	ps2_workFrame,
+	ps2_textureLayer,
+	ps2_scissor,
 	ps2_clearScreen,
 	ps2_clearFrame,
 	ps2_fillFrame,
@@ -973,4 +977,5 @@ video_driver_t video_ps2 = {
 	ps2_uploadMem,
 	ps2_uploadClut,
 	ps2_blitTexture,
+	ps2_flushCache
 };

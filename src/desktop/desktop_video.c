@@ -14,6 +14,11 @@
 #define OUTPUT_WIDTH 640
 #define OUTPUT_HEIGHT 480
 
+typedef struct texture_layer {
+	SDL_Texture *texture;
+	uint8_t *buffer;
+} texture_layer_t;
+
 typedef struct desktop_video {
 	SDL_Window* window;
 	SDL_Renderer* renderer;
@@ -22,27 +27,21 @@ typedef struct desktop_video {
     
     // Base clut starting address
     uint16_t *clut_base;
+	uint8_t *texturesMem;
 
 	// Original buffers containing clut indexes
-	uint8_t *scrbitmap;
-	uint8_t *tex_spr;
-	uint8_t *tex_spr0;
-	uint8_t *tex_spr1;
-	uint8_t *tex_spr2;
-	uint8_t *tex_fix;
-
 	SDL_Texture *sdl_texture_scrbitmap;
-	SDL_Texture *sdl_texture_tex_spr0;
-	SDL_Texture *sdl_texture_tex_spr1;
-	SDL_Texture *sdl_texture_tex_spr2;
-	SDL_Texture *sdl_texture_tex_fix;
+	uint8_t *scrbitmap;
+	
+	texture_layer_t *tex_layers;
+	uint8_t tex_layers_count;
 } desktop_video_t;
 
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
 
-static void *desktop_init(void)
+static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count)
 {
 	uint32_t windows_width, windows_height;
 	desktop_video_t *desktop = (desktop_video_t*)calloc(1, sizeof(desktop_video_t));
@@ -92,49 +91,35 @@ static void *desktop_init(void)
 
 	// Original buffers containing clut indexes
 	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT;
-	size_t textureSize = BUF_WIDTH * TEXTURE_HEIGHT;
-	desktop->scrbitmap = (uint8_t*)malloc(scrbitmapSize);
-	uint8_t *tex_spr = (uint8_t*)malloc(textureSize * 3);
-	desktop->tex_spr = tex_spr;
-	desktop->tex_spr0 = tex_spr;
-	desktop->tex_spr1 = tex_spr + textureSize;
-	desktop->tex_spr2 = tex_spr + textureSize * 2;
-	desktop->tex_fix = (uint8_t*)malloc(textureSize);
+	size_t totalTextureSize = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		totalTextureSize += layer_textures[i].width * layer_textures[i].height;
+	}
+	uint8_t *textures = (uint8_t*)malloc(totalTextureSize);
+	desktop->texturesMem = textures;
+
+	desktop->tex_layers = (texture_layer_t *)calloc(layer_textures_count, sizeof(texture_layer_t));
+	desktop->tex_layers_count = layer_textures_count;
 
 	// Create SDL textures
 	desktop->sdl_texture_scrbitmap = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_TARGET, BUF_WIDTH, SCR_HEIGHT);
 	if (desktop->sdl_texture_scrbitmap == NULL) {
 		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
 		exit(1);
-	}	
-	desktop->sdl_texture_tex_spr0 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr0 == NULL) {
-		printf("Could not create sdl_texture_tex_spr0: %s\n", SDL_GetError());
-		exit(1);
 	}
-	desktop->sdl_texture_tex_spr1 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr1 == NULL) {
-		printf("Could not create sdl_texture_tex_spr1: %s\n", SDL_GetError());
-		exit(1);
-	}
-
-	desktop->sdl_texture_tex_spr2 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr2 == NULL) {
-		printf("Could not create sdl_texture_tex_spr2: %s\n", SDL_GetError());
-		exit(1);
-	}
-
-	desktop->sdl_texture_tex_fix = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_fix == NULL) {
-		printf("Could not create sdl_texture_tex_fix: %s\n", SDL_GetError());
-		exit(1);
-	}
-
 	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr0, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr1, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr2, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_fix, desktop->blendMode);
+	
+	size_t texOffset = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		desktop->tex_layers[i].buffer = textures + texOffset;
+		desktop->tex_layers[i].texture = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, layer_textures[i].width, layer_textures[i].height);
+		if (desktop->tex_layers[i].texture == NULL) {
+			printf("Could not create texture layer %d: %s\n", i, SDL_GetError());
+			exit(1);
+		}
+		SDL_SetTextureBlendMode(desktop->tex_layers[i].texture, desktop->blendMode);
+		texOffset += layer_textures[i].width * layer_textures[i].height;
+	}
 
 	ui_init();
 
@@ -152,42 +137,22 @@ static void desktop_exit(desktop_video_t *desktop) {
 		desktop->sdl_texture_scrbitmap = NULL;
 	}
 
-	if (desktop->sdl_texture_tex_spr0) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr0);
-		desktop->sdl_texture_tex_spr0 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_spr1) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr1);
-		desktop->sdl_texture_tex_spr1 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_spr2) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr2);
-		desktop->sdl_texture_tex_spr2 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_fix) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_fix);
-		desktop->sdl_texture_tex_fix = NULL;
-	}
-
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
 	}
 
-	if (desktop->tex_spr) {
-		free(desktop->tex_spr);
-		desktop->tex_spr = NULL;
-		desktop->tex_spr0 = NULL;
-		desktop->tex_spr1 = NULL;
-		desktop->tex_spr2 = NULL;
+	if (desktop->texturesMem) {
+		free(desktop->texturesMem);
+		desktop->texturesMem = NULL;
 	}
 
-	if (desktop->tex_fix) {
-		free(desktop->tex_fix);
-		desktop->tex_fix = NULL;
+	for (int i = 0; i < desktop->tex_layers_count; i++) {
+		desktop->tex_layers[i].buffer = NULL;
+		if (desktop->tex_layers[i].texture) {
+			SDL_DestroyTexture(desktop->tex_layers[i].texture);
+			desktop->tex_layers[i].texture = NULL;
+		}
 	}
 }
 
@@ -237,25 +202,30 @@ static void *desktop_frameAddr(void *data, void *frame, int x, int y)
 	return NULL;
 }
 
-static void *desktop_workFrame(void *data, enum WorkBuffer buffer)
+static void *desktop_workFrame(void *data)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-	switch (buffer) {
-		case SCRBITMAP:
-			return desktop->scrbitmap;
-		case TEX_SPR0:
-			return desktop->tex_spr0;
-		case TEX_SPR1:
-			return desktop->tex_spr1;
-		case TEX_SPR2:
-			return desktop->tex_spr2;
-		case TEX_FIX:
-			return desktop->tex_fix;
-		default:
-			return NULL;
-	}
+	return desktop->scrbitmap;
 }
 
+static void *desktop_textureLayer(void *data, uint8_t layerIndex)
+{
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	return desktop->tex_layers[layerIndex].buffer;
+}
+
+static void desktop_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
+{
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	
+	SDL_Rect sdl_rect;
+	sdl_rect.x = left;
+	sdl_rect.y = top;
+	sdl_rect.w = right - left;
+	sdl_rect.h = bottom - top;
+	
+	SDL_RenderSetClipRect(desktop->renderer, &sdl_rect);
+}
 
 /*--------------------------------------------------------
 	Clear Draw/Display Frame
@@ -272,8 +242,10 @@ static void desktop_clearScreen(void *data) {
 	Clear Specified Frame
 --------------------------------------------------------*/
 
-static void desktop_clearFrame(void *data, void *frame)
+static void desktop_clearFrame(void *data, int index)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	printf("TODO: desktop_clearFrame index=%d\n", index);
 }
 
 
@@ -323,35 +295,35 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
     SDL_SetRenderTarget(desktop->renderer, NULL);
     SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
 
-	if (!desktop->draw_extra_info) {
-		return;
-	}
+	// if (!desktop->draw_extra_info) {
+	// 	return;
+	// }
 
-	// Let's print the SPR0, SPR1 SPR2 and FIX in the empty space of the screen (right size 0.5 scale)
-	SDL_Rect dst_rect_spr0 = { BUF_WIDTH, 0, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr0_border = { dst_rect_spr0.x - 1, dst_rect_spr0.y - 1, dst_rect_spr0.w + 2, dst_rect_spr0.h + 2 };
-	SDL_Rect dst_rect_spr1 = { BUF_WIDTH, dst_rect_spr0.y + dst_rect_spr0.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr1_border = { dst_rect_spr1.x - 1, dst_rect_spr1.y - 1, dst_rect_spr1.w + 2, dst_rect_spr1.h + 2 };
-	SDL_Rect dst_rect_spr2 = { BUF_WIDTH, dst_rect_spr1.y + dst_rect_spr1.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr2_border = { dst_rect_spr2.x - 1, dst_rect_spr2.y - 1, dst_rect_spr2.w + 2, dst_rect_spr2.h + 2 };
-	SDL_Rect dst_rect_fix = { BUF_WIDTH, dst_rect_spr2.y + dst_rect_spr2.h + 20, BUF_WIDTH / 2, SCR_HEIGHT / 2 };
-	SDL_Rect dst_rect_fix_border = { dst_rect_fix.x - 1, dst_rect_fix.y - 1, dst_rect_fix.w + 2, dst_rect_fix.h + 2 };
+	// // Let's print the SPR0, SPR1 SPR2 and FIX in the empty space of the screen (right size 0.5 scale)
+	// SDL_Rect dst_rect_spr0 = { BUF_WIDTH, 0, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr0_border = { dst_rect_spr0.x - 1, dst_rect_spr0.y - 1, dst_rect_spr0.w + 2, dst_rect_spr0.h + 2 };
+	// SDL_Rect dst_rect_spr1 = { BUF_WIDTH, dst_rect_spr0.y + dst_rect_spr0.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr1_border = { dst_rect_spr1.x - 1, dst_rect_spr1.y - 1, dst_rect_spr1.w + 2, dst_rect_spr1.h + 2 };
+	// SDL_Rect dst_rect_spr2 = { BUF_WIDTH, dst_rect_spr1.y + dst_rect_spr1.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr2_border = { dst_rect_spr2.x - 1, dst_rect_spr2.y - 1, dst_rect_spr2.w + 2, dst_rect_spr2.h + 2 };
+	// SDL_Rect dst_rect_fix = { BUF_WIDTH, dst_rect_spr2.y + dst_rect_spr2.h + 20, BUF_WIDTH / 2, SCR_HEIGHT / 2 };
+	// SDL_Rect dst_rect_fix_border = { dst_rect_fix.x - 1, dst_rect_fix.y - 1, dst_rect_fix.w + 2, dst_rect_fix.h + 2 };
 
-	SDL_SetRenderDrawColor(desktop->renderer, 255, 0, 0, 255);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_fix_border);
-	SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 255);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_fix);
+	// SDL_SetRenderDrawColor(desktop->renderer, 255, 0, 0, 255);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_fix_border);
+	// SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 255);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_fix);
 
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr0, NULL, &dst_rect_spr0);
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr1, NULL, &dst_rect_spr1);
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr2, NULL, &dst_rect_spr2);	
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_fix, NULL, &dst_rect_fix);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr0, NULL, &dst_rect_spr0);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr1, NULL, &dst_rect_spr1);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr2, NULL, &dst_rect_spr2);	
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_fix, NULL, &dst_rect_fix);
 
 }
 
@@ -390,34 +362,16 @@ static void *desktop_getNativeObjects(void *data, int index) {
 	return NULL;
 }
 
-static SDL_Texture *desktop_getTexture(void *data, enum WorkBuffer buffer) {
-	desktop_video_t *desktop = (desktop_video_t*)data;
-	switch (buffer) {
-		case SCRBITMAP:
-			return desktop->sdl_texture_scrbitmap;
-		case TEX_SPR0:
-			return desktop->sdl_texture_tex_spr0;
-		case TEX_SPR1:
-			return desktop->sdl_texture_tex_spr1;
-		case TEX_SPR2:
-			return desktop->sdl_texture_tex_spr2;
-		case TEX_FIX:
-			return desktop->sdl_texture_tex_fix;
-		default:
-			return NULL;
-	}
-}
-
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
+static void desktop_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
 	// We need to transform the texutres saved that uses clut into a SDL texture compatible format
 	SDL_Point size;
 	desktop_video_t *desktop = (desktop_video_t *)data;
 	struct Vertex *vertexs = (struct Vertex *)vertices;
 	uint16_t *clut_texture = (uint16_t *)clut;
-	uint8_t *tex_fix = desktop_workFrame(data, buffer);
-	SDL_Texture *texture = desktop_getTexture(data, buffer);
+	uint8_t *tex = desktop->tex_layers[textureIndex].buffer;
+	SDL_Texture *texture = desktop->tex_layers[textureIndex].texture;
 	SDL_QueryTexture(texture, NULL, NULL, &size.x, &size.y);
 
 	// Lock texture
@@ -429,7 +383,7 @@ static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, 
 	for (int i = 0; i < size.y; ++i) {
 		for (int j = 0; j < size.x; ++j) {
 			int index = i * size.x + j;
-			uint8_t pixelValue = tex_fix[index];
+			uint8_t pixelValue = tex[index];
 			uint16_t color = clut_texture[pixelValue];
 
 			uint16_t *pixel = (uint16_t*)pixels + index;
@@ -467,12 +421,15 @@ static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, 
 	}
 }
 
-static void desktop_uploadMem(void *data, enum WorkBuffer buffer) {
+static void desktop_uploadMem(void *data, uint8_t textureIndex) {
 }
 
 static void desktop_uploadClut(void *data, uint16_t *bank, uint8_t bank_index) {
 }
 
+static void desktop_flushCache(void *data, void *addr, size_t size) {
+	// No cache to flush on desktop
+}
 
 video_driver_t video_desktop = {
 	"desktop",
@@ -483,6 +440,8 @@ video_driver_t video_desktop = {
 	desktop_flipScreen,
 	desktop_frameAddr,
 	desktop_workFrame,
+	desktop_textureLayer,
+	desktop_scissor,
 	desktop_clearScreen,
 	desktop_clearFrame,
 	desktop_fillFrame,
@@ -496,4 +455,5 @@ video_driver_t video_desktop = {
 	desktop_uploadMem,
 	desktop_uploadClut,
 	desktop_blitTexture,
+	desktop_flushCache,
 };

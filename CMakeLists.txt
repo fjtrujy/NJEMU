@@ -90,7 +90,7 @@ if (USE_PG)
 endif()
 
 # Enable interprocedural optimization LTO
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 # Common Flags options
 set(COMMON_FLAGS

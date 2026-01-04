@@ -10,7 +10,6 @@
 void *show_frame;
 void *draw_frame;
 void *work_frame;
-void *tex_frame;
 
 void *video_data;
 
@@ -23,6 +22,8 @@ video_driver_t video_null = {
 	NULL, // flipScreen
 	NULL, // frameAddr
 	NULL, // workFrame
+	NULL, // textureLayer
+	NULL, // scissor
 	NULL, // clearScreen
 	NULL, // clearFrame
 	NULL, // fillFrame
@@ -36,6 +37,7 @@ video_driver_t video_null = {
 	NULL, // uploadMem
 	NULL, // uploadClut
 	NULL, // blitTexture
+	NULL  // flushCache
 };
 
 video_driver_t *video_drivers[] = {

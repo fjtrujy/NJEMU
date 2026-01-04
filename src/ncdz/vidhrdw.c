@@ -583,7 +583,7 @@ void neogeo_screenrefresh(void)
 	}
 	else
 	{
-		video_driver->clearFrame(video_data, draw_frame);
+		video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 	}
 
 	next_update_first_line = FIRST_VISIBLE_LINE;
