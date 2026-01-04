@@ -62,6 +62,12 @@ struct Vertex
 	int16_t x, y, z;
 };
 
+struct PointVertex
+{
+	uint16_t color;
+	int16_t x, y, z;
+};
+
 struct rectangle
 {
 	int min_x;
@@ -78,13 +84,19 @@ typedef struct rect_t
 	int16_t bottom;
 } RECT;
 
-enum WorkBuffer {
-	SCRBITMAP,
-	TEX_SPR0,
-	TEX_SPR1,
-	TEX_SPR2,
-	TEX_FIX,
+enum CommonGraphicObjects {
+	COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT,
+	COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
+	COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+	COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+	COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
 };
+
+typedef struct layer_texture_info {
+	size_t width;
+	size_t height;
+	uint8_t bytes_per_pixel;
+} layer_texture_info_t;
 
 typedef struct video_driver
 {
@@ -94,16 +106,18 @@ typedef struct video_driver
 	*
 	* Returns: video driver handle on success, otherwise NULL.
 	**/
-	void *(*init)(void);
+	void *(*init)(layer_texture_info_t *layer_textures, uint8_t layer_textures_count);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
 	void (*setClutBaseAddr)(void *data, uint16_t *clut_base);
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);
-	void *(*workFrame)(void *data, enum WorkBuffer buffer);
+	void *(*workFrame)(void *data);
+	void *(*textureLayer)(void *data, uint8_t layerIndex);
+	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
-	void (*clearFrame)(void *data, void *frame);
+	void (*clearFrame)(void *data, int index);
 	void (*fillFrame)(void *data, void *frame, uint32_t color);
 	void (*startWorkFrame)(void *data, uint32_t color);
 	void (*transferWorkFrame)(void *data, RECT *src_rect, RECT *dst_rect);
@@ -112,9 +126,11 @@ typedef struct video_driver
 	void (*copyRectRotate)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void *(*getNativeObjects)(void *data, int index);
-	void (*uploadMem)(void *data, enum WorkBuffer buffer);
+	void (*uploadMem)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);
-	void (*blitTexture)(void *data, enum WorkBuffer buffer, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
+	void (*blitTexture)(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
+	void (*blitPoints)(void *data, uint32_t points_count, void *vertices);
+	void (*flushCache)(void *data, void *addr, size_t size);
 
 } video_driver_t;
 
@@ -133,7 +149,6 @@ extern int video_mode;
 extern void *show_frame;
 extern void *draw_frame;
 extern void *work_frame;
-extern void *tex_frame;
 extern RECT full_rect;
 
 extern void *video_data;

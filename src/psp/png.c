@@ -526,7 +526,7 @@ int load_png(const char *name, int number)
 
 	memset(&p, 0, sizeof(struct png_info));
 
-	video_driver->clearFrame(video_data, draw_frame);
+	video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
 	if ((fp = fopen(name, "rb")) == NULL)
 		return 0;

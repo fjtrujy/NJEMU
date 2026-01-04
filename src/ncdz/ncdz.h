@@ -30,4 +30,13 @@ void neogeo_main(void);
 void neogeo_restart(void);
 void neogeo_bios_exit(void);
 
+enum TEXTURE_LAYER_INDEX {
+	TEXTURE_LAYER_SPR0,
+	TEXTURE_LAYER_SPR1,
+	TEXTURE_LAYER_SPR2,
+	TEXTURE_LAYER_FIX,
+	TEXTURE_LAYER_COUNT
+};
+
+
 #endif /* NCDZ_H */

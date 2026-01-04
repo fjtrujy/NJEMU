@@ -85,7 +85,7 @@ void file_browser(void) {
 	// Get the game name from a file called game_name.ini
 	FILE *fp = fopen("game_name.ini", "r");
 	if (fp) {
-		fgets(game_name, 255, fp);
+		fgets(game_name, sizeof(game_name), fp);
 		fclose(fp);
 	}
 #if (EMU_SYSTEM == NCDZ)

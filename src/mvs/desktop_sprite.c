@@ -27,6 +27,7 @@ static RECT mvs_clip[7] =
 	{  0,  1,  0 + 480,  1 + 270 }	    // option_stretch = 5  (480x270 16:9)
 };
 
+static bool tex_fix_changed;
 static struct Vertex ALIGN_DATA vertices_fix[FIX_MAX_SPRITES * 2];
 static uint16_t ALIGN_DATA spr_flags[SPR_MAX_SPRITES];
 static struct Vertex ALIGN_DATA vertices_spr[SPR_MAX_SPRITES * 2];
@@ -39,37 +40,6 @@ static uint8_t clut_index;
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	Clear all sprites immediately
-------------------------------------------------------------------------*/
-
-void blit_clear_all_sprite(void)
-{
-	blit_clear_spr_sprite();
-	blit_clear_fix_sprite();
-}
-
-
-/*------------------------------------------------------------------------
-	Set FIX sprite clear flag
-------------------------------------------------------------------------*/
-
-void blit_set_fix_clear_flag(void)
-{
-	clear_fix_texture = 1;
-}
-
-
-/*------------------------------------------------------------------------
-	Set SPR sprite clear flag
-------------------------------------------------------------------------*/
-
-void blit_set_spr_clear_flag(void)
-{
-	clear_spr_texture = 1;
-}
-
-
-/*------------------------------------------------------------------------
 	Sprite processing reset
 ------------------------------------------------------------------------*/
 
@@ -77,11 +47,12 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data, SCRBITMAP);
-	tex_spr[0] = video_driver->workFrame(video_data, TEX_SPR0);
-	tex_spr[1] = video_driver->workFrame(video_data, TEX_SPR1);
-	tex_spr[2] = video_driver->workFrame(video_data, TEX_SPR2);
-	tex_fix    = video_driver->workFrame(video_data, TEX_FIX);
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
+	tex_spr[0] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR0);
+	tex_spr[1] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR1);
+	tex_spr[2] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR2);
+	tex_fix    = video_driver->textureLayer(video_data, TEXTURE_LAYER_FIX);
+	tex_fix_changed = false;
 
 	for (i = 0; i < FIX_TEXTURE_SIZE; i++) fix_data[i].index = i;
 	for (i = 0; i < SPR_TEXTURE_SIZE; i++) spr_data[i].index = i;
@@ -121,6 +92,7 @@ void blit_start(int start, int end)
 		if (clear_fix_texture) blit_clear_fix_sprite();
 
 		video_driver->startWorkFrame(video_data, CNVCOL15TO32(video_palette[4095]));
+		video_driver->scissor(video_data, 24, 16, 336, 240);
 	}
 }
 
@@ -150,6 +122,8 @@ void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 		uint32_t col, tile;
 		uint8_t *src, *dst, lines, row, column;
 
+		tex_fix_changed = false;
+		
 		if (fix_texture_num == FIX_TEXTURE_SIZE - 1)
 			fix_delete_sprite();
 
@@ -191,7 +165,13 @@ void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 void blit_finish_fix(void)
 {
 	if (!fix_num) return;
-	video_driver->blitTexture(video_data, TEX_FIX, clut, clut_index, fix_num, vertices_fix);
+	if (tex_fix_changed) {
+		video_driver->uploadMem(video_data, TEXTURE_LAYER_FIX);
+		tex_fix_changed = false;
+	}
+
+	video_driver->flushCache(video_data, vertices_fix, fix_num * sizeof(struct Vertex));
+	video_driver->blitTexture(video_data, TEXTURE_LAYER_FIX, clut, clut_index, fix_num, vertices_fix);
 }
 
 
@@ -270,36 +250,28 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 	End SPR drawing
 ------------------------------------------------------------------------*/
 
-static enum WorkBuffer getWorkBufferForSPR(uint8_t index) {
-	switch (index) {
-		case 0:
-			return TEX_SPR0;
-		case 1:
-			return TEX_SPR1;
-		case 2:
-			return TEX_SPR2;
-		default:
-			return TEX_SPR0;
-	}
-}
-
 void blit_finish_spr(void)
 {
 	int i, total_sprites = 0;
 	uint16_t flags, *pflags = spr_flags;
 	struct Vertex *vertices, *vertices_tmp;
 	uint16_t *clut_tmp;
-	enum WorkBuffer workBuffer;
+	uint8_t tex_layer_index;
 
 	if (!spr_index) return;
 
-	struct Vertex vertex_buffer[spr_num];
+	bool memUploaded[TEXTURE_LAYER_COUNT] = { 0 };
+	bool clutUploaded[16] = { 0 };
 
 	flags = *pflags;
-	workBuffer = getWorkBufferForSPR(flags & 3);
+	tex_layer_index = flags & 3;
+	memUploaded[tex_layer_index] = true;
+	clutUploaded[(flags & 0xf00)/256] = true;
 	clut_tmp = &clut[flags & 0xf00];
+	video_driver->uploadMem(video_data, tex_layer_index);
 
-	vertices_tmp = vertices = &vertex_buffer[0];
+	vertices_tmp = vertices = &vertices_spr[0];
+	video_driver->flushCache(video_data, vertices, spr_num * sizeof(struct Vertex));
 
 	for (i = 0; i < spr_num; i += 2)
 	{
@@ -307,18 +279,22 @@ void blit_finish_spr(void)
 		{
 			if (total_sprites)
 			{
-				video_driver->blitTexture(video_data, workBuffer, clut_tmp, 0, total_sprites, vertices);
+				video_driver->blitTexture(video_data, tex_layer_index, clut_tmp, palette_bank, total_sprites, vertices);
 				total_sprites = 0;
 				vertices = vertices_tmp;
 			}
 
 			flags = *pflags;
-			workBuffer = getWorkBufferForSPR(flags & 3);
+			tex_layer_index = flags & 3;
 			clut_tmp = &clut[flags & 0xf00];
+			if (memUploaded[tex_layer_index] == false) {
+				memUploaded[tex_layer_index] = true;
+				video_driver->uploadMem(video_data, tex_layer_index);
+			}
+			if (clutUploaded[(flags & 0xf00)/256] == false) {
+				clutUploaded[(flags & 0xf00)/256] = true;
+			}
 		}
-
-		vertices_tmp[0] = vertices_spr[i + 0];
-		vertices_tmp[1] = vertices_spr[i + 1];
 
 		vertices_tmp += 2;
 		total_sprites += 2;
@@ -326,7 +302,7 @@ void blit_finish_spr(void)
 	}
 
 	if (total_sprites)
-		video_driver->blitTexture(video_data, workBuffer, clut_tmp, 0, total_sprites, vertices);
+		video_driver->blitTexture(video_data, tex_layer_index, clut_tmp, palette_bank, total_sprites, vertices);
 }
 
 
