@@ -486,6 +486,7 @@ target_link_libraries(${TARGET} PUBLIC
        
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
+    set(BUILD_PRX OFF)
     create_pbp_file(
         TARGET ${TARGET}
         ICON_PATH NULL
