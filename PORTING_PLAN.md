@@ -61,7 +61,7 @@ The emulator cores should be ported first since this is the primary functionalit
 - `src/cps1/ps2_sprite.c`
 - `src/cps1/desktop_sprite.c`
 
-**Reference:** 
+**Reference:**
 - Use `src/cps1/psp_sprite.c` as template for platform-specific code
 - Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` as reference implementations
 
@@ -73,6 +73,58 @@ The emulator cores should be ported first since this is the primary functionalit
 5. CMakeLists.txt already supports `${PLATFORM_LOWER}_sprite.c`
 
 **Estimated effort:** 1-2 days per platform (reduced due to sprite_common.c refactoring)
+
+#### CPS1 Key Differences from MVS/NCDZ
+
+| Feature | MVS/NCDZ | CPS1 |
+|---------|----------|------|
+| Texture atlases | 2 (FIX + SPR) | 5 (OBJECT + SCROLL1/2/3 + SCROLLH) |
+| Tile sizes | 8×8 and 16×16 only | 8×8, 16×16, and 32×32 |
+| High priority layer | None | SCROLLH (16-bit direct color) |
+| CLUT banks | 2 × 256 palettes | Per-layer palettes (0-31, 32-63, etc.) |
+| Graphics format | Nibble-packed | Interleaved planar (0,4,1,5,2,6,3,7) |
+| Per-line effects | None | SCROLL2 parallax scrolling |
+| Priority masks | None | tpens bitmask for SCROLLH |
+| Stars layer | None | Point rendering for star fields |
+
+#### CPS1 Porting Considerations
+
+1. **Multiple texture atlases:** Must allocate and manage 5 separate textures
+2. **SCROLLH direct color:** Not indexed - must decode to RGB at cache time
+3. **Software rendering path:** SCROLL2 parallax requires CPU rendering when clip < 16 lines
+4. **Interleaved pixel format:** Decode pattern `dst[0,4,1,5,2,6,3,7]` is hardware-defined
+5. **CLUT bank switching:** Each layer uses different palette ranges, track CLUT changes for batching
+
+#### CPS1 Texture Atlas Summary
+
+| Layer | Tile Size | Texture Size | Format | UV Calculation |
+|-------|-----------|--------------|--------|----------------|
+| OBJECT | 16×16 | 512×512 | 8-bit indexed | u=(idx&0x1f)<<4, v=(idx&0x3e0)>>1 |
+| SCROLL1 | 8×8 | 512×512 | 8-bit indexed | u=(idx&0x3f)<<3, v=(idx&0xfc0)>>3 |
+| SCROLL2 | 16×16 | 512×512 | 8-bit indexed | u=(idx&0x1f)<<4, v=(idx&0x3e0)>>1 |
+| SCROLL3 | 32×32 | 512×512 | 8-bit indexed | u=(idx&0xf)<<5, v=(idx&0xf0)<<1 |
+| SCROLLH | varies | 512×192 | 16-bit RGB | varies by tile size |
+
+#### CPS1 CLUT Organization
+
+| Layer | Palette Range | CLUT Bank 0 | CLUT Bank 1 |
+|-------|---------------|-------------|-------------|
+| OBJECT | 0-31 | clut[0<<4] | clut[16<<4] |
+| SCROLL1 | 32-63 | clut[32<<4] | clut[48<<4] |
+| SCROLL2 | 64-95 | clut[64<<4] | clut[80<<4] |
+| SCROLL3 | 96-127 | clut[96<<4] | clut[112<<4] |
+
+#### CPS1 Work Buffers Memory Layout
+
+```
+work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes) = 278,528 bytes
+            ├─ tex_scrollh  (512 × 192 × 2 bytes) = 196,608 bytes
+            ├─ tex_object   (512 × 512 × 1 byte)  = 262,144 bytes
+            ├─ tex_scroll1  (512 × 512 × 1 byte)  = 262,144 bytes
+            ├─ tex_scroll2  (512 × 512 × 1 byte)  = 262,144 bytes
+            └─ tex_scroll3  (512 × 512 × 1 byte)  = 262,144 bytes
+                                          Total ≈ 1.5 MB
+```
 
 ### 1.2 Port CPS2 Sprite Rendering
 

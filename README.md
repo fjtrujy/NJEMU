@@ -1352,6 +1352,131 @@ MVS uses a shared sprite management architecture:
 | FIX | 0x200 | 512×512 / 8×8 tiles | 1,200 |
 | SPR | 0x200 | 512×1536 / 16×16 tiles | 12,288 |
 
+#### Texture Atlas Architecture
+
+The emulator uses texture atlases to batch sprite rendering. Decoded tiles are stored in large textures and referenced by UV coordinates.
+
+**FIX Layer Atlas (TEX_FIX):**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 8×8 pixels                               │
+│ Tiles per row: 64 (512/8)                           │
+│ Total rows: 64 (512/8)                              │
+│ Max tiles: 4,096                                    │
+├─────────────────────────────────────────────────────┤
+│  Tile Layout (idx = tile index):                    │
+│  ┌────┬────┬────┬────┬─────┬─────┐                  │
+│  │ 0  │ 1  │ 2  │ 3  │ ... │ 63  │  row 0          │
+│  ├────┼────┼────┼────┼─────┼─────┤                  │
+│  │ 64 │ 65 │ 66 │ 67 │ ... │ 127 │  row 1          │
+│  ├────┼────┼────┼────┼─────┼─────┤                  │
+│  │... │... │... │... │ ... │ ... │                  │
+│  └────┴────┴────┴────┴─────┴─────┘                  │
+│                                                     │
+│  UV Calculation:                                    │
+│  u0 = (idx % 64) * 8 = (idx & 0x3f) << 3            │
+│  v0 = (idx / 64) * 8 = (idx & 0xfc0) >> 3           │
+└─────────────────────────────────────────────────────┘
+```
+
+**SPR Layer Atlas (TEX_SPR0/1/2):**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×1536 pixels (3 banks × 512)         │
+│ Tile size: 16×16 pixels                             │
+│ Tiles per row: 32 (512/16)                          │
+│ Total rows: 96 (1536/16)                            │
+│ Max tiles: 3,072                                    │
+├─────────────────────────────────────────────────────┤
+│  Memory Organization (3 contiguous buffers):        │
+│  ┌─────────────────────┐ ─┐                         │
+│  │     TEX_SPR0        │  │                         │
+│  │   512×512 (bank 0)  │  │                         │
+│  ├─────────────────────┤  │                         │
+│  │     TEX_SPR1        │  ├─ 512×1536 total         │
+│  │   512×512 (bank 1)  │  │                         │
+│  ├─────────────────────┤  │                         │
+│  │     TEX_SPR2        │  │                         │
+│  │   512×512 (bank 2)  │  │                         │
+│  └─────────────────────┘ ─┘                         │
+│                                                     │
+│  UV Calculation:                                    │
+│  u0 = (idx % 32) * 16 = (idx & 0x1f) << 4           │
+│  v0 = (idx / 32) * 16 = (idx & 0x3e0) >> 1          │
+│  bank = idx >> 10  (which 512×512 section)          │
+└─────────────────────────────────────────────────────┘
+```
+
+#### CLUT (Color Look-Up Table) System
+
+MVS uses a hardware CLUT for palette-based rendering:
+
+```
+┌─────────────────────────────────────────────────────┐
+│              CLUT Organization                      │
+├─────────────────────────────────────────────────────┤
+│ Palette Banks: 2 (for raster effects)               │
+│ Palettes per Bank: 256                              │
+│ Colors per Palette: 16 (4-bit index)                │
+│ Color Format: 15-bit RGB (5-5-5)                    │
+│ Total Colors: 2 × 256 × 16 = 8,192                  │
+├─────────────────────────────────────────────────────┤
+│  Bank Layout (256×16 colors each):                  │
+│  ┌────────────────────────────────────┐             │
+│  │ Bank 0: Palettes 0-255             │             │
+│  │   Palette 0:  colors 0-15          │ ← FIX uses  │
+│  │   Palette 1:  colors 16-31         │   palettes  │
+│  │   ...                              │   0-15 only │
+│  │   Palette 15: colors 240-255       │             │
+│  │   Palette 16: colors 256-271       │ ← SPR uses  │
+│  │   ...                              │   all 256   │
+│  │   Palette 255: colors 4080-4095    │             │
+│  ├────────────────────────────────────┤             │
+│  │ Bank 1: Palettes 0-255             │             │
+│  │   (identical structure)            │             │
+│  └────────────────────────────────────┘             │
+│                                                     │
+│  Texture Pixel Format (8-bit):                      │
+│  ┌─────────────────────────────────┐                │
+│  │ Bits 7-4: Palette offset (0-15) │                │
+│  │ Bits 3-0: Color index (0-15)    │                │
+│  └─────────────────────────────────┘                │
+│                                                     │
+│  color_table[] embeds palette offset:               │
+│  0x00000000 = palette offset 0                      │
+│  0x10101010 = palette offset 1                      │
+│  ...                                                │
+│  0xf0f0f0f0 = palette offset 15                     │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Sprite Cache Key Generation
+
+Sprites are cached using unique keys to avoid re-decoding:
+
+```c
+// FIX tiles: code (12-bit) + palette (4-bit)
+#define MAKE_FIX_KEY(code, attr)  (code | (attr << 28))
+
+// SPR tiles: code (20-bit) + palette high nibble
+#define MAKE_SPR_KEY(code, attr)  (code | ((attr & 0x0f00) << 20))
+```
+
+The hash table uses open addressing with linked lists for collision resolution.
+
+#### Work Buffer System
+
+The rendering pipeline uses multiple work buffers:
+
+| Buffer | Type | Size | Purpose |
+|--------|------|------|---------|
+| SCRBITMAP | 16-bit RGB | 384×264 | Software rendering target |
+| TEX_SPR0 | 8-bit indexed | 512×512 | Sprite atlas bank 0 |
+| TEX_SPR1 | 8-bit indexed | 512×512 | Sprite atlas bank 1 |
+| TEX_SPR2 | 8-bit indexed | 512×512 | Sprite atlas bank 2 |
+| TEX_FIX | 8-bit indexed | 512×512 | FIX layer atlas |
+
 #### Graphics Data Format
 
 MVS graphics are stored with a simple nibble-packed format:
@@ -1458,6 +1583,157 @@ The CPS-1 composites six layers that can be stacked in any order:
 | SCROLL3 | 0x40 | 512×512 / 32×32 | ~150 |
 | SCROLLH | 0x200 | 512×192 / varies | ~1,500 |
 
+#### Texture Atlas Architecture
+
+CPS1 uses **5 separate texture atlases** (vs MVS/NCDZ's 2), each optimized for different tile sizes:
+
+**OBJECT Atlas (tex_object) - 16×16 sprites:**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 16×16 pixels                             │
+│ Tiles per row: 32 (512/16)                          │
+│ Max tiles: 1,024                                    │
+├─────────────────────────────────────────────────────┤
+│  UV Calculation:                                    │
+│  u0 = (idx & 0x001f) << 4                           │
+│  v0 = (idx & 0x03e0) >> 1                           │
+│                                                     │
+│  Flip handling via attribute bits 5-6:             │
+│  attr ^= 0x60;                                      │
+│  vertices[(attr & 0x20) >> 5].u += 16;  // X flip   │
+│  vertices[(attr & 0x40) >> 6].v += 16;  // Y flip   │
+└─────────────────────────────────────────────────────┘
+```
+
+**SCROLL1 Atlas (tex_scroll1) - 8×8 tiles:**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 8×8 pixels                               │
+│ Tiles per row: 64 (512/8)                           │
+│ Max tiles: 4,096                                    │
+├─────────────────────────────────────────────────────┤
+│  UV Calculation:                                    │
+│  u0 = (idx & 0x003f) << 3                           │
+│  v0 = (idx & 0x0fc0) >> 3                           │
+└─────────────────────────────────────────────────────┘
+```
+
+**SCROLL2 Atlas (tex_scroll2) - 16×16 tiles:**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 16×16 pixels                             │
+│ Tiles per row: 32 (512/16)                          │
+│ Max tiles: 1,024                                    │
+├─────────────────────────────────────────────────────┤
+│  UV Calculation: Same as OBJECT                     │
+│                                                     │
+│  Special Feature: Per-line parallax scrolling       │
+│  - When clip region < 16 lines: software rendering  │
+│  - When clip region >= 16 lines: hardware rendering │
+└─────────────────────────────────────────────────────┘
+```
+
+**SCROLL3 Atlas (tex_scroll3) - 32×32 tiles:**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 32×32 pixels                             │
+│ Tiles per row: 16 (512/32)                          │
+│ Max tiles: 256                                      │
+├─────────────────────────────────────────────────────┤
+│  UV Calculation:                                    │
+│  u0 = (idx & 0x000f) << 5                           │
+│  v0 = (idx & 0x00f0) << 1                           │
+└─────────────────────────────────────────────────────┘
+```
+
+**SCROLLH Atlas (tex_scrollh) - High Priority Layer:**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×192 pixels (16-bit DIRECT color)    │
+│ Tile sizes: 8×8, 16×16, or 32×32 (varies by layer)  │
+│ DIFFERENT from other layers: NOT indexed!           │
+├─────────────────────────────────────────────────────┤
+│  Key difference: Pre-rendered to 16-bit color       │
+│  - No CLUT lookup at draw time                      │
+│  - tpens bitmask controls which colors are visible  │
+│  - Used for priority mask effects (e.g., staircases │
+│    appearing in front of characters in Final Fight) │
+└─────────────────────────────────────────────────────┘
+```
+
+#### CLUT (Color Look-Up Table) System
+
+CPS1 uses a different palette organization than MVS/NCDZ:
+
+```
+┌─────────────────────────────────────────────────────┐
+│              CPS1 CLUT Organization                 │
+├─────────────────────────────────────────────────────┤
+│ Total Palettes: 192 (vs MVS's 256)                  │
+│ Colors per Palette: 16 (4-bit index)                │
+│ Color Format: 15-bit RGB (5-5-5)                    │
+│ On-screen colors: 192 × 16 = 3,072                  │
+├─────────────────────────────────────────────────────┤
+│  Palette Assignment by Layer:                       │
+│  ┌────────────────────────────────────┐             │
+│  │ Palettes 0-31:   OBJECT sprites    │             │
+│  │ Palettes 32-63:  SCROLL1 tiles     │             │
+│  │ Palettes 64-95:  SCROLL2 tiles     │             │
+│  │ Palettes 96-127: SCROLL3 tiles     │             │
+│  │ Palettes 128-191: Extended/unused  │             │
+│  └────────────────────────────────────┘             │
+├─────────────────────────────────────────────────────┤
+│  Two CLUT Banks (bit 4 of attr):                    │
+│  attr & 0x10 == 0: Bank 0 (lower 16 palettes)       │
+│  attr & 0x10 != 0: Bank 1 (upper 16 palettes)       │
+│                                                     │
+│  PSP CLUT Loading:                                  │
+│  OBJECT:  clut[0<<4] or clut[16<<4]                 │
+│  SCROLL1: clut[32<<4] or clut[48<<4]                │
+│  SCROLL2: clut[64<<4] or clut[80<<4]                │
+│  SCROLL3: clut[96<<4] or clut[112<<4]               │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Sprite Cache Key Generation
+
+CPS1 uses different key formats for normal and high-priority layers:
+
+```c
+// Normal layers: tile code + palette (4 bits)
+#define MAKE_KEY(code, attr)      (code | ((attr & 0x0f) << 28))
+
+// High priority layer: code + attr including tpens mask
+#define MAKE_HIGH_KEY(code, attr) (code | ((attr & 0x19f) << 16))
+```
+
+#### Work Buffer System
+
+CPS1 requires more memory due to multiple texture atlases:
+
+| Buffer | Type | Size | Purpose |
+|--------|------|------|---------|
+| scrbitmap | 16-bit RGB | 512×272 | Software rendering target |
+| tex_scrollh | 16-bit RGB | 512×192 | High priority layer (direct color) |
+| tex_object | 8-bit indexed | 512×512 | OBJECT sprite atlas |
+| tex_scroll1 | 8-bit indexed | 512×512 | SCROLL1 tile atlas |
+| tex_scroll2 | 8-bit indexed | 512×512 | SCROLL2 tile atlas |
+| tex_scroll3 | 8-bit indexed | 512×512 | SCROLL3 tile atlas |
+
+**Memory Layout (PSP):**
+```
+work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes)
+            ├─ tex_scrollh  (512 × 192 × 2 bytes)
+            ├─ tex_object   (512 × 512 × 1 byte)
+            ├─ tex_scroll1  (512 × 512 × 1 byte)
+            ├─ tex_scroll2  (512 × 512 × 1 byte)
+            └─ tex_scroll3  (512 × 512 × 1 byte)
+```
+
 #### CPS1 Graphics Data Format (Interleaved Planar)
 
 **Important:** CPS1 graphics ROMs use an interleaved planar format. When decoding a 32-bit word, pixels are NOT sequential:
@@ -1509,6 +1785,58 @@ CPS1 has a flexible layer priority system controlled by hardware registers:
 
 - **Native:** 384×224
 - **With borders:** 512×256 work area (visible at x=64, y=16)
+
+#### Rendering Pipeline (CPS1)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CPS1 Frame Rendering Flow                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. blit_start(high_layer)                                      │
+│     └─ Reset scrollh if layer changed                           │
+│     └─ Delete dirty palette entries from scrollh cache          │
+│     └─ Clear palette dirty marks                                │
+│     └─ Clear work frame                                         │
+│                                                                  │
+│  2. For each layer (priority order varies per game):            │
+│                                                                  │
+│     SCROLL3: blit_draw_scroll3() → blit_finish_scroll3()        │
+│     └─ Cache miss: decode 32×32 tile to tex_scroll3             │
+│     └─ Add vertices, batch by CLUT bank (0 or 1)                │
+│     └─ Draw with CLUT at palette 96 or 112                      │
+│                                                                  │
+│     SCROLL2: blit_set_clip_scroll2() sets render mode           │
+│     └─ Clip >= 16 lines: hardware path                          │
+│     └─ Clip < 16 lines: software path (for parallax)            │
+│     └─ blit_draw_scroll2() → blit_finish_scroll2()              │
+│     └─ Draw with CLUT at palette 64 or 80                       │
+│                                                                  │
+│     SCROLL1: blit_draw_scroll1() → blit_finish_scroll1()        │
+│     └─ Cache miss: decode 8×8 tile to tex_scroll1               │
+│     └─ gfxset parameter for different character sets            │
+│     └─ Draw with CLUT at palette 32 or 48                       │
+│                                                                  │
+│     OBJECT: blit_draw_object() → blit_finish_object()           │
+│     └─ Cache miss: decode 16×16 sprite to tex_object            │
+│     └─ Track CLUT changes, batch draw when CLUT switches        │
+│     └─ Draw with CLUT at palette 0 or 16                        │
+│                                                                  │
+│     SCROLLH (high priority): varies by scrollh_layer_number     │
+│     └─ blit_draw_scroll1h/2h/3h() → blit_finish_scrollh()       │
+│     └─ Uses 16-bit direct color (no CLUT at draw time)          │
+│     └─ tpens bitmask controls visible colors (priority mask)    │
+│                                                                  │
+│     STARS: blit_draw_stars() (point rendering)                  │
+│     └─ Draws 1×1 pixel stars as GPU points                      │
+│     └─ Used in Forgotten Worlds, etc.                           │
+│                                                                  │
+│  3. blit_finish()                                               │
+│     └─ Handle screen rotation/flip if enabled                   │
+│     └─ Transfer work frame to display with scaling              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -1642,6 +1970,107 @@ NCDZ uses a shared sprite management architecture similar to MVS:
 | FIX | 0x200 | 512×512 / 8×8 | 1,200 |
 | SPR | 0x200 | 512×1536 / 16×16 | 12,288 |
 
+#### Texture Atlas Architecture
+
+NCDZ uses the same texture atlas architecture as MVS. Since both systems share the Neo Geo hardware base, the rendering implementation is nearly identical.
+
+**FIX Layer Atlas (TEX_FIX):**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×512 pixels (8-bit indexed)          │
+│ Tile size: 8×8 pixels                               │
+│ Tiles per row: 64 (512/8)                           │
+│ Max tiles: 4,096                                    │
+├─────────────────────────────────────────────────────┤
+│  UV Calculation (same as MVS):                      │
+│  u0 = (idx & 0x3f) << 3                             │
+│  v0 = (idx & 0xfc0) >> 3                            │
+│                                                     │
+│  Key difference from MVS:                           │
+│  - Graphics from memory_region_gfx1 (loaded from CD)│
+│  - Different tile decoding (bit expansion):         │
+│    datal = ((tile & 0x0f) >> 0) | ...               │
+│    (expands 4-bit to 8-bit per pixel)               │
+└─────────────────────────────────────────────────────┘
+```
+
+**SPR Layer Atlas (TEX_SPR0/1/2):**
+```
+┌─────────────────────────────────────────────────────┐
+│ Dimensions: 512×1536 pixels (3 banks × 512)         │
+│ Tile size: 16×16 pixels                             │
+│ Tiles per row: 32 (512/16)                          │
+│ Max tiles: 3,072                                    │
+├─────────────────────────────────────────────────────┤
+│  Memory Organization:                               │
+│  ┌─────────────────────┐                            │
+│  │ TEX_SPR0 (bank 0)   │ ← tiles 0-1023             │
+│  ├─────────────────────┤                            │
+│  │ TEX_SPR1 (bank 1)   │ ← tiles 1024-2047          │
+│  ├─────────────────────┤                            │
+│  │ TEX_SPR2 (bank 2)   │ ← tiles 2048-3071          │
+│  └─────────────────────┘                            │
+│                                                     │
+│  UV Calculation:                                    │
+│  u0 = (idx & 0x1f) << 4                             │
+│  v0 = (idx & 0x3e0) >> 1                            │
+│  bank = idx >> 10                                   │
+│                                                     │
+│  Key difference from MVS:                           │
+│  - Graphics from memory_region_gfx2 (loaded from CD)│
+│  - No ROM caching needed (all data in RAM)          │
+└─────────────────────────────────────────────────────┘
+```
+
+#### CLUT (Color Look-Up Table) System
+
+NCDZ uses the same CLUT system as MVS:
+
+```
+┌─────────────────────────────────────────────────────┐
+│              CLUT Organization                      │
+├─────────────────────────────────────────────────────┤
+│ Palette Banks: 2                                    │
+│ Palettes per Bank: 256                              │
+│ Colors per Palette: 16                              │
+│ Color Format: 15-bit RGB                            │
+├─────────────────────────────────────────────────────┤
+│  Palette Selection in Attributes:                   │
+│  ┌────────────────────────────────────┐             │
+│  │ FIX: attr bits 0-3 = palette 0-15  │             │
+│  │ SPR: attr bits 8-11 = palette 0-255│             │
+│  └────────────────────────────────────┘             │
+│                                                     │
+│  color_table[] lookup (same as MVS):                │
+│  col = color_table[(attr >> 8) & 0x0f]              │
+│  Embeds palette offset into 8-bit texture pixels   │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Sprite Cache Key Generation
+
+Same key generation as MVS:
+
+```c
+// FIX: 12-bit tile code + 4-bit palette
+#define MAKE_FIX_KEY(code, attr)  (code | (attr << 28))
+
+// SPR: 15-bit tile code + palette offset
+#define MAKE_SPR_KEY(code, attr)  (code | ((attr & 0x0f00) << 20))
+```
+
+**Note:** NCDZ uses 15-bit tile codes (`code & 0x7fff`) vs MVS's 20-bit addressing.
+
+#### Work Buffer System
+
+| Buffer | Type | Size | Purpose |
+|--------|------|------|---------|
+| SCRBITMAP | 16-bit RGB | 384×264 | Software rendering target |
+| TEX_SPR0 | 8-bit indexed | 512×512 | Sprite atlas bank 0 |
+| TEX_SPR1 | 8-bit indexed | 512×512 | Sprite atlas bank 1 |
+| TEX_SPR2 | 8-bit indexed | 512×512 | Sprite atlas bank 2 |
+| TEX_FIX | 8-bit indexed | 512×512 | FIX layer atlas |
+
 #### Graphics Data Format
 
 NCDZ uses the same nibble-packed format as MVS:
@@ -1727,6 +2156,107 @@ row = idx / TILES_PER_LINE;
 column = idx % TILES_PER_LINE;
 offset = ((row * TILE_HEIGHT) + line) * BUF_WIDTH + (column * TILE_WIDTH);
 dst = &texture[offset];
+```
+
+#### Platform-Specific Texture Atlas Implementation
+
+**MVS/NCDZ Texture Decoding (Platform-Specific):**
+
+The tile decoding writes to texture atlas positions differently per platform:
+
+```c
+// PS2/Desktop (linear layout):
+row = idx / TILE_16x16_PER_LINE;      // Which row of tiles
+column = idx % TILE_16x16_PER_LINE;   // Which column
+for (lines = 0; lines < 16; lines++) {
+    offset = ((row * 16) + lines) * BUF_WIDTH + (column * 16);
+    dst = &tex_spr[0][offset];
+    // Decode 16 pixels per line...
+}
+
+// PSP (swizzled layout):
+dst = SWIZZLED8_16x16(tex_spr, idx);
+// Different byte ordering for GPU cache optimization
+```
+
+**CLUT Upload Per Platform:**
+
+| Platform | CLUT Location | Upload Method |
+|----------|---------------|---------------|
+| PSP | GPU CLUT registers | `sceGuClutLoad()` with 16 entries |
+| PS2 | GS VRAM | `gsKit_texture_send_inline()` to VRAM |
+| Desktop | Software | Direct palette lookup in shader/CPU |
+
+**PS2 CLUT Specifics:**
+```c
+// CLUT stored in GS VRAM (256×16 colors per bank)
+#define CLUT_WIDTH 256
+#define CLUT_BANK_HEIGHT 16
+#define CLUT_BANKS_COUNT 2
+
+// CLUT offset calculation for PS2 CSM2 mode:
+gs_texclut texclut = postion_to_TEXCLUT(CLUT_CBW, 0, cov);
+```
+
+#### Vertex Format Per Platform
+
+**PS2 (GSKit GSPRIMUVPOINTFLAT):**
+```c
+typedef struct {
+    gs_xyz2 xyz2;    // Position (X, Y, Z packed)
+    gs_uv uv;        // Texture coordinates
+} GSPRIMUVPOINTFLAT;
+
+// Vertex submission:
+gskit_prim_list_sprite_texture_uv_flat_color2(gsGlobal, tex, color, count, vertices);
+```
+
+**PSP (sceGu Vertex):**
+```c
+struct Vertex {
+    uint16_t u, v;   // Texture coordinates
+    uint16_t color;  // Vertex color
+    int16_t x, y, z; // Position
+};
+
+// Vertex submission:
+sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, count, NULL, vertices);
+```
+
+#### Rendering Pipeline (MVS/NCDZ)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frame Rendering Flow                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. blit_start()                                                │
+│     └─ Upload CLUT for current palette bank                     │
+│     └─ Clear work frame with background color                   │
+│                                                                  │
+│  2. blit_draw_spr() [called per visible sprite]                 │
+│     └─ Check sprite cache (hash lookup)                         │
+│     └─ If miss: decode tile → texture atlas                     │
+│     └─ Add vertices to draw list                                │
+│     └─ Track which texture bank and CLUT offset                 │
+│                                                                  │
+│  3. blit_finish_spr()                                           │
+│     └─ Upload modified texture banks to VRAM                    │
+│     └─ Batch draw sprites by texture bank + CLUT                │
+│     └─ Submit vertex lists to GPU                               │
+│                                                                  │
+│  4. blit_draw_fix() [called per FIX tile]                       │
+│     └─ Same cache/decode flow as SPR                            │
+│     └─ Add to FIX vertex list                                   │
+│                                                                  │
+│  5. blit_finish_fix()                                           │
+│     └─ Upload TEX_FIX if modified                               │
+│     └─ Draw all FIX tiles in one batch                          │
+│                                                                  │
+│  6. blit_finish()                                               │
+│     └─ Transfer work frame to display (with scaling)            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
