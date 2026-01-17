@@ -7,9 +7,6 @@
 #include <stddef.h>
 #include "video_driver.h"
 
-#if VIDEO_32BPP
-int video_mode = 0;
-#endif
 void *show_frame;
 void *draw_frame;
 void *work_frame;

@@ -88,11 +88,7 @@ UI_PALETTE ui_palette[UI_PAL_MAX] =
 ******************************************************************************/
 
 static int light_level = 0;
-#if VIDEO_32BPP
-static int pixel_format;
-#else
 #define pixel_format	GU_PSM_5551
-#endif
 
 #ifdef COMMAND_LIST
 static uint16_t command_font_color[11] =
@@ -317,10 +313,6 @@ void ui_init(void)
 
 	for (x = 0; x < 12; x++)
 		gauss_sum += gauss_fact[GAUSS_WIDTH][x];
-
-#if VIDEO_32BPP
-	pixel_format = (video_mode == 32) ? GU_PSM_8888 : GU_PSM_5551;
-#endif
 }
 
 
@@ -1837,10 +1829,7 @@ void hline_gradation(int sx, int ex, int y, int r1, int g1, int b1, int r2, int 
 	sceGuEnable(GU_BLEND);
 	sceGuShadeModel(GU_SMOOTH);
 
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuEnable(GU_DITHER);
+	sceGuEnable(GU_DITHER);
 
 	vertices = (Vertex16 *)sceGuGetMemory(2 * sizeof(Vertex16));
 
@@ -1856,11 +1845,7 @@ void hline_gradation(int sx, int ex, int y, int r1, int g1, int b1, int r2, int 
 
 		sceGuDrawArray(GU_LINES, PRIMITIVE_FLAGS, 2, NULL, vertices);
 	}
-
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuDisable(GU_DITHER);
+	sceGuDisable(GU_DITHER);
 
 	sceGuShadeModel(GU_FLAT);
 	sceGuDisable(GU_BLEND);
@@ -1958,11 +1943,7 @@ void vline_gradation(int x, int sy, int ey, int r1, int g1, int b1, int r2, int 
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
 	sceGuShadeModel(GU_SMOOTH);
-
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuEnable(GU_DITHER);
+	sceGuEnable(GU_DITHER);
 
 	vertices = (Vertex16 *)sceGuGetMemory(2 * sizeof(Vertex16));
 
@@ -1978,11 +1959,7 @@ void vline_gradation(int x, int sy, int ey, int r1, int g1, int b1, int r2, int 
 
 		sceGuDrawArray(GU_LINES, PRIMITIVE_FLAGS, 2, NULL, vertices);
 	}
-
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuDisable(GU_DITHER);
+	sceGuDisable(GU_DITHER);
 
 	sceGuShadeModel(GU_FLAT);
 	sceGuDisable(GU_BLEND);
@@ -2156,11 +2133,7 @@ void boxfill_gradation(int sx, int sy, int ex, int ey, int r1, int g1, int b1, i
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
 	sceGuShadeModel(GU_SMOOTH);
-
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuEnable(GU_DITHER);
+	sceGuEnable(GU_DITHER);
 
 	vertices = (Vertex16 *)sceGuGetMemory(4 * sizeof(Vertex16));
 
@@ -2209,11 +2182,7 @@ void boxfill_gradation(int sx, int sy, int ex, int ey, int r1, int g1, int b1, i
 
 		sceGuDrawArray(GU_TRIANGLE_STRIP, PRIMITIVE_FLAGS, 4, NULL, vertices);
 	}
-
-#if VIDEO_32BPP
-	if (video_mode == 16)
-#endif
-		sceGuDisable(GU_DITHER);
+	sceGuDisable(GU_DITHER);
 
 	sceGuShadeModel(GU_FLAT);
 	sceGuDisable(GU_BLEND);
@@ -2384,39 +2353,6 @@ void draw_bar_shadow(void)
 		draw_boxshadow(x, 20, 8, 8, 7);
 	}
 }
-
-
-#if VIDEO_32BPP
-
-/*******************************************************
-	ユーザインタフェース色設定
-*******************************************************/
-
-/*------------------------------------------------------
-	UI_PALETTE取得
-------------------------------------------------------*/
-
-void get_ui_color(UI_PALETTE *pal, int *r, int *g, int *b)
-{
-	*r = pal->r;
-	*g = pal->g;
-	*b = pal->b;
-}
-
-
-/*------------------------------------------------------
-	UI_PALETTE設定
-------------------------------------------------------*/
-
-void set_ui_color(UI_PALETTE *pal, int r, int g, int b)
-{
-	pal->r = r;
-	pal->g = g;
-	pal->b = b;
-}
-
-#endif /* VIDEO_32BPP */
-
 
 /******************************************************************************
 	ロゴ描画

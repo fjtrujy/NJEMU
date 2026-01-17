@@ -28,11 +28,6 @@ UI_PALETTE ui_palette[UI_PAL_MAX] =
 int cheat_num = 0;
 gamecheat_t* gamecheat[MAX_CHEATS];
 
-#if VIDEO_32BPP
-int bgimage_type;
-int bgimage_blightness;
-#endif
-
 void msg_printf(const char *text, ...) {
 	// Let's use directly printf instead
 	va_list args;

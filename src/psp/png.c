@@ -48,7 +48,7 @@ struct png_info
 	uint8_t  *zimage;
 	uint32_t zlength;
 
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 	uint32_t xres;
 	uint32_t yres;
 	uint32_t resolution_unit;
@@ -83,7 +83,7 @@ static void errormsg(int number)
 	{
 	case 0: ui_popup(TEXT(COULD_NOT_ALLOCATE_MEMORY_FOR_PNG)); break;
 	case 1: ui_popup(TEXT(COULD_NOT_ENCODE_PNG_IMAGE)); break;
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 	case 2: ui_popup(TEXT(COULD_NOT_DECODE_PNG_IMAGE)); break;
 #endif
 	}
@@ -181,36 +181,7 @@ static void png_zcfree(voidpf opaque, voidpf ptr)
 #endif
 
 
-#if VIDEO_32BPP
-static const uint8_t *png_data;
-static uint32_t png_size;
-static uint32_t png_offset;
-
-static size_t png_read(void *buf, size_t size, FILE *fp)
-{
-	if (fp)
-	{
-		return fread(buf, 1, size, fp);
-	}
-	else
-	{
-		if ((png_size - png_offset) >= size)
-		{
-			memcpy(buf, &png_data[png_offset], size);
-			png_offset += size;
-			return size;
-		}
-		else
-		{
-			size = png_size - png_offset;
-
-			memcpy(buf, &png_data[png_offset], size);
-			png_offset += size;
-			return size;
-		}
-	}
-}
-#elif (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 #define png_read(buf, size, fp)	fread(buf, 1, size, fp)
 #endif
 
@@ -221,7 +192,7 @@ static size_t png_read(void *buf, size_t size, FILE *fp)
 
 ********************************************************************************/
 
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 
 /* convert_uint is here so we don't have to deal with byte-ordering issues */
 static uint32_t convert_from_network_order(uint8_t *v)
@@ -543,44 +514,6 @@ static int png_read_file(FILE *fp, struct png_info *p)
 	return 1;
 }
 
-
-/*--------------------------------------------------------
-	±³¾°»­Ïñ¤ÎÃ÷¶È¤ò‰ä¸ü
---------------------------------------------------------*/
-
-#if VIDEO_32BPP
-static inline void adjust_blightness(uint8_t *r, uint8_t *g, uint8_t *b)
-{
-	switch (bgimage_blightness)
-	{
-	case 25:
-		*r  >>= 2;
-		*g  >>= 2;
-		*b  >>= 2;
-		break;
-
-	case 50:
-		*r  >>= 1;
-		*g  >>= 1;
-		*b  >>= 1;
-		break;
-
-	case 75:
-		*r = (*r >> 1) + (*r >> 2);
-		*g = (*g >> 1) + (*g >> 2);
-		*b = (*b >> 1) + (*b >> 2);
-		break;
-
-	default:
-		*r = (uint8_t)((int)*r * bgimage_blightness / 100);
-		*g = (uint8_t)((int)*g * bgimage_blightness / 100);
-		*b = (uint8_t)((int)*b * bgimage_blightness / 100);
-		break;
-	}
-}
-#endif
-
-
 /*--------------------------------------------------------
 	PNGÕi¤ßÞz¤ß
 --------------------------------------------------------*/
@@ -595,23 +528,8 @@ int load_png(const char *name, int number)
 
 	video_driver->clearFrame(video_data, draw_frame);
 
-#if VIDEO_32BPP
-	if (name)
-	{
-		if ((fp = fopen(name, "rb")) == NULL)
-			return 0;
-	}
-	else
-	{
-		fp = NULL;
-		png_data = wallpaper[number];
-		png_size = wallpaper_size[number];
-		png_offset = 0;
-	}
-#else
 	if ((fp = fopen(name, "rb")) == NULL)
 		return 0;
-#endif
 
 	png_mem_init(1);
 
@@ -622,110 +540,50 @@ int load_png(const char *name, int number)
 
 		sx = (SCR_WIDTH - p.width) >> 1;
 		sy = (SCR_HEIGHT - p.height) >> 1;
+		uint16_t *vptr, *dst;
 
-#if VIDEO_32BPP
-		if (video_mode == 32)
+		vptr = (uint16_t *)video_driver->frameAddr(video_data, draw_frame, sx, sy);
+
+		switch (p.bpp * p.bit_depth)
 		{
-			uint32_t *vptr, *dst;
-
-			vptr = (uint32_t *)video_driver->frameAddr(video_data, draw_frame, sx, sy);
-
-			switch (p.bpp * p.bit_depth)
+		case 8:
+			for (y = 0; y < p.height; y++)
 			{
-			case 8:
-				for (y = 0; y < p.height; y++)
+				src++;
+				dst = &vptr[y * BUF_WIDTH];
+
+				for (x = 0; x < p.width; x++)
 				{
-					src++;
-					dst = &vptr[y * BUF_WIDTH];
+					uint8_t color = *src++;
+					uint8_t r = p.palette[color * 3 + 0];
+					uint8_t g = p.palette[color * 3 + 1];
+					uint8_t b = p.palette[color * 3 + 2];
 
-					for (x = 0; x < p.width; x++)
-					{
-						uint8_t color = *src++;
-						uint8_t r = p.palette[color * 3 + 0];
-						uint8_t g = p.palette[color * 3 + 1];
-						uint8_t b = p.palette[color * 3 + 2];
-
-						if (bgimage_blightness != 100)
-							adjust_blightness(&r, &g, &b);
-
-						dst[x] = MAKECOL32(r, g, b);
-					}
+					dst[x] = MAKECOL15(r, g, b);
 				}
-				break;
-
-			case 24:
-				for (y = 0; y < p.height; y++)
-				{
-					src++;
-					dst = &vptr[y * BUF_WIDTH];
-
-					for (x = 0; x < p.width; x++)
-					{
-						uint8_t r = *src++;
-						uint8_t g = *src++;
-						uint8_t b = *src++;
-
-						if (bgimage_blightness != 100)
-							adjust_blightness(&r, &g, &b);
-
-						dst[x] = MAKECOL32(r, g, b);
-					}
-				}
-				break;
-
-			default:
-				ui_popup(TEXT(xBIT_COLOR_PNG_IMAGE_NOT_SUPPORTED), p.bpp * p.bit_depth);
-				break;
 			}
-		}
-		else
-#endif
-		{
-			uint16_t *vptr, *dst;
+			break;
 
-			vptr = (uint16_t *)video_driver->frameAddr(video_data, draw_frame, sx, sy);
-
-			switch (p.bpp * p.bit_depth)
+		case 24:
+			for (y = 0; y < p.height; y++)
 			{
-			case 8:
-				for (y = 0; y < p.height; y++)
+				src++;
+				dst = &vptr[y * BUF_WIDTH];
+
+				for (x = 0; x < p.width; x++)
 				{
-					src++;
-					dst = &vptr[y * BUF_WIDTH];
+					uint8_t r = *src++;
+					uint8_t g = *src++;
+					uint8_t b = *src++;
 
-					for (x = 0; x < p.width; x++)
-					{
-						uint8_t color = *src++;
-						uint8_t r = p.palette[color * 3 + 0];
-						uint8_t g = p.palette[color * 3 + 1];
-						uint8_t b = p.palette[color * 3 + 2];
-
-						dst[x] = MAKECOL15(r, g, b);
-					}
+					dst[x] = MAKECOL15(r, g, b);
 				}
-				break;
-
-			case 24:
-				for (y = 0; y < p.height; y++)
-				{
-					src++;
-					dst = &vptr[y * BUF_WIDTH];
-
-					for (x = 0; x < p.width; x++)
-					{
-						uint8_t r = *src++;
-						uint8_t g = *src++;
-						uint8_t b = *src++;
-
-						dst[x] = MAKECOL15(r, g, b);
-					}
-				}
-				break;
-
-			default:
-				ui_popup(TEXT(xBIT_COLOR_PNG_IMAGE_NOT_SUPPORTED), p.bpp * p.bit_depth);
-				break;
 			}
+			break;
+
+		default:
+			ui_popup(TEXT(xBIT_COLOR_PNG_IMAGE_NOT_SUPPORTED), p.bpp * p.bit_depth);
+			break;
 		}
 	}
 
@@ -924,48 +782,21 @@ static int png_create_datastream(SceUID fd)
 	}
 
 	dst = p.image;
+	uint16_t *vptr, *src;
 
-#if VIDEO_32BPP
-#if 0
-	if (video_mode == 32)
+	vptr = (uint16_t *)video_driver->frameAddr(video_data, show_frame, 0, 0);
+
+	for (y = 0; y < p.height; y++)
 	{
-		uint32_t *vptr, *src;
+		src = &vptr[y * BUF_WIDTH];
 
-		vptr = (uint32_t *)video_driver->frameAddr(video_data, show_frame, 0, 0);
-
-		for (y = 0; y < p.height; y++)
+		*dst++ = 0;
+		for (x = 0; x < p.width; x++)
 		{
-			src = &vptr[y * BUF_WIDTH];
-
-			*dst++ = 0;
-			for (x = 0; x < p.width; x++)
-			{
-				uint32_t color = src[x];
-				*dst++ = (uint8_t)GETR32(color);
-				*dst++ = (uint8_t)GETG32(color);
-				*dst++ = (uint8_t)GETB32(color);
-			}
-		}
-	}
-#endif
-#endif
-	{
-		uint16_t *vptr, *src;
-
-		vptr = (uint16_t *)video_driver->frameAddr(video_data, show_frame, 0, 0);
-
-		for (y = 0; y < p.height; y++)
-		{
-			src = &vptr[y * BUF_WIDTH];
-
-			*dst++ = 0;
-			for (x = 0; x < p.width; x++)
-			{
-				uint16_t color = src[x];
-				*dst++ = (uint8_t)GETR15(color);
-				*dst++ = (uint8_t)GETG15(color);
-				*dst++ = (uint8_t)GETB15(color);
-			}
+			uint16_t color = src[x];
+			*dst++ = (uint8_t)GETR15(color);
+			*dst++ = (uint8_t)GETG15(color);
+			*dst++ = (uint8_t)GETB15(color);
 		}
 	}
 

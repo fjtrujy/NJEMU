@@ -11,16 +11,6 @@
 
 
 /******************************************************************************
-	¥°¥í©`¥Ð¥ë‰äÊý
-******************************************************************************/
-
-#if VIDEO_32BPP
-int bgimage_type;
-int bgimage_blightness;
-#endif
-
-
-/******************************************************************************
 	±³¾°Ãè»­
 ******************************************************************************/
 
@@ -30,26 +20,7 @@ int bgimage_blightness;
 
 void load_background(int number)
 {
-#if VIDEO_32BPP
-	int found = 0;
-
-	if (bgimage_type == BG_DEFAULT || bgimage_type == BG_USER)
-	{
-		found = load_png(NULL, number);
-	}
-	else if (bgimage_type == BG_LOGOONLY)
-	{
-		found = load_png(NULL, WP_LOGO);
-	}
-
-	if (!found)
-	{
-		boxfill(0, 0, 479, 271, COLOR_BLACK);
-		boxfill_alpha(0, 0, 479, 271, UI_COLOR(UI_PAL_BG2), 15 * bgimage_blightness / 100);
-	}
-#else
 	ui_fill_frame(draw_frame, UI_PAL_BG2);
-#endif
 
 	draw_bar_shadow();
 
@@ -949,11 +920,7 @@ static UI_HELP *help_init(int number)
 		HELP_DISABLE()
 #endif
 		HELP_ENABLE(EXIT_EMULATOR)
-#if VIDEO_32BPP
-		HELP_ENABLE(OPEN_COLOR_SETTINGS_MENU)
-#else
 		HELP_DISABLE()
-#endif
 #if (EMU_SYSTEM == MVS)
 		HELP_ENABLE(SHOW_BIOS_SELECT_MENU)
 #elif (EMU_SYSTEM == NCDZ)
@@ -1055,22 +1022,6 @@ static UI_HELP *help_init(int number)
 		HELP_DISABLE()
 		HELP_ENABLE(RETURN_TO_MAIN_MENU)
 		HELP_DISABLE()
-		HELP_DISABLE()
-		HELP_ENABLE(SHOW_THIS_HELP)
-		HELP_END
-		break;
-#endif
-#if VIDEO_32BPP
-	case HELP_COLORSETTINGS:
-		HELP_SET_NAME(COLOR_SETTINGS_MENU)
-		HELP_ENABLE(SELECT_ITEM)
-		HELP_ENABLE(SELECT_ITEM_CHANGE_VALUE)
-		HELP_ENABLE(RGB_VALUE_PLUS_5)
-		HELP_ENABLE(RETURN_TO_FILE_BROWSER)
-		HELP_ENABLE(RGB_VALUE_MINUS_5)
-		HELP_ENABLE(RESTORE_ALL_VALUES_TO_DEFAULT)
-		HELP_DISABLE()
-		HELP_ENABLE(RETURN_TO_FILE_BROWSER)
 		HELP_DISABLE()
 		HELP_ENABLE(SHOW_THIS_HELP)
 		HELP_END

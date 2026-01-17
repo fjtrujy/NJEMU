@@ -95,21 +95,12 @@ static int zipname_num;
 	Draw title_x.sys to Image Buffer
 --------------------------------------------------------*/
 
-#if VIDEO_32BPP
-static void title_draw_spr(int sx, int sy, uint8_t *spr, uint32_t *palette, int tileno)
-#else
 static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int tileno)
-#endif
 {
 	uint32_t tile, lines = 16;
 	uint32_t *src = (uint32_t *)(spr + tileno * 128);
-#if VIDEO_32BPP
-	uint32_t *dst = (uint32_t *)video_driver->frameAddr(video_data, tex_frame, sx, sy);
-	uint32_t *pal = &palette[tileno << 4];
-#else
 	uint16_t *dst = (uint16_t *)video_driver->frameAddr(video_data, tex_frame, sx, sy);
 	uint16_t *pal = &palette[tileno << 4];
-#endif
 
 	while (lines--)
 	{
@@ -147,9 +138,6 @@ static int load_title(const char *path, int number)
 	int64_t fd;
 	uint8_t  title_spr[0x1680];
 	uint16_t palette[0x5a0 >> 1];
-#if VIDEO_32BPP
-	uint32_t palette32[0x5a0 >> 1];
-#endif
 	char title_path[PATH_MAX], region_chr[3] = {'j','u','e'};
 
 	zip_open(path);
@@ -182,23 +170,11 @@ static int load_title(const char *path, int number)
 
 	for (i = 0; i < 0x5a0 >> 1; i++)
 	{
-#if VIDEO_32BPP
-		int r = ((palette[i] >> 7) & 0x1e) | ((palette[i] >> 14) & 0x01);
-		int g = ((palette[i] >> 3) & 0x1e) | ((palette[i] >> 13) & 0x01);
-		int b = ((palette[i] << 1) & 0x1e) | ((palette[i] >> 12) & 0x01);
-
-		r = (r << 3) | (r >> 2);
-		g = (g << 3) | (g >> 2);
-		b = (b << 3) | (b >> 2);
-
-		palette32[i] = MAKECOL32(r, g, b);
-#else
 		int r = ((palette[i] >> 7) & 0x1e) | ((palette[i] >> 14) & 0x01);
 		int g = ((palette[i] >> 3) & 0x1e) | ((palette[i] >> 13) & 0x01);
 		int b = ((palette[i] << 1) & 0x1e) | ((palette[i] >> 12) & 0x01);
 
 		palette[i] = MAKECOL15(r, g, b);
-#endif
 	}
 
 	neogeo_decode_spr(title_spr, 0, 0x1680);
@@ -209,11 +185,7 @@ static int load_title(const char *path, int number)
 	{
 		for (x = 0; x < 144; x += 16)
 		{
-#if VIDEO_32BPP
-			title_draw_spr(x, y, title_spr, palette32, tileno);
-#else
 			title_draw_spr(x, y, title_spr, palette, tileno);
-#endif
 			tileno++;
 		}
 	}
@@ -469,9 +441,6 @@ static void checkStartupDir(void)
 #ifdef SAVE_STATE
 	checkDir("state");
 #endif
-#if VIDEO_32BPP
-	checkDir("data");
-#endif
 #if (EMU_SYSTEM == MVS)
 	checkDir("memcard");
 #endif
@@ -644,9 +613,6 @@ static void getDir(const char *path)
 #endif
 #ifdef SAVE_STATE
 			if (strcasecmp(dir.d_name, "state") == 0) continue;
-#endif
-#if VIDEO_32BPP
-			if (strcasecmp(dir.d_name, "data") == 0) continue;
 #endif
 #if (EMU_SYSTEM == MVS)
 			if (strcasecmp(dir.d_name, "memcard") == 0) continue;
@@ -892,10 +858,6 @@ void file_browser(void)
 
 	Loop = LOOP_BROWSER;
 
-#if (VIDEO_32BPP && USE_CACHE)
-	GFX_MEMORY = NULL;
-#endif
-
 	for (i = 0; i < MAX_ENTRY; i++)
 		files[i] = (struct dirent *)malloc(sizeof(struct dirent));
 
@@ -908,12 +870,7 @@ void file_browser(void)
 	strcat(curr_dir, "roms");
 	strcpy(startupDir, curr_dir);
 	load_settings();
-
-#if VIDEO_32BPP
-	load_wallpaper();
-#else
 	ui_fill_frame(draw_frame, UI_PAL_BG2);
-#endif
 
 	load_background(WP_LOGO);
 	show_background();
@@ -1392,13 +1349,6 @@ void file_browser(void)
 					sprintf(startupDir, "%s/%s", curr_dir, files[sel]->name);
 			}
 		}
-#if VIDEO_32BPP
-		else if (pad_pressed(PLATFORM_PAD_L))
-		{
-			show_color_menu();
-			update = 1;
-		}
-#endif
 		else if (pad_pressed(PLATFORM_PAD_SELECT))
 		{
 			help(HELP_FILEBROWSER);
@@ -1440,8 +1390,5 @@ error:
 		if (files[i]) free(files[i]);
 	}
 	free_zipname();
-#endif
-#if VIDEO_32BPP
-	free_wallpaper();
 #endif
 }

@@ -215,15 +215,6 @@ static void desktop_free(void *data)
 static void desktop_setMode(void *data, int mode)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-#if VIDEO_32BPP
-	if (video_mode != mode)
-	{
-		desktop_exit(desktop);
-		video_mode = mode;
-
-		desktop_start(data);
-	}
-#endif
 }
 
 static void desktop_setClutBaseAddr(void *data, uint16_t *clut_base)

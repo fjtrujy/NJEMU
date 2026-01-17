@@ -386,7 +386,6 @@ cmake --build build_psp_cps1
 | `ADHOC` | Enable Ad Hoc multiplayer | OFF |
 | `NO_GUI` | Disable GUI (headless mode) | ON |
 | `SAVE_STATE` | Enable save state support | OFF |
-| `UI_32BPP` | Enable 32-bit color UI | ON |
 | `RELEASE` | Release build | OFF |
 
 ### Build Directory Convention
@@ -444,7 +443,6 @@ Before compiling, edit the Makefile to configure build targets. Lines starting w
 | `ADHOC = 1` | Enable AdHoc multiplayer (not supported by NCDZPSP) |
 | `SAVE_STATE = 1` | Enable save state/load functionality |
 | `COMMAND_LIST = 1` | Enable command list (move list) display |
-| `UI_32BPP = 1` | Use 32-bit color for UI; allows wallpapers but may cause memory issues |
 | `RELEASE = 1` | Release build (code within `#if RELEASE ~ #endif` is enabled) |
 
 #### Version Settings

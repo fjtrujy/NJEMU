@@ -141,15 +141,6 @@ void draw_bar_shadow(void);
 void draw_box_shadow(int sx, int sy, int ex, int ey);
 
 /*------------------------------------------------------
-	User Interface Color Settings
-------------------------------------------------------*/
-
-#if VIDEO_32BPP
-void get_ui_color(UI_PALETTE *pal, int *r, int *g, int *b);
-void set_ui_color(UI_PALETTE *pal, int r, int g, int b);
-#endif
-
-/*------------------------------------------------------
 	Logo Drawing
 ------------------------------------------------------*/
 

@@ -50,9 +50,6 @@
 #ifdef ADHOC
 #include "psp/adhoc.h"
 #endif
-#if VIDEO_32BPP
-#include "psp/wallpaper.h"
-#endif
 #include "SystemButtons.h"
 
 #ifdef LARGE_MEMORY

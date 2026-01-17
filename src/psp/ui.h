@@ -16,25 +16,6 @@
 	���������ʾ
 ------------------------------------------------------*/
 
-// #if !VIDEO_32BPP
-// enum
-// {
-// 	WP_LOGO = 0,
-// 	WP_FILER,
-// 	WP_GAMECFG,
-// 	WP_KEYCFG,
-// 	WP_STATE,
-// 	WP_COLORCFG,
-// 	WP_DIPSW,
-// 	WP_CMDLIST,
-// 	NUM_WALLPAPERS
-// };
-// #endif
-
-#if VIDEO_32BPP
-extern int bgimage_type;
-extern int bgimage_blightness;
-#endif
 
 
 

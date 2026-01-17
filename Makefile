@@ -19,7 +19,6 @@ COMMAND_LIST = 0
 ADHOC = 0
 NO_GUI = 0
 SAVE_STATE = 0
-UI_32BPP = 1
 RELEASE = 0
 SYSTEM_BUTTONS = 0
 DEBUG = 0
@@ -180,12 +179,6 @@ ifeq ($(SYSTEM_BUTTONS), 1)
 OSOBJS += $(OS)/SystemButtons.o
 endif
 
-ifeq ($(UI_32BPP), 1)
-ifeq ($(NO_GUI), 0)
-OSOBJS += $(OS)/wallpaper.o
-endif
-endif
-
 #------------------------------------------------------------------------------
 # Include makefiles
 #------------------------------------------------------------------------------
@@ -239,12 +232,6 @@ endif
 
 ifeq ($(COMMAND_LIST), 1)
 CFLAGS += -DCOMMAND_LIST=1
-endif
-
-ifeq ($(UI_32BPP), 1)
-CFLAGS += -DVIDEO_32BPP=1
-else
-CFLAGS += -DVIDEO_32BPP=0
 endif
 
 ifeq ($(RELEASE), 1)

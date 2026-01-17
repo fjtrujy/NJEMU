@@ -146,9 +146,6 @@ enum
 #ifdef SAVE_STATE
 	HELP_STATE,
 #endif
-#if VIDEO_32BPP
-	HELP_COLORSETTINGS,
-#endif
 #ifdef COMMAND_LIST
 	HELP_COMMANDLIST,
 #endif

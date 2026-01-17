@@ -38,26 +38,12 @@ typedef struct psp_video {
 	Video Processing Initialization
 --------------------------------------------------------*/
 static void psp_start(void *data) {
-	#if VIDEO_32BPP
-	if (video_mode == 32)
-	{
-		pixel_format = GU_PSM_8888;
+	pixel_format = GU_PSM_5551;
 
-		show_frame = (void *)(FRAMESIZE32 * 0);
-		draw_frame = (void *)(FRAMESIZE32 * 1);
-		work_frame = (void *)(FRAMESIZE32 * 2);
-		tex_frame  = (void *)(FRAMESIZE32 * 3);
-	}
-	else
-#endif
-	{
-		pixel_format = GU_PSM_5551;
-
-		show_frame = (void *)(FRAMESIZE * 0);
-		draw_frame = (void *)(FRAMESIZE * 1);
-		work_frame = (void *)(FRAMESIZE * 2);
-		tex_frame  = (void *)(FRAMESIZE * 3);
-	}
+	show_frame = (void *)(FRAMESIZE * 0);
+	draw_frame = (void *)(FRAMESIZE * 1);
+	work_frame = (void *)(FRAMESIZE * 2);
+	tex_frame  = (void *)(FRAMESIZE * 3);
 
 	sceGuDisplay(GU_FALSE);
 	sceGuInit();
@@ -142,16 +128,6 @@ static void psp_free(void *data)
 
 static void psp_setMode(void *data, int mode)
 {
-#if VIDEO_32BPP
-	if (video_mode != mode)
-	{
-		if (video_mode) psp_exit();
-
-		video_mode = mode;
-
-		psp_start(data);
-	}
-#endif
 }
 
 static void psp_setClutBaseAddr(void *data, uint16_t *clut_base)
@@ -188,12 +164,7 @@ static void psp_flipScreen(void *data, bool vsync)
 
 static void *psp_frameAddr(void *data, void *frame, int x, int y)
 {
-#if VIDEO_32BPP
-	if (video_mode == 32)
-		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 2));
-	else
-#endif
-		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
+	return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 }
 
 static void *psp_workFrame(void *data, enum WorkBuffer buffer)

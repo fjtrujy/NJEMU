@@ -89,43 +89,6 @@ static cfg_type default_options[] =
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",		&neogeo_region,	1,	2	},
 #endif
-
-#if VIDEO_32BPP
-	{ CFG_NONE,	"[Color Settings]", },
-	{ CFG_INT,	"BGImageType",			&bgimage_type,					  3,   3 },
-	{ CFG_INT,	"BGImageBlightness",	&bgimage_blightness,			 50, 100 },
-	{ CFG_INT,	"TitleFontR",			&ui_palette[UI_PAL_TITLE].r,	255, 255 },
-	{ CFG_INT,	"TitleFontG",			&ui_palette[UI_PAL_TITLE].g,	255, 255 },
-	{ CFG_INT,	"TitleFontB",			&ui_palette[UI_PAL_TITLE].b,	255, 255 },
-	{ CFG_INT,	"SelectFontR",			&ui_palette[UI_PAL_SELECT].r,	255, 255 },
-	{ CFG_INT,	"SelectFontG",			&ui_palette[UI_PAL_SELECT].g,	255, 255 },
-	{ CFG_INT,	"SelectFontB",			&ui_palette[UI_PAL_SELECT].b,	255, 255 },
-	{ CFG_INT,	"NormalFontR",			&ui_palette[UI_PAL_NORMAL].r,	180, 255 },
-	{ CFG_INT,	"NormalFontG",			&ui_palette[UI_PAL_NORMAL].g,	180, 255 },
-	{ CFG_INT,	"NormalFontB",			&ui_palette[UI_PAL_NORMAL].b,	180, 255 },
-	{ CFG_INT,	"InfoFontR",			&ui_palette[UI_PAL_INFO].r,	255, 255 },
-	{ CFG_INT,	"InfoFontG",			&ui_palette[UI_PAL_INFO].g,	255, 255 },
-	{ CFG_INT,	"InfoFontB",			&ui_palette[UI_PAL_INFO].b,	 64, 255 },
-	{ CFG_INT,	"WarningFontR",			&ui_palette[UI_PAL_WARNING].r,	255, 255 },
-	{ CFG_INT,	"WarningFontG",			&ui_palette[UI_PAL_WARNING].g,	 64, 255 },
-	{ CFG_INT,	"WarningFontB",			&ui_palette[UI_PAL_WARNING].b,	 64, 255 },
-	{ CFG_INT,	"BGColor1R",			&ui_palette[UI_PAL_BG1].r,		 48, 255 },
-	{ CFG_INT,	"BGColor1G",			&ui_palette[UI_PAL_BG1].g,		 48, 255 },
-	{ CFG_INT,	"BGColor1B",			&ui_palette[UI_PAL_BG1].b,		 48, 255 },
-	{ CFG_INT,	"BGColor2R",			&ui_palette[UI_PAL_BG2].r,		  0, 255 },
-	{ CFG_INT,	"BGColor3G",			&ui_palette[UI_PAL_BG2].g,		  0, 255 },
-	{ CFG_INT,	"BGColor2B",			&ui_palette[UI_PAL_BG2].b,		160, 255 },
-	{ CFG_INT,	"FrameColorR",			&ui_palette[UI_PAL_FRAME].r,	  0, 255 },
-	{ CFG_INT,	"FrameColorG",			&ui_palette[UI_PAL_FRAME].g,	  0, 255 },
-	{ CFG_INT,	"FrameColorB",			&ui_palette[UI_PAL_FRAME].b,	  0, 255 },
-	{ CFG_INT,	"FileSelect1R",			&ui_palette[UI_PAL_FILESEL1].r, 40, 255 },
-	{ CFG_INT,	"FileSelect1G",			&ui_palette[UI_PAL_FILESEL1].g, 40, 255 },
-	{ CFG_INT,	"FileSelect1B",			&ui_palette[UI_PAL_FILESEL1].b, 40, 255 },
-	{ CFG_INT,	"FileSelect2R",			&ui_palette[UI_PAL_FILESEL2].r, 120, 255 },
-	{ CFG_INT,	"FileSelect2G",			&ui_palette[UI_PAL_FILESEL2].g, 120, 255 },
-	{ CFG_INT,	"FileSelect2B",			&ui_palette[UI_PAL_FILESEL2].b, 120, 255 },
-#endif
-
 	{ CFG_NONE, NULL, }
 };
 

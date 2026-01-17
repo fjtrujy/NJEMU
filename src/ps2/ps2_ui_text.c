@@ -359,29 +359,6 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		"Show command list. (MAME Plus! format \"command.dat\")",
 #endif
 
-#if VIDEO_32BPP
-		"Color settings menu",
-		"Background image type",
-		"Background image blightness",
-		"Title bar text",
-		"Selected text",
-		"Normal text",
-		"Information message text",
-		"Warning message text",
-		"File select bar (start)",
-		"File select bar (end)",
-		"Title bar/Message box",
-		"Title bar/ Message box frame",
-		"Background",
-		"Red",
-		"Green",
-		"Blue",
-		"Default image",
-		"User's image",
-		"logo.png only",
-		"File select bar",
-#endif
-
 		"Command list",
 
 		/* psp/mp3.c */
@@ -414,7 +391,7 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		/* psp/png.c */
 		"Could not allocate memory for PNG.",
 		"Could not enecode PNG image.",
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 		"Could not decode PNG image.",
 #endif
 		"%d bit color PNG image not supported.",
@@ -916,29 +893,6 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		"このゲームのコマンド一覧を表示します。",
 #endif
 
-#if VIDEO_32BPP
-		"カラー設定メニュー",
-		"背景画像の種類",
-		"背景画像の明るさ",
-		"タイトルバーの文字",
-		"選択された文字",
-		"標準の文字",
-		"情報メッセージの文字",
-		"警告メッセージの文字",
-		"ファイル選択バー(開始)",
-		"ファイル選択バー(終了)",
-		"タイトルバー/メッセージボックス",
-		"タイトルバー/メッセージボックスの枠",
-		"背景色(背景画像未使用時)",
-		"赤輝度",
-		"緑輝度",
-		"青輝度",
-		"標準の画像",
-		"ユーザの画像",
-		"logo.pngのみ",
-		"ファイル選択バー",
-#endif
-
 		"コマンドリスト",
 
 		/* psp/mp3.c */
@@ -971,7 +925,7 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		/* psp/png.c */
 		"PNG画像用のメモリを確保できません。",
 		"PNG画像を作成できません。",
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 		"PNG画像を展開できません。",
 #endif
 		"%dbitカラーのPNG画像には対応していません。",
@@ -1473,29 +1427,6 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		"Mostrar lista de comando. (MAME Plus! format \"command.dat\")",
 #endif
 
-#if VIDEO_32BPP
-		"Menu de ajustes de color",
-		"Tipo de imagen de fondo",
-		"Brillo de imagen de fondo",
-		"Texto de barra de titulo",
-		"Texto seleccionado",
-		"Texto normal",
-		"Texto de mensajes de informacion",
-		"Texto de mensajes de advertencia",
-		"Barra de seleccion de archivo (inico)",
-		"Barra de seleccion de archivo (fin)",
-		"Barra de titulo/Message box",
-		"Barra de titulo/ Message box frame",
-		"Fondo",
-		"Rojo",
-		"Verde",
-		"Azul",
-		"Imagen por defecto",
-		"Imagen del usuario",
-		"solo logo.png",
-		"Barra de seleccion de archivo",
-#endif
-
 		"Lista de comandos",
 
 		/* psp/mp3.c */
@@ -1528,7 +1459,7 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		/* psp/png.c */
 		"No se pudo asignar memoria para PNG.",
 		"No se pudo codificar la imagen PNG.",
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 		"No se pudo decodificar la imagen PNG.",
 #endif
 		"%d bit color imagen PNG no soportada.",
@@ -2030,29 +1961,6 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		"显示操作说明 (MAME Plus格式的\"command.dat\")",
 #endif
 
-#if VIDEO_32BPP
-		"颜色管理菜单",
-		"背景图类型",
-		"背景图亮度",
-		"标题框文字",
-		"选定文字",
-		"普通文字",
-		"消息文字",
-		"警告文字",
-		"文件选择框 (头)",
-		"文件选择框 (尾)",
-		"标题框/信息框",
-		"标题外框/信息外框",
-		"背景",
-		"红",
-		"绿",
-		"蓝",
-		"默认图像",
-		"用户图像",
-		"logo.png",
-		"文件选择框",
-#endif
-
 		"操作说明",
 
 		/* psp/mp3.c */
@@ -2085,7 +1993,7 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		/* psp/png.c */
 		"无法为PNG分配内存",
 		"无法圧缩PNG图像",
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 		"无法解圧PNG图像",
 #endif
 		"不支持%d位颜色的PNG图",
@@ -2587,29 +2495,6 @@ static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
 		"顯示操作說明 (MAME Plus格式的\"command.dat\")",
 #endif
 
-#if VIDEO_32BPP
-		"顏色管理菜單",
-		"背景圖類型",
-		"背景圖亮度",
-		"標題框文字",
-		"選定文字",
-		"普通文字",
-		"消息文字",
-		"警告文字",
-		"文件選擇框 (頭)",
-		"文件選擇框 (尾)",
-		"標題框/信息框",
-		"標題外框/信息外框",
-		"背景",
-		"紅",
-		"綠",
-		"藍",
-		"默認圖像",
-		"用戶圖像",
-		"logo.png",
-		"文件選擇框",
-#endif
-
 		"操作說明",
 
 		/* psp/mp3.c */
@@ -2642,7 +2527,7 @@ static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
 		/* psp/png.c */
 		"無法為PNG分配內存",
 		"無法壓縮PNG圖像",
-#if VIDEO_32BPP || (EMU_SYSTEM == NCDZ)
+#if (EMU_SYSTEM == NCDZ)
 		"無法解壓PNG圖像",
 #endif
 		"不支持%d位顏色的PNG圖",

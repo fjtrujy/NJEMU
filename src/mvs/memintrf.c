@@ -2061,10 +2061,6 @@ void memory_shutdown(void)
 #endif
 	if (memory_region_user3)  free(memory_region_user3);
 #endif
-
-#if VIDEO_32BPP
-	GFX_MEMORY = NULL;
-#endif
 }
 
 

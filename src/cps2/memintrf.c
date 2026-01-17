@@ -852,10 +852,6 @@ void memory_shutdown(void)
 	psp2k_mem_offset = PSP2K_MEM_TOP;
 	psp2k_mem_left   = PSP2K_MEM_SIZE;
 #endif
-
-#if (USE_CACHE && VIDEO_32BPP)
-	GFX_MEMORY = NULL;
-#endif
 }
 
 

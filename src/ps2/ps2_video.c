@@ -466,15 +466,6 @@ static void ps2_free(void *data)
 static void ps2_setMode(void *data, int mode)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-#if VIDEO_32BPP
-	if (video_mode != mode)
-	{
-		ps2_exit(ps2);
-		video_mode = mode;
-
-		ps2_start(data);
-	}
-#endif
 }
 
 static void ps2_setClutBaseAddr(void *data, uint16_t *clut_base)
@@ -521,11 +512,6 @@ static void ps2_flipScreen(void *data, bool vsync)
 static void *ps2_frameAddr(void *data, void *frame, int x, int y)
 {
 	// TODO: FJTRUJY so far just used by the menu
-// #if VIDEO_32BPP
-// 	if (video_mode == 32)
-// 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 2));
-// 	else
-// #endif
 // 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
 	return NULL;
 }
