@@ -15,28 +15,27 @@ void *tex_frame;
 void *video_data;
 
 video_driver_t video_null = {
-	"null",
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-	NULL,
+	"null", // ident
+	NULL, // init
+	NULL, // free
+	NULL, // setClutBaseAddr
+	NULL, // waitVsync
+	NULL, // flipScreen
+	NULL, // frameAddr
+	NULL, // workFrame
+	NULL, // clearScreen
+	NULL, // clearFrame
+	NULL, // fillFrame
+	NULL, // startWorkFrame
+	NULL, // transferWorkFrame
+	NULL, // copyRect
+	NULL, // copyRectFlip
+	NULL, // copyRectRotate
+	NULL, // drawTexture
+	NULL, // getNativeObjects
+	NULL, // uploadMem
+	NULL, // uploadClut
+	NULL, // blitTexture
 };
 
 video_driver_t *video_drivers[] = {

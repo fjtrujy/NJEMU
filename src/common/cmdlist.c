@@ -529,7 +529,6 @@ void commandlist(int flag)
 		}
 #endif
 		sound_thread_enable(0);
-		video_driver->setMode(video_data, 32);
 		power_driver->setLowestCpuClock(power_data);
 	}
 
@@ -765,7 +764,6 @@ void commandlist(int flag)
 
 		power_driver->setCpuClock(power_data, platform_cpuclock);
 
-		video_driver->setMode(video_data, 16);
 		autoframeskip_reset();
 		blit_clear_all_sprite();
 

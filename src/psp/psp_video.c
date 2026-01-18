@@ -121,15 +121,6 @@ static void psp_free(void *data)
 	free(psp);
 }
 
-/*--------------------------------------------------------
-	Video Mode Setting
---------------------------------------------------------*/
-
-
-static void psp_setMode(void *data, int mode)
-{
-}
-
 static void psp_setClutBaseAddr(void *data, uint16_t *clut_base)
 {
 	psp_video_t *psp = (psp_video_t*)data;
@@ -550,7 +541,6 @@ video_driver_t video_psp = {
 	"psp",
 	psp_init,
 	psp_free,
-	psp_setMode,
 	psp_setClutBaseAddr,
 	psp_waitVsync,
 	psp_flipScreen,

@@ -75,7 +75,6 @@ static int cps2_init(void)
 
 static void cps2_reset(void)
 {
-	video_driver->setMode(video_data, 16);
 	video_driver->clearScreen(video_data);
 
 	Loop = LOOP_EXEC;
@@ -98,7 +97,6 @@ static void cps2_reset(void)
 
 static void cps2_exit(void)
 {
-	video_driver->setMode(video_data, 32);
 	video_driver->clearScreen(video_data);
 
 	ui_popup_reset();

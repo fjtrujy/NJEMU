@@ -428,8 +428,6 @@ int adhocInit(const char *matchingData)
 	const char *unknown = "";
 	char message[256];
 
-	video_driver->setMode(video_data, 32);
-
 	mode = MODE_LOBBY;
 	Server = 0;
 	adhoc_initialized = 0;

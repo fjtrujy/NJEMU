@@ -97,7 +97,6 @@ typedef struct video_driver
 	void *(*init)(void);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
-	void (*setMode)(void *data, int mode);
 	void (*setClutBaseAddr)(void *data, uint16_t *clut_base);
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);

@@ -368,8 +368,6 @@ void show_fatal_error(void)
 		ex = sx + width;
 		ey = sy + (FONTSIZE - 1);
 
-		video_driver->setMode(video_data, 32);
-
 		load_background(WP_LOGO);
 
 		while (Loop != LOOP_EXIT)

@@ -458,16 +458,6 @@ static void ps2_free(void *data)
 	free(ps2);
 }
 
-/*--------------------------------------------------------
-	Video Mode Setting
---------------------------------------------------------*/
-
-
-static void ps2_setMode(void *data, int mode)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-}
-
 static void ps2_setClutBaseAddr(void *data, uint16_t *clut_base)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -972,7 +962,6 @@ video_driver_t video_ps2 = {
 	"ps2",
 	ps2_init,
 	ps2_free,
-	ps2_setMode,
 	ps2_setClutBaseAddr,
 	ps2_waitVsync,
 	ps2_flipScreen,

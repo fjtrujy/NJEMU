@@ -207,16 +207,6 @@ static void desktop_free(void *data)
 	free(desktop);
 }
 
-/*--------------------------------------------------------
-	Video Mode Setting
---------------------------------------------------------*/
-
-
-static void desktop_setMode(void *data, int mode)
-{
-	desktop_video_t *desktop = (desktop_video_t*)data;
-}
-
 static void desktop_setClutBaseAddr(void *data, uint16_t *clut_base)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
@@ -493,7 +483,6 @@ video_driver_t video_desktop = {
 	"desktop",
 	desktop_init,
 	desktop_free,
-	desktop_setMode,
 	desktop_setClutBaseAddr,
 	desktop_waitVsync,
 	desktop_flipScreen,

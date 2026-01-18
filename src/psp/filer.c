@@ -834,7 +834,6 @@ void show_exit_screen(void)
 {
 	if (Loop == LOOP_EXIT)
 	{
-		video_driver->setMode(video_data, 32);
 		video_driver->clearScreen(video_data);
 		boxfill(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_DARKGRAY);
 		uifont_print_shadow_center(129, COLOR_WHITE, TEXT(PLEASE_WAIT));

@@ -127,8 +127,6 @@ static int neogeo_init(void)
 
 static void neogeo_reset(void)
 {
-	video_driver->setMode(video_data, 16);
-
 	video_driver->clearScreen(video_data);
 
 	timer_reset();
@@ -154,7 +152,6 @@ static void neogeo_exit(void)
 	int32_t fd;
 	char path[PATH_MAX];
 
-	video_driver->setMode(video_data, 32);
 	video_driver->clearScreen(video_data);
 
 	ui_popup_reset();

@@ -2446,7 +2446,6 @@ void showmenu(void)
 #ifdef SAVE_STATE
 	state_make_thumbnail();
 #endif
-	video_driver->setMode(video_data, 32);
 
 #if (EMU_SYSTEM == NCDZ)
 	if (cdda_playing == CDDA_PLAY) mp3_pause(1);
@@ -2629,7 +2628,6 @@ void showmenu(void)
 
 	pad_wait_clear();
 	ui_popup_reset();
-	video_driver->setMode(video_data, 16);
 	video_driver->clearScreen(video_data);
 	video_driver->clearFrame(video_data, work_frame);
 #if (EMU_SYSTEM != CPS2)
