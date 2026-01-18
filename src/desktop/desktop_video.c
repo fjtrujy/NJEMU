@@ -42,58 +42,6 @@ typedef struct desktop_video {
 	Global Functions
 ******************************************************************************/
 
-static void desktop_start(void *data) {
-	desktop_video_t *desktop = (desktop_video_t*)data;
-
-	// Original buffers containing clut indexes
-	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT;
-	size_t textureSize = BUF_WIDTH * TEXTURE_HEIGHT;
-	desktop->scrbitmap = (uint8_t*)malloc(scrbitmapSize);
-	uint8_t *tex_spr = (uint8_t*)malloc(textureSize * 3);
-	desktop->tex_spr = tex_spr;
-	desktop->tex_spr0 = tex_spr;
-	desktop->tex_spr1 = tex_spr + textureSize;
-	desktop->tex_spr2 = tex_spr + textureSize * 2;
-	desktop->tex_fix = (uint8_t*)malloc(textureSize);
-
-	// Create SDL textures
-	desktop->sdl_texture_scrbitmap = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_TARGET, BUF_WIDTH, SCR_HEIGHT);
-	if (desktop->sdl_texture_scrbitmap == NULL) {
-		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
-		return;
-	}	
-	desktop->sdl_texture_tex_spr0 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr0 == NULL) {
-		printf("Could not create sdl_texture_tex_spr0: %s\n", SDL_GetError());
-		return;
-	}
-	desktop->sdl_texture_tex_spr1 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr1 == NULL) {
-		printf("Could not create sdl_texture_tex_spr1: %s\n", SDL_GetError());
-		return;
-	}
-
-	desktop->sdl_texture_tex_spr2 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr2 == NULL) {
-		printf("Could not create sdl_texture_tex_spr2: %s\n", SDL_GetError());
-		return;
-	}
-
-	desktop->sdl_texture_tex_fix = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_fix == NULL) {
-		printf("Could not create sdl_texture_tex_fix: %s\n", SDL_GetError());
-		return;
-	}
-
-	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr0, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr1, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr2, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_fix, desktop->blendMode);
-
-	ui_init();
-}
-
 static void *desktop_init(void)
 {
 	uint32_t windows_width, windows_height;
@@ -142,7 +90,54 @@ static void *desktop_init(void)
 		SDL_BLENDOPERATION_ADD
 	);
 
-	desktop_start(desktop);
+	// Original buffers containing clut indexes
+	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT;
+	size_t textureSize = BUF_WIDTH * TEXTURE_HEIGHT;
+	desktop->scrbitmap = (uint8_t*)malloc(scrbitmapSize);
+	uint8_t *tex_spr = (uint8_t*)malloc(textureSize * 3);
+	desktop->tex_spr = tex_spr;
+	desktop->tex_spr0 = tex_spr;
+	desktop->tex_spr1 = tex_spr + textureSize;
+	desktop->tex_spr2 = tex_spr + textureSize * 2;
+	desktop->tex_fix = (uint8_t*)malloc(textureSize);
+
+	// Create SDL textures
+	desktop->sdl_texture_scrbitmap = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_TARGET, BUF_WIDTH, SCR_HEIGHT);
+	if (desktop->sdl_texture_scrbitmap == NULL) {
+		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
+		exit(1);
+	}	
+	desktop->sdl_texture_tex_spr0 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
+	if (desktop->sdl_texture_tex_spr0 == NULL) {
+		printf("Could not create sdl_texture_tex_spr0: %s\n", SDL_GetError());
+		exit(1);
+	}
+	desktop->sdl_texture_tex_spr1 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
+	if (desktop->sdl_texture_tex_spr1 == NULL) {
+		printf("Could not create sdl_texture_tex_spr1: %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	desktop->sdl_texture_tex_spr2 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
+	if (desktop->sdl_texture_tex_spr2 == NULL) {
+		printf("Could not create sdl_texture_tex_spr2: %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	desktop->sdl_texture_tex_fix = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
+	if (desktop->sdl_texture_tex_fix == NULL) {
+		printf("Could not create sdl_texture_tex_fix: %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
+	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr0, desktop->blendMode);
+	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr1, desktop->blendMode);
+	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr2, desktop->blendMode);
+	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_fix, desktop->blendMode);
+
+	ui_init();
+
 	return desktop;
 }
 

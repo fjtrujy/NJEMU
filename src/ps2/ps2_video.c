@@ -325,14 +325,14 @@ static void *ps2_workFrame(void *data, enum WorkBuffer buffer)
 
 static void ps2_flipScreen(void *data, bool vsync);
 
-static void ps2_start(void *data) {
+static void *ps2_init(void)
+{
 	ee_sema_t sema;
-	ps2_video_t *ps2 = (ps2_video_t*)data;
 
-	GSGLOBAL *gsGlobal;
+	ps2_video_t *ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
+	GSGLOBAL *gsGlobal = gsKit_init_global();
 	
-	gsGlobal = gsKit_init_global();
-
+	ps2->drawExtraInfo = false;
 
    	sema.init_count = 0;
    	sema.max_count  = 1;
@@ -403,15 +403,8 @@ static void ps2_start(void *data) {
 	ui_init();
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
-	ps2_flipScreen(data, true);
-}
+	ps2_flipScreen(ps2, true);
 
-static void *ps2_init(void)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
-	ps2->drawExtraInfo = false;
-
-	ps2_start(ps2);
 	return ps2;
 }
 

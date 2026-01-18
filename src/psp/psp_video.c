@@ -37,7 +37,9 @@ typedef struct psp_video {
 /*--------------------------------------------------------
 	Video Processing Initialization
 --------------------------------------------------------*/
-static void psp_start(void *data) {
+static void *psp_init(void)
+{
+	psp_video_t *psp = (psp_video_t*)calloc(1, sizeof(psp_video_t));
 	pixel_format = GU_PSM_5551;
 
 	show_frame = (void *)(FRAMESIZE * 0);
@@ -85,21 +87,15 @@ static void psp_start(void *data) {
 	sceGuFinish();
 	sceGuSync(0, GU_SYNC_FINISH);
 
-	video_driver->clearFrame(data, show_frame);
-	video_driver->clearFrame(data, draw_frame);
-	video_driver->clearFrame(data, work_frame);
+	video_driver->clearFrame(psp, show_frame);
+	video_driver->clearFrame(psp, draw_frame);
+	video_driver->clearFrame(psp, work_frame);
 
 	sceDisplayWaitVblankStart();
 	sceGuDisplay(GU_TRUE);
 
 	ui_init();
-}
 
-static void *psp_init(void)
-{
-	psp_video_t *psp = (psp_video_t*)calloc(1, sizeof(psp_video_t));
-
-	psp_start(psp);
 	return psp;
 }
 
