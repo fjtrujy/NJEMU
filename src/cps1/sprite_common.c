@@ -88,8 +88,6 @@ uint16_t *scrbitmap;
 
 /* CLUT */
 uint16_t *clut;
-uint16_t clut0_num;
-uint16_t clut1_num;
 
 /* Color table for palette index encoding
    Used to encode 4-bit palette indices into 8-bit texture format */
@@ -1220,5 +1218,231 @@ void scrollh_delete_dirty_palette(void)
 			}
 		}
 	}
+}
+
+
+/******************************************************************************
+	Platform-agnostic blit functions
+******************************************************************************/
+
+/*------------------------------------------------------------------------
+	Clear all sprites immediately
+------------------------------------------------------------------------*/
+
+void blit_clear_all_sprite(void)
+{
+	int i;
+
+	for (i = 0; i < OBJECT_TEXTURE_SIZE - 1; i++)
+		object_data[i].next = &object_data[i + 1];
+
+	object_data[i].next = NULL;
+	object_free_head = &object_data[0];
+
+	for (i = 0; i < SCROLL1_TEXTURE_SIZE - 1; i++)
+		scroll1_data[i].next = &scroll1_data[i + 1];
+
+	scroll1_data[i].next = NULL;
+	scroll1_free_head = &scroll1_data[0];
+
+	for (i = 0; i < SCROLL2_TEXTURE_SIZE - 1; i++)
+		scroll2_data[i].next = &scroll2_data[i + 1];
+
+	scroll2_data[i].next = NULL;
+	scroll2_free_head = &scroll2_data[0];
+
+	for (i = 0; i < SCROLL3_TEXTURE_SIZE - 1; i++)
+		scroll3_data[i].next = &scroll3_data[i + 1];
+
+	scroll3_data[i].next = NULL;
+	scroll3_free_head = &scroll3_data[0];
+
+	memset(object_head, 0, sizeof(SPRITE *) * OBJECT_HASH_SIZE);
+	memset(scroll1_head, 0, sizeof(SPRITE *) * SCROLL1_HASH_SIZE);
+	memset(scroll2_head, 0, sizeof(SPRITE *) * SCROLL2_HASH_SIZE);
+	memset(scroll3_head, 0, sizeof(SPRITE *) * SCROLL3_HASH_SIZE);
+
+	object_texture_num = 0;
+	scroll1_texture_num = 0;
+	scroll2_texture_num = 0;
+	scroll3_texture_num = 0;
+
+	scrollh_reset_sprite();
+	memset(palette_dirty_marks, 0, sizeof(palette_dirty_marks));
+}
+
+
+/*------------------------------------------------------------------------
+	Clear high layer
+------------------------------------------------------------------------*/
+
+void blit_scrollh_clear_sprite(uint16_t tpens)
+{
+	scrollh_delete_sprite_tpens(tpens);
+}
+
+
+/*------------------------------------------------------------------------
+	Set palette dirty flag
+------------------------------------------------------------------------*/
+
+void blit_palette_mark_dirty(int palno)
+{
+	if (palno < 64) scroll1_palette_is_dirty = 1;
+	else if (palno < 96) scroll2_palette_is_dirty = 1;
+	else if (palno < 128) scroll3_palette_is_dirty = 1;
+
+	palette_dirty_marks[palno] = 1;
+}
+
+
+/*------------------------------------------------------------------------
+	Update OBJECT texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if ((x > 47 && x < 448) && (y > 0 && y < 239))
+	{
+		uint32_t key = MAKE_KEY(code, attr);
+		SPRITE *p = object_head[key & OBJECT_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+		 	}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL1 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_KEY(code, attr);
+	SPRITE *p = scroll1_head[key & SCROLL1_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL2 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if (y + 16 > 0 && y < 239)
+	{
+		uint32_t key = MAKE_KEY(code, attr);
+		SPRITE *p = scroll2_head[key & SCROLL2_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+			}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL3 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_KEY(code, attr);
+	SPRITE *p = scroll3_head[key & SCROLL3_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL2 (high layer) texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if (y + 16 > 0 && y < 239)
+	{
+		uint32_t key = MAKE_HIGH_KEY(code, attr);
+		SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+			}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL1,3 (high layer) texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_HIGH_KEY(code, attr);
+	SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Check SCROLL2 draw range
+------------------------------------------------------------------------*/
+
+int blit_check_clip_scroll2(int16_t sy)
+{
+	scroll2_sy = sy;
+	scroll2_ey = sy + 16;
+
+	if (scroll2_min_y > scroll2_sy) scroll2_sy = scroll2_min_y;
+	if (scroll2_max_y < scroll2_ey) scroll2_ey = scroll2_max_y;
+
+	return (scroll2_sy < scroll2_ey);
 }
 

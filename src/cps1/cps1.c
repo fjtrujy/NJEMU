@@ -8,6 +8,19 @@
 
 #include "cps1.h"
 
+/* Per-target texture atlas descriptions required by the video driver.
+ * Each entry describes a texture atlas width/height (pixels).
+ * The core passes these to the video driver during init.
+ */
+layer_texture_info_t emu_layer_textures[] = {
+	{ 512, 192, 2 }, /* TEXTURE_LAYER_SCROLLH (direct-color / special) */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_OBJECT */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL1 */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL2 */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL3 */
+};
+uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
+
 
 /******************************************************************************
 	Local Functions

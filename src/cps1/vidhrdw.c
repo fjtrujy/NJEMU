@@ -80,8 +80,8 @@ struct cps_scroll2_t
 static struct cps_scroll2_t ALIGN_DATA scroll2[224];
 static uint16_t cps_scroll2_blocks;
 
-static uint16_t ALIGN_DATA video_clut16[65536];
-uint16_t ALIGN16_DATA video_palette[cps1_palette_size >> 1];
+static uint16_t __attribute__((aligned(64))) video_clut16[65536];
+uint16_t __attribute__((aligned(64))) video_palette[cps1_palette_size >> 1];
 
 
 /* CPS1 output port */
