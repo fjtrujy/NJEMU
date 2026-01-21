@@ -43,13 +43,6 @@ static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uin
 	Local Structures/Variables
 ******************************************************************************/
 
-typedef struct object_t OBJECT;
-
-struct object_t
-{
-	uint32_t clut;
-	struct Vertex vertices[2];
-};
 
 static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
 
@@ -68,13 +61,39 @@ static RECT cps_clip[6] =
 	Vertex Data
 ------------------------------------------------------------------------*/
 
-static OBJECT ALIGN_DATA vertices_object[OBJECT_MAX_SPRITES];
+/* OBJECT vertex arrays (16x16 tiles) - separate arrays per CLUT for direct GPU submission */
+static struct Vertex __attribute__((aligned(64))) vertices_object_clut0[OBJECT_MAX_SPRITES * 2];
+static struct Vertex __attribute__((aligned(64))) vertices_object_clut1[OBJECT_MAX_SPRITES * 2];
+static uint16_t object_clut0_num;
+static uint16_t object_clut1_num;
 
-static uint16_t object_num;
-static uint16_t object_index;
+/* Separate vertex arrays for each scroll layer to avoid GPU race conditions.
+   When GPU commands are queued asynchronously, shared buffers can be overwritten
+   before the GPU finishes processing them. Each layer needs its own buffers. */
 
-static struct Vertex ALIGN_DATA vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
-static struct Vertex ALIGN_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
+/* SCROLL1 vertex arrays (8x8 tiles) */
+static struct Vertex __attribute__((aligned(64))) vertices_scroll1_clut0[SCROLL1_MAX_SPRITES * 2];
+static struct Vertex __attribute__((aligned(64))) vertices_scroll1_clut1[SCROLL1_MAX_SPRITES * 2];
+static uint16_t scroll1_clut0_num;
+static uint16_t scroll1_clut1_num;
+
+/* SCROLL2 vertex arrays (16x16 tiles) */
+static struct Vertex __attribute__((aligned(64))) vertices_scroll2_clut0[SCROLL2_MAX_SPRITES * 2];
+static struct Vertex __attribute__((aligned(64))) vertices_scroll2_clut1[SCROLL2_MAX_SPRITES * 2];
+static uint16_t scroll2_clut0_num;
+static uint16_t scroll2_clut1_num;
+
+/* SCROLL3 vertex arrays (32x32 tiles) */
+static struct Vertex __attribute__((aligned(64))) vertices_scroll3_clut0[SCROLL3_MAX_SPRITES * 2];
+static struct Vertex __attribute__((aligned(64))) vertices_scroll3_clut1[SCROLL3_MAX_SPRITES * 2];
+static uint16_t scroll3_clut0_num;
+static uint16_t scroll3_clut1_num;
+
+/* SCROLLH vertex array (high priority layer) */
+static struct Vertex __attribute__((aligned(64))) vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
+
+/* STARS vertex array (0x1000 = 4096 potential stars) */
+static struct PointVertex __attribute__((aligned(64))) vertices_stars[0x1000];
 
 
 /*------------------------------------------------------------------------
@@ -95,77 +114,6 @@ static const int ALIGN_DATA swizzle_table_8bit[32] =
 ******************************************************************************/
 
 /*------------------------------------------------------------------------
-	Clear all sprites immediately
-------------------------------------------------------------------------*/
-
-void blit_clear_all_sprite(void)
-{
-	int i;
-
-	for (i = 0; i < OBJECT_TEXTURE_SIZE - 1; i++)
-		object_data[i].next = &object_data[i + 1];
-
-	object_data[i].next = NULL;
-	object_free_head = &object_data[0];
-
-	for (i = 0; i < SCROLL1_TEXTURE_SIZE - 1; i++)
-		scroll1_data[i].next = &scroll1_data[i + 1];
-
-	scroll1_data[i].next = NULL;
-	scroll1_free_head = &scroll1_data[0];
-
-	for (i = 0; i < SCROLL2_TEXTURE_SIZE - 1; i++)
-		scroll2_data[i].next = &scroll2_data[i + 1];
-
-	scroll2_data[i].next = NULL;
-	scroll2_free_head = &scroll2_data[0];
-
-	for (i = 0; i < SCROLL3_TEXTURE_SIZE - 1; i++)
-		scroll3_data[i].next = &scroll3_data[i + 1];
-
-	scroll3_data[i].next = NULL;
-	scroll3_free_head = &scroll3_data[0];
-
-	memset(object_head, 0, sizeof(SPRITE *) * OBJECT_HASH_SIZE);
-	memset(scroll1_head, 0, sizeof(SPRITE *) * SCROLL1_HASH_SIZE);
-	memset(scroll2_head, 0, sizeof(SPRITE *) * SCROLL2_HASH_SIZE);
-	memset(scroll3_head, 0, sizeof(SPRITE *) * SCROLL3_HASH_SIZE);
-
-	object_texture_num = 0;
-	scroll1_texture_num = 0;
-	scroll2_texture_num = 0;
-	scroll3_texture_num = 0;
-
-	scrollh_reset_sprite();
-	memset(palette_dirty_marks, 0, sizeof(palette_dirty_marks));
-}
-
-
-/*------------------------------------------------------------------------
-	Clear high layer
-------------------------------------------------------------------------*/
-
-void blit_scrollh_clear_sprite(uint16_t tpens)
-{
-	scrollh_delete_sprite_tpens(tpens);
-}
-
-
-/*------------------------------------------------------------------------
-	Set palette dirty flag
-------------------------------------------------------------------------*/
-
-void blit_palette_mark_dirty(int palno)
-{
-	if (palno < 64) scroll1_palette_is_dirty = 1;
-	else if (palno < 96) scroll2_palette_is_dirty = 1;
-	else if (palno < 128) scroll3_palette_is_dirty = 1;
-
-	palette_dirty_marks[palno] = 1;
-}
-
-
-/*------------------------------------------------------------------------
 	Reset sprite processing
 ------------------------------------------------------------------------*/
 
@@ -173,13 +121,12 @@ void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *p
 {
 	int i;
 
-	// TODO: FJTRUJY - Make this function more generic
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data, SCRBITMAP);
-	tex_scrollh = scrbitmap + BUF_WIDTH * SCR_HEIGHT;
-	tex_object  = (uint8_t *)(tex_scrollh + BUF_WIDTH * SCROLLH_MAX_HEIGHT);
-	tex_scroll1 = tex_object  + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_scroll2 = tex_scroll1 + BUF_WIDTH * TEXTURE_HEIGHT;
-	tex_scroll3 = tex_scroll2 + BUF_WIDTH * TEXTURE_HEIGHT;
+	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
+	tex_scrollh = (uint16_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLLH);
+	tex_object  = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_OBJECT);
+	tex_scroll1 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL1);
+	tex_scroll2 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL2);
+	tex_scroll3 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL3);
 
 	for (i = 0; i < OBJECT_TEXTURE_SIZE; i++) object_data[i].index = i;
 	for (i = 0; i < SCROLL1_TEXTURE_SIZE; i++) scroll1_data[i].index = i;
@@ -193,7 +140,7 @@ void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *p
 	gfx_scroll3 = &memory_region_gfx1[bank_scroll3 << 21];
 
 	pen_usage = pen_usage16;
-	clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palette);
+	clut = (uint16_t *)&video_palette;
 
 	blit_clear_all_sprite();
 }
@@ -214,26 +161,22 @@ void blit_start(int high_layer)
 	scrollh_delete_dirty_palette();
 	memset(palette_dirty_marks, 0, sizeof(palette_dirty_marks));
 
-	clut0_num = 0;
-	clut1_num = 0;
-
-	object_index = 0;
-	object_num  = 0;
+	/* Initialize per-layer vertex counters */
+	object_clut0_num = 0;
+	object_clut1_num = 0;
+	scroll1_clut0_num = 0;
+	scroll1_clut1_num = 0;
+	scroll2_clut0_num = 0;
+	scroll2_clut1_num = 0;
+	scroll3_clut0_num = 0;
+	scroll3_clut1_num = 0;
 
 	scrollh_num = 0;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, draw_frame, BUF_WIDTH);
-	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
-	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
+	/* Start a new work frame via the video driver */
+	video_driver->startWorkFrame(video_data, 0);
+	video_driver->scissor(video_data, 64, 16, 448, 240);
 
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-
-	sceGuEnable(GU_ALPHA_TEST);
-	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
 }
 
 
@@ -264,30 +207,6 @@ void blit_finish(void)
 
 
 /*------------------------------------------------------------------------
-	Update OBJECT texture
-------------------------------------------------------------------------*/
-
-void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	if ((x > 47 && x < 448) && (y > 0 && y < 239))
-	{
-		uint32_t key = MAKE_KEY(code, attr);
-		SPRITE *p = object_head[key & OBJECT_HASH_MASK];
-
-		while (p)
-		{
-			if (p->key == key)
-			{
-				p->used = frames_displayed;
-				return;
-		 	}
-			p = p->next;
-		}
-	}
-}
-
-
-/*------------------------------------------------------------------------
 	Register OBJECT to draw list
 ------------------------------------------------------------------------*/
 
@@ -296,7 +215,6 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 	if ((x > 47 && x < 448) && (y > 0 && y < 239))
 	{
 		int16_t idx;
-		OBJECT *object;
 		struct Vertex *vertices;
 		uint32_t key = MAKE_KEY(code, attr);
 
@@ -329,10 +247,16 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 			}
 		}
 
-		object = &vertices_object[object_index++];
-		object->clut = attr & 0x10;
-
-		vertices = object->vertices;
+		if (attr & 0x10)
+		{
+			vertices = &vertices_object_clut1[object_clut1_num];
+			object_clut1_num += 2;
+		}
+		else
+		{
+			vertices = &vertices_object_clut0[object_clut0_num];
+			object_clut0_num += 2;
+		}
 
 		vertices[0].x = vertices[1].x = x;
 		vertices[0].y = vertices[1].y = y;
@@ -345,8 +269,6 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 		vertices[1].x += 16;
 		vertices[1].y += 16;
-
-		object_num += 2;
 	}
 }
 
@@ -357,73 +279,25 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_finish_object(void)
 {
-	int i, total_sprites = 0;
-	uint8_t color = 0;
-	struct Vertex *vertices, *vertices_tmp;
-	OBJECT *object;
+	uint16_t *current_clut;
 
-	if (!object_num) return;
+	if (object_clut0_num + object_clut1_num == 0) return;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, 16, 448, 240);
-	sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_object);
-	sceGuClutLoad(256/8, clut);
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
 
-	vertices_tmp = vertices = (struct Vertex *)sceGuGetMemory(object_num * sizeof(struct Vertex));
-
-	object = vertices_object;
-
-	for (i = 0; i < object_index; i++)
+	if (object_clut0_num)
 	{
-		if (color != object->clut)
-		{
-			color = object->clut;
-
-			if (total_sprites)
-			{
-				sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, total_sprites, NULL, vertices);
-				total_sprites = 0;
-				vertices = vertices_tmp;
-			}
-
-			sceGuClutLoad(256/8, &clut[color << 4]);
-		}
-
-		vertices_tmp[0] = object->vertices[0];
-		vertices_tmp[1] = object->vertices[1];
-
-		total_sprites += 2;
-		vertices_tmp += 2;
-		object++;
+		current_clut = clut;
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_object_clut0, object_clut0_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, current_clut, 0, object_clut0_num, vertices_object_clut0);
 	}
-
-	if (total_sprites)
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, total_sprites, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
-}
-
-
-/*------------------------------------------------------------------------
-	Update SCROLL1 texture
-------------------------------------------------------------------------*/
-
-void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	uint32_t key = MAKE_KEY(code, attr);
-	SPRITE *p = scroll1_head[key & SCROLL1_HASH_MASK];
-
-	while (p)
+	if (object_clut1_num)
 	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return;
-		}
-		p = p->next;
+		current_clut = &clut[16 << 4];
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_object_clut1, object_clut1_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, current_clut, 0, object_clut1_num, vertices_object_clut1);
 	}
 }
 
@@ -466,13 +340,13 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint1
 
 	if (attr & 0x10)
 	{
-		vertices = &vertices_scroll[1][clut1_num];
-		clut1_num += 2;
+		vertices = &vertices_scroll1_clut1[scroll1_clut1_num];
+		scroll1_clut1_num += 2;
 	}
 	else
 	{
-		vertices = &vertices_scroll[0][clut0_num];
-		clut0_num += 2;
+		vertices = &vertices_scroll1_clut0[scroll1_clut0_num];
+		scroll1_clut0_num += 2;
 	}
 
 	vertices[0].x = vertices[1].x = x;
@@ -495,40 +369,25 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint1
 
 void blit_finish_scroll1(void)
 {
-	struct Vertex *vertices;
+	
+	uint16_t *current_clut;
+	if (scroll1_clut0_num + scroll1_clut1_num == 0) return;
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL1);
 
-	if (clut0_num + clut1_num == 0) return;
-
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, 16, 448, 240);
-	sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_scroll1);
-
-	vertices = (struct Vertex *)sceGuGetMemory((clut0_num + clut1_num) * sizeof(struct Vertex));
-
-	if (clut0_num)
+	if (scroll1_clut0_num)
 	{
-		sceGuClutLoad(256/8, &clut[32 << 4]);
-
-		memcpy(vertices, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut0_num, NULL, vertices);
-		vertices += clut0_num;
-
-		clut0_num = 0;
+		current_clut = &clut[32 << 4];
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_scroll1_clut0, scroll1_clut0_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, scroll1_clut0_num, vertices_scroll1_clut0);
 	}
-	if (clut1_num)
+	if (scroll1_clut1_num)
 	{
-		sceGuClutLoad(256/8, &clut[48 << 4]);
-
-		memcpy(vertices, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut1_num, NULL, vertices);
-
-		clut1_num = 0;
+		current_clut = &clut[48 << 4];
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_scroll1_clut1, scroll1_clut1_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, scroll1_clut1_num, vertices_scroll1_clut1);
 	}
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
 }
 
 
@@ -550,46 +409,6 @@ void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
 	{
 		blit_draw_scroll2  = blit_draw_scroll2_software;
 		blit_draw_scroll2h = blit_draw_scroll2h_software;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	Check SCROLL2 draw range
-------------------------------------------------------------------------*/
-
-int blit_check_clip_scroll2(int16_t sy)
-{
-	scroll2_sy = sy;
-	scroll2_ey = sy + 16;
-
-	if (scroll2_min_y > scroll2_sy) scroll2_sy = scroll2_min_y;
-	if (scroll2_max_y < scroll2_ey) scroll2_ey = scroll2_max_y;
-
-	return (scroll2_sy < scroll2_ey);
-}
-
-
-/*------------------------------------------------------------------------
-	Update SCROLL2 texture
-------------------------------------------------------------------------*/
-
-void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	if (y + 16 > 0 && y < 239)
-	{
-		uint32_t key = MAKE_KEY(code, attr);
-		SPRITE *p = scroll2_head[key & SCROLL2_HASH_MASK];
-
-		while (p)
-		{
-			if (p->key == key)
-			{
-				p->used = frames_displayed;
-				return;
-			}
-			p = p->next;
-		}
 	}
 }
 
@@ -666,13 +485,13 @@ static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint
 
 	if (attr & 0x10)
 	{
-		vertices = &vertices_scroll[1][clut1_num];
-		clut1_num += 2;
+		vertices = &vertices_scroll2_clut1[scroll2_clut1_num];
+		scroll2_clut1_num += 2;
 	}
 	else
 	{
-		vertices = &vertices_scroll[0][clut0_num];
-		clut0_num += 2;
+		vertices = &vertices_scroll2_clut0[scroll2_clut0_num];
+		scroll2_clut0_num += 2;
 	}
 
 	vertices[0].x = vertices[1].x = x;
@@ -695,61 +514,30 @@ static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint
 
 void blit_finish_scroll2(void)
 {
-	struct Vertex *vertices;
+	uint16_t *current_clut;
 
-	if (clut0_num + clut1_num == 0) return;
+	if (scroll2_clut0_num + scroll2_clut1_num == 0) return;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, scroll2_min_y, 448, scroll2_max_y);
-	sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_scroll2);
+	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL2);
 
-	vertices = (struct Vertex *)sceGuGetMemory((clut0_num + clut1_num) * sizeof(struct Vertex));
-
-	if (clut0_num)
+	if (scroll2_clut0_num)
 	{
-		sceGuClutLoad(256/8, &clut[64 << 4]);
-
-		memcpy(vertices, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut0_num, NULL, vertices);
-		vertices += clut0_num;
-
-		clut0_num = 0;
+		current_clut = &clut[64 << 4];
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_scroll2_clut0, scroll2_clut0_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, scroll2_clut0_num, vertices_scroll2_clut0);
 	}
-	if (clut1_num)
+	if (scroll2_clut1_num)
 	{
-		sceGuClutLoad(256/8, &clut[80 << 4]);
-
-		memcpy(vertices, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut1_num, NULL, vertices);
-
-		clut1_num = 0;
+		current_clut = &clut[80 << 4];
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->flushCache(video_data, vertices_scroll2_clut1, scroll2_clut1_num * sizeof(struct Vertex));
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, scroll2_clut1_num, vertices_scroll2_clut1);
 	}
 
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
-}
-
-
-/*------------------------------------------------------------------------
-	Update SCROLL3 texture
-------------------------------------------------------------------------*/
-
-void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	uint32_t key = MAKE_KEY(code, attr);
-	SPRITE *p = scroll3_head[key & SCROLL3_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return;
-		}
-		p = p->next;
-	}
+	// Put back to full screen scissor
+	video_driver->scissor(video_data, 64, 16, 448, 240);
 }
 
 
@@ -800,13 +588,13 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 	if (attr & 0x10)
 	{
-		vertices = &vertices_scroll[1][clut1_num];
-		clut1_num += 2;
+		vertices = &vertices_scroll3_clut1[scroll3_clut1_num];
+		scroll3_clut1_num += 2;
 	}
 	else
 	{
-		vertices = &vertices_scroll[0][clut0_num];
-		clut0_num += 2;
+		vertices = &vertices_scroll3_clut0[scroll3_clut0_num];
+		scroll3_clut0_num += 2;
 	}
 
 	vertices[0].x = vertices[1].x = x;
@@ -829,40 +617,26 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_finish_scroll3(void)
 {
-	struct Vertex *vertices;
+	uint16_t *current_clut;
 
-	if (clut0_num + clut1_num == 0) return;
+	if (scroll3_clut0_num + scroll3_clut1_num == 0) return;
 
-	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, 16, 448, 240);
-	sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_scroll3);
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL3);
 
-	vertices = (struct Vertex *)sceGuGetMemory((clut0_num + clut1_num) * sizeof(struct Vertex));
-
-	if (clut0_num)
+	if (scroll3_clut0_num)
 	{
-		sceGuClutLoad(256/8, &clut[96 << 4]);
-
-		memcpy(vertices, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut0_num, NULL, vertices);
-		vertices += clut0_num;
-
-		clut0_num = 0;
+		current_clut = &clut[96 << 4];
+		video_driver->flushCache(video_data, vertices_scroll3_clut0, scroll3_clut0_num * sizeof(struct Vertex));
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, scroll3_clut0_num, vertices_scroll3_clut0);
 	}
-	if (clut1_num)
+	if (scroll3_clut1_num)
 	{
-		sceGuClutLoad(256/8, &clut[112 << 4]);
-
-		memcpy(vertices, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, clut1_num, NULL, vertices);
-
-		clut1_num = 0;
+		current_clut = &clut[112 << 4];
+		video_driver->flushCache(video_data, vertices_scroll3_clut1, scroll3_clut1_num * sizeof(struct Vertex));
+		video_driver->uploadClut(video_data, current_clut, 0);
+		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, scroll3_clut1_num, vertices_scroll3_clut1);
 	}
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
 }
 
 
@@ -982,30 +756,6 @@ static void blit_draw_scroll2h_software(int16_t x, int16_t y, uint32_t code, uin
 
 
 /*------------------------------------------------------------------------
-	Update SCROLL2 (high layer) texture
-------------------------------------------------------------------------*/
-
-void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	if (y + 16 > 0 && y < 239)
-	{
-		uint32_t key = MAKE_HIGH_KEY(code, attr);
-		SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
-
-		while (p)
-		{
-			if (p->key == key)
-			{
-				p->used = frames_displayed;
-				return;
-			}
-			p = p->next;
-		}
-	}
-}
-
-
-/*------------------------------------------------------------------------
 	Register SCROLL2 (high layer) to draw list
 ------------------------------------------------------------------------*/
 
@@ -1093,22 +843,15 @@ void blit_finish_scroll2h(void)
 {
 	struct Vertex *vertices;
 
+	
 	if (!scrollh_num) return;
-
-	sceGuStart(GU_DIRECT, gulist);
-
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, scroll2_min_y, 448, scroll2_max_y);
-	sceGuTexMode(GU_PSM_5551, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_scrollh);
-
-	vertices = (struct Vertex *)sceGuGetMemory(scrollh_num * sizeof(struct Vertex));
-	memcpy(vertices, vertices_scrollh, scrollh_num * sizeof(struct Vertex));
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, scrollh_num, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
-
+	/* Use video driver to render the high (scrollh) layer */
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLLH);
+	video_driver->flushCache(video_data, vertices_scrollh, scrollh_num * sizeof(struct Vertex));
+	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
+	video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLLH, NULL, 0, scrollh_num, vertices_scrollh);
+	// Put back to full screen scissor
+	video_driver->scissor(video_data, 64, 16, 448, 240);
 	scrollh_num = 0;
 }
 
@@ -1212,27 +955,6 @@ void blit_draw_scroll3h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint
 
 
 /*------------------------------------------------------------------------
-	Update SCROLL1,3 (high layer) texture
-------------------------------------------------------------------------*/
-
-void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	uint32_t key = MAKE_HIGH_KEY(code, attr);
-	SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
-
-	while (p)
-	{
-		if (p->key == key)
-		{
-			p->used = frames_displayed;
-			return;
-		}
-		p = p->next;
-	}
-}
-
-
-/*------------------------------------------------------------------------
 	End SCROLL1,3 (high layer) drawing
 ------------------------------------------------------------------------*/
 
@@ -1241,20 +963,10 @@ void blit_finish_scrollh(void)
 	struct Vertex *vertices;
 
 	if (!scrollh_num) return;
-
-	sceGuStart(GU_DIRECT, gulist);
-
-	sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-	sceGuScissor(64, 16, 448, 240);
-	sceGuTexMode(GU_PSM_5551, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex_scrollh);
-
-	vertices = (struct Vertex *)sceGuGetMemory(scrollh_num * sizeof(struct Vertex));
-	memcpy(vertices, vertices_scrollh, scrollh_num * sizeof(struct Vertex));
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, scrollh_num, NULL, vertices);
-
-	sceGuFinish();
-	sceGuSync(0, GU_SYNC_FINISH);
+	/* Use video driver to render the high (scrollh) layer */
+	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLLH);
+	video_driver->flushCache(video_data, vertices_scrollh, scrollh_num * sizeof(struct Vertex));
+	video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLLH, NULL, 0, scrollh_num, vertices_scrollh);
 }
 
 
@@ -1264,46 +976,27 @@ void blit_finish_scrollh(void)
 
 void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t *pal)
 {
-	typedef struct Vertex_t
+	struct PointVertex *vertices_tmp = vertices_stars;
+
+	uint16_t offs;
+	int stars_num = 0;
+
+	for (offs = 0; offs < 0x1000; offs++, col += 8)
 	{
-		uint16_t color;
-		int16_t x, y, z;
-	} Vertex;
+		if (*col != 0x0f)
+		{
+			vertices_tmp->x     = (((offs >> 8) << 5) - stars_x + (*col & 0x1f)) & 0x1ff;
+			vertices_tmp->y     = ((offs & 0xff) - stars_y) & 0xff;
+			vertices_tmp->z     = 0;
+			vertices_tmp->color = pal[(*col & 0xe0) >> 1];
+			vertices_tmp++;
+			stars_num++;
+		}
+	}
 
-	Vertex *vertices = (Vertex *)sceGuGetMemory(0x1000 * sizeof(Vertex));
-
-	if (vertices)
+	if (stars_num)
 	{
-		Vertex *vertices_tmp = vertices;
-		uint16_t offs;
-		int stars_num = 0;
-
-		for (offs = 0; offs < 0x1000; offs++, col += 8)
-		{
-			if (*col != 0x0f)
-			{
-				vertices_tmp->x     = (((offs >> 8) << 5) - stars_x + (*col & 0x1f)) & 0x1ff;
-				vertices_tmp->y     = ((offs & 0xff) - stars_y) & 0xff;
-				vertices_tmp->color = pal[(*col & 0xe0) >> 1];
-				vertices_tmp++;
-				stars_num++;
-			}
-		}
-
-		if (stars_num)
-		{
-			sceGuStart(GU_DIRECT, gulist);
-			sceGuDrawBufferList(GU_PSM_5551, work_frame, BUF_WIDTH);
-			sceGuScissor(64, 16, 448, 240);
-			sceGuDisable(GU_TEXTURE_2D);
-			sceGuDisable(GU_ALPHA_TEST);
-
-			sceGuDrawArray(GU_POINTS, GU_COLOR_5551 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, stars_num, NULL, vertices);
-
-			sceGuEnable(GU_TEXTURE_2D);
-			sceGuEnable(GU_ALPHA_TEST);
-			sceGuFinish();
-			sceGuSync(0, GU_SYNC_FINISH);
-		}
+		video_driver->flushCache(video_data, vertices_stars, stars_num * sizeof(struct PointVertex));
+		video_driver->blitPoints(video_data, stars_num, vertices_stars);
 	}
 }

@@ -153,8 +153,6 @@ extern uint16_t *scrbitmap;
 
 /* CLUT */
 extern uint16_t *clut;
-extern uint16_t clut0_num;
-extern uint16_t clut1_num;
 
 /* Color table */
 extern const uint32_t ALIGN_DATA color_table[16];
@@ -213,6 +211,18 @@ void drawgfx16h_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int li
 /* Function pointer arrays for software rendering */
 extern void ALIGN_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
 extern void ALIGN_DATA (*drawgfx16h[4])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
+
+/* Platform-agnostic blit functions */
+void blit_clear_all_sprite(void);
+void blit_scrollh_clear_sprite(uint16_t tpens);
+void blit_palette_mark_dirty(int palno);
+void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+int blit_check_clip_scroll2(int16_t sy);
 
 #endif /* CPS1_SPRITE_COMMON_H */
 

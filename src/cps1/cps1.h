@@ -24,6 +24,15 @@
 #include "sprite.h"
 #include "vidhrdw.h"
 
+enum TEXTURE_LAYER_INDEX {
+	TEXTURE_LAYER_SCROLLH,
+	TEXTURE_LAYER_OBJECT,
+	TEXTURE_LAYER_SCROLL1,
+	TEXTURE_LAYER_SCROLL2,
+	TEXTURE_LAYER_SCROLL3,
+	TEXTURE_LAYER_COUNT
+};
+
 void cps1_main(void);
 
 #endif /* CPS1_H */
