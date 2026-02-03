@@ -59,9 +59,10 @@ static uint16_t next_pow2(uint16_t v)
 }
 
 static void *psp_init(layer_texture_info_t *layer_textures,
-					  uint8_t layer_textures_count)
+					  uint8_t layer_textures_count, clut_info_t *clut_info)
 {
 	psp_video_t *psp = (psp_video_t *)calloc(1, sizeof(psp_video_t));
+	psp->clut_base = clut_info->base;
 	uint32_t framesize = BUF_WIDTH * SCR_HEIGHT * 2;
 	uint8_t *vram_base = (uint8_t *)sceGeEdramGetAddr();
 	uintptr_t offset = 0;
@@ -182,12 +183,6 @@ static void psp_free(void *data)
 
 	psp_exit();
 	free(psp);
-}
-
-static void psp_setClutBaseAddr(void *data, uint16_t *clut_base)
-{
-	psp_video_t *psp = (psp_video_t *)data;
-	psp->clut_base = clut_base;
 }
 
 /*--------------------------------------------------------
@@ -667,7 +662,6 @@ video_driver_t video_psp = {
 	"psp",
 	psp_init,
 	psp_free,
-	psp_setClutBaseAddr,
 	psp_waitVsync,
 	psp_flipScreen,
 	psp_frameAddr,

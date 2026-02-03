@@ -28,6 +28,11 @@
 
 #define SCROLLH_MAX_HEIGHT	192
 
+/* Tiles per line for linear (non-swizzled) texture layout */
+#define TILE_8x8_PER_LINE	(BUF_WIDTH/8)
+#define TILE_16x16_PER_LINE	(BUF_WIDTH/16)
+#define TILE_32x32_PER_LINE	(BUF_WIDTH/32)
+
 #define MAKE_KEY(code, attr)		(code | ((attr & 0x0f) << 28))
 #define MAKE_HIGH_KEY(code, attr)	(code | ((attr & 0x19f) << 16))
 
@@ -150,9 +155,6 @@ extern uint8_t *pen_usage;
 
 /* Screen bitmap */
 extern uint16_t *scrbitmap;
-
-/* CLUT */
-extern uint16_t *clut;
 
 /* Color table */
 extern const uint32_t ALIGN_DATA color_table[16];

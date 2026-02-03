@@ -86,9 +86,6 @@ uint8_t *pen_usage;
 /* Screen bitmap */
 uint16_t *scrbitmap;
 
-/* CLUT */
-uint16_t *clut;
-
 /* Color table for palette index encoding
    Used to encode 4-bit palette indices into 8-bit texture format */
 const uint32_t ALIGN_DATA color_table[16] =

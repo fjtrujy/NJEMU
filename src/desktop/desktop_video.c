@@ -42,11 +42,12 @@ typedef struct desktop_video {
 	Global Functions
 ******************************************************************************/
 
-static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count)
+static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {
 	uint32_t windows_width, windows_height;
 	desktop_video_t *desktop = (desktop_video_t*)calloc(1, sizeof(desktop_video_t));
 	desktop->draw_extra_info = false;
+	desktop->clut_base = clut_info->base;
 
 	// Create a window (width, height, window title)
 	char title[256];
@@ -166,12 +167,6 @@ static void desktop_free(void *data)
 	
 	desktop_exit(desktop);
 	free(desktop);
-}
-
-static void desktop_setClutBaseAddr(void *data, uint16_t *clut_base)
-{
-	desktop_video_t *desktop = (desktop_video_t*)data;
-	desktop->clut_base = clut_base;
 }
 
 /*--------------------------------------------------------
@@ -445,7 +440,6 @@ video_driver_t video_desktop = {
 	"desktop",
 	desktop_init,
 	desktop_free,
-	desktop_setClutBaseAddr,
 	desktop_waitVsync,
 	desktop_flipScreen,
 	desktop_frameAddr,

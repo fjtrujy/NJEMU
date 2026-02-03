@@ -12,7 +12,7 @@ This document outlines the remaining work needed to complete the cross-platform 
 |----------|-----|-----|-----|-------|
 | **MVS** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
 | **NCDZ** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
-| **CPS1** | ✅ Complete | ❌ Not started | ❌ Not started | Missing sprite rendering |
+| **CPS1** | ✅ Complete | ✅ Core done | ❌ Not started | PS2 sprite rendering complete |
 | **CPS2** | ✅ Complete | ❌ Not started | ❌ Not started | Missing sprite rendering |
 
 ### Platform Drivers
@@ -324,8 +324,8 @@ Once the GUI abstraction is in place, port the actual menu system.
 ### Immediate (Core Functionality)
 
 1. ✅ ~~MVS core for PS2/PC~~ (DONE)
-2. ✅ ~~NCDZ core for PS2/PC~~ (DONE)  
-3. 🔲 CPS1 sprite rendering for PS2
+2. ✅ ~~NCDZ core for PS2/PC~~ (DONE)
+3. ✅ ~~CPS1 sprite rendering for PS2~~ (DONE)
 4. 🔲 CPS1 sprite rendering for PC
 5. 🔲 CPS2 sprite rendering for PS2
 6. 🔲 CPS2 sprite rendering for PC
@@ -359,7 +359,7 @@ Once the GUI abstraction is in place, port the actual menu system.
 ### CPS1 Porting
 - [x] `src/cps1/sprite_common.h` - Created (shared declarations)
 - [x] `src/cps1/sprite_common.c` - Created (platform-agnostic code)
-- [ ] `src/cps1/ps2_sprite.c`
+- [x] `src/cps1/ps2_sprite.c` - Created (PS2 GSKit rendering)
 - [ ] `src/cps1/desktop_sprite.c`
 
 ### CPS2 Porting

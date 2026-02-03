@@ -81,7 +81,7 @@ static struct cps_scroll2_t ALIGN_DATA scroll2[224];
 static uint16_t cps_scroll2_blocks;
 
 static uint16_t __attribute__((aligned(64))) video_clut16[65536];
-uint16_t __attribute__((aligned(64))) video_palette[cps1_palette_size >> 1];
+uint16_t __attribute__((aligned(64))) video_palette[CPS1_PALETTE_ENTRIES];
 
 
 /* CPS1 output port */

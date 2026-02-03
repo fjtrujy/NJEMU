@@ -27,15 +27,68 @@
 /* turn black GS Screen */
 #define GS_BLACK GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x80)
 
+/******************************************************************************
+ * PS2 CLUT (Color Look-Up Table) Architecture
+ * ============================================
+ *
+ * The PS2 GS uses CLUT for indexed textures (T4/T8). For T8 textures (8-bit
+ * indexed), each pixel value (0-255) indexes into a 256-color palette row.
+ *
+ * VRAM Layout:
+ * -----------
+ * We allocate CLUT_BANKS_COUNT banks in VRAM, each bank containing
+ * CLUT_WIDTH × CLUT_BANK_HEIGHT colors (256 × 16 = 4096 colors per bank).
+ *
+ *   Bank 0: [Row 0: 256 colors][Row 1: 256 colors]...[Row 15: 256 colors]
+ *   Bank 1: [Row 0: 256 colors][Row 1: 256 colors]...[Row 15: 256 colors]
+ *
+ * Upload Strategy:
+ * ---------------
+ * The CLUT is uploaded once per frame via uploadClut(). This avoids
+ * re-uploading during the frame when palette data hasn't changed.
+ * - MVS: Uses 2 palette banks (4096 colors each), uploads to matching CLUT bank
+ * - CPS1: Uses single flat palette (3072 colors), uploads to bank 0
+ *
+ * Addressing with TEXCLUT (CSM2 mode):
+ * -----------------------------------
+ * When drawing indexed textures, we use the GS TEXCLUT register to select
+ * which 256-color row within the CLUT bank to use:
+ *
+ *   gs_texclut contains:
+ *   - CBW: CLUT buffer width (CLUT_WIDTH >> 6 = 4)
+ *   - COU: Column offset (always 0)
+ *   - COV: Row offset (0-15) - selects which row of 256 colors to use
+ *
+ * For a pixel value P in a T8 texture with TEXCLUT COV=N:
+ *   CLUT lookup = Bank base + (N * 256) + P
+ *
+ * Example - CPS1 SCROLL3 with palette index 5:
+ *   - Texture pixels encoded as 0x50-0x5F (via color_table[5])
+ *   - current_clut = &clut[96 << 4] = &clut[1536]
+ *   - COV = 1536 / 256 = 6
+ *   - Pixel 0x55 → CLUT entry 6*256 + 0x55 = 1621
+ *   - This matches video_palette[(96+5)*16 + 5] = video_palette[1621]
+ *
+ * Target Requirements:
+ * -------------------
+ * - MVS/NCDZ: 2 banks × 4096 colors = 8192 total (matches video_palettebank)
+ * - CPS1: 1 bank × 3072 colors (192 palettes × 16) - current config uploads
+ *         4096 but only 3072 are valid, needs adjustment
+ *
+ *****************************************************************************/
+
 #define CLUT_WIDTH 256
 #define CLUT_HEIGHT 1
 #define CLUT_BANK_HEIGHT 16
 #define CLUT_BANKS_COUNT 2
 #define CLUT_CBW (CLUT_WIDTH >> 6)
 
-/* 6000000 Hz pixel clock / 384 H / 264 V = 59.1856060~ Hz */
-/* Render width must be 64 pixel multiple,  */
-#define RENDER_SCREEN_WIDTH 384
+/* Render buffer dimensions - must accommodate all emulator source clips:
+ * - MVS/NCDZ: src_clip right edge = 328 (24 + 304)
+ * - CPS1:     src_clip right edge = 448 (64 + 384)
+ * Using BUF_WIDTH (512) ensures all targets fit.
+ */
+#define RENDER_SCREEN_WIDTH BUF_WIDTH
 #define RENDER_SCREEN_HEIGHT 264
 
 typedef struct texture_layer {
@@ -51,10 +104,14 @@ typedef struct ps2_video {
 
 	GSTEXTURE *scrbitmap;
 
-	// Base clut starting address
+	/* CLUT configuration from emu_clut_info */
 	uint16_t *clut_base;
+	uint16_t clut_entries_per_bank;
+	uint8_t clut_bank_count;
+	uint8_t clut_bank_height;  /* entries_per_bank / CLUT_WIDTH */
+
 	uint8_t *texturesMem;
-	
+
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 
@@ -122,7 +179,7 @@ static inline void *ps2_vramClutForBankIndex(void *data, uint8_t bank_index) {
 static inline gs_texclut ps2_textclutForParameters(void *data, uint16_t *current_clut, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	ptrdiff_t offset = current_clut - ps2->clut_base;
-	uint8_t cov = offset / CLUT_WIDTH - (bank_index * CLUT_BANK_HEIGHT);
+	uint8_t cov = offset / CLUT_WIDTH - (bank_index * ps2->clut_bank_height);
 
 	gs_texclut texclut = postion_to_TEXCLUT(CLUT_CBW, 0, cov);
 	return texclut;
@@ -318,7 +375,7 @@ static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 
 static void ps2_flipScreen(void *data, bool vsync);
 
-static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count)
+static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {
 	ee_sema_t sema;
 	ps2_video_t *ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
@@ -378,10 +435,19 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		texOffset += layer_textures[i].width * layer_textures[i].height;
 	}
 
-	uint32_t clut_vram_size = gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT, GS_PSM_CT16);
-	uint32_t all_clut_vram_size = clut_vram_size * CLUT_BANKS_COUNT;
+	/* Store CLUT configuration from target.
+	 * Bank height is entries_per_bank / CLUT_WIDTH, rounded up to ensure full coverage. */
+	ps2->clut_base = clut_info->base;
+	ps2->clut_entries_per_bank = clut_info->entries_per_bank;
+	ps2->clut_bank_count = clut_info->bank_count;
+	ps2->clut_bank_height = (clut_info->entries_per_bank + CLUT_WIDTH - 1) / CLUT_WIDTH;
+
+	/* Allocate CLUT VRAM based on target's requirements */
+	uint32_t clut_vram_size = gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * ps2->clut_bank_height, GS_PSM_CT16);
+	uint32_t all_clut_vram_size = clut_vram_size * ps2->clut_bank_count;
 	void *vram_cluts = (void *)gsKit_vram_alloc(gsGlobal, all_clut_vram_size, GSKIT_ALLOC_USERBUFFER);
-	printf("vram_cluts %p\n", vram_cluts);
+	printf("CLUT VRAM: %p (banks=%d, entries/bank=%d, height=%d, size/bank=%u)\n",
+		   vram_cluts, ps2->clut_bank_count, ps2->clut_entries_per_bank, ps2->clut_bank_height, clut_vram_size);
 	ps2->clut_vram_size = clut_vram_size;
 	ps2->vram_cluts = vram_cluts;
 
@@ -438,11 +504,6 @@ static void ps2_free(void *data)
 	free(ps2);
 }
 
-static void ps2_setClutBaseAddr(void *data, uint16_t *clut_base)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	ps2->clut_base = clut_base;
-}
 
 /*--------------------------------------------------------
 	Wait for VSYNC
@@ -573,6 +634,11 @@ static void ps2_startWorkFrame(void *data, uint32_t color) {
 	uint8_t green = color >> 8;
 	uint8_t red = color >> 0;
 	gs_rgbaq ps2_color = color_to_RGBAQ(red, green, blue, alpha, 0);
+
+	/* Reset TEXCLUT state so first blit call triggers gsKit_set_texclut.
+	   Without this, if the first blit has COV=0, the comparison would fail
+	   (0 != 0 is false) and TEXCLUT register would never be set with correct CBW. */
+	ps2->currentTexclut.specification.cov = 0xFF;
 
 	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
 	gsKit_renderToTexture(ps2->gsGlobal, ps2->scrbitmap);
@@ -935,7 +1001,8 @@ static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	void *vram = ps2_vramClutForBankIndex(data, bank_index);
-   	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)clut, CLUT_WIDTH, CLUT_HEIGHT * CLUT_BANK_HEIGHT, (u32)vram, GS_PSM_CT16, 1, GS_CLUT_PALLETE);
+	/* Upload CLUT using target-specific dimensions */
+   	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)clut, CLUT_WIDTH, CLUT_HEIGHT * ps2->clut_bank_height, (u32)vram, GS_PSM_CT16, 1, GS_CLUT_PALLETE);
 }
 
 static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
@@ -973,7 +1040,6 @@ video_driver_t video_ps2 = {
 	"ps2",
 	ps2_init,
 	ps2_free,
-	ps2_setClutBaseAddr,
 	ps2_waitVsync,
 	ps2_flipScreen,
 	ps2_frameAddr,

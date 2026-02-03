@@ -21,6 +21,16 @@ layer_texture_info_t emu_layer_textures[] = {
 };
 uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
 
+/* CLUT configuration for CPS1:
+ * - 192 palettes × 16 colors = 3072 entries
+ * - Single bank (no palette bank switching like Neo Geo)
+ */
+clut_info_t emu_clut_info = {
+	.base = (uint16_t *)video_palette,
+	.entries_per_bank = CPS1_PALETTE_ENTRIES,
+	.bank_count = 1
+};
+
 
 /******************************************************************************
 	Local Functions
@@ -184,6 +194,8 @@ static void apply_cheat()
 /*--------------------------------------------------------
 	CPS1 Emulation Execute
 --------------------------------------------------------*/
+uint32_t global_frame_count = 0;
+// int pspScreenshotSave(const char *filename);
 
 static void cps1_run(void)
 {
@@ -207,6 +219,12 @@ static void cps1_run(void)
 			timer_update_cpu();
 			update_screen();
 			update_inputport();
+
+			// printf("Frame: %u\n", global_frame_count++);
+			// if (global_frame_count == 685) {
+			// 	usleep(2000000000);
+			// 	Loop = LOOP_EXIT;
+			// }
 		}
 
 		video_driver->clearScreen(video_data);
