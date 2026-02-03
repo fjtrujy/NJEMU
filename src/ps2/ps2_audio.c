@@ -86,11 +86,23 @@ static bool ps2_chSRCReserve(void *data, uint16_t samples, int32_t frequency, ui
 	format.freq = frequency;
 	format.channels = channels;
 
+	printf("PS2 Audio: Reserving SRC channel - samples=%d, freq=%d, channels=%d\n", 
+	       samples, frequency, channels);
+
 	ps2->channel = audsrv_set_format(&format);
 	ps2->samples = samples;
 	ps2->is_mp3_channel = false;
-	audsrv_set_volume(MAX_VOLUME);
-	return ps2->channel >= 0;
+	
+	printf("PS2 Audio: audsrv_set_format returned channel=%d\n", ps2->channel);
+	
+	if (ps2->channel >= 0) {
+		audsrv_set_volume(MAX_VOLUME);
+		printf("PS2 Audio: Audio initialized successfully\n");
+		return true;
+	} else {
+		printf("PS2 Audio: ERROR - Failed to initialize audio channel\n");
+		return false;
+	}
 }
 
 static bool ps2_chReserve(void *data, uint16_t samplecount, uint8_t channels) {

@@ -6,6 +6,7 @@
 
 ******************************************************************************/
 
+#include <assert.h>
 #include "emumain.h"
 #include "thread_driver.h"
 #include "audio_driver.h"
@@ -57,9 +58,9 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 		if (sound_enable)
 			(*sound->update)(sound_buffer[flip]);
 		else
-			memset(sound_buffer[flip], 0, SOUND_BUFFER_SIZE * 2);
+			memset(sound_buffer[flip], 0, sound->samples * sound->channels * sizeof(int16_t));
 
-		audio_driver->srcOutputBlocking(game_audio, sound_volume, sound_buffer[flip], SOUND_BUFFER_SIZE * sizeof(int16_t));
+		audio_driver->srcOutputBlocking(game_audio, sound_volume, sound_buffer[flip], sound->samples * sound->channels * sizeof(int16_t));
 		flip ^= 1;
 	}
 
@@ -130,6 +131,9 @@ void sound_thread_set_volume(void)
 
 int sound_thread_start(void)
 {
+	/* Verify that the sound buffer is large enough for the configured audio format */
+	assert(sound->samples * sound->channels <= SOUND_BUFFER_SIZE);
+
 	sound_active = 0;
 	sound_thread = NULL;
 	sound_volume = 0;
@@ -141,7 +145,7 @@ int sound_thread_start(void)
 
 	game_audio = audio_driver->init();
 
-	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency, 2))
+	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency, sound->channels))
 	{
 		fatalerror(TEXT(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND));
 		audio_driver->free(game_audio);
