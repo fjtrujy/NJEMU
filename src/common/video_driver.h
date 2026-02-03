@@ -98,18 +98,33 @@ typedef struct layer_texture_info {
 	uint8_t bytes_per_pixel;
 } layer_texture_info_t;
 
+/* CLUT (Color Look-Up Table) configuration for indexed textures.
+ * Each target defines its own emu_clut_info based on palette requirements:
+ *   - MVS/NCDZ: 2 banks × 4096 colors (video_palettebank[2][4096])
+ *   - CPS1:     1 bank × 3072 colors (video_palette[3072])
+ */
+typedef struct clut_info {
+	uint16_t *base;              /* Pointer to palette memory */
+	uint16_t entries_per_bank;   /* Colors per bank (e.g., 4096 for Neo Geo, 3072 for CPS1) */
+	uint8_t bank_count;          /* Number of banks (2 for Neo Geo, 1 for CPS) */
+} clut_info_t;
+
 typedef struct video_driver
 {
 	/* Human-readable identifier. */
 	const char *ident;
 	/* Creates and initializes handle to video driver.
-	*
-	* Returns: video driver handle on success, otherwise NULL.
-	**/
-	void *(*init)(layer_texture_info_t *layer_textures, uint8_t layer_textures_count);
+	 *
+	 * Parameters:
+	 *   layer_textures: Array of texture layer configurations
+	 *   layer_textures_count: Number of texture layers
+	 *   clut_info: CLUT configuration (base address, entries per bank, bank count)
+	 *
+	 * Returns: video driver handle on success, otherwise NULL.
+	 **/
+	void *(*init)(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
-	void (*setClutBaseAddr)(void *data, uint16_t *clut_base);
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);

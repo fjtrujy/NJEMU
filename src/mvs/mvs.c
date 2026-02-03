@@ -23,11 +23,21 @@ int neogeo_save_sound_flag;
 layer_texture_info_t emu_layer_textures[] =
 {
 	{ 512, 512, 1 }, // TEX_SPR0
-	{ 512, 512, 1 },  // TEX_SPR1
+	{ 512, 512, 1 }, // TEX_SPR1
 	{ 512, 512, 1 }, // TEX_SPR2
-	{ 512, 512, 1 },  // TEX_FIX
+	{ 512, 512, 1 }, // TEX_FIX
 };
 uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
+
+/* CLUT configuration for MVS/Neo Geo:
+ * - 2 palette banks (switched during gameplay)
+ * - 4096 colors per bank (256 palettes × 16 colors)
+ */
+clut_info_t emu_clut_info = {
+	.base = (uint16_t *)video_palettebank,
+	.entries_per_bank = PALETTE_BANK_SIZE,
+	.bank_count = PALETTE_BANKS
+};
 
 /******************************************************************************
 	Local Variables

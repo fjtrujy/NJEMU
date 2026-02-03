@@ -17,7 +17,6 @@ video_driver_t video_null = {
 	"null", // ident
 	NULL, // init
 	NULL, // free
-	NULL, // setClutBaseAddr
 	NULL, // waitVsync
 	NULL, // flipScreen
 	NULL, // frameAddr

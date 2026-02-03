@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "ncdz.h"
+#include "common/memory_sizes.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -20,11 +21,21 @@ int neogeo_region;
 layer_texture_info_t emu_layer_textures[] =
 {
 	{ 512, 512, 1 }, // TEX_SPR0
-	{ 512, 512, 1 },  // TEX_SPR1
+	{ 512, 512, 1 }, // TEX_SPR1
 	{ 512, 512, 1 }, // TEX_SPR2
-	{ 512, 512, 1 },  // TEX_FIX
+	{ 512, 512, 1 }, // TEX_FIX
 };
 uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
+
+/* CLUT configuration for NCDZ/Neo Geo CD:
+ * - 2 palette banks (switched during gameplay)
+ * - 4096 colors per bank (256 palettes × 16 colors)
+ */
+clut_info_t emu_clut_info = {
+	.base = (uint16_t *)video_palettebank,
+	.entries_per_bank = (NEOGEO_PALETTE_SIZE / NEOGEO_PALETTE_BANKS),
+	.bank_count = NEOGEO_PALETTE_BANKS
+};
 
 /******************************************************************************
 	Local Variables

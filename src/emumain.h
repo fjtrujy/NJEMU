@@ -231,6 +231,7 @@ extern char cache_dir[PATH_MAX];
 
 extern layer_texture_info_t emu_layer_textures[];
 extern uint8_t emu_layer_textures_count;
+extern clut_info_t emu_clut_info;
 
 extern int option_showfps;
 extern int option_autoframeskip;

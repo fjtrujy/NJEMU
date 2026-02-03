@@ -1207,6 +1207,36 @@ Each platform implements the same driver interfaces:
 | `*_ticker.c` | Timing and frame pacing |
 | `*_power.c` | Power management |
 
+### Target Configuration
+
+Each emulator target (MVS, NCDZ, CPS1, CPS2) defines configuration globals in its core file (e.g., `src/mvs/mvs.c`):
+
+| Global | Type | Purpose |
+|--------|------|---------|
+| `emu_layer_textures` | `layer_texture_info_t[]` | Texture atlas dimensions per layer |
+| `emu_layer_textures_count` | `uint8_t` | Number of texture layers |
+| `emu_clut_info` | `clut_info_t` | CLUT configuration (base, entries, banks) |
+
+**CLUT Configuration Example (MVS):**
+```c
+clut_info_t emu_clut_info = {
+    .base = (uint16_t *)video_palettebank,
+    .entries_per_bank = PALETTE_BANK_SIZE,  // 4096
+    .bank_count = PALETTE_BANKS             // 2
+};
+```
+
+**CLUT Configuration Example (CPS1):**
+```c
+clut_info_t emu_clut_info = {
+    .base = (uint16_t *)video_palette,
+    .entries_per_bank = CPS1_PALETTE_ENTRIES,  // 3072
+    .bank_count = 1
+};
+```
+
+These are passed to the video driver during initialization in `src/emumain.c`.
+
 ---
 
 ## Technical Architecture - Emulator Targets
@@ -1521,7 +1551,7 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 
 ### CPS1 (Capcom Play System 1) Target
 
-**Files:** `src/cps1/psp_sprite.c`, `src/cps1/sprite_common.c`
+**Files:** `src/cps1/psp_sprite.c`, `src/cps1/ps2_sprite.c`, `src/cps1/sprite_common.c`
 
 **Hardware Reference:**
 - [Fabien Sanglard's CPS-1 Graphics Study](https://fabiensanglard.net/cps1_gfx/index.html)
@@ -1549,7 +1579,7 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 | `sprite_common.h` | Shared declarations, constants, macros, extern variables |
 | `sprite_common.c` | Hash table management, software rendering, shared data |
 | `psp_sprite.c` | PSP-specific: swizzled textures, sceGu* API |
-| `ps2_sprite.c` | PS2-specific: GSKit rendering (TODO) |
+| `ps2_sprite.c` | PS2-specific: GSKit rendering, linear textures |
 | `desktop_sprite.c` | Desktop-specific: SDL2 rendering (TODO) |
 
 #### Graphics Layers

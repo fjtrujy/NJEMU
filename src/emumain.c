@@ -523,7 +523,7 @@ int main(int argc, char *argv[]) {
 	pad_init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
-	video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count);
+	video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	// Platform system buttom

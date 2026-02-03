@@ -61,11 +61,24 @@ static RECT cps_clip[6] =
 	Vertex Data
 ------------------------------------------------------------------------*/
 
-/* OBJECT vertex arrays (16x16 tiles) - separate arrays per CLUT for direct GPU submission */
-static struct Vertex __attribute__((aligned(64))) vertices_object_clut0[OBJECT_MAX_SPRITES * 2];
-static struct Vertex __attribute__((aligned(64))) vertices_object_clut1[OBJECT_MAX_SPRITES * 2];
-static uint16_t object_clut0_num;
-static uint16_t object_clut1_num;
+/* CLUT */
+static uint16_t *clut;
+
+/* OBJECT vertex arrays (16x16 tiles) - single array to preserve draw order */
+static struct Vertex __attribute__((aligned(64))) vertices_object[OBJECT_MAX_SPRITES * 2];
+static uint16_t object_num;
+
+/* OBJECT CLUT batch tracking - preserves draw order when CLUT changes */
+typedef struct {
+	uint16_t start;      /* Start index in vertex array */
+	uint16_t count;      /* Number of vertices in this batch */
+	uint16_t *clut;      /* CLUT pointer for this batch */
+} object_batch_t;
+
+#define OBJECT_MAX_BATCHES 256
+static object_batch_t object_batches[OBJECT_MAX_BATCHES];
+static uint16_t object_batch_count;
+static uint16_t *object_current_clut;
 
 /* Separate vertex arrays for each scroll layer to avoid GPU race conditions.
    When GPU commands are queued asynchronously, shared buffers can be overwritten
@@ -162,8 +175,9 @@ void blit_start(int high_layer)
 	memset(palette_dirty_marks, 0, sizeof(palette_dirty_marks));
 
 	/* Initialize per-layer vertex counters */
-	object_clut0_num = 0;
-	object_clut1_num = 0;
+	object_num = 0;
+	object_batch_count = 0;
+	object_current_clut = NULL;
 	scroll1_clut0_num = 0;
 	scroll1_clut1_num = 0;
 	scroll2_clut0_num = 0;
@@ -247,16 +261,31 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 			}
 		}
 
-		if (attr & 0x10)
+		/* Determine CLUT for this sprite */
+		uint16_t *sprite_clut = (attr & 0x10) ? &clut[16 << 4] : clut;
+
+		/* Check if CLUT changed - need to start a new batch */
+		if (sprite_clut != object_current_clut)
 		{
-			vertices = &vertices_object_clut1[object_clut1_num];
-			object_clut1_num += 2;
+			/* Finalize current batch if any */
+			if (object_current_clut != NULL && object_batch_count > 0)
+			{
+				object_batches[object_batch_count - 1].count = object_num - object_batches[object_batch_count - 1].start;
+			}
+
+			/* Start new batch */
+			if (object_batch_count < OBJECT_MAX_BATCHES)
+			{
+				object_batches[object_batch_count].start = object_num;
+				object_batches[object_batch_count].count = 0;
+				object_batches[object_batch_count].clut = sprite_clut;
+				object_batch_count++;
+			}
+			object_current_clut = sprite_clut;
 		}
-		else
-		{
-			vertices = &vertices_object_clut0[object_clut0_num];
-			object_clut0_num += 2;
-		}
+
+		vertices = &vertices_object[object_num];
+		object_num += 2;
 
 		vertices[0].x = vertices[1].x = x;
 		vertices[0].y = vertices[1].y = y;
@@ -279,25 +308,30 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_finish_object(void)
 {
-	uint16_t *current_clut;
+	uint16_t i;
 
-	if (object_clut0_num + object_clut1_num == 0) return;
+	if (object_num == 0) return;
+
+	/* Finalize the last batch */
+	if (object_batch_count > 0)
+	{
+		object_batches[object_batch_count - 1].count = object_num - object_batches[object_batch_count - 1].start;
+	}
 
 	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
+	video_driver->flushCache(video_data, vertices_object, object_num * sizeof(struct Vertex));
 
-	if (object_clut0_num)
+	/* Render batches in order - preserves original draw order */
+	for (i = 0; i < object_batch_count; i++)
 	{
-		current_clut = clut;
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_object_clut0, object_clut0_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, current_clut, 0, object_clut0_num, vertices_object_clut0);
-	}
-	if (object_clut1_num)
-	{
-		current_clut = &clut[16 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_object_clut1, object_clut1_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, current_clut, 0, object_clut1_num, vertices_object_clut1);
+		if (object_batches[i].count > 0)
+		{
+			video_driver->uploadClut(video_data, object_batches[i].clut, 0);
+			video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT,
+				object_batches[i].clut, 0,
+				object_batches[i].count,
+				&vertices_object[object_batches[i].start]);
+		}
 	}
 }
 
