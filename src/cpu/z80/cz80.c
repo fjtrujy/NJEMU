@@ -403,7 +403,7 @@ void Cz80_Set_Fetch(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintpt
 --------------------------------------------------------*/
 
 #if CZ80_ENCRYPTED_ROM
-void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uint32_t decrypted_rom)
+void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintptr_t decrypted_rom)
 {
 	int i, j;
 
@@ -413,7 +413,7 @@ void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr
 
 	while (i <= j)
 	{
-		CPU->OPFetch[i] = (int32_t)decrypted_rom - (int32_t)CPU->Fetch[i];
+		CPU->OPFetch[i] = (intptr_t)decrypted_rom - (intptr_t)CPU->Fetch[i];
 		i++;
 	}
 }
