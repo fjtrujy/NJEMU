@@ -101,7 +101,7 @@ static uint16_t scroll3_clut1_num;
 static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
 
 /* STARS vertex array (0x1000 = 4096 potential stars) */
-static struct PointVertex ALIGN16_DATA vertices_stars[0x1000];
+static GSPRIMPOINT ALIGN16_DATA vertices_stars[0x1000];
 
 /* PS2 gsKit context and texture atlases.
  * CPS1 has two different texture sizes:
@@ -1117,7 +1117,7 @@ void blit_finish_scrollh(void)
 
 void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t *pal)
 {
-	struct PointVertex *vertices_tmp = vertices_stars;
+	GSPRIMPOINT *vertices_tmp = vertices_stars;
 
 	uint16_t offs;
 	int stars_num = 0;
@@ -1126,10 +1126,12 @@ void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t 
 	{
 		if (*col != 0x0f)
 		{
-			vertices_tmp->x     = (((offs >> 8) << 5) - stars_x + (*col & 0x1f)) & 0x1ff;
-			vertices_tmp->y     = ((offs & 0xff) - stars_y) & 0xff;
-			vertices_tmp->z     = 0;
-			vertices_tmp->color = pal[(*col & 0xe0) >> 1];
+			uint16_t x = (((offs >> 8) << 5) - stars_x + (*col & 0x1f)) & 0x1ff;
+			uint16_t y = ((offs & 0xff) - stars_y) & 0xff;
+			uint16_t c = pal[(*col & 0xe0) >> 1];
+
+			vertices_tmp->xyz2 = vertex_to_XYZ2_pixel_perfect(x, y);
+			vertices_tmp->rgbaq = color_to_RGBAQ(GETR15(c), GETG15(c), GETB15(c), 0x80, 0);
 			vertices_tmp++;
 			stars_num++;
 		}
@@ -1137,7 +1139,7 @@ void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t 
 
 	if (stars_num)
 	{
-		video_driver->flushCache(video_data, vertices_stars, stars_num * sizeof(struct PointVertex));
+		video_driver->flushCache(video_data, vertices_stars, stars_num * sizeof(GSPRIMPOINT));
 		video_driver->blitPoints(video_data, stars_num, vertices_stars);
 	}
 }
