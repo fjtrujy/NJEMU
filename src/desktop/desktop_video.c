@@ -441,7 +441,16 @@ static void desktop_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 }
 
 static void desktop_blitPoints(void *data, uint32_t points_count, void *vertices) {
-	// TODO: Implement desktop point drawing for stars
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	struct PointVertex *pts = (struct PointVertex *)vertices;
+	uint32_t i;
+
+	for (i = 0; i < points_count; i++)
+	{
+		uint16_t c = pts[i].color;
+		SDL_SetRenderDrawColor(desktop->renderer, GETR15(c), GETG15(c), GETB15(c), 255);
+		SDL_RenderDrawPoint(desktop->renderer, pts[i].x, pts[i].y);
+	}
 }
 
 static void desktop_flushCache(void *data, void *addr, size_t size) {

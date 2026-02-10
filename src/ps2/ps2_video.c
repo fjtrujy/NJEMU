@@ -1029,7 +1029,8 @@ static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_
 }
 
 static void ps2_blitPoints(void *data, uint32_t points_count, void *vertices) {
-	// TODO: Implement PS2 point drawing for stars
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gsKit_prim_list_points(ps2->gsGlobal, points_count, (GSPRIMPOINT *)vertices);
 }
 
 static void ps2_flushCache(void *data, void *addr, size_t size) {
