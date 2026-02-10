@@ -28,9 +28,9 @@ static RECT mvs_clip[7] =
 };
 
 static bool tex_fix_changed;
-static struct Vertex ALIGN_DATA vertices_fix[FIX_MAX_SPRITES * 2];
-static uint16_t ALIGN_DATA spr_flags[SPR_MAX_SPRITES];
-static struct Vertex ALIGN_DATA vertices_spr[SPR_MAX_SPRITES * 2];
+static struct Vertex ALIGN16_DATA vertices_fix[FIX_MAX_SPRITES * 2];
+static uint16_t ALIGN16_DATA spr_flags[SPR_MAX_SPRITES];
+static struct Vertex ALIGN16_DATA vertices_spr[SPR_MAX_SPRITES * 2];
 
 static uint8_t clut_index;
 

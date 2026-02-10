@@ -37,23 +37,23 @@
 	Global Structures
 ******************************************************************************/
 
-cz80_struc ALIGN_DATA CZ80;
+cz80_struc ALIGN16_DATA CZ80;
 
 
 /******************************************************************************
 	Local Variables
 ******************************************************************************/
 
-static uint8_t ALIGN_DATA cz80_bad_address[1 << CZ80_FETCH_SFT];
+static uint8_t ALIGN16_DATA cz80_bad_address[1 << CZ80_FETCH_SFT];
 
-static uint8_t ALIGN_DATA SZ[256];
-static uint8_t ALIGN_DATA SZP[256];
-static uint8_t ALIGN_DATA SZ_BIT[256];
-static uint8_t ALIGN_DATA SZHV_inc[256];
-static uint8_t ALIGN_DATA SZHV_dec[256];
+static uint8_t ALIGN16_DATA SZ[256];
+static uint8_t ALIGN16_DATA SZP[256];
+static uint8_t ALIGN16_DATA SZ_BIT[256];
+static uint8_t ALIGN16_DATA SZHV_inc[256];
+static uint8_t ALIGN16_DATA SZHV_dec[256];
 #if CZ80_BIG_FLAGS_ARRAY
-static uint8_t ALIGN_DATA SZHVC_add[2*256*256];
-static uint8_t ALIGN_DATA SZHVC_sub[2*256*256];
+static uint8_t ALIGN16_DATA SZHVC_add[2*256*256];
+static uint8_t ALIGN16_DATA SZHVC_sub[2*256*256];
 #endif
 
 

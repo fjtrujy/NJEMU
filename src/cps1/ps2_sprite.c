@@ -60,7 +60,7 @@ static RECT cps_clip[6] =
 static uint16_t *clut;
 
 /* OBJECT vertex arrays (16x16 tiles) - single array to preserve draw order */
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_object[OBJECT_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_object[OBJECT_MAX_SPRITES * 2];
 static uint16_t object_num;
 
 /* OBJECT CLUT batch tracking - preserves draw order when CLUT changes */
@@ -80,28 +80,28 @@ static uint16_t *object_current_clut;
    before the GPU finishes processing them. Each layer needs its own buffers. */
 
 /* SCROLL1 vertex arrays (8x8 tiles) */
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll1_clut0[SCROLL1_MAX_SPRITES * 2];
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll1_clut1[SCROLL1_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll1_clut0[SCROLL1_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll1_clut1[SCROLL1_MAX_SPRITES * 2];
 static uint16_t scroll1_clut0_num;
 static uint16_t scroll1_clut1_num;
 
 /* SCROLL2 vertex arrays (16x16 tiles) */
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll2_clut0[SCROLL2_MAX_SPRITES * 2];
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll2_clut1[SCROLL2_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll2_clut0[SCROLL2_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll2_clut1[SCROLL2_MAX_SPRITES * 2];
 static uint16_t scroll2_clut0_num;
 static uint16_t scroll2_clut1_num;
 
 /* SCROLL3 vertex arrays (32x32 tiles) */
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll3_clut0[SCROLL3_MAX_SPRITES * 2];
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scroll3_clut1[SCROLL3_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll3_clut0[SCROLL3_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scroll3_clut1[SCROLL3_MAX_SPRITES * 2];
 static uint16_t scroll3_clut0_num;
 static uint16_t scroll3_clut1_num;
 
 /* SCROLLH vertex array (high priority layer) */
-static GSPRIMUVPOINTFLAT ALIGN_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
+static GSPRIMUVPOINTFLAT ALIGN16_DATA vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
 
 /* STARS vertex array (0x1000 = 4096 potential stars) */
-static struct PointVertex ALIGN_DATA vertices_stars[0x1000];
+static struct PointVertex ALIGN16_DATA vertices_stars[0x1000];
 
 /* PS2 gsKit context and texture atlases.
  * CPS1 has two different texture sizes:

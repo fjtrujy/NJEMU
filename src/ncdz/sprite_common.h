@@ -52,14 +52,14 @@ struct sprite_t
 	Shared variables (extern declarations)
 ******************************************************************************/
 
-extern SPRITE ALIGN_DATA *fix_head[FIX_HASH_SIZE];
-extern SPRITE ALIGN_DATA fix_data[FIX_TEXTURE_SIZE];
+extern SPRITE ALIGN16_DATA *fix_head[FIX_HASH_SIZE];
+extern SPRITE ALIGN16_DATA fix_data[FIX_TEXTURE_SIZE];
 extern SPRITE *fix_free_head;
 extern uint16_t fix_num;
 extern uint16_t fix_texture_num;
 
-extern SPRITE ALIGN_DATA *spr_head[SPR_HASH_SIZE];
-extern SPRITE ALIGN_DATA spr_data[SPR_TEXTURE_SIZE];
+extern SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
+extern SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
 extern SPRITE *spr_free_head;
 extern uint16_t spr_num;
 extern uint16_t spr_texture_num;
@@ -75,7 +75,7 @@ extern uint8_t *tex_fix;
 extern uint8_t *tex_spr[3];
 extern uint16_t *clut;
 
-extern const uint32_t ALIGN_DATA color_table[16];
+extern const uint32_t ALIGN16_DATA color_table[16];
 extern const uint8_t zoom_x_tables[][16];
 
 /******************************************************************************
@@ -104,7 +104,7 @@ void drawgfxline_fixed_flip_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, 
 void drawgfxline_zoom_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
 void drawgfxline_zoom_flip_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
 
-extern void ALIGN_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
+extern void ALIGN16_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
 
 /* Common sprite interface functions */
 void blit_clear_all_sprite(void);

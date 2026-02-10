@@ -14,7 +14,7 @@
 ******************************************************************************/
 
 int option_controller;
-uint8_t ALIGN_DATA neogeo_port_value[MVS_PORT_MAX];
+uint8_t ALIGN16_DATA neogeo_port_value[MVS_PORT_MAX];
 
 int input_map[MAX_INPUTS];
 int analog_sensitivity;
@@ -48,10 +48,10 @@ static const uint8_t hotkey_mask[11] =
 	0x0f	// A+B+C+D
 };
 
-static uint8_t ALIGN_DATA input_flag[MAX_INPUTS];
-static int ALIGN_DATA af_map1[MVS_BUTTON_MAX];
-static int ALIGN_DATA af_map2[MVS_BUTTON_MAX];
-static int ALIGN_DATA af_counter[MVS_BUTTON_MAX];
+static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
+static int ALIGN16_DATA af_map1[MVS_BUTTON_MAX];
+static int ALIGN16_DATA af_map2[MVS_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[MVS_BUTTON_MAX];
 static int input_ui_wait;
 static int service_switch;
 

@@ -39,7 +39,7 @@ static uint16_t *cps_scroll2;
 static uint16_t *cps_scroll3;
 static uint16_t *cps_other;
 static uint16_t *cps1_palette;
-static uint16_t ALIGN_DATA cps1_old_palette[4*32*16];
+static uint16_t ALIGN16_DATA cps1_old_palette[4*32*16];
 
 static uint8_t cps_layer_enabled[4];								/* Layer enabled [Y/N] */
 static int16_t cps_scroll1x, cps_scroll1y;
@@ -47,8 +47,8 @@ static int16_t cps_scroll2x, cps_scroll2y;
 static int16_t cps_scroll3x, cps_scroll3y;
 static uint32_t cps1_object_num;									/* object total sprites num */
 static uint8_t  *cps1_object_pen_usage;							/* object sprites pen usage */
-static uint8_t  ALIGN_DATA cps1_scroll2_pen_usage[CPS1_PEN_USAGE_SIZE];		/* scroll2 sprites pen usage */
-static uint16_t ALIGN_DATA cps1_scroll_pen_usage[4][CPS1_PEN_USAGE_SIZE];	/* scroll sprites pen usage */
+static uint8_t  ALIGN16_DATA cps1_scroll2_pen_usage[CPS1_PEN_USAGE_SIZE];		/* scroll2 sprites pen usage */
+static uint16_t ALIGN16_DATA cps1_scroll_pen_usage[4][CPS1_PEN_USAGE_SIZE];	/* scroll sprites pen usage */
 
 #define cps1_obj_size			0x800
 #define cps1_max_obj			(cps1_obj_size >> 3)
@@ -62,7 +62,7 @@ struct cps1_object_t
 	uint16_t attr;
 };
 
-static struct cps1_object_t ALIGN_DATA cps1_object[cps1_max_obj + 1];
+static struct cps1_object_t ALIGN16_DATA cps1_object[cps1_max_obj + 1];
 static struct cps1_object_t *cps1_last_object;
 
 static uint16_t cps1_transparency_scroll[4];	/* Transparency pens of scroll layers */
@@ -77,7 +77,7 @@ struct cps_scroll2_t
 	int16_t end;
 };
 
-static struct cps_scroll2_t ALIGN_DATA scroll2[224];
+static struct cps_scroll2_t ALIGN16_DATA scroll2[224];
 static uint16_t cps_scroll2_blocks;
 
 static uint16_t __attribute__((aligned(64))) video_clut16[65536];
@@ -531,7 +531,7 @@ void cps1_video_reset(void)
 	memset(cps1_old_palette, 0, sizeof(cps1_old_palette));
 	memset(video_palette, 0, sizeof(video_palette));
 
-	for (i = 0; i < 4*32*16; i += 16)
+	for (i = 0; i < CPS1_PALETTE_ENTRIES; i += 16)
 		video_palette[i + 15] = 0x8000;
 
 	cps1_port(CPS1_OBJ_BASE)     = 0x9200;

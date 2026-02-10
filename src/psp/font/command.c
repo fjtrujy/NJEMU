@@ -16,7 +16,7 @@
 	gryph data
 ------------------------------------------------------*/
 
-static const uint8_t ALIGN_DATA command_font[] = {
+static const uint8_t ALIGN16_DATA command_font[] = {
 	0x00,0x00,0x62,0x67,0x02,0x00,0x00,0x00,0xb1,0xff,0xff,0xbf,0x01,0x00,0x10,0xfe,
 	0xef,0xe4,0xff,0x1e,0x00,0xb0,0xff,0x9f,0x90,0xff,0xbf,0x00,0xf2,0xff,0x2f,0x28,
 	0xff,0xff,0x02,0xf6,0xff,0x0f,0x0e,0xff,0xff,0x06,0xf7,0xff,0x37,0x3c,0xf7,0xff,
@@ -474,7 +474,7 @@ static const uint8_t ALIGN_DATA command_font[] = {
 	0x00,0x00,0x00,0x00,0x20,0x2d,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
 };
 
-static const int ALIGN_DATA command_font_pos[NUM_FONTS] = {
+static const int ALIGN16_DATA command_font_pos[NUM_FONTS] = {
 	0x000000,0x00005b,0x0000b6,0x000111,0x00016c,0x0001c7,0x000222,0x00027d,0x0002d8,0x000333,0x00038e,0x0003e9,0x000444,0x00049f,0x0004fa,0x000555,
 	0x0005b0,0x00060b,0x000666,0x0006c1,0x00071c,0x000777,0x0007d2,0x00082d,0x000888,0x0008e3,0x00093e,0x000999,0x0009f4,0x000a4f,0x000aaa,0x000b05,
 	0x000b60,0x000b92,0x000bce,0x000c00,0x000c36,0x000c7e,0x000cb4,0x000ce6,0x000d22,0x000d54,0x000d81,0x000da1,0x000db3,0x000def,0x000e37,0x000e7f,
@@ -484,7 +484,7 @@ static const int ALIGN_DATA command_font_pos[NUM_FONTS] = {
 	0x001a7b,0x001ac3,0x001b0b,0x001b5f,0x001bb3,0x001c0e
 };
 
-static const int8_t ALIGN_DATA command_font_width[NUM_FONTS] = {
+static const int8_t ALIGN16_DATA command_font_width[NUM_FONTS] = {
 	14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,
 	14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,14,
 	10,10,10,12,12,12,10,10,10,10, 8,12,10,12,12,12,
@@ -494,7 +494,7 @@ static const int8_t ALIGN_DATA command_font_width[NUM_FONTS] = {
 	12,12,14,14,14,14
 };
 
-static const int8_t ALIGN_DATA command_font_height[NUM_FONTS] = {
+static const int8_t ALIGN16_DATA command_font_height[NUM_FONTS] = {
 	13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,
 	13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,
 	10,12,10, 9,12, 9,10,12,10, 9, 8, 3,12,12,12,11,
@@ -504,7 +504,7 @@ static const int8_t ALIGN_DATA command_font_height[NUM_FONTS] = {
 	12,12,12,12,13,13
 };
 
-static const int8_t ALIGN_DATA command_font_skipx[NUM_FONTS] = {
+static const int8_t ALIGN16_DATA command_font_skipx[NUM_FONTS] = {
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	 2, 2, 1, 1, 1, 0, 2, 2, 1, 2, 3, 1, 3, 2, 1, 1,
@@ -514,7 +514,7 @@ static const int8_t ALIGN_DATA command_font_skipx[NUM_FONTS] = {
 	 1, 1, 1, 1, 0, 0
 };
 
-static const int8_t ALIGN_DATA command_font_skipy[NUM_FONTS] = {
+static const int8_t ALIGN16_DATA command_font_skipy[NUM_FONTS] = {
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	 2, 1, 2, 2, 1, 2, 2, 1, 2, 3, 3, 9, 1, 1, 1, 2,

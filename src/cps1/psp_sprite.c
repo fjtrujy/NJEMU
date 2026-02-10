@@ -113,7 +113,7 @@ static struct PointVertex __attribute__((aligned(64))) vertices_stars[0x1000];
 	'swizzle' Texture Address Calculation Table (8-bit color)
 ------------------------------------------------------------------------*/
 
-static const int ALIGN_DATA swizzle_table_8bit[32] =
+static const int ALIGN16_DATA swizzle_table_8bit[32] =
 {
 	   0, 16, 16, 16, 16, 16, 16, 16,
 	3984, 16, 16, 16, 16, 16, 16, 16,

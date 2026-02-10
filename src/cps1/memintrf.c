@@ -56,9 +56,9 @@ uint32_t memory_length_sound1;
 uint32_t memory_length_user1;
 uint32_t memory_length_user2;
 
-uint8_t  ALIGN_DATA cps1_ram[CPS1_RAM_SIZE];
-uint16_t ALIGN_DATA cps1_gfxram[CPS1_GFXRAM_SIZE >> 1];
-uint16_t ALIGN_DATA cps1_output[CPS1_OUTPUT_SIZE >> 1];
+uint8_t  ALIGN16_DATA cps1_ram[CPS1_RAM_SIZE];
+uint16_t ALIGN16_DATA cps1_gfxram[CPS1_GFXRAM_SIZE >> 1];
+uint16_t ALIGN16_DATA cps1_output[CPS1_OUTPUT_SIZE >> 1];
 
 uint8_t *qsound_sharedram1;
 uint8_t *qsound_sharedram2;

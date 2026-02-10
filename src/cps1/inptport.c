@@ -15,8 +15,8 @@
 
 int option_controller;
 int cps1_dipswitch[3];
-uint16_t ALIGN_DATA cps1_port_value[CPS1_PORT_MAX];
-int ALIGN_DATA input_map[MAX_INPUTS];
+uint16_t ALIGN16_DATA cps1_port_value[CPS1_PORT_MAX];
+int ALIGN16_DATA input_map[MAX_INPUTS];
 int input_max_players;
 int input_max_buttons;
 int analog_sensitivity;
@@ -27,10 +27,10 @@ int af_interval = 1;
 	Local Variables
 ******************************************************************************/
 
-static uint8_t ALIGN_DATA input_flag[MAX_INPUTS];
-static int ALIGN_DATA af_map1[CPS1_BUTTON_MAX];
-static int ALIGN_DATA af_map2[CPS1_BUTTON_MAX];
-static int ALIGN_DATA af_counter[CPS1_BUTTON_MAX];
+static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
+static int ALIGN16_DATA af_map1[CPS1_BUTTON_MAX];
+static int ALIGN16_DATA af_map2[CPS1_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[CPS1_BUTTON_MAX];
 static int input_analog_value[2];
 static int input_ui_wait;
 static int service_switch;

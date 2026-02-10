@@ -29,14 +29,14 @@ static RECT mvs_clip[6] =
 static bool tex_fix_changed;
 static struct Vertex __attribute__((aligned(64))) vertices_fix[FIX_MAX_SPRITES * 2];
 static struct Vertex __attribute__((aligned(64))) vertices_spr[SPR_MAX_SPRITES * 2];
-static uint16_t ALIGN_DATA spr_flags[SPR_MAX_SPRITES];
+static uint16_t ALIGN16_DATA spr_flags[SPR_MAX_SPRITES];
 
 
 /*------------------------------------------------------------------------
 	'swizzle' texture address calculation table
 ------------------------------------------------------------------------*/
 
-static const int ALIGN_DATA swizzle_table_8bit[16] =
+static const int ALIGN16_DATA swizzle_table_8bit[16] =
 {
 	   0, 16, 16, 16, 16, 16, 16, 16,
 	3984, 16, 16, 16, 16, 16, 16, 16

@@ -12,14 +12,14 @@
 	Shared variable definitions
 ******************************************************************************/
 
-SPRITE ALIGN_DATA *fix_head[FIX_HASH_SIZE];
-SPRITE ALIGN_DATA fix_data[FIX_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *fix_head[FIX_HASH_SIZE];
+SPRITE ALIGN16_DATA fix_data[FIX_TEXTURE_SIZE];
 SPRITE *fix_free_head;
 uint16_t fix_num;
 uint16_t fix_texture_num;
 
-SPRITE ALIGN_DATA *spr_head[SPR_HASH_SIZE];
-SPRITE ALIGN_DATA spr_data[SPR_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
+SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
 SPRITE *spr_free_head;
 uint16_t spr_num;
 uint16_t spr_texture_num;
@@ -41,7 +41,7 @@ uint16_t *clut;
  * Each entry broadcasts a 4-bit palette offset to all bytes of a 32-bit word
  * Used when rendering tiles to texture cache
  */
-const uint32_t ALIGN_DATA color_table[16] =
+const uint32_t ALIGN16_DATA color_table[16] =
 {
 	0x00000000, 0x10101010, 0x20202020, 0x30303030,
 	0x40404040, 0x50505050, 0x60606060, 0x70707070,
@@ -93,7 +93,7 @@ const uint8_t zoom_x_tables[][16] =
 	/* Index 16 (hardware $F = full) uses drawgfxline_fixed() instead */
 };
 
-void ALIGN_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom) =
+void ALIGN16_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom) =
 {
 	drawgfxline_zoom,					// 0000
 	drawgfxline_zoom_flip,				// 0001

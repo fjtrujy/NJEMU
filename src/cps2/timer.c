@@ -21,7 +21,7 @@ typedef struct timer_t
 	void (*callback)(int param);
 } TIMER;
 
-static TIMER ALIGN_DATA timer[MAX_TIMER];
+static TIMER ALIGN16_DATA timer[MAX_TIMER];
 
 
 /******************************************************************************
