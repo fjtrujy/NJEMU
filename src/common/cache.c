@@ -64,12 +64,12 @@ typedef struct cache_s
 } cache_t;
 
 
-static cache_t ALIGN_DATA cache_data[MAX_CACHE_SIZE];
+static cache_t ALIGN16_DATA cache_data[MAX_CACHE_SIZE];
 static cache_t *head;
 static cache_t *tail;
 
 static int num_cache;
-static uint16_t ALIGN_DATA blocks[MAX_CACHE_BLOCKS];
+static uint16_t ALIGN16_DATA blocks[MAX_CACHE_BLOCKS];
 static int64_t cache_fd;
 
 int cache_type;
@@ -79,11 +79,11 @@ static char spr_cache_name[PATH_MAX];
 #ifndef LARGE_MEMORY
 int pcm_cache_enable;
 
-static cache_t ALIGN_DATA pcm_data[MAX_PCM_SIZE];
+static cache_t ALIGN16_DATA pcm_data[MAX_PCM_SIZE];
 static cache_t *pcm_head;
 static cache_t *pcm_tail;
 
-static uint16_t ALIGN_DATA pcm_blocks[MAX_PCM_BLOCKS];
+static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
 #endif
 #endif

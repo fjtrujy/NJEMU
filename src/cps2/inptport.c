@@ -28,10 +28,10 @@ int af_interval = 1;
 	Local Variables
 ******************************************************************************/
 
-static uint8_t ALIGN_DATA input_flag[MAX_INPUTS];
-static int ALIGN_DATA af_map1[CPS2_BUTTON_MAX];
-static int ALIGN_DATA af_map2[CPS2_BUTTON_MAX];
-static int ALIGN_DATA af_counter[CPS2_BUTTON_MAX];
+static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
+static int ALIGN16_DATA af_map1[CPS2_BUTTON_MAX];
+static int ALIGN16_DATA af_map2[CPS2_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[CPS2_BUTTON_MAX];
 static int input_analog_value[2];
 static int input_ui_wait;
 static int service_switch;

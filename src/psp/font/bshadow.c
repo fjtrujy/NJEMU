@@ -8,7 +8,7 @@
 
 #include "psp/psp.h"
 
-const unsigned char ALIGN_DATA shadow[9][8][4] = {
+const unsigned char ALIGN16_DATA shadow[9][8][4] = {
 	{	//	00 - left top
 		{ 0x00,0x11,0x22,0x22 },
 		{ 0x10,0x22,0x33,0x44 },

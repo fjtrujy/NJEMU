@@ -102,9 +102,9 @@ uint32_t memory_length_user2;
 #endif
 uint32_t memory_length_user3;
 
-uint8_t ALIGN_DATA neogeo_memcard[NEOGEO_MEMCARD_SIZE];
-uint8_t ALIGN_DATA neogeo_ram[NEOGEO_RAM_SIZE];
-uint16_t ALIGN_DATA neogeo_sram16[NEOGEO_SRAM_SIZE];
+uint8_t ALIGN16_DATA neogeo_memcard[NEOGEO_MEMCARD_SIZE];
+uint8_t ALIGN16_DATA neogeo_ram[NEOGEO_RAM_SIZE];
+uint16_t ALIGN16_DATA neogeo_sram16[NEOGEO_SRAM_SIZE];
 
 int neogeo_machine_mode;
 

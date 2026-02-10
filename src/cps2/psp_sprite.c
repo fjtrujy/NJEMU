@@ -87,9 +87,9 @@ static uint16_t *scrbitmap;
 #define OBJECT_TEXTURE_SIZE		((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
 #define OBJECT_MAX_SPRITES		0x1400
 
-static SPRITE ALIGN_DATA *object_head[OBJECT_HASH_SIZE];
-static SPRITE ALIGN_DATA object_data[OBJECT_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *object_free_head;
+static SPRITE ALIGN16_DATA *object_head[OBJECT_HASH_SIZE];
+static SPRITE ALIGN16_DATA object_data[OBJECT_TEXTURE_SIZE];
+static SPRITE ALIGN16_DATA *object_free_head;
 
 static uint8_t *tex_object;
 static uint16_t object_texture_num;
@@ -104,9 +104,9 @@ static uint16_t object_texture_num;
 #define SCROLL1_TEXTURE_SIZE	((BUF_WIDTH/8)*(TEXTURE_HEIGHT/8))
 #define SCROLL1_MAX_SPRITES		((384/8 + 2) * (224/8 + 2))
 
-static SPRITE ALIGN_DATA *scroll1_head[SCROLL1_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll1_free_head;
+static SPRITE ALIGN16_DATA *scroll1_head[SCROLL1_HASH_SIZE];
+static SPRITE ALIGN16_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
+static SPRITE ALIGN16_DATA *scroll1_free_head;
 
 static uint8_t *tex_scroll1;
 static uint16_t scroll1_texture_num;
@@ -121,9 +121,9 @@ static uint16_t scroll1_texture_num;
 #define SCROLL2_TEXTURE_SIZE	((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
 #define SCROLL2_MAX_SPRITES		((384/16 + 2) * (224/16 + 2))
 
-static SPRITE ALIGN_DATA *scroll2_head[SCROLL2_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll2_free_head;
+static SPRITE ALIGN16_DATA *scroll2_head[SCROLL2_HASH_SIZE];
+static SPRITE ALIGN16_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
+static SPRITE ALIGN16_DATA *scroll2_free_head;
 
 static uint8_t *tex_scroll2;
 static uint16_t scroll2_texture_num;
@@ -138,9 +138,9 @@ static uint16_t scroll2_texture_num;
 #define SCROLL3_TEXTURE_SIZE	((BUF_WIDTH/32)*(TEXTURE_HEIGHT/32))
 #define SCROLL3_MAX_SPRITES		((384/32 + 2) * (224/32 + 2))
 
-static SPRITE ALIGN_DATA *scroll3_head[SCROLL3_HASH_SIZE];
-static SPRITE ALIGN_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
-static SPRITE ALIGN_DATA *scroll3_free_head;
+static SPRITE ALIGN16_DATA *scroll3_head[SCROLL3_HASH_SIZE];
+static SPRITE ALIGN16_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
+static SPRITE ALIGN16_DATA *scroll3_free_head;
 
 static uint8_t *tex_scroll3;
 static uint16_t scroll3_texture_num;
@@ -152,12 +152,12 @@ static uint16_t scroll3_texture_num;
 
 static OBJECT *vertices_object_head[8];
 static OBJECT *vertices_object_tail[8];
-static OBJECT ALIGN_DATA vertices_object[OBJECT_MAX_SPRITES];
+static OBJECT ALIGN16_DATA vertices_object[OBJECT_MAX_SPRITES];
 
 static uint16_t object_num[8];
 static uint16_t object_index;
 
-static struct Vertex ALIGN_DATA vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
+static struct Vertex ALIGN16_DATA vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
 
 
 /*------------------------------------------------------------------------
@@ -168,7 +168,7 @@ static uint16_t *clut;
 static uint16_t clut0_num;
 static uint16_t clut1_num;
 
-static const uint32_t ALIGN_DATA color_table[16] =
+static const uint32_t ALIGN16_DATA color_table[16] =
 {
 	0x00000000, 0x10101010, 0x20202020, 0x30303030,
 	0x40404040, 0x50505050, 0x60606060, 0x70707070,
@@ -181,7 +181,7 @@ static const uint32_t ALIGN_DATA color_table[16] =
 	'swizzle'テクスチャアドレス計算テーブル (8bitカラー)
 ------------------------------------------------------------------------*/
 
-static const int ALIGN_DATA swizzle_table_8bit[32] =
+static const int ALIGN16_DATA swizzle_table_8bit[32] =
 {
 	   0, 16, 16, 16, 16, 16, 16, 16,
 	3984, 16, 16, 16, 16, 16, 16, 16,
@@ -204,7 +204,7 @@ static void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t 
 static void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
 static void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
 
-static void ALIGN_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines) =
+static void ALIGN16_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines) =
 {
 	drawgfx16_16x16,
 	drawgfx16_16x16_opaque,

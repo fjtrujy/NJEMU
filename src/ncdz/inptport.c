@@ -14,7 +14,7 @@
 ******************************************************************************/
 
 int option_controller;
-uint8_t ALIGN_DATA neogeo_port_value[NCDZ_PORT_MAX];
+uint8_t ALIGN16_DATA neogeo_port_value[NCDZ_PORT_MAX];
 
 int input_map[MAX_INPUTS];
 int af_interval = 1;
@@ -44,10 +44,10 @@ static const uint8_t hotkey_mask[11] =
 	0x0f	// A+B+C+D
 };
 
-static uint8_t ALIGN_DATA input_flag[MAX_INPUTS];
-static int ALIGN_DATA af_map1[NCDZ_BUTTON_MAX];
-static int ALIGN_DATA af_map2[NCDZ_BUTTON_MAX];
-static int ALIGN_DATA af_counter[NCDZ_BUTTON_MAX];
+static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
+static int ALIGN16_DATA af_map1[NCDZ_BUTTON_MAX];
+static int ALIGN16_DATA af_map2[NCDZ_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[NCDZ_BUTTON_MAX];
 static int input_ui_wait;
 
 

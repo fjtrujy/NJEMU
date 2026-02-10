@@ -57,13 +57,13 @@ uint32_t memory_length_user1;
 uint32_t gfx_total_elements[3];
 uint8_t *gfx_pen_usage[3];
 
-uint8_t  ALIGN_DATA cps1_ram[CPS1_RAM_SIZE];
-uint8_t  ALIGN_DATA cps2_ram[CPS2_RAM_SIZE + 2];
-uint16_t ALIGN_DATA cps1_gfxram[CPS1_GFXRAM_SIZE >> 1];
-uint16_t ALIGN_DATA cps1_output[CPS1_OUTPUT_SIZE >> 1];
+uint8_t  ALIGN16_DATA cps1_ram[CPS1_RAM_SIZE];
+uint8_t  ALIGN16_DATA cps2_ram[CPS2_RAM_SIZE + 2];
+uint16_t ALIGN16_DATA cps1_gfxram[CPS1_GFXRAM_SIZE >> 1];
+uint16_t ALIGN16_DATA cps1_output[CPS1_OUTPUT_SIZE >> 1];
 
-uint16_t ALIGN_DATA cps2_objram[2][CPS2_OBJRAM_SIZE >> 1];
-uint16_t ALIGN_DATA cps2_output[CPS2_OUTPUT_SIZE >> 1];
+uint16_t ALIGN16_DATA cps2_objram[2][CPS2_OBJRAM_SIZE >> 1];
+uint16_t ALIGN16_DATA cps2_output[CPS2_OUTPUT_SIZE >> 1];
 
 uint8_t *qsound_sharedram1;
 uint8_t *qsound_sharedram2;
