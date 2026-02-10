@@ -92,7 +92,17 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	);
 
 	// Original buffers containing clut indexes
-	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT;
+	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT * sizeof(uint16_t);
+	desktop->scrbitmap = (uint8_t*)malloc(scrbitmapSize);
+	if (desktop->scrbitmap == NULL) {
+		printf("Could not allocate scrbitmap buffer\n");
+		SDL_DestroyRenderer(desktop->renderer);
+		SDL_DestroyWindow(desktop->window);
+		free(desktop);
+		return NULL;
+	}
+	memset(desktop->scrbitmap, 0, scrbitmapSize);
+
 	size_t totalTextureSize = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
 		totalTextureSize += layer_textures[i].width * layer_textures[i].height * layer_textures[i].bytes_per_pixel;
@@ -114,6 +124,7 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	size_t texOffset = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
 		desktop->tex_layers[i].buffer = textures + texOffset;
+		desktop->tex_layers[i].bytes_per_pixel = layer_textures[i].bytes_per_pixel;
 		desktop->tex_layers[i].texture = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, layer_textures[i].width, layer_textures[i].height);
 		if (desktop->tex_layers[i].texture == NULL) {
 			printf("Could not create texture layer %d: %s\n", i, SDL_GetError());
@@ -270,6 +281,7 @@ static void desktop_startWorkFrame(void *data, uint32_t color) {
     uint8_t green = color >> 8;
     uint8_t red = color >> 0;
     SDL_SetRenderDrawColor(desktop->renderer, red, green, blue, alpha);
+    SDL_RenderClear(desktop->renderer);
 }
 
 static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
