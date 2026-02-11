@@ -147,6 +147,12 @@ typedef struct video_driver
 	void (*blitPoints)(void *data, uint32_t points_count, void *vertices);
 	void (*flushCache)(void *data, void *addr, size_t size);
 
+	/* Depth-test support (used by CPS2 priority masking) */
+	void (*enableDepthTest)(void *data);
+	void (*disableDepthTest)(void *data);
+	void (*clearDepthBuffer)(void *data);
+	void (*clearColorBuffer)(void *data);
+
 } video_driver_t;
 
 extern int platform_cpuclock;

@@ -37,7 +37,11 @@ video_driver_t video_null = {
 	NULL, // uploadClut
 	NULL, // blitTexture
 	NULL, // blitPoints
-	NULL  // flushCache
+	NULL, // flushCache
+	NULL, // enableDepthTest
+	NULL, // disableDepthTest
+	NULL, // clearDepthBuffer
+	NULL, // clearColorBuffer
 };
 
 video_driver_t *video_drivers[] = {

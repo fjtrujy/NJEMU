@@ -38,6 +38,7 @@ typedef struct psp_video
 	uintptr_t show_frame; // Relative VRAM offset
 	uintptr_t draw_frame; // Relative VRAM offset
 	uintptr_t scrbitmap;  // Relative VRAM offset
+	uintptr_t depth_frame; // Relative VRAM offset for depth buffer
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint8_t *texturesMem;
@@ -78,6 +79,9 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 	offset += framesize;
 	offset = VRAM_ALIGN_UP(offset);
 	psp->scrbitmap = offset; // Store relative offset
+	offset += framesize;
+	offset = VRAM_ALIGN_UP(offset);
+	psp->depth_frame = offset; // Store relative offset for depth buffer (16-bit)
 	offset += framesize;
 	offset = VRAM_ALIGN_UP(offset);
 
@@ -658,6 +662,32 @@ static void psp_flushCache(void *data, void *addr, size_t size)
 	sceKernelDcacheWritebackRange(addr, aligned_size);
 }
 
+static void psp_enableDepthTest(void *data)
+{
+	sceGuEnable(GU_DEPTH_TEST);
+	sceGuDepthMask(GU_FALSE);
+}
+
+static void psp_disableDepthTest(void *data)
+{
+	sceGuDisable(GU_DEPTH_TEST);
+	sceGuDepthMask(GU_TRUE);
+}
+
+static void psp_clearDepthBuffer(void *data)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	sceGuDepthBuffer((void *)psp->depth_frame, BUF_WIDTH);
+	sceGuClearDepth(0);
+	sceGuClear(GU_DEPTH_BUFFER_BIT);
+}
+
+static void psp_clearColorBuffer(void *data)
+{
+	sceGuClearColor(0);
+	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
+}
+
 video_driver_t video_psp = {
 	"psp",
 	psp_init,
@@ -683,4 +713,8 @@ video_driver_t video_psp = {
 	psp_blitTexture,
 	psp_blitPoints,
 	psp_flushCache,
+	psp_enableDepthTest,
+	psp_disableDepthTest,
+	psp_clearDepthBuffer,
+	psp_clearColorBuffer,
 };

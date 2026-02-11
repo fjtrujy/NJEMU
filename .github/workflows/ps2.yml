@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [MVS, NCDZ, CPS1] #TOOD: CPS2
+        target: [MVS, NCDZ, CPS1, CPS2] 
         large_memory: [OFF] #TODO: ON
         command_list: [OFF] #TODO: ON
         adhoc: [OFF] #TODO: ON

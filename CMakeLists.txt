@@ -90,7 +90,7 @@ if (USE_PG)
 endif()
 
 # Enable interprocedural optimization LTO
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 # Common Flags options
 set(COMMON_FLAGS
@@ -326,6 +326,41 @@ if (${TARGET} STREQUAL "CPS1")
 endif()
 
 # Add specific target source files
+if (${TARGET} STREQUAL "CPS2")
+
+    include_directories(
+        src/cps2
+    )
+
+    set(TARGET_SRC ${TARGET_SRC}
+        common/coin.h
+        common/coin.c
+        cps2/cps2.h
+        cps2/cps2.c
+        cps2/cps2crpt.c
+        cps2/driver.h
+        cps2/driver.c
+        cps2/memintrf.h
+        cps2/memintrf.c
+        cps2/inptport.h
+        cps2/inptport.c
+        cps2/timer.h
+        cps2/timer.c
+        cps2/vidhrdw.h
+        cps2/vidhrdw.c
+        cps2/sprite.h
+        cps2/sprite_common.h
+        cps2/sprite_common.c
+        cps2/${PLATFORM_LOWER}_sprite.c
+        cps2/eeprom.h
+        cps2/eeprom.c
+    )
+
+    # Set SOUND_QSOUND flag for CPS2
+    set(SOUND_QSOUND ON)
+endif()
+
+# Add specific target source files
 if (${TARGET} STREQUAL "NCDZ")
     include_directories(
         src/ncdz
@@ -455,6 +490,7 @@ elseif(PLATFORM STREQUAL "PSP")
         pspaudio
         pspgu
         psppower
+        pspdebug
     )
 endif()
 
@@ -485,7 +521,7 @@ target_link_libraries(${TARGET} PUBLIC
        
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
-    set(BUILD_PRX OFF)
+    set(BUILD_PRX ON)
     create_pbp_file(
         TARGET ${TARGET}
         ICON_PATH NULL

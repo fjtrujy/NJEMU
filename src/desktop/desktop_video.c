@@ -252,7 +252,17 @@ static void desktop_clearScreen(void *data) {
 static void desktop_clearFrame(void *data, int index)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-	printf("TODO: desktop_clearFrame index=%d\n", index);
+
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		/* Clear the work frame (scrbitmap render target) to transparent black */
+		SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+		SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 0);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	default:
+		break;
+	}
 }
 
 
@@ -457,6 +467,22 @@ static void desktop_flushCache(void *data, void *addr, size_t size) {
 	// No cache to flush on desktop
 }
 
+static void desktop_enableDepthTest(void *data) {
+	// No-op: depth test not needed on desktop yet
+}
+
+static void desktop_disableDepthTest(void *data) {
+	// No-op: depth test not needed on desktop yet
+}
+
+static void desktop_clearDepthBuffer(void *data) {
+	// No-op: depth buffer not used on desktop yet
+}
+
+static void desktop_clearColorBuffer(void *data) {
+	// No-op: color buffer clear within scissor not needed on desktop yet
+}
+
 video_driver_t video_desktop = {
 	"desktop",
 	desktop_init,
@@ -482,4 +508,8 @@ video_driver_t video_desktop = {
 	desktop_blitTexture,
 	desktop_blitPoints,
 	desktop_flushCache,
+	desktop_enableDepthTest,
+	desktop_disableDepthTest,
+	desktop_clearDepthBuffer,
+	desktop_clearColorBuffer,
 };

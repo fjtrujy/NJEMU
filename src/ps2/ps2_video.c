@@ -392,7 +392,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 
 	gsGlobal->PSM  = GS_PSM_CT16;
 	gsGlobal->PSMZ = GS_PSMZ_16S;
-	gsGlobal->ZBuffering = GS_SETTING_OFF;
+	gsGlobal->ZBuffering = GS_SETTING_ON;
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
@@ -411,6 +411,11 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	gsKit_vram_clear(gsGlobal);
 
 	gsKit_init_screen(gsGlobal);
+
+	/* Default depth test to "always pass" so Z-buffering doesn't
+	   interfere with targets that don't need it (CPS1, MVS, NCDZ).
+	   CPS2 toggles depth via enableDepthTest/disableDepthTest. */
+	gsGlobal->Test->ZTST = 1;
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
     gsKit_clear(gsGlobal, GS_BLACK);
@@ -577,7 +582,7 @@ static void ps2_clearFrame(void *data, int index)
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
 		assert("Cannot clear global context");
-		break;
+		return;
 	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
 		fbp = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
 		buffer_width = ps2->gsGlobal->Width;
@@ -589,19 +594,20 @@ static void ps2_clearFrame(void *data, int index)
 		buffer_width = ps2->gsGlobal->Width;
 		buffer_height = ps2->gsGlobal->Height;
 		psm = ps2->gsGlobal->PSM;
+		break;
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		fbp = ps2->scrbitmap->Vram;
 		buffer_width = ps2->scrbitmap->Width;
 		buffer_height = ps2->scrbitmap->Height;
 		psm = ps2->scrbitmap->PSM;
 		break;
-	default:	
+	default:
 		assert("Shouldn't clear texture layers");
-		break;
+		return;
 	}
 
-	// gsKit_setRegFrame(ps2->gsGlobal, fbp, buffer_width, buffer_height, psm);
-	// gsKit_custom_clear(ps2->gsGlobal, ps2->clearScreenColor, buffer_width, buffer_height);
+	gsKit_setRegFrame(ps2->gsGlobal, fbp, buffer_width, buffer_height, psm);
+	gsKit_custom_clear(ps2->gsGlobal, ps2->clearScreenColor, buffer_width, buffer_height);
 }
 
 
@@ -1037,6 +1043,86 @@ static void ps2_flushCache(void *data, void *addr, size_t size) {
 	// No cache to flush on PS2
 }
 
+/*--------------------------------------------------------
+	Z-Buffer / Depth Test Helpers
+
+	Used by CPS2 for priority masking. The GS ZBUF register
+	controls Z writes (zmsk: 0=enabled, 1=disabled) and the
+	TEST register controls Z comparison (ZTST: 1=always pass,
+	2=GEQUAL). Default state is depth-off (ZTST=1, zmsk=1).
+--------------------------------------------------------*/
+
+static inline void ps2_setZBufMask(GSGLOBAL *gsGlobal, uint8_t zmsk) {
+	u64 *p_data;
+	u64 *p_store;
+	int qsize = 1;
+
+	p_store = p_data = gsKit_heap_alloc(gsGlobal, qsize, (qsize * 16), GIF_AD);
+
+	if (p_store == gsGlobal->CurQueue->last_tag) {
+		*p_data++ = GIF_TAG_AD(qsize);
+		*p_data++ = GIF_AD;
+	}
+
+	*p_data++ = GS_SETREG_ZBUF(gsGlobal->ZBuffer / 8192, gsGlobal->PSMZ, zmsk);
+	*p_data++ = GS_ZBUF_1 + gsGlobal->PrimContext;
+}
+
+static void ps2_enableDepthTest(void *data) {
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	/* ZTST=2 (GEQUAL): pass if source Z >= destination Z */
+	gsGlobal->Test->ZTST = 2;
+	gsKit_set_test(gsGlobal, 0);
+
+	/* Enable Z writes (zmsk=0) */
+	ps2_setZBufMask(gsGlobal, 0);
+}
+
+static void ps2_disableDepthTest(void *data) {
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	/* ZTST=1 (always pass): depth test never rejects */
+	gsGlobal->Test->ZTST = 1;
+	gsKit_set_test(gsGlobal, 0);
+
+	/* Disable Z writes (zmsk=1) */
+	ps2_setZBufMask(gsGlobal, 1);
+}
+
+static void ps2_clearDepthBuffer(void *data) {
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	/* Enable Z writes so the clear sprite writes Z=0 everywhere.
+	   startWorkFrame already cleared color to black, so the
+	   combined color+Z clear is harmless for color. */
+	ps2_setZBufMask(gsGlobal, 0);
+
+	/* gsKit_custom_clear internally sets ZTST=1 (always pass),
+	   draws full-screen at Z=0, then restores ZTST. With zmsk=0
+	   the Z-buffer gets cleared to 0. */
+	gsKit_custom_clear(gsGlobal, ps2->clearScreenColor,
+					   RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
+
+	/* Restore Z writes disabled (default state) */
+	ps2_setZBufMask(gsGlobal, 1);
+}
+
+static void ps2_clearColorBuffer(void *data) {
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	/* Z writes should already be disabled (disableDepthTest was called
+	   before this). gsKit_custom_clear draws at Z=0 with ZTST=1,
+	   clearing color within the current scissor while preserving
+	   the Z-buffer values from priority 0 objects. */
+	gsKit_custom_clear(gsGlobal, ps2->clearScreenColor,
+					   RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
+}
+
 video_driver_t video_ps2 = {
 	"ps2",
 	ps2_init,
@@ -1061,5 +1147,9 @@ video_driver_t video_ps2 = {
 	ps2_uploadClut,
 	ps2_blitTexture,
 	ps2_blitPoints,
-	ps2_flushCache
+	ps2_flushCache,
+	ps2_enableDepthTest,
+	ps2_disableDepthTest,
+	ps2_clearDepthBuffer,
+	ps2_clearColorBuffer,
 };
