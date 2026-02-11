@@ -56,6 +56,7 @@ class RomConverter {
         this.progressText = document.getElementById('progress-text');
         this.outputPanel = document.getElementById('output-panel');
         this.console = document.getElementById('console');
+        this.copyConsoleBtn = document.getElementById('copy-console-btn');
         this.downloadPanel = document.getElementById('download-panel');
         this.downloadBtn = document.getElementById('download-btn');
     }
@@ -107,6 +108,11 @@ class RomConverter {
         // Download button
         this.downloadBtn.addEventListener('click', () => {
             this.downloadResults();
+        });
+
+        // Copy console button
+        this.copyConsoleBtn.addEventListener('click', () => {
+            this.copyConsoleToClipboard();
         });
 
         // System selector change - load module when user selects a system
@@ -331,6 +337,34 @@ class RomConverter {
         this.console.innerHTML = '';
     }
     
+    async copyConsoleToClipboard() {
+        try {
+            // Get all text content from the console
+            const consoleText = this.console.innerText || this.console.textContent;
+            
+            // Copy to clipboard
+            await navigator.clipboard.writeText(consoleText);
+            
+            // Visual feedback
+            const originalIcon = this.copyConsoleBtn.querySelector('.copy-icon').textContent;
+            const originalText = this.copyConsoleBtn.querySelector('.copy-text').textContent;
+            
+            this.copyConsoleBtn.querySelector('.copy-icon').textContent = '✓';
+            this.copyConsoleBtn.querySelector('.copy-text').textContent = 'Copied!';
+            this.copyConsoleBtn.classList.add('copied');
+            
+            // Reset after 2 seconds
+            setTimeout(() => {
+                this.copyConsoleBtn.querySelector('.copy-icon').textContent = originalIcon;
+                this.copyConsoleBtn.querySelector('.copy-text').textContent = originalText;
+                this.copyConsoleBtn.classList.remove('copied');
+            }, 2000);
+        } catch (error) {
+            console.error('Failed to copy console output:', error);
+            this.log('Failed to copy to clipboard', 'error');
+        }
+    }
+    
     updateProgress(percent, text) {
         this.progressFill.style.width = `${percent}%`;
         this.progressText.textContent = text;
@@ -392,10 +426,18 @@ class RomConverter {
 
                 // Get the game name from the ROM filename
                 const gameName = fileName.replace('.zip', '').toLowerCase();
-                const cacheDir = `/cache/${gameName}_cache`;
 
                 // Check if cache was actually created
-                const cacheExists = FS.analyzePath(cacheDir).exists;
+                // MVS creates a directory: /cache/{gameName}_cache/
+                // CPS2 creates a zip:      /cache/{gameName}_cache.zip
+                //   or a raw file:         /cache/{gameName}.cache
+                const cacheDir = `/cache/${gameName}_cache`;
+                const cacheZip = `/cache/${gameName}_cache.zip`;
+                const cacheRaw = `/cache/${gameName}.cache`;
+                const cacheDirExists = FS.analyzePath(cacheDir).exists;
+                const cacheZipExists = FS.analyzePath(cacheZip).exists;
+                const cacheRawExists = FS.analyzePath(cacheRaw).exists;
+                const cacheExists = cacheDirExists || cacheZipExists || cacheRawExists;
 
                 if (cacheExists) {
                     this.log(`✓ ${fileName} converted successfully!`, 'success');
@@ -435,41 +477,83 @@ class RomConverter {
     
     async downloadResults() {
         try {
+            const FS = this.FS;
+
+            // Collect all cache entries with their type info
+            const cacheEntries = [];
+            for (const file of this.selectedFiles) {
+                if (this.fileStatuses.get(file.name) !== 'completed') continue;
+
+                const gameName = file.name.replace('.zip', '').toLowerCase();
+                const cacheDir = `/cache/${gameName}_cache`;
+                const cacheZip = `/cache/${gameName}_cache.zip`;
+                const cacheRaw = `/cache/${gameName}.cache`;
+
+                if (FS.analyzePath(cacheDir).exists) {
+                    cacheEntries.push({ gameName, type: 'dir', path: cacheDir });
+                } else if (FS.analyzePath(cacheZip).exists) {
+                    cacheEntries.push({ gameName, type: 'zip', path: cacheZip });
+                } else if (FS.analyzePath(cacheRaw).exists) {
+                    cacheEntries.push({ gameName, type: 'raw', path: cacheRaw });
+                }
+            }
+
+            if (cacheEntries.length === 0) {
+                this.log('No cache files found to download', 'error');
+                return;
+            }
+
+            // Single file cache (zip or raw): download directly without JSZip wrapper
+            // This avoids double-zipping CPS2 caches which confuses users
+            if (cacheEntries.length === 1 && cacheEntries[0].type !== 'dir') {
+                const entry = cacheEntries[0];
+                const data = FS.readFile(entry.path);
+                const fileName = entry.type === 'zip'
+                    ? `${entry.gameName}_cache.zip`
+                    : `${entry.gameName}.cache`;
+                const mimeType = entry.type === 'zip'
+                    ? 'application/zip'
+                    : 'application/octet-stream';
+
+                this.log(`Downloading ${fileName} (${(data.length / 1024 / 1024).toFixed(2)} MB)`);
+                const blob = new Blob([data], { type: mimeType });
+                this.downloadBlob(blob, fileName);
+                return;
+            }
+
+            // Multiple caches or directory-based: wrap in a JSZip container
             const JSZip = window.JSZip;
             if (!JSZip) {
                 this.log('JSZip not available for download', 'error');
                 return;
             }
 
-            const FS = this.FS;
             const zip = new JSZip();
-            let cacheCount = 0;
 
-            // Find all cache directories for successfully converted files
-            for (const file of this.selectedFiles) {
-                if (this.fileStatuses.get(file.name) !== 'completed') continue;
-
-                const gameName = file.name.replace('.zip', '').toLowerCase();
-                const cacheDir = `/cache/${gameName}_cache`;
-
-                if (FS.analyzePath(cacheDir).exists) {
-                    this.log(`Packaging ${gameName}_cache...`);
-                    this.addFolderToZip(zip, cacheDir, `${gameName}_cache`, FS);
-                    cacheCount++;
+            for (const entry of cacheEntries) {
+                if (entry.type === 'dir') {
+                    // MVS-style: directory with multiple files
+                    this.log(`Packaging ${entry.gameName}_cache/...`);
+                    this.addFolderToZip(zip, entry.path, `${entry.gameName}_cache`, FS);
+                } else if (entry.type === 'zip') {
+                    // CPS2-style: zip file — download as-is
+                    this.log(`Packaging ${entry.gameName}_cache.zip...`);
+                    const data = FS.readFile(entry.path);
+                    zip.file(`${entry.gameName}_cache.zip`, data);
+                    this.log(`  Added: ${entry.gameName}_cache.zip (${data.length} bytes)`);
+                } else {
+                    // CPS2-style: raw cache file
+                    this.log(`Packaging ${entry.gameName}.cache...`);
+                    const data = FS.readFile(entry.path);
+                    zip.file(`${entry.gameName}.cache`, data);
+                    this.log(`  Added: ${entry.gameName}.cache (${data.length} bytes)`);
                 }
-            }
-
-            if (cacheCount === 0) {
-                this.log('No cache files found to download', 'error');
-                return;
             }
 
             // Generate and download the zip
             this.log('Generating zip file...');
             const content = await zip.generateAsync({ type: 'blob' });
-            const zipName = cacheCount === 1
-                ? `${this.selectedFiles.find(f => this.fileStatuses.get(f.name) === 'completed').name.replace('.zip', '')}_cache.zip`
-                : `romcnv_cache_${cacheCount}_games.zip`;
+            const zipName = `romcnv_cache_${cacheEntries.length}_games.zip`;
             this.log(`Downloading ${zipName} (${(content.size / 1024 / 1024).toFixed(2)} MB)`);
             this.downloadBlob(content, zipName);
 

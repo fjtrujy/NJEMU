@@ -476,6 +476,53 @@ section {
     letter-spacing: 0.05em;
 }
 
+.console-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.console-header h3 {
+    margin-bottom: 0;
+}
+
+.copy-console-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.copy-console-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.copy-console-btn:active {
+    transform: translateY(0);
+}
+
+.copy-console-btn.copied {
+    background: rgba(57, 211, 83, 0.15);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.copy-console-btn .copy-icon {
+    font-size: 1rem;
+}
+
 .console {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
