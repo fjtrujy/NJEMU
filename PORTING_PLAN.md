@@ -12,8 +12,8 @@ This document outlines the remaining work needed to complete the cross-platform 
 |----------|-----|-----|-----|-------|
 | **MVS** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
 | **NCDZ** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
-| **CPS1** | ✅ Complete | ✅ Core done | ❌ Not started | PS2 sprite rendering complete |
-| **CPS2** | ✅ Complete | ❌ Not started | ❌ Not started | Missing sprite rendering |
+| **CPS1** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported (incl. stars) |
+| **CPS2** | ✅ Complete | ❌ Not started | ❌ Not started | Next priority - needs sprite refactoring |
 
 ### Platform Drivers
 
@@ -50,29 +50,20 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 The emulator cores should be ported first since this is the primary functionality.
 
-### 1.1 Port CPS1 Sprite Rendering
+### 1.1 Port CPS1 Sprite Rendering ✅ COMPLETE
 
-**Current Structure (after refactoring):**
+**Structure:**
 - `src/cps1/sprite_common.h` - Shared declarations (constants, structures, extern variables)
 - `src/cps1/sprite_common.c` - Platform-agnostic code (hash table management, software rendering)
 - `src/cps1/psp_sprite.c` - PSP-specific rendering (GU commands, swizzling)
+- `src/cps1/ps2_sprite.c` - PS2-specific rendering (GSKit primitives)
+- `src/cps1/desktop_sprite.c` - Desktop-specific rendering (SDL2)
 
-**Files to create:**
-- `src/cps1/ps2_sprite.c`
-- `src/cps1/desktop_sprite.c`
-
-**Reference:**
-- Use `src/cps1/psp_sprite.c` as template for platform-specific code
-- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` as reference implementations
-
-**Steps:**
-1. The common sprite management code is already in `sprite_common.c`
-2. Only implement the `blit_*` functions for each platform
-3. Create `ps2_sprite.c` using PS2 GSKit for rendering (see MVS example)
-4. Create `desktop_sprite.c` using SDL2 for rendering (see MVS example)
-5. CMakeLists.txt already supports `${PLATFORM_LOWER}_sprite.c`
-
-**Estimated effort:** 1-2 days per platform (reduced due to sprite_common.c refactoring)
+**Completed work:**
+- PS2 sprite rendering with GSKit (sprites, scrolls, stars via `gsKit_prim_list_points`)
+- Desktop sprite rendering with SDL2 (sprites, scrolls, stars via `SDL_RenderDrawPoint`)
+- Fixed alignment crash: consolidated `ALIGN_DATA` → `ALIGN16_DATA` for x86_64 SSE compatibility
+- Fixed frame clearing on Desktop (`SDL_RenderClear` in `startWorkFrame`)
 
 #### CPS1 Key Differences from MVS/NCDZ
 
@@ -136,29 +127,88 @@ work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes) = 278,528 bytes
 2. Create `src/cps2/sprite_common.c` - Platform-agnostic code
 3. Update `src/cps2/psp_sprite.c` - Keep only PSP-specific code
 
+**Additionally required:**
+- Add `emu_layer_textures[]`, `emu_layer_textures_count`, and `emu_clut_info` to `src/cps2/cps2.c`
+- Add `TEXTURE_LAYER_INDEX` enum to `src/cps2/cps2.h`
+- Migrate PSP sprite code from old `workFrame(SCRBITMAP/TEX_SPR0)` API to new `textureLayer()` pattern
+
 **Files to create after refactoring:**
 - `src/cps2/sprite_common.h`
 - `src/cps2/sprite_common.c`
 - `src/cps2/ps2_sprite.c`
 - `src/cps2/desktop_sprite.c`
 
-**Reference:** 
-- Use `src/cps1/sprite_common.c` as template for the refactoring
-- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` for platform implementations
+**Reference:**
+- Use `src/cps1/sprite_common.c` and `src/cps1/sprite_common.h` as template for the refactoring
+- Use `src/cps1/ps2_sprite.c` and `src/cps1/desktop_sprite.c` as closest reference (same Capcom hardware family)
+- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` for additional platform patterns
 
-**Estimated effort:** 
+**Estimated effort:**
 - Refactoring: 0.5 day
 - Per platform: 1-2 days (reduced due to shared code)
 
+#### CPS2 Key Differences from CPS1
+
+| Feature | CPS1 | CPS2 |
+|---------|------|------|
+| Texture layers | 5 (incl. SCROLLH) | 4 (no SCROLLH) |
+| Star field | Yes (blitPoints) | No |
+| Object priority | Simple ordering | 8-level priority with Z-buffer masking |
+| Object RAM | Single | Double-buffered (2 banks) |
+| Palette delay | No | Yes (some games, `flags & 2`) |
+| Palette entries | `6*32*16 = 3072` | `4*32*16 = 2048` |
+| ROM encryption | No | Yes |
+| Scroll3 kludges | None | SSF2T, XMCOTA, DIMAHOO base adjustments |
+
+#### CPS2 Texture Atlas Summary
+
+| Layer | Tile Size | Texture Size | Format | GFX Offset |
+|-------|-----------|--------------|--------|------------|
+| OBJECT | 16x16 | 512x512 | 8-bit indexed | `code << 7` (128 bytes/tile) |
+| SCROLL1 | 8x8 | 512x512 | 8-bit indexed | `code << 6` (64 bytes/tile) |
+| SCROLL2 | 16x16 | 512x512 | 8-bit indexed | `code << 7` (128 bytes/tile) |
+| SCROLL3 | 32x32 | 512x512 | 8-bit indexed | `code << 9` (512 bytes/tile) |
+
+#### CPS2 CLUT Organization
+
+Two banks per layer selected by `attr & 0x10`. Each palette has 16 colors (4-bit tiles).
+
+| Layer | Bank 0 offset | Bank 1 offset | Palette range |
+|-------|---------------|---------------|---------------|
+| OBJECT | `clut[0]` | `clut[16<<4]` | 0-31 |
+| SCROLL1 | `clut[32<<4]` | `clut[48<<4]` | 32-63 |
+| SCROLL2 | `clut[64<<4]` | `clut[80<<4]` | 64-95 |
+| SCROLL3 | `clut[96<<4]` | `clut[112<<4]` | 96-127 |
+
+#### CPS2 Work Buffers Memory Layout
+
+```
+work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes) = 278,528 bytes
+            ├─ tex_object   (512 × 512 × 1 byte)  = 262,144 bytes
+            ├─ tex_scroll1  (512 × 512 × 1 byte)  = 262,144 bytes
+            ├─ tex_scroll2  (512 × 512 × 1 byte)  = 262,144 bytes
+            └─ tex_scroll3  (512 × 512 × 1 byte)  = 262,144 bytes
+                                          Total ≈ 1.3 MB
+```
+
+#### CPS2 Porting Considerations
+
+1. **Simpler than CPS1:** No SCROLLH layer, no star field — 4 layers instead of 5
+2. **Priority masking:** `cps2_has_mask` enables depth-buffer rendering for objects where priority reverses — must be handled per-platform
+3. **Scroll2 dual rendering:** Small clip areas (<16 lines) use software rendering directly to scrbitmap; full tiles use hardware GPU — desktop/PS2 can simplify to always software or always hardware
+4. **Object priority queuing:** Objects are queued into 8 priority buckets then rendered interleaved with scroll layers — the vidhrdw.c orchestration is platform-agnostic
+5. **Palette delay:** Some games (xmcota, msh, mshvsf, mvsc, xmvsf) buffer object palettes one frame behind — handled in vidhrdw.c, transparent to sprite code
+6. **Color conversion:** CPS2 uses BRGB 16-bit → `video_clut16[65536]` lookup → 15-bit RGB; this is in vidhrdw.c and is platform-agnostic
+
 ### 1.3 Update CMakeLists.txt
 
-Add support for building CPS1 and CPS2 on PS2 and PC platforms:
+CPS1 is already fully configured in CMakeLists.txt. For CPS2, add support for building on PS2 and PC platforms:
 
 ```cmake
-if (${TARGET} STREQUAL "CPS1")
+if (${TARGET} STREQUAL "CPS2")
     set(TARGET_SRC ${TARGET_SRC}
-        cps1/${PLATFORM_LOWER}_sprite.c
-        # ... other CPS1 files
+        cps2/${PLATFORM_LOWER}_sprite.c
+        # ... other CPS2 files
     )
 endif()
 ```
@@ -326,9 +376,10 @@ Once the GUI abstraction is in place, port the actual menu system.
 1. ✅ ~~MVS core for PS2/PC~~ (DONE)
 2. ✅ ~~NCDZ core for PS2/PC~~ (DONE)
 3. ✅ ~~CPS1 sprite rendering for PS2~~ (DONE)
-4. 🔲 CPS1 sprite rendering for PC
-5. 🔲 CPS2 sprite rendering for PS2
-6. 🔲 CPS2 sprite rendering for PC
+4. ✅ ~~CPS1 sprite rendering for PC~~ (DONE)
+5. 🔲 CPS2 sprite rendering refactoring (extract sprite_common)
+6. 🔲 CPS2 sprite rendering for PS2
+7. 🔲 CPS2 sprite rendering for PC
 
 ### Short-term (Basic GUI)
 
@@ -360,7 +411,7 @@ Once the GUI abstraction is in place, port the actual menu system.
 - [x] `src/cps1/sprite_common.h` - Created (shared declarations)
 - [x] `src/cps1/sprite_common.c` - Created (platform-agnostic code)
 - [x] `src/cps1/ps2_sprite.c` - Created (PS2 GSKit rendering)
-- [ ] `src/cps1/desktop_sprite.c`
+- [x] `src/cps1/desktop_sprite.c` - Created (SDL2 rendering)
 
 ### CPS2 Porting
 - [ ] `src/cps2/sprite_common.h` - Refactor from psp_sprite.c

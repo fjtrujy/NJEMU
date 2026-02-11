@@ -79,11 +79,11 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 | Emulator | PSP | PS2 | PC |
 |----------|-----|-----|-----|
 | **MVS** | ✅ Full | ✅ Core | ✅ Core |
-| **CPS1** | ✅ Full | ❌ | ❌ |
+| **CPS1** | ✅ Full | ✅ Core | ✅ Core |
 | **CPS2** | ✅ Full | ❌ | ❌ |
 | **NCDZ** | ✅ Full | ✅ Core | ✅ Core |
 
-> **Note:** Currently MVS and NCDZ cores have been ported to PS2 and PC. The menu/GUI system has not been ported yet - only the emulation core runs on the new platforms.
+> **Note:** Currently MVS, NCDZ, and CPS1 cores have been ported to PS2 and PC. CPS2 is next. The menu/GUI system has not been ported yet - only the emulation core runs on the new platforms.
 
 📋 See [PORTING_PLAN.md](PORTING_PLAN.md) for detailed roadmap and remaining work.
 
@@ -609,7 +609,7 @@ cmake -DCMAKE_TOOLCHAIN_FILE=${PS2SDK}/ps2dev.cmake \
       ..
 ```
 
-Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on PS2).
+Replace `{TARGET}` with one of: `MVS`, `NCDZ`, or `CPS1` (currently supported on PS2).
 
 3. Build the project:
 
@@ -716,7 +716,7 @@ cmake -DPLATFORM="Desktop" \
       ..
 ```
 
-Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on Desktop).
+Replace `{TARGET}` with one of: `MVS`, `NCDZ`, or `CPS1` (currently supported on Desktop).
 
 3. Build the project:
 
