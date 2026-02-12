@@ -245,6 +245,18 @@ static void *psp_workFrame(void *data)
 	return (void *)psp->scrbitmap;
 }
 
+static void *psp_drawFrame(void *data)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	return (void *)psp->draw_frame;
+}
+
+static void *psp_showFrame(void *data)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	return (void *)psp->show_frame;
+}
+
 static void *psp_textureLayer(void *data, uint8_t layerIndex)
 {
 	psp_video_t *psp = (psp_video_t *)data;
@@ -704,6 +716,8 @@ video_driver_t video_psp = {
 	psp_endFrame,
 	psp_frameAddr,
 	psp_workFrame,
+	psp_drawFrame,
+	psp_showFrame,
 	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,

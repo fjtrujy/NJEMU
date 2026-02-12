@@ -631,18 +631,18 @@ void state_make_thumbnail(void)
 		if (machine_screen_type)
 		{
 			RECT clip2 = { 152, 0, 152 + 112, 152 };
-			video_driver->copyRectRotate(video_data, work_frame, tex, &clip1, &clip2);
+			video_driver->copyRectRotate(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
 		}
 		else
 		{
 			RECT clip2 = { 152, 0, 152 + 152, 112 };
-			video_driver->copyRect(video_data, work_frame, tex, &clip1, &clip2);
+			video_driver->copyRect(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
 		}
 #elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
 		RECT clip1 = { 24, 16, 336, 240 };
 		RECT clip2 = { 152, 0, 152 + 152, 112 };
 
-		video_driver->copyRect(video_data, work_frame, tex, &clip1, &clip2);
+		video_driver->copyRect(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
 #endif
 	}
 }

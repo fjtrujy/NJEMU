@@ -206,7 +206,9 @@ static void show_title(int sx, int sy)
 
 	draw_box_shadow(sx, sy, sx + 144, sy + 80);
 	void *tex_frame = video_driver->textureLayer(video_data, 0);
-	video_driver->copyRect(video_data, tex_frame, draw_frame, &clip1, &clip2);
+	video_driver->beginFrame(video_data);
+	video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip1, &clip2);
+	video_driver->endFrame(video_data);
 }
 
 
@@ -836,7 +838,9 @@ void show_exit_screen(void)
 {
 	if (Loop == LOOP_EXIT)
 	{
+		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
+		video_driver->endFrame(video_data);
 		boxfill(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_DARKGRAY);
 		uifont_print_shadow_center(129, COLOR_WHITE, TEXT(PLEASE_WAIT));
 		video_driver->flipScreen(video_data, 1);
@@ -871,7 +875,9 @@ void file_browser(void)
 	strcat(curr_dir, "roms");
 	strcpy(startupDir, curr_dir);
 	load_settings();
-	ui_fill_frame(draw_frame, UI_PAL_BG2);
+	video_driver->beginFrame(video_data);
+	ui_fill_frame(video_driver->drawFrame(video_data), UI_PAL_BG2);
+	video_driver->endFrame(video_data);
 
 	load_background(WP_LOGO);
 	show_background();
@@ -1140,9 +1146,11 @@ void file_browser(void)
 			clip2.bottom = clip2.top  + h;
 
 			void *tex_frame = video_driver->textureLayer(video_data, 0);
-			video_driver->copyRect(video_data, draw_frame, tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, draw_frame, &clip2, &clip1);
+			video_driver->beginFrame(video_data);
+			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
+			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
+			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->endFrame(video_data);
 
 			update = draw_battery_status(0);
 			update |= draw_volume_status(0);

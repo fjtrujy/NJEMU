@@ -163,7 +163,7 @@ static int bios_check(int flag)
 
 	if (!flag) ui_popup_reset();
 
-	video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
+	video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
 	video_driver->flipScreen(video_data, 1);
 
 	for (i = 0; i < BIOS_MAX; i++)

@@ -134,6 +134,8 @@ typedef struct video_driver
 	void (*endFrame)(void *data);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);
 	void *(*workFrame)(void *data);
+	void *(*drawFrame)(void *data);
+	void *(*showFrame)(void *data);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
@@ -171,10 +173,6 @@ extern video_driver_t *video_drivers[];
 
 #define video_driver video_drivers[0]
 
-extern int video_mode;
-extern void *show_frame;
-extern void *draw_frame;
-extern void *work_frame;
 extern RECT full_rect;
 
 extern void *video_data;

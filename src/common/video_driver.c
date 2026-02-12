@@ -7,10 +7,6 @@
 #include <stddef.h>
 #include "video_driver.h"
 
-void *show_frame;
-void *draw_frame;
-void *work_frame;
-
 void *video_data;
 
 video_driver_t video_null = {
@@ -23,6 +19,8 @@ video_driver_t video_null = {
 	NULL, // endFrame
 	NULL, // frameAddr
 	NULL, // workFrame
+	NULL, // drawFrame
+	NULL, // showFrame
 	NULL, // textureLayer
 	NULL, // scissor
 	NULL, // clearScreen

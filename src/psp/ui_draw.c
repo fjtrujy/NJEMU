@@ -801,7 +801,7 @@ static int internal_font_putc(struct font_t *font, int sx, int sy, int r, int g,
 	sy += font->skipy;
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuEnable(GU_BLEND);
 
@@ -851,7 +851,7 @@ static int internal_shadow_putc(struct font_t *font, int sx, int sy)
 	sy += font->skipy;
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuEnable(GU_BLEND);
 
@@ -901,7 +901,7 @@ static int internal_light_putc(struct font_t *font, int sx, int sy)
 	sy += font->skipy;
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuEnable(GU_BLEND);
 
@@ -1475,7 +1475,7 @@ void draw_volume(int volume)
 	struct Vertex *vertices, *vertices_tmp;
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuEnable(GU_BLEND);
 	sceGuTexMode(GU_PSM_4444, 0, 0, GU_FALSE);
@@ -1600,7 +1600,7 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 	int len = strlen(s);
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(sx, sy, sx + 8 * len, sy + 8);
 
 	if (bg)
@@ -1750,7 +1750,7 @@ void hline(int sx, int ex, int y, int r, int g, int b)
 	uint32_t color = MAKECOL32(r, g, b);
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 
@@ -1785,7 +1785,7 @@ void hline_alpha(int sx, int ex, int y, int r, int g, int b, int alpha)
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -1823,7 +1823,7 @@ void hline_gradation(int sx, int ex, int y, int r1, int g1, int b1, int r2, int 
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -1865,7 +1865,7 @@ void vline(int x, int sy, int ey, int r, int g, int b)
 	uint32_t color = MAKECOL32(r, g, b);
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 
@@ -1900,7 +1900,7 @@ void vline_alpha(int x, int sy, int ey, int r, int g, int b, int alpha)
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -1938,7 +1938,7 @@ void vline_gradation(int x, int sy, int ey, int r1, int g1, int b1, int r2, int 
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -1979,7 +1979,7 @@ void box(int sx, int sy, int ex, int ey, int r, int g, int b)
 	uint32_t color = MAKECOL32(r, g, b);
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 
@@ -2031,7 +2031,7 @@ void boxfill(int sx, int sy, int ex, int ey, int r, int g, int b)
 	uint32_t color = MAKECOL32(r, g, b);
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 
@@ -2078,7 +2078,7 @@ void boxfill_alpha(int sx, int sy, int ex, int ey, int r, int g, int b, int alph
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -2128,7 +2128,7 @@ void boxfill_gradation(int sx, int sy, int ex, int ey, int r1, int g1, int b1, i
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
@@ -2205,7 +2205,7 @@ static void draw_boxshadow(int sx, int sy, int w, int h, int code)
 	struct Vertex *vertices;
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(sx, sy, sx + w, sy + h);
 	sceGuDisable(GU_ALPHA_TEST);
 	sceGuEnable(GU_BLEND);
@@ -2396,7 +2396,7 @@ void logo(int sx, int sy, int r, int g, int b)
 	}
 
 	sceGuStart(GU_DIRECT, gulist);
-	sceGuDrawBufferList(pixel_format, draw_frame, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, video_driver->drawFrame(video_data), BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuEnable(GU_BLEND);
 

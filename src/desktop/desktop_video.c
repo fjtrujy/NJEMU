@@ -225,6 +225,16 @@ static void *desktop_workFrame(void *data)
 	return desktop->scrbitmap;
 }
 
+static void *desktop_drawFrame(void *data)
+{
+	return NULL;
+}
+
+static void *desktop_showFrame(void *data)
+{
+	return NULL;
+}
+
 static void *desktop_textureLayer(void *data, uint8_t layerIndex)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
@@ -509,6 +519,8 @@ video_driver_t video_desktop = {
 	desktop_endFrame,
 	desktop_frameAddr,
 	desktop_workFrame,
+	desktop_drawFrame,
+	desktop_showFrame,
 	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,

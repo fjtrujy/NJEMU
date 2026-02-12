@@ -28,7 +28,9 @@ static int menu_reset(void)
 {
 	if (messagebox(MB_RESETEMULATION))
 	{
+		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
+		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 		cheat_num = 0; 			//disable cheat
 		Loop = LOOP_RESET;
@@ -47,7 +49,9 @@ static int menu_resetdip(void)
 {
 	if (messagebox(MB_RESTARTEMULATION))
 	{
+		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
+		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 		cheat_num = 0; 			//disable cheat
 		Loop = LOOP_RESET;		//dip no need to restart
@@ -62,7 +66,9 @@ static int menu_restart(void)
 {
 	if (messagebox(MB_RESTARTEMULATION))
 	{
+		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
+		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 		cheat_num = 0; 			//disable cheat
 		Loop = LOOP_RESTART;
@@ -1999,20 +2005,22 @@ static void state_draw_thumbnail(void)
 {
 	void *tex = UI_TEXTURE;
 
+	video_driver->beginFrame(video_data);
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
 	{
 		RECT clip1 = { 0, 0, 112, 152 };
 		RECT clip2 = { 317, 34, 317+112, 34+152 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, draw_frame, &clip1, &clip2);
+		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, video_driver->drawFrame(video_data), &clip1, &clip2);
 	}
 	else
 #endif
 	{
 		RECT clip1 = { 0, 0, 152, 112 };
 		RECT clip2 = { 298, 52, 298+152, 52+112 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, draw_frame, &clip1, &clip2);
+		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, video_driver->drawFrame(video_data), &clip1, &clip2);
 	}
+	video_driver->endFrame(video_data);
 }
 
 static void state_refresh_screen(int reload_thumbnail)
@@ -2167,7 +2175,9 @@ static int state_save_slot(void)
 		int res;
 
 		state_refresh_screen(0);
-		video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
+		video_driver->beginFrame(video_data);
+		video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
+		video_driver->endFrame(video_data);
 
 		power_driver->setCpuClock(power_data, platform_cpuclock);
 		res = state_save(state_sel);
@@ -2179,7 +2189,9 @@ static int state_save_slot(void)
 		{
 			state_refresh_screen(1);
 			draw_battery_status(1);
-			video_driver->copyRect(video_data, draw_frame, show_frame, &full_rect, &full_rect);
+			video_driver->beginFrame(video_data);
+			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->showFrame(video_data), &full_rect, &full_rect);
+			video_driver->endFrame(video_data);
 			res = messagebox(MB_FINISHSAVESTATE);
 		}
 		return res + 1;
@@ -2194,7 +2206,9 @@ static int state_load_slot(void)
 		int res;
 
 		state_refresh_screen(0);
-		video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
+		video_driver->beginFrame(video_data);
+		video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
+		video_driver->endFrame(video_data);
 
 		power_driver->setCpuClock(power_data, platform_cpuclock);
 		res = state_load(state_sel);
@@ -2287,9 +2301,11 @@ static int menu_state(void)
 			clip2.bottom = clip2.top  + h;
 
 			void *tex_frame = video_driver->textureLayer(video_data, 0);
-			video_driver->copyRect(video_data, draw_frame, tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, draw_frame, &clip2, &clip1);
+			video_driver->beginFrame(video_data);
+			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
+			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
+			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
@@ -2468,7 +2484,9 @@ void showmenu(void)
 	mainmenu_num = i;
 
 	power_driver->setLowestCpuClock(power_data);
+	video_driver->beginFrame(video_data);
 	video_driver->clearScreen(video_data);
+	video_driver->endFrame(video_data);
 	load_background(WP_LOGO);
 	ui_popup_reset();
 	pad_wait_clear();
@@ -2548,9 +2566,12 @@ void showmenu(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->copyRect(video_data, draw_frame, tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, draw_frame, &clip2, &clip1);
+			void *tex_frame = video_driver->textureLayer(video_data, 0);
+			video_driver->beginFrame(video_data);
+			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
+			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
+			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
@@ -2629,8 +2650,10 @@ void showmenu(void)
 
 	pad_wait_clear();
 	ui_popup_reset();
+	video_driver->beginFrame(video_data);
 	video_driver->clearScreen(video_data);
 	video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
+	video_driver->endFrame(video_data);
 #if (EMU_SYSTEM != CPS2)
 	sound_set_samplerate();
 #endif

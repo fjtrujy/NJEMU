@@ -367,6 +367,16 @@ static void *ps2_workFrame(void *data)
 	return (void *)ps2->scrbitmap->Vram;
 }
 
+static void *ps2_drawFrame(void *data)
+{
+	return NULL;
+}
+
+static void *ps2_showFrame(void *data)
+{
+	return NULL;
+}
+
 static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -550,6 +560,13 @@ static void ps2_endFrame(void *data)
 	/* No-op: gsKit queue is executed in flipScreen */
 }
 
+static void *ps2_frameAddr(void *data, void *frame, int x, int y)
+{
+	return NULL;
+}
+
+static void ps2_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
+{
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	gsKit_set_scissor(ps2->gsGlobal, GS_SETREG_SCISSOR(left, right, top, bottom));
 }
@@ -1129,6 +1146,8 @@ video_driver_t video_ps2 = {
 	ps2_endFrame,
 	ps2_frameAddr,
 	ps2_workFrame,
+	ps2_drawFrame,
+	ps2_showFrame,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,

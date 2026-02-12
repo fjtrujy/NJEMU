@@ -125,7 +125,7 @@ static void adhoc_init_progress(int total, const char *text)
 	sprintf(buf, "AdHoc - %s", game_name);
 	uifont_print(32, 5, UI_COLOR(UI_PAL_TITLE), buf);
 
-	video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
+	video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
 
 	init_progress(total, text);
 }
@@ -226,7 +226,7 @@ static void DisplayPspList(int top, int rows)
 		int i;
 		char temp[20];
 
-		video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
+		video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
 
 		draw_scrollbar(470, 26, 479, 270, rows, max, pos);
 

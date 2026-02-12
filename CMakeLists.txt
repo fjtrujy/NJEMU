@@ -216,7 +216,42 @@ if (NO_GUI)
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
 else()
-    # Add source files related to GUI if needed
+    # Font data files
+    set(OS_SRC ${OS_SRC}
+        ${PLATFORM_LOWER}/font/graphic.c
+        ${PLATFORM_LOWER}/font/ascii_14p.c
+        ${PLATFORM_LOWER}/font/font_s.c
+        ${PLATFORM_LOWER}/font/bshadow.c
+        ${PLATFORM_LOWER}/font/command.c
+        ${PLATFORM_LOWER}/font/ascii_14.c
+        ${PLATFORM_LOWER}/font/latin1_14.c
+        ${PLATFORM_LOWER}/font/gbk_s14.c
+        ${PLATFORM_LOWER}/font/gbk_tbl.c
+    )
+
+    # GUI source files
+    set(OS_SRC ${OS_SRC}
+        ${PLATFORM_LOWER}/config.c
+        ${PLATFORM_LOWER}/filer.c
+        ${PLATFORM_LOWER}/ui.c
+        ${PLATFORM_LOWER}/ui_draw.c
+        ${PLATFORM_LOWER}/ui_menu.c
+        ${PLATFORM_LOWER}/png.c
+    )
+
+    # Icon files (target-specific)
+    if (${TARGET} STREQUAL "CPS1" OR ${TARGET} STREQUAL "CPS2")
+        set(ICON_PREFIX "cps")
+    elseif (${TARGET} STREQUAL "MVS")
+        set(ICON_PREFIX "mvs")
+    elseif (${TARGET} STREQUAL "NCDZ")
+        set(ICON_PREFIX "ncdz")
+    endif()
+
+    set(OS_SRC ${OS_SRC}
+        ${PLATFORM_LOWER}/icon/${ICON_PREFIX}_s.c
+        ${PLATFORM_LOWER}/icon/${ICON_PREFIX}_l.c
+    )
 endif()
 
 

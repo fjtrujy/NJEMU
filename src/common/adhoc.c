@@ -219,7 +219,7 @@ void adhoc_pause(void)
 
 	sound_thread_enable(0);
 
-	video_driver->copyRect(video_data, show_frame, work_frame, &rect, &rect);
+	video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->workFrame(video_data), &rect, &rect);
 
 	do
 	{
@@ -282,7 +282,7 @@ void adhoc_pause(void)
 			}
 
 			video_driver->waitVsync(video_data);
-			video_driver->copyRect(video_data, draw_frame, show_frame, &rect, &rect);
+			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->showFrame(video_data), &rect, &rect);
 
 			buttons = poll_gamepad();
 

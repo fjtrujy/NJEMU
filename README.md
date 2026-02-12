@@ -532,7 +532,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `EBOOT.PBP` - The main executable for PSP
-- Resource files copied from `{TARGET}_RESOURCE/`
+- Resource files copied from `resources/{TARGET}/`
 
 #### Configuring the Game (NO_GUI builds)
 
@@ -638,7 +638,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}.elf` - The main executable for PS2
-- Resource files copied from `{TARGET}_RESOURCE/`
+- Resource files copied from `resources/{TARGET}/`
 
 #### Configuring the Game (NO_GUI builds)
 
@@ -740,7 +740,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}` - The main executable
-- Resource files copied from `{TARGET}_RESOURCE/`
+- Resource files copied from `resources/{TARGET}/`
 
 #### Configuring the Game (NO_GUI builds)
 
