@@ -377,7 +377,13 @@ static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, 
 }
 
 static void *desktop_getNativeObjects(void *data, int index) {
-	return NULL;
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
+		return desktop->renderer;
+	default:
+		return NULL;
+	}
 }
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
