@@ -661,7 +661,7 @@ int cache_start(void)
 {
 	int i, found;
 	uint32_t size = 0;
-	char version_str[8];
+	char version_str[8] = {0};
 #if (EMU_SYSTEM == MVS)
 	int32_t fd;
 #endif
