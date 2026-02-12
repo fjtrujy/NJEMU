@@ -5,6 +5,7 @@ class RomConverter {
     constructor() {
         this.selectedFiles = [];
         this.fileStatuses = new Map(); // Track status of each file
+        this.cacheResults = new Map(); // Track cache format/path per game
         this.modules = {}; // Store loaded module instances { mvs: Module, cps2: Module }
         this.currentSystem = null;
         this.isProcessing = false;
@@ -39,6 +40,9 @@ class RomConverter {
         // Options
         this.systemRadios = document.querySelectorAll('input[name="system"]');
         this.slimModeCheckbox = document.getElementById('slim-mode');
+        this.formatSelector = document.getElementById('format-selector');
+        this.formatGroup = document.getElementById('format-group');
+        this.formatInfo = document.getElementById('format-info');
 
         // Buttons
         this.convertBtn = document.getElementById('convert-btn');
@@ -137,6 +141,7 @@ class RomConverter {
                     try {
                         await this.loadModuleForSystem(system);
                         this.currentSystem = system;
+                        this.populateFormatOptions(system);
                         // Show content after module loads
                         this.converterContent.hidden = false;
                     } catch (error) {
@@ -303,6 +308,7 @@ class RomConverter {
     clearFiles() {
         this.selectedFiles = [];
         this.fileStatuses.clear();
+        this.cacheResults.clear();
         this.romInput.value = '';
         this.fileList.hidden = true;
         this.fileListItems.innerHTML = '';
@@ -317,6 +323,119 @@ class RomConverter {
             }
         }
         return null;
+    }
+
+    getSelectedFormat() {
+        const checked = document.querySelector('input[name="cache-format"]:checked');
+        return checked ? checked.value : null;
+    }
+
+    // Cache format definitions per system
+    static FORMAT_OPTIONS = {
+        mvs: [
+            {
+                value: 'folder',
+                label: 'Folder',
+                icon: '📁',
+                description: 'Individual block files in a folder. Best for PSP/PS2 — zero decompression, fast random I/O.',
+                recommended: ['PSP', 'PS2'],
+            },
+            {
+                value: 'zip',
+                label: 'ZIP',
+                icon: '📦',
+                description: 'Single compressed archive. Best for Web/Desktop — saves 30–70% disk, single download.',
+                recommended: ['Desktop', 'Web'],
+            },
+        ],
+        cps2: [
+            {
+                value: 'raw',
+                label: 'Raw File',
+                icon: '💾',
+                description: 'Single uncompressed file with offset table. Best for PSP/PS2 — fastest I/O, single file descriptor.',
+                recommended: ['PSP', 'PS2'],
+            },
+            {
+                value: 'zip',
+                label: 'ZIP',
+                icon: '📦',
+                description: 'Single compressed archive. Best for Web/Desktop — saves 30–70% disk, single download.',
+                recommended: ['Desktop', 'Web'],
+            },
+            {
+                value: 'folder',
+                label: 'Folder',
+                icon: '📁',
+                description: 'Individual block files in a folder. No decompression overhead, but many files — avoid on FAT16.',
+                recommended: [],
+            },
+        ],
+    };
+
+    populateFormatOptions(system) {
+        const formats = RomConverter.FORMAT_OPTIONS[system];
+        if (!formats) return;
+
+        this.formatGroup.innerHTML = '';
+
+        // Slim mode only applies to MVS
+        this.slimModeCheckbox.closest('.checkbox-label').style.display =
+            (system === 'mvs') ? 'flex' : 'none';
+
+        formats.forEach((fmt, i) => {
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'cache-format';
+            radio.id = `fmt-${fmt.value}`;
+            radio.value = fmt.value;
+            if (i === 0) radio.checked = true;
+
+            const label = document.createElement('label');
+            label.htmlFor = `fmt-${fmt.value}`;
+            label.className = 'format-label';
+
+            const icon = document.createElement('span');
+            icon.className = 'format-icon';
+            icon.textContent = fmt.icon;
+
+            const text = document.createElement('span');
+            text.className = 'format-text';
+
+            const name = document.createElement('span');
+            name.className = 'format-name';
+            name.textContent = fmt.label;
+
+            const badges = document.createElement('span');
+            badges.className = 'format-badges';
+            fmt.recommended.forEach(plat => {
+                const badge = document.createElement('span');
+                badge.className = 'format-badge';
+                badge.textContent = plat;
+                badges.appendChild(badge);
+            });
+
+            text.appendChild(name);
+            text.appendChild(badges);
+            label.appendChild(icon);
+            label.appendChild(text);
+
+            this.formatGroup.appendChild(radio);
+            this.formatGroup.appendChild(label);
+
+            radio.addEventListener('change', () => this.updateFormatInfo(system));
+        });
+
+        this.updateFormatInfo(system);
+    }
+
+    updateFormatInfo(system) {
+        const formats = RomConverter.FORMAT_OPTIONS[system];
+        const selected = this.getSelectedFormat();
+        const fmt = formats.find(f => f.value === selected);
+        if (fmt) {
+            this.formatInfo.textContent = fmt.description;
+        }
     }
     
     isSlimMode() {
@@ -416,32 +535,55 @@ class RomConverter {
                 // Write to Emscripten filesystem
                 FS.writeFile(`/roms/${fileName}`, data);
 
-                // Get options
-                const system = this.getSelectedSystem();
-                const slim = this.isSlimMode();
-                this.log(`Options: ${slim ? 'Slim mode' : 'Standard mode'}`);
-
-                // Call main() with command-line arguments
-                const result = this.Module.callMain([`/roms/${fileName}`]);
-
                 // Get the game name from the ROM filename
                 const gameName = fileName.replace('.zip', '').toLowerCase();
 
-                // Check if cache was actually created
-                // MVS creates a directory: /cache/{gameName}_cache/
-                // CPS2 creates a zip:      /cache/{gameName}_cache.zip
-                //   or a raw file:         /cache/{gameName}.cache
-                const cacheDir = `/cache/${gameName}_cache`;
-                const cacheZip = `/cache/${gameName}_cache.zip`;
-                const cacheRaw = `/cache/${gameName}.cache`;
-                const cacheDirExists = FS.analyzePath(cacheDir).exists;
-                const cacheZipExists = FS.analyzePath(cacheZip).exists;
-                const cacheRawExists = FS.analyzePath(cacheRaw).exists;
-                const cacheExists = cacheDirExists || cacheZipExists || cacheRawExists;
+                // Clean up any stale cache files from previous conversions
+                const staleDir = `/cache/${gameName}_cache`;
+                const staleZip = `/cache/${gameName}_cache.zip`;
+                const staleRaw = `/cache/${gameName}.cache`;
+                this.removePath(FS, staleDir);
+                try { FS.unlink(staleZip); } catch (e) { /* ignore */ }
+                try { FS.unlink(staleRaw); } catch (e) { /* ignore */ }
+
+                // Get options
+                const system = this.getSelectedSystem();
+                const slim = this.isSlimMode();
+                const format = this.getSelectedFormat();
+                this.log(`Options: ${slim ? 'Slim mode' : 'Standard mode'}, Format: ${format}`);
+
+                // Build command-line arguments
+                const args = [`/roms/${fileName}`];
+                if (system === 'mvs' && format === 'zip') args.push('-zip');
+                if (system === 'cps2' && format === 'raw') args.push('-raw');
+                if (system === 'cps2' && format === 'zip') args.push('-zip');
+                if (system === 'cps2' && format === 'folder') args.push('-folder');
+
+                // Call main() with command-line arguments
+                const result = this.Module.callMain(args);
+
+                // Determine expected cache path based on selected format
+                let cacheType = null;
+                let cachePath = null;
+
+                if (system === 'cps2' && format === 'raw') {
+                    cachePath = `/cache/${gameName}.cache`;
+                    cacheType = 'raw';
+                } else if (format === 'zip') {
+                    cachePath = `/cache/${gameName}_cache.zip`;
+                    cacheType = 'zip';
+                } else {
+                    // folder format (MVS default, or CPS2 -folder)
+                    cachePath = `/cache/${gameName}_cache`;
+                    cacheType = 'dir';
+                }
+
+                const cacheExists = FS.analyzePath(cachePath).exists;
 
                 if (cacheExists) {
                     this.log(`✓ ${fileName} converted successfully!`, 'success');
                     this.setFileStatus(fileName, 'completed');
+                    this.cacheResults.set(fileName, { gameName, type: cacheType, path: cachePath });
                     successCount++;
                 } else {
                     this.log(`✗ ${fileName} - No cache created (may not need conversion)`, 'error');
@@ -479,23 +621,12 @@ class RomConverter {
         try {
             const FS = this.FS;
 
-            // Collect all cache entries with their type info
+            // Collect cache entries from stored conversion results
             const cacheEntries = [];
             for (const file of this.selectedFiles) {
                 if (this.fileStatuses.get(file.name) !== 'completed') continue;
-
-                const gameName = file.name.replace('.zip', '').toLowerCase();
-                const cacheDir = `/cache/${gameName}_cache`;
-                const cacheZip = `/cache/${gameName}_cache.zip`;
-                const cacheRaw = `/cache/${gameName}.cache`;
-
-                if (FS.analyzePath(cacheDir).exists) {
-                    cacheEntries.push({ gameName, type: 'dir', path: cacheDir });
-                } else if (FS.analyzePath(cacheZip).exists) {
-                    cacheEntries.push({ gameName, type: 'zip', path: cacheZip });
-                } else if (FS.analyzePath(cacheRaw).exists) {
-                    cacheEntries.push({ gameName, type: 'raw', path: cacheRaw });
-                }
+                const result = this.cacheResults.get(file.name);
+                if (result) cacheEntries.push(result);
             }
 
             if (cacheEntries.length === 0) {
@@ -594,6 +725,24 @@ class RomConverter {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    removePath(FS, path) {
+        try {
+            const info = FS.analyzePath(path);
+            if (!info.exists) return;
+            const stat = FS.stat(path);
+            if (FS.isDir(stat.mode)) {
+                const entries = FS.readdir(path);
+                for (const entry of entries) {
+                    if (entry === '.' || entry === '..') continue;
+                    this.removePath(FS, `${path}/${entry}`);
+                }
+                FS.rmdir(path);
+            } else {
+                FS.unlink(path);
+            }
+        } catch (e) { /* ignore */ }
     }
 }
 

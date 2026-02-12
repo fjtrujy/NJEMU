@@ -1153,10 +1153,91 @@ error:
 }
 
 
+static int create_folder_cache(char *game_name)
+{
+	FILE *fp;
+	uint32_t block, total = 0, count = 0;
+	char version[8], fname[PATH_MAX];
+
+	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
+
+	chdir("cache");
+
+	sprintf(fname, "%s_cache", game_name);
+
+#ifdef CHINESE
+	printf("缓存名: cache%c%s_cache\n", delimiter, game_name);
+	printf("正在创建缓存文件夹...\n");
+#else
+	printf("cache name: cache%c%s_cache\n", delimiter, game_name);
+	printf("Create cache folder...\n");
+#endif
+
+	if (chdir(fname) != 0)
+	{
+		if (mkdir(fname, 0777) != 0)
+		{
+#ifdef CHINESE
+			printf("错误: 无法创建文件夹 \"cache%c%s_cache\".\n", delimiter, game_name);
+#else
+			printf("ERROR: Could not create directory \"cache%c%s_cache\".\n", delimiter, game_name);
+#endif
+			chdir("..");
+			return 0;
+		}
+		chdir(fname);
+	}
+
+	for (block = 0; block < 0x200; block++)
+		if (!block_empty[block]) total++;
+	total++; /* +1 for cache_info */
+
+	print_progress(0, total);
+
+	/* Write individual block files */
+	for (block = 0; block < 0x200; block++)
+	{
+		if (block_empty[block]) continue;
+
+		sprintf(fname, "%03x", block);
+		if ((fp = fopen(fname, "wb")) == NULL) goto error;
+		fwrite(&memory_region_gfx1[block << 16], 1, 0x10000, fp);
+		fclose(fp);
+		print_progress(++count, total);
+	}
+
+	/* Write cache_info */
+	if ((fp = fopen("cache_info", "wb")) == NULL) goto error;
+	fwrite(version, 1, 8, fp);
+	fwrite(gfx_pen_usage[TILE08], 1, gfx_total_elements[TILE08], fp);
+	fwrite(gfx_pen_usage[TILE16], 1, gfx_total_elements[TILE16], fp);
+	fwrite(gfx_pen_usage[TILE32], 1, gfx_total_elements[TILE32], fp);
+	fwrite(block_empty, 1, 0x200, fp);
+	fclose(fp);
+
+	print_progress(++count, total);
+	printf("\n");
+
+	chdir("..");
+	chdir("..");
+	return 1;
+
+error:
+#ifdef CHINESE
+	printf("错误: 无法创建文件.\n");
+#else
+	printf("ERROR: Could not create file.\n");
+#endif
+	chdir("..");
+	chdir("..");
+	return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
 	char *p, path[PATH_MAX];
-	int i, path_found = 0, all = 0, zip = 0, res = 1;
+	int i, path_found = 0, all = 0, raw = 0, zip = 0, folder = 0, res = 1;
 	check_byte_order();
 
 #ifdef CHINESE
@@ -1177,9 +1258,17 @@ int main(int argc, char *argv[])
 			{
 				all = 1;
 			}
+			else if (!strcasecmp(argv[i], "-raw"))
+			{
+				raw = 1;
+			}
 			else if (!strcasecmp(argv[i], "-zip"))
 			{
 				zip = 1;
+			}
+			else if (!strcasecmp(argv[i], "-folder"))
+			{
+				folder = 1;
 			}
 			else if (strchr(argv[i], DELIMITER) != NULL)
 			{
@@ -1190,8 +1279,8 @@ int main(int argc, char *argv[])
 
 	if (!path_found)
 	{
-		printf("usage: romcnv_cps2 fullpath%cgamename.zip [-zip]\n", DELIMITER);
-		printf("  or   romcnv_cps2 fullpath -all [-zip]\n\n", DELIMITER);
+		printf("usage: romcnv_cps2 fullpath%cgamename.zip [-raw] [-zip] [-folder]\n", DELIMITER);
+		printf("  or   romcnv_cps2 fullpath -all [-raw] [-zip] [-folder]\n\n", DELIMITER);
 		return 0;
 	}
 
@@ -1245,7 +1334,13 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				if (zip || cacheinfo->zip)
+				if (zip)
+					res = create_zip_cache(game_name);
+				else if (folder)
+					res = create_folder_cache(game_name);
+				else if (raw)
+					res = create_raw_cache(game_name);
+				else if (cacheinfo->zip)
 					res = create_zip_cache(game_name);
 				else
 					res = create_raw_cache(game_name);
@@ -1315,7 +1410,13 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			if (zip || cacheinfo->zip)
+			if (zip)
+				res = create_zip_cache(game_name);
+			else if (folder)
+				res = create_folder_cache(game_name);
+			else if (raw)
+				res = create_raw_cache(game_name);
+			else if (cacheinfo->zip)
 				res = create_zip_cache(game_name);
 			else
 				res = create_raw_cache(game_name);

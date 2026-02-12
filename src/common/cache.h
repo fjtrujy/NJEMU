@@ -26,13 +26,17 @@ enum
 {
 	CACHE_NOTFOUND = 0,
 	CACHE_ZIPFILE,
-	CACHE_RAWFILE
+	CACHE_RAWFILE,
+	CACHE_FOLDER
 };
 
+extern int cache_type;
 extern uint32_t (*read_cache)(uint32_t offset);
 extern void (*update_cache)(uint32_t offset);
 #if (EMU_SYSTEM == MVS)
+#ifndef LARGE_MEMORY
 extern int pcm_cache_enable;
+#endif
 #else
 extern uint8_t *block_empty;
 extern uint32_t block_offset[MAX_CACHE_BLOCKS];

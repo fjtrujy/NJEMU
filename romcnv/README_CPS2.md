@@ -34,8 +34,13 @@ romcnv_cps2 /path/to/game.zip
 | Option | Description |
 |--------|-------------|
 | `-all` | Convert all ROMs in the specified directory |
-| `-zip` | Create compressed cache files (reduces storage space) |
+| `-raw` | Force raw cache file format (overrides per-game defaults) |
+| `-zip` | Create a ZIP compressed cache file (reduces storage space) |
+| `-folder` | Create a folder with individual block files instead of a single raw cache |
 | `-batch` | Batch mode - don't pause between conversions |
+
+> **Note:** Some games default to ZIP format for historical reasons. Use `-raw` to explicitly
+> force the single-file `.cache` format regardless of per-game defaults.
 
 ### Examples
 
@@ -67,6 +72,11 @@ romcnv_cps2 "D:\roms" -all
 romcnv_cps2 "D:\roms" -all -zip
 ```
 
+**Convert with folder format:**
+```bash
+romcnv_cps2 "D:\roms\avsp.zip" -folder
+```
+
 ### Linux/macOS Examples
 
 ```bash
@@ -76,21 +86,31 @@ romcnv_cps2 "D:\roms" -all -zip
 # Convert with ZIP compression
 ./romcnv_cps2 /home/user/roms/ssf2.zip -zip
 
+# Convert with folder format
+./romcnv_cps2 /home/user/roms/ssf2.zip -folder
+
 # Convert all ROMs in directory
 ./romcnv_cps2 /home/user/roms -all
 
 # Convert all with ZIP compression
 ./romcnv_cps2 /home/user/roms -all -zip
+
+# Convert all with folder format
+./romcnv_cps2 /home/user/roms -all -folder
 ```
 
 ## Output
 
-The converter creates a `cache` directory containing:
-- `gamename.cache` - Optimized cache file for each game
+The converter creates a `cache` directory containing one of:
+- `gamename.cache` — Single raw cache file (default)
+- `gamename_cache.zip` — ZIP compressed cache file (with `-zip`)
+- `gamename_cache/` — Folder with individual block files (with `-folder`)
+
+All three formats are supported by the emulator on all platforms.
 
 ### File Structure for Emulators
 
-**PSP:**
+**PSP (raw format — default):**
 ```
 /PSP/GAME/CPS2PSP/
 ├── roms/
@@ -99,7 +119,25 @@ The converter creates a `cache` directory containing:
     └── game.cache
 ```
 
-**PS2:**
+**PSP (zip format):**
+```
+/PSP/GAME/CPS2PSP/
+├── roms/
+│   └── game.zip
+└── cache/
+    └── game_cache.zip
+```
+
+**PSP (folder format):**
+```
+/PSP/GAME/CPS2PSP/
+├── roms/
+│   └── game.zip
+└── cache/
+    └── game_cache/
+```
+
+**PS2 (raw format — default):**
 ```
 mass:/CPS2PSP/
 ├── roms/
@@ -138,13 +176,46 @@ emmake make
 - Cache files are version-specific - regenerate if you update the emulator
 - Some games fully fit in memory and don't require cache conversion
 
-## ZIP Compression
+## Cache Format Comparison
 
-The `-zip` option creates compressed cache files:
-- **Pros**: Smaller storage footprint
-- **Cons**: Slightly longer load times
+The emulator supports reading caches in **raw file**, **zip**, and **folder** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
 
-Recommended for platforms with limited storage (PSP Memory Stick, PS2 USB).
+### Memory
+
+| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
+|---|---|---|---|
+| Persistent open FD | 1 file descriptor held open | Zip archive kept open (central directory in RAM) | None — open/read/close per block |
+| ZIP central directory overhead | — | ~32 bytes × num_entries | — |
+| Block metadata | `block_offset[0x200]` = 2 KB | `block_empty[0x200]` = 512 B | `block_empty[0x200]` = 512 B |
+| Sleep/resume cost | `close()`/`open()` 1 FD | `zip_close()`/`zip_open()` (re-parse central dir) | Nothing to do |
+| **Overall RAM overhead** | **Lowest** | **Medium** | **Lowest** |
+
+### Read Performance
+
+| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
+|---|---|---|---|
+| Cache miss (block load) | `lseek()` + `read()` — 1 syscall pair, direct offset | `zopen()` → scan zip dir + `zread()` decompress 64 KB + `zclose()` — **slowest** | `open()` + `read()` + `close()` — 3 syscalls, no decompression |
+| Cache hit | LRU pointer update only | LRU pointer update only | LRU pointer update only |
+| I/O pattern | Random seek in single file ✅ | Sequential scan of zip entries + inflate ❌ | Path lookup + read small file 🔶 |
+| Decompression CPU | **None** | zlib `inflate()` per 64 KB block — **significant on PSP/PS2** | **None** |
+| Startup (`fill_cache`) | Sequential `lseek`+`read` — fast | Open+decompress+close each block — **slowest** | Open+read+close each block — moderate |
+
+### Disk / Storage
+
+| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
+|---|---|---|---|
+| Disk size | Largest — offset table + uncompressed blocks, padded to 64 KB alignment | **Smallest** — deflate typically 30–70% compression | Same as raw — uncompressed blocks + metadata |
+| File count | **1 file** | **1 file** | Many files (up to 512 blocks + `cache_info`) |
+| Filesystem friendliness | ✅ Best | ✅ Good | ⚠️ FAT16/FAT32 may struggle with 500+ entries (PSP Memory Stick) |
+
+### Recommendation per Platform
+
+| Platform | Best format | Reason |
+|---|---|---|
+| **PSP** | Raw file (default) | Weakest CPU; `lseek`/`read` is the cheapest cache miss path. Single FD. FAT16 hates many files. |
+| **PS2** | Raw file (default) | Same — limited CPU, limited I/O drivers. |
+| **Desktop** | Any (zip for disk savings) | CPU is a non-issue; zip saves ~50% disk with negligible cost. |
+| **WASM / Web** | ZIP | Single HTTP download; in-memory inflate is fast in browser. |
 
 ## Troubleshooting
 

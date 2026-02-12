@@ -16,6 +16,7 @@
 #include "romcnv.h"
 #include "common.h"
 #include "neogeo.h"
+#include "zfile.h"
 
 #define MAX_GAMES			512
 
@@ -1090,6 +1091,108 @@ error:
 }
 
 
+static int create_zip_cache(char *game_name)
+{
+	int fd;
+	uint32_t block, total = 0, count = 0, num_blocks;
+	char version[8], zipname[PATH_MAX];
+	int res = 0;
+
+	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
+
+	chdir("cache");
+
+	sprintf(zipname, "%s%ccache%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
+	remove(zipname);
+
+#ifdef CHINESE
+	printf("缓存名: cache%c%s_cache.zip\n", delimiter, game_name);
+	printf("正在创建缓存文件...\n");
+#else
+	printf("cache name: cache%c%s_cache.zip\n", delimiter, game_name);
+	printf("Create cache file...\n");
+#endif
+
+	if (zip_open(zipname, "wb") < 0)
+	{
+#ifdef CHINESE
+		printf("错误: 无法创建zip文件 \"cache%c%s_cache.zip\".\n", delimiter, game_name);
+#else
+		printf("ERROR: Could not create zip file \"cache%c%s_cache.zip\".\n", delimiter, game_name);
+#endif
+		goto error;
+	}
+
+#ifdef CHINESE
+	printf("压缩为zip文件... \"cache%c%s_cache.zip\"\n", delimiter, game_name);
+#else
+	printf("Compress to zip file... \"cache%c%s_cache.zip\"\n", delimiter, game_name);
+#endif
+
+	/* Write crom blocks */
+	if (convert_crom)
+	{
+		num_blocks = memory_length_gfx3 >> 16;
+
+		for (block = 0; block < num_blocks; block++)
+		{
+			static const char cnv_table[16] =
+			{
+				'0','1','2','3','4','5','6','7',
+				'8','9','a','b','c','d','e','f'
+			};
+			char fname[4];
+
+			fname[0] = cnv_table[(block >> 8) & 0x0f];
+			fname[1] = cnv_table[(block >> 4) & 0x0f];
+			fname[2] = cnv_table[ block       & 0x0f];
+			fname[3] = '\0';
+
+			if ((fd = zopen(fname)) < 0) goto error;
+			zwrite(fd, &memory_region_gfx3[block << 16], 0x10000);
+			zclose(fd);
+		}
+	}
+
+	/* Write srom */
+	if (convert_srom && encrypt_gfx2)
+	{
+		if ((fd = zopen("srom")) < 0) goto error;
+		zwrite(fd, memory_region_gfx2, memory_length_gfx2);
+		zclose(fd);
+	}
+
+	/* Write vrom */
+	if (convert_vrom && (encrypt_snd1 || disable_sound))
+	{
+		if ((fd = zopen("vrom")) < 0) goto error;
+		zwrite(fd, memory_region_sound1, memory_length_sound1);
+		zclose(fd);
+	}
+
+	/* Write cache_info (version + pen_usage) */
+	if ((fd = zopen("cache_info")) < 0) goto error;
+	zwrite(fd, version, 8);
+	zwrite(fd, gfx_pen_usage[TILE_SPR], gfx_total_elements[TILE_SPR]);
+	zclose(fd);
+
+	res = 1;
+
+error:
+	zip_close();
+
+#ifdef CHINESE
+	if (!res) printf("错误: 无法创建文件.\n");
+#else
+	if (!res) printf("ERROR: Could not create file.\n");
+#endif
+
+	chdir("..");
+
+	return res;
+}
+
+
 int main(int argc, char *argv[])
 {
 	char *p, path[PATH_MAX];
@@ -1118,6 +1221,10 @@ int main(int argc, char *argv[])
 			{
 				psp2k = 1;
 			}
+			else if (!strcasecmp(argv[i], "-zip"))
+			{
+				zip = 1;
+			}
 			else if (strchr(argv[i], DELIMITER) != NULL)
 			{
 				path_found = i;
@@ -1127,8 +1234,8 @@ int main(int argc, char *argv[])
 
 	if (!path_found)
 	{
-		printf("usage: romcnv_mvs fullpath%cgamename.zip\n", DELIMITER);
-		printf("  or   romcnv_mvs fullpath -all\n\n", DELIMITER);
+		printf("usage: romcnv_mvs fullpath%cgamename.zip [-zip]\n", DELIMITER);
+		printf("  or   romcnv_mvs fullpath -all [-zip]\n\n", DELIMITER);
 		return 0;
 	}
 
@@ -1205,7 +1312,7 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				if (create_raw_cache(game_name))
+				if (zip ? create_zip_cache(game_name) : create_raw_cache(game_name))
 				{
 #ifdef CHINESE
 					printf("完成.\n\n");
@@ -1218,7 +1325,7 @@ int main(int argc, char *argv[])
 		}
 #ifdef CHINESE
 		printf("完成.\n");
-		printf("请将cache内的文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n");
+		printf("请将cache内的文件复制到\"/PSP/GAMES/mvspsp/cache\".\n");
 #else
 		printf("complete.\n");
 		printf("Please copy these files to directory \"/PSP/GAMES/mvspsp/cache\".\n");
@@ -1280,16 +1387,22 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-			res = create_raw_cache(game_name);
+			res = zip ? create_zip_cache(game_name) : create_raw_cache(game_name);
 		}
 		if (res)
 		{
 #ifdef CHINESE
 			printf("完成.\n");
-			printf("请将\"cache%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+			if (zip)
+				printf("请将\"cache%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+			else
+				printf("请将\"cache%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
 #else
 			printf("complete.\n");
-			printf("Please copy \"cache%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+			if (zip)
+				printf("Please copy \"cache%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+			else
+				printf("Please copy \"cache%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
 #endif
 		}
 		free_memory();

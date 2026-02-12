@@ -411,9 +411,8 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		"Unsupported version of cache file \"V%c%c\".\n",
 		"Current required version is \"" CACHE_VERSION "\".\n",
 		"Please rebuild cache file.\n",
-#if (EMU_SYSTEM == CPS2)
 		"Could not open sprite block %03x\n",
-#elif (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS)
 		"PCM cache enabled.\n",
 #endif
 #endif

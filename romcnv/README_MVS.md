@@ -34,6 +34,7 @@ romcnv_mvs /path/to/game.zip
 | Option | Description |
 |--------|-------------|
 | `-all` | Convert all ROMs in the specified directory |
+| `-zip` | Create a ZIP compressed cache file instead of a folder |
 | `-batch` | Batch mode - don't pause between conversions |
 | `-slim` | PSP Slim mode - skip PCM cache for unencrypted games (reduces cache size) |
 
@@ -56,6 +57,11 @@ romcnv_mvs "D:\roms\kof2003.zip"
 romcnv_mvs "D:\roms" -all
 ```
 
+**Convert with ZIP compression:**
+```bash
+romcnv_mvs "D:\roms\kof99.zip" -zip
+```
+
 **Convert for PSP Slim (reduced cache size):**
 ```bash
 romcnv_mvs "D:\roms\kof99.zip" -slim
@@ -67,8 +73,14 @@ romcnv_mvs "D:\roms\kof99.zip" -slim
 # Convert a single ROM
 ./romcnv_mvs /home/user/roms/kof99.zip
 
+# Convert with ZIP compression
+./romcnv_mvs /home/user/roms/kof99.zip -zip
+
 # Convert all ROMs in directory
 ./romcnv_mvs /home/user/roms -all
+
+# Convert all with ZIP compression
+./romcnv_mvs /home/user/roms -all -zip
 
 # Convert with slim mode
 ./romcnv_mvs /home/user/roms/garou.zip -slim
@@ -76,12 +88,15 @@ romcnv_mvs "D:\roms\kof99.zip" -slim
 
 ## Output
 
-The converter creates a `cache` directory containing:
-- `gamename_cache/` - Directory with optimized cache files for each game
+The converter creates a `cache` directory containing one of:
+- `gamename_cache/` — Folder with individual block files (default)
+- `gamename_cache.zip` — ZIP compressed cache file (with `-zip`)
+
+Both formats are supported by the emulator on all platforms.
 
 ### File Structure for Emulators
 
-**PSP:**
+**PSP (folder format):**
 ```
 /PSP/GAME/MVSPSP/
 ├── roms/
@@ -90,7 +105,16 @@ The converter creates a `cache` directory containing:
     └── game_cache/
 ```
 
-**PS2:**
+**PSP (zip format):**
+```
+/PSP/GAME/MVSPSP/
+├── roms/
+│   └── game.zip
+└── cache/
+    └── game_cache.zip
+```
+
+**PS2 (folder format):**
 ```
 mass:/MVSPSP/
 ├── roms/
@@ -98,6 +122,55 @@ mass:/MVSPSP/
 └── cache/
     └── game_cache/
 ```
+
+**PS2 (zip format):**
+```
+mass:/MVSPSP/
+├── roms/
+│   └── game.zip
+└── cache/
+    └── game_cache.zip
+```
+
+## Cache Format Comparison
+
+The emulator supports reading caches in **folder** and **zip** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
+
+### Memory
+
+| Aspect | Folder (default) | ZIP (`-zip`) |
+|---|---|---|
+| Persistent open FD | 1 (`crom` file kept open) | Zip archive kept open (central directory in RAM) |
+| ZIP central directory overhead | — | ~32 bytes × num_entries |
+| Sleep/resume cost | `close()`/`open()` 1 FD | `zip_close()`/`zip_open()` (re-parse central dir) |
+| **Overall RAM overhead** | **Lowest** | **Medium** |
+
+### Read Performance
+
+| Aspect | Folder (default) | ZIP (`-zip`) |
+|---|---|---|
+| Cache miss (block load) | `lseek()` + `read()` — 1 syscall pair, direct offset | `zopen()` → scan zip dir + `zread()` decompress 64 KB + `zclose()` — **slowest** |
+| Cache hit | LRU pointer update only | LRU pointer update only |
+| I/O pattern | Random seek in single `crom` file ✅ | Sequential scan of zip entries + inflate ❌ |
+| Decompression CPU | **None** | zlib `inflate()` per 64 KB block — **significant on PSP/PS2** |
+| Startup (`fill_cache`) | Sequential `lseek`+`read` — fast | Open+decompress+close each block — **slowest** |
+
+### Disk / Storage
+
+| Aspect | Folder (default) | ZIP (`-zip`) |
+|---|---|---|
+| Disk size | Larger — uncompressed blocks | **Smallest** — deflate typically 30–70% compression |
+| File count | Multiple files (`cache_info`, `crom`, `srom`, `vrom`) | **1 file** |
+| Filesystem friendliness | ✅ Few large files | ✅ Single file |
+
+### Recommendation per Platform
+
+| Platform | Best format | Reason |
+|---|---|---|
+| **PSP** | Folder (default) | Weakest CPU; `lseek`/`read` on `crom` is the cheapest cache miss path. No decompression overhead. |
+| **PS2** | Folder (default) | Same — limited CPU, limited I/O drivers. |
+| **Desktop** | Either (zip for disk savings) | CPU is a non-issue; zip saves ~50% disk with negligible cost. |
+| **WASM / Web** | ZIP | Single HTTP download; in-memory inflate is fast in browser. |
 
 ## Building from Source
 

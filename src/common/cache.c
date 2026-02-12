@@ -72,6 +72,9 @@ static int num_cache;
 static uint16_t ALIGN_DATA blocks[MAX_CACHE_BLOCKS];
 static int64_t cache_fd;
 
+int cache_type;
+static char spr_cache_name[PATH_MAX];
+
 #if (EMU_SYSTEM == MVS)
 #ifndef LARGE_MEMORY
 int pcm_cache_enable;
@@ -83,9 +86,6 @@ static cache_t *pcm_tail;
 static uint16_t ALIGN_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
 #endif
-#else
-static int cache_type;
-static char spr_cache_name[PATH_MAX];
 #endif
 
 
@@ -147,7 +147,7 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 }
 
 #endif
-#else
+#endif
 
 /*------------------------------------------------------
 	Open Data File in ZIP Cache File
@@ -183,7 +183,38 @@ static int zip_cache_open(int number)
 	cache_fd = -1;
 
 
-#endif
+/*------------------------------------------------------
+	Open Data File in Folder Cache
+------------------------------------------------------*/
+
+static int folder_cache_open(int number)
+{
+	static const char cnv_table[16] =
+	{
+		'0','1','2','3','4','5','6','7',
+		'8','9','a','b','c','d','e','f'
+	};
+	char fname[PATH_MAX];
+
+	sprintf(fname, "%s/%c%c%c", spr_cache_name,
+		cnv_table[(number >> 8) & 0x0f],
+		cnv_table[(number >> 4) & 0x0f],
+		cnv_table[ number       & 0x0f]);
+
+	cache_fd = open(fname, O_RDONLY, 0777);
+
+	return cache_fd != -1;
+}
+
+
+/*------------------------------------------------------
+	Read Data File from Folder Cache
+------------------------------------------------------*/
+
+#define folder_cache_load(offs)							\
+	read(cache_fd, &GFX_MEMORY[offs << 16], 0x10000);	\
+	close(cache_fd);									\
+	cache_fd = -1;
 
 /*------------------------------------------------------
 	Fill Cache with Data
@@ -202,27 +233,71 @@ static int fill_cache(void)
 	block = 0;
 
 #if (EMU_SYSTEM == MVS)
-	while (i < num_cache)
+	if (cache_type == CACHE_RAWFILE)
 	{
-		p = head;
-		p->block = block;
-		blocks[block] = p->idx;
+		while (i < num_cache)
+		{
+			p = head;
+			p->block = block;
+			blocks[block] = p->idx;
 
-		lseek((int32_t)cache_fd, block << BLOCK_SHIFT, SEEK_SET);
-		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+			lseek((int32_t)cache_fd, block << BLOCK_SHIFT, SEEK_SET);
+			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
 
-		head = p->next;
-		head->prev = NULL;
+			head = p->next;
+			head->prev = NULL;
 
-		p->prev = tail;
-		p->next = NULL;
+			p->prev = tail;
+			p->next = NULL;
 
-		tail->next = p;
-		tail = p;
-		i++;
+			tail->next = p;
+			tail = p;
+			i++;
 
-		if (++block >= MAX_CACHE_BLOCKS)
-			break;
+			if (++block >= MAX_CACHE_BLOCKS)
+				break;
+		}
+	}
+	else
+	{
+		while (i < num_cache)
+		{
+			int ok;
+
+			p = head;
+			p->block = block;
+			blocks[block] = p->idx;
+
+			if (cache_type == CACHE_ZIPFILE)
+				ok = zip_cache_open(p->block);
+			else
+				ok = folder_cache_open(p->block);
+
+			if (!ok)
+			{
+				msg_printf(TEXT(COULD_NOT_OPEN_SPRITE_BLOCK_x), p->block);
+				return 0;
+			}
+
+			if (cache_type == CACHE_ZIPFILE) {
+				zip_cache_load(p->idx)
+			} else {
+				folder_cache_load(p->idx)
+			}
+
+			head = p->next;
+			head->prev = NULL;
+
+			p->prev = tail;
+			p->next = NULL;
+
+			tail->next = p;
+			tail = p;
+			i++;
+
+			if (++block >= MAX_CACHE_BLOCKS)
+				break;
+		}
 	}
 #ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
@@ -286,16 +361,28 @@ static int fill_cache(void)
 		{
 			if (!block_empty[block])
 			{
+				int ok;
+
 				p = head;
 				p->block = block;
 				blocks[block] = p->idx;
 
-				if (!zip_cache_open(p->block))
+				if (cache_type == CACHE_ZIPFILE)
+					ok = zip_cache_open(p->block);
+				else
+					ok = folder_cache_open(p->block);
+
+				if (!ok)
 				{
 					msg_printf(TEXT(COULD_NOT_OPEN_SPRITE_BLOCK_x), p->block);
 					return 0;
 				}
-				zip_cache_load(p->idx);
+
+				if (cache_type == CACHE_ZIPFILE) {
+					zip_cache_load(p->idx)
+				} else {
+					folder_cache_load(p->idx)
+				}
 
 				head = p->next;
 				head->prev = NULL;
@@ -392,7 +479,6 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 	Read data from ZIP compressed cache file
 ------------------------------------------------------*/
 
-#if (EMU_SYSTEM == CPS2)
 static uint32_t read_cache_zipfile(uint32_t offset)
 {
 	int16_t new_block = offset >> BLOCK_SHIFT;
@@ -436,7 +522,57 @@ static uint32_t read_cache_zipfile(uint32_t offset)
 
 	return ((tail->idx << BLOCK_SHIFT) | (offset & BLOCK_MASK));
 }
-#endif
+
+
+/*------------------------------------------------------
+	Use Folder Cache
+
+	Read data from individual block files in folder
+------------------------------------------------------*/
+
+static uint32_t read_cache_folder(uint32_t offset)
+{
+	int16_t new_block = offset >> BLOCK_SHIFT;
+	uint32_t idx = blocks[new_block];
+	cache_t *p;
+
+	if (idx == BLOCK_NOT_CACHED)
+	{
+		if (!folder_cache_open(new_block))
+			return 0;
+
+		p = head;
+		blocks[p->block] = BLOCK_NOT_CACHED;
+
+		p->block = new_block;
+		blocks[new_block] = p->idx;
+
+		folder_cache_load(p->idx);
+	}
+	else p = &cache_data[idx];
+
+	if (p->next)
+	{
+		if (p->prev)
+		{
+			p->prev->next = p->next;
+			p->next->prev = p->prev;
+		}
+		else
+		{
+			head = p->next;
+			head->prev = NULL;
+		}
+
+		p->prev = tail;
+		p->next = NULL;
+
+		tail->next = p;
+		tail = p;
+	}
+
+	return ((tail->idx << BLOCK_SHIFT) | (offset & BLOCK_MASK));
+}
 
 
 /*------------------------------------------------------
@@ -494,6 +630,7 @@ void cache_init(void)
 	cache_fd = -1;
 
 #if (EMU_SYSTEM == MVS)
+	cache_type = CACHE_NOTFOUND;
 	read_cache = NULL;
 #else
 	cache_type = CACHE_NOTFOUND;
@@ -536,8 +673,11 @@ int cache_start(void)
 	msg_printf(TEXT(LOADING_CACHE_INFORMATION_DATA));
 
 	found = 0;
+
+	/* Try folder format first: {game}_cache/cache_info */
 	if ((fd = cachefile_open(CACHE_INFO)) >= 0)
 	{
+		cache_type = CACHE_RAWFILE;
 		read(fd, version_str, 8);
 
 		if (strcmp(version_str, "MVS_" CACHE_VERSION) == 0)
@@ -555,46 +695,110 @@ int cache_start(void)
 			return 0;
 		}
 	}
-	else
+
+	/* Try zip format: {game}_cache.zip */
+	if (!found)
 	{
+		cache_type = CACHE_ZIPFILE;
+
+		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
+		if (zip_open(spr_cache_name) == -1)
+		{
+			if (strlen(parent_name))
+			{
+				sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
+				if (zip_open(spr_cache_name) == -1)
+				{
+					zip_close();
+				}
+				else found = 1;
+			}
+		}
+		else found = 1;
+
+		if (found)
+		{
+			if ((cache_fd = zopen("cache_info")) != -1)
+			{
+				memset(version_str, 0, 8);
+				zread(cache_fd, version_str, 8);
+
+				if (strcmp(version_str, "MVS_" CACHE_VERSION) == 0)
+				{
+					zread(cache_fd, gfx_pen_usage[2], memory_length_gfx3 / 128);
+					zclose(cache_fd);
+				}
+				else
+				{
+					zclose(cache_fd);
+					found = 0;
+				}
+			}
+			else
+			{
+				found = 0;
+			}
+			if (!found)
+			{
+				zip_close();
+				msg_printf(TEXT(UNSUPPORTED_VERSION_OF_CACHE_FILE), version_str[5], version_str[6]);
+				msg_printf(TEXT(CURRENT_REQUIRED_VERSION_IS_x));
+				msg_printf(TEXT(PLEASE_REBUILD_CACHE_FILE));
+				return 0;
+			}
+		}
+	}
+
+	if (!found)
+	{
+		cache_type = CACHE_NOTFOUND;
 		msg_printf(TEXT(COULD_NOT_OPEN_CACHE_FILE));
 		return 0;
 	}
 
 #ifndef LARGE_MEMORY
-	if (option_sound_enable && disable_sound)
+	if (cache_type == CACHE_RAWFILE)
 	{
-		if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
+		if (option_sound_enable && disable_sound)
 		{
-			if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * BLOCK_SIZE)) != NULL)
+			if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
 			{
-				pcm_cache_enable = 1;
-				disable_sound = 0;
-				msg_printf(TEXT(PCM_CACHE_ENABLED));
+				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * BLOCK_SIZE)) != NULL)
+				{
+					pcm_cache_enable = 1;
+					disable_sound = 0;
+					msg_printf(TEXT(PCM_CACHE_ENABLED));
+				}
 			}
-		}
-		if (!pcm_cache_enable)
-		{
-			if (pcm_fd >= 0)
+			if (!pcm_cache_enable)
 			{
-				close(pcm_fd);
-				pcm_fd = -1;
+				if (pcm_fd >= 0)
+				{
+					close(pcm_fd);
+					pcm_fd = -1;
+				}
+				memory_length_sound1 = 0;
 			}
-			memory_length_sound1 = 0;
 		}
 	}
 #endif
 
-	if ((cache_fd = cachefile_open(CACHE_CROM)) < 0)
+	/* Open crom for block access (folder format only) */
+	if (cache_type == CACHE_RAWFILE)
 	{
-		msg_printf(TEXT(COULD_NOT_OPEN_CACHE_FILE));
-		return 0;
+		if ((cache_fd = cachefile_open(CACHE_CROM)) < 0)
+		{
+			msg_printf(TEXT(COULD_NOT_OPEN_CACHE_FILE));
+			return 0;
+		}
 	}
+	/* For zip format, blocks will be accessed via zip_cache_open on demand */
 
 #elif (EMU_SYSTEM == CPS2)
 	found = 1;
 	cache_type = CACHE_RAWFILE;
 
+	/* Try raw file format: {game}.cache */
 	sprintf(spr_cache_name, "%s/%s.cache", cache_dir, game_name);
 	if ((cache_fd = open(spr_cache_name, O_RDONLY, 0777)) < 0)
 	{
@@ -604,6 +808,8 @@ int cache_start(void)
 			found = 0;
 		}
 	}
+
+	/* Try zip file format: {game}_cache.zip */
 	if (!found)
 	{
 		found = 1;
@@ -620,6 +826,27 @@ int cache_start(void)
 			}
 		}
 	}
+
+	/* Try folder format: {game}_cache/cache_info */
+	if (!found)
+	{
+		char path[PATH_MAX];
+		found = 1;
+		cache_type = CACHE_FOLDER;
+
+		sprintf(spr_cache_name, "%s/%s_cache", cache_dir, game_name);
+		sprintf(path, "%s/cache_info", spr_cache_name);
+		if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
+		{
+			sprintf(spr_cache_name, "%s/%s_cache", cache_dir, cache_parent_name);
+			sprintf(path, "%s/cache_info", spr_cache_name);
+			if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
+			{
+				found = 0;
+			}
+		}
+	}
+
 	if (!found)
 	{
 		cache_type = CACHE_NOTFOUND;
@@ -646,7 +873,7 @@ int cache_start(void)
 			found = 0;
 		}
 	}
-	else
+	else if (cache_type == CACHE_ZIPFILE)
 	{
 		if ((cache_fd = zopen("cache_info")) != -1)
 		{
@@ -672,6 +899,27 @@ int cache_start(void)
 		}
 		if (!found) zip_close();
 	}
+	else /* CACHE_FOLDER */
+	{
+		/* cache_fd is already open from the folder detection above */
+		read(cache_fd, version_str, 8);
+
+		if (strcmp(version_str, "CPS2" CACHE_VERSION) == 0)
+		{
+			read(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
+			read(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
+			read(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
+			read(cache_fd, block_empty, MAX_CACHE_BLOCKS);
+			close(cache_fd);
+			cache_fd = -1;
+		}
+		else
+		{
+			close(cache_fd);
+			cache_fd = -1;
+			found = 0;
+		}
+	}
 	if (!found)
 	{
 		msg_printf(TEXT(UNSUPPORTED_VERSION_OF_CACHE_FILE), version_str[5], version_str[6]);
@@ -691,14 +939,13 @@ int cache_start(void)
 	else
 #endif
 	{
-#if (EMU_SYSTEM == MVS)
-		read_cache = read_cache_rawfile;
-#else
 		if (cache_type == CACHE_RAWFILE)
 			read_cache = read_cache_rawfile;
-		else
+		else if (cache_type == CACHE_ZIPFILE)
 			read_cache = read_cache_zipfile;
-#endif
+		else
+			read_cache = read_cache_folder;
+
 		update_cache = update_cache_dynamic;
 
 		// Check allocatable size
@@ -810,25 +1057,21 @@ void cache_shutdown(void)
 		pcm_cache_enable = 0;
 	}
 #endif
-	if (cache_fd != -1)
-	{
-		close((int32_t)cache_fd);
-		cache_fd = -1;
-	}
-#else
+#endif
 	if (cache_type == CACHE_RAWFILE)
 	{
 		if (cache_fd != -1)
 		{
-			close(cache_fd);
+			close((int32_t)cache_fd);
 			cache_fd = -1;
 		}
 	}
-	else
+	else if (cache_type == CACHE_ZIPFILE)
 	{
 		zip_close();
 	}
-#endif
+	/* CACHE_FOLDER: nothing to close (blocks opened/closed on demand) */
+
 	num_cache = 0;
 }
 
@@ -843,31 +1086,40 @@ void cache_sleep(int flag)
 	{
 		if (flag)
 		{
+			if (cache_type == CACHE_RAWFILE)
+			{
+				close((int32_t)cache_fd);
+			}
+			else if (cache_type == CACHE_ZIPFILE)
+			{
+				zip_close();
+			}
 #if (EMU_SYSTEM == MVS)
-			close((int32_t)cache_fd);
 #ifndef LARGE_MEMORY
 			if (pcm_cache_enable) close(pcm_fd);
 #endif
-#else
-			if (cache_type == CACHE_RAWFILE)
-				close(cache_fd);
-			else
-				zip_close();
 #endif
 		}
 		else
 		{
+			if (cache_type == CACHE_RAWFILE)
+			{
 #if (EMU_SYSTEM == MVS)
-			cache_fd = cachefile_open(CACHE_CROM);
+				cache_fd = cachefile_open(CACHE_CROM);
+#else
+				cache_fd = open(spr_cache_name, O_RDONLY, 0777);
+#endif
+			}
+			else if (cache_type == CACHE_ZIPFILE)
+			{
+				zip_open(spr_cache_name);
+			}
+			/* CACHE_FOLDER: nothing to reopen */
+#if (EMU_SYSTEM == MVS)
 #ifndef LARGE_MEMORY
 			if (pcm_cache_enable)
 				pcm_fd = cachefile_open(CACHE_VROM);
 #endif
-#else
-			if (cache_type == CACHE_RAWFILE)
-				cache_fd = open(spr_cache_name, O_RDONLY, 0777);
-			else
-				zip_open(spr_cache_name);
 #endif
 		}
 	}

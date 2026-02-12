@@ -778,17 +778,34 @@ static int load_rom_gfx2(void)
 
 	if (encrypt_gfx2)
 	{
-		int32_t fd;
-
-		if ((fd = cachefile_open(CACHE_SROM)) < 0)
+#if USE_CACHE
+		if (cache_type == CACHE_ZIPFILE)
 		{
-			error_file("cache/srom");
-			return 0;
+			int64_t zfd = zopen("srom");
+			if (zfd == -1)
+			{
+				error_file("cache/srom");
+				return 0;
+			}
+			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
+			zread(zfd, memory_region_gfx2, memory_length_gfx2);
+			zclose(zfd);
 		}
+		else
+#endif
+		{
+			int32_t fd;
 
-		msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
-		read(fd, memory_region_gfx2, memory_length_gfx2);
-		close(fd);
+			if ((fd = cachefile_open(CACHE_SROM)) < 0)
+			{
+				error_file("cache/srom");
+				return 0;
+			}
+
+			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
+			read(fd, memory_region_gfx2, memory_length_gfx2);
+			close(fd);
+		}
 	}
 	else
 	{
@@ -982,17 +999,34 @@ static int load_rom_sound1(void)
 
 	if (encrypt_snd1)
 	{
-		int32_t fd;
-
-		if ((fd = cachefile_open(CACHE_VROM)) < 0)
+#if USE_CACHE
+		if (cache_type == CACHE_ZIPFILE)
 		{
-			error_file("cache/vrom");
-			return 0;
+			int64_t zfd = zopen("vrom");
+			if (zfd == -1)
+			{
+				error_file("cache/vrom");
+				return 0;
+			}
+			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
+			zread(zfd, memory_region_sound1, memory_length_sound1);
+			zclose(zfd);
 		}
+		else
+#endif
+		{
+			int32_t fd;
 
-		msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
-		read(fd, memory_region_sound1, memory_length_sound1);
-		close(fd);
+			if ((fd = cachefile_open(CACHE_VROM)) < 0)
+			{
+				error_file("cache/vrom");
+				return 0;
+			}
+
+			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
+			read(fd, memory_region_sound1, memory_length_sound1);
+			close(fd);
+		}
 	}
 	else
 	{
