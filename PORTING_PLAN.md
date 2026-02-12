@@ -6,7 +6,7 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 ## Current Status Summary
 
-> **Milestone: All emulator cores are fully ported to all platforms (PSP, PS2, Desktop).** The next phase is GUI/menu system porting.
+> **Milestone: All emulator cores are fully ported to all platforms (PSP, PS2, Desktop). Video driver abstraction is complete.** The next phase is GUI/menu system porting.
 
 ### Emulator Core Porting
 
@@ -31,22 +31,49 @@ This document outlines the remaining work needed to complete the cross-platform 
 | `*_ui_text.c` | ✅ | ✅ | ✅ | Basic text output |
 | `*_no_gui.c` | ✅ | ✅ | ✅ | Stub UI for testing |
 
+### Video Driver Abstraction
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Frame buffer globals eliminated | ✅ Complete | `draw_frame`, `show_frame`, `work_frame` replaced by vtable getters |
+| `drawFrame()` / `showFrame()` / `workFrame()` | ✅ Complete | Added to `video_driver_t`, implemented in PSP/PS2/Desktop |
+| `beginFrame()` / `endFrame()` | ✅ Complete | Frame lifecycle abstraction for all platforms |
+| `frameAddr()` / `scissor()` | ✅ Complete | Implemented in all 3 platform drivers |
+| All GUI code uses `video_driver->` | ✅ Complete | No remaining bare global references |
+
 ### GUI/Menu System
 
-| Component | PSP | PS2 | PC | Notes |
-|-----------|-----|-----|-----|-------|
-| Drawing primitives (`ui_draw.c`) | ✅ 2434 lines | ❌ | ❌ | Heavily PSP-specific (sceGu) |
-| Menu system (`ui_menu.c`) | ✅ 2667 lines | ❌ | ❌ | Mostly portable (uses `video_driver->`, `pad_pressed()`) |
-| File browser (`filer.c`) | ✅ 1396 lines | ❌ | ❌ | Partially portable (uses `sceIoDread` for dirs) |
-| UI framework (`ui.c`) | ✅ 1105 lines | ❌ | ❌ | Mostly portable (dialogs, progress, popups) |
-| Configuration (`config.c`) | ✅ 555 lines | ❌ | ❌ | Portable logic, PSP paths |
-| Font data (`font/*.c`) | ✅ | Shareable | Shareable | C arrays, no platform deps |
-| Localization (`psp_ui_text.c`) | ✅ 2768 lines | ✅ (driver exists) | ✅ (driver exists) | `ui_text_driver` already abstracted |
-| Wallpapers (`wallpaper.c`) | ✅ 151 lines | ❌ | ❌ | PNG loading needed |
-| Per-system menus (`menu/*.c`) | ✅ | ❌ | ❌ | CPS: 24K, MVS: 8K, NCDZ: 4K |
-| Per-system config (`config/*.c`) | ✅ | ❌ | ❌ | CPS: 42K, MVS: 17K, NCDZ: 4K |
+| Component | PSP | PS2 | PC | Location | Notes |
+|-----------|-----|-----|-----|----------|-------|
+| Drawing primitives (`ui_draw.c`) | ✅ 2434 lines | ❌ | ❌ | `src/psp/` only | Heavily PSP-specific (sceGu). **Bottleneck file.** |
+| Menu system (`ui_menu.c`) | ✅ 2667 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (uses `video_driver->`, `pad_pressed()`) |
+| File browser (`filer.c`) | ✅ 1396 lines | ❌ | ❌ | `src/psp/` only | Uses `sceIoDread` for dirs |
+| UI framework (`ui.c`) | ✅ 1105 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (dialogs, progress, popups) |
+| Configuration (`config.c`) | ✅ 555 lines | ❌ | ❌ | `src/psp/` only | Portable logic, PSP paths |
+| PNG handling (`png.c`) | ✅ | ❌ | ❌ | `src/psp/` only | PSP-specific texture upload |
+| Font data (`font/*.c`) | ✅ | — | — | `src/psp/font/` only | C arrays, no platform deps — **needs move to common** |
+| Icon data (`icon/*.c`) | ✅ | — | — | `src/psp/icon/` only | C arrays, per-target — **needs move to common** |
+| Per-system menus (`menu/*.c`) | ✅ | — | — | `src/psp/menu/` only | Pure data/logic — **needs move to common** |
+| Per-system config (`config/*.c`) | ✅ | — | — | `src/psp/config/` only | Pure data/logic — **needs move to common** |
+| Localization (`*_ui_text.c`) | ✅ | ✅ | ✅ | Per-platform | `ui_text_driver` already abstracted |
+| Cross-platform GUI API | ✅ | — | — | `src/common/main_ui_draw.h` | Declares all ~34 GUI functions |
 
 **Total PSP GUI code: ~11,000 lines** (core files) + font data + per-system menu/config data.
+
+### What's Done vs What Remains
+
+```
+✅ DONE                              ❌ REMAINING
+─────────────────────────            ──────────────────────────────
+Emulator cores (all 4)               Font/icon data → src/common/
+Platform drivers (all 9)             Menu/config data → src/common/
+Video driver vtable                  Portable GUI logic → src/common/
+Frame buffer abstraction             desktop_ui_draw.c (SDL2)
+beginFrame/endFrame                  ps2_ui_draw.c (gsKit)
+PSP GUI (fully working)              CMake NO_GUI for PS2/Desktop
+main_ui_draw.h (API contract)        File browser POSIX porting
+                                     PNG loading cross-platform
+```
 
 ---
 
@@ -56,15 +83,27 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 The PSP GUI code is better structured than expected. The higher-level files (`ui_menu.c`, `filer.c`, `ui.c`) already use platform-agnostic abstractions:
 
-1. **Video output:** `video_driver->flipScreen()`, `video_driver->clearScreen()`, `video_driver->waitVsync()`
-2. **Input:** `pad_pressed(PLATFORM_PAD_UP)`, `pad_update()`, `pad_wait_clear()` — all platform-independent
-3. **Text:** `TEXT()` macro via `ui_text_driver` — already has PS2/Desktop drivers
+1. **Video output:** `video_driver->flipScreen()`, `video_driver->clearScreen()`, `video_driver->waitVsync()`, `video_driver->beginFrame()`, `video_driver->endFrame()`
+2. **Frame buffers:** `video_driver->drawFrame()`, `video_driver->showFrame()`, `video_driver->workFrame()` — no more global variables
+3. **Input:** `pad_pressed(PLATFORM_PAD_UP)`, `pad_update()`, `pad_wait_clear()` — all platform-independent
+4. **Text:** `TEXT()` macro via `ui_text_driver` — already has PS2/Desktop drivers
 
 ### What's PSP-Specific (Needs Porting)
 
 Only `ui_draw.c` is heavily PSP-coupled — it uses `sceGuDrawBufferList()` and direct VRAM pixel manipulation for every drawing primitive. This is the **single bottleneck** file.
 
 The file browser (`filer.c`) uses `sceIoDread()` for PSP directory enumeration and `readHomeButton()` for PSP system button detection. These need platform alternatives.
+
+### What Needs to Move to Common (Platform-Independent Data)
+
+These directories currently live under `src/psp/` but contain **no PSP-specific code** — they are pure C data arrays and portable logic that should be shared across all platforms:
+
+| Directory | Contents | Action |
+|-----------|----------|--------|
+| `src/psp/font/` | 10 bitmap font C arrays (ascii_14, latin1_14, graphic, logo, etc.) | Move to `src/common/font/` |
+| `src/psp/icon/` | 6 icon C arrays (cps_s/l, mvs_s/l, ncdz_s/l) | Move to `src/common/icon/` |
+| `src/psp/menu/` | 3 per-target menu definitions (cps.c, mvs.c, ncdz.c) | Move to `src/common/menu/` |
+| `src/psp/config/` | 3 per-target config logic (cps.c, mvs.c, ncdz.c) | Move to `src/common/config/` |
 
 ### Layered Architecture
 
@@ -259,7 +298,7 @@ PS2 uses gsKit for 2D rendering. Drawing primitive mapping:
 
 ### 2.5 Update CMakeLists.txt
 
-Modify the `NO_GUI` conditional to compile the right files:
+The current `NO_GUI=OFF` block in `CMakeLists.txt` uses `${PLATFORM_LOWER}/` prefix for **all** GUI files, which only works for PSP since only `src/psp/` has the full file tree. After moving shared data to common, it should become:
 
 ```cmake
 if (NO_GUI)
@@ -267,25 +306,48 @@ if (NO_GUI)
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
 else()
-    set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
+    # Font data files (shared across all platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/font/graphic.c
+        common/font/ascii_14p.c
+        common/font/font_s.c
+        common/font/bshadow.c
+        common/font/command.c
+        common/font/ascii_14.c
+        common/font/latin1_14.c
+        common/font/gbk_s14.c
+        common/font/gbk_tbl.c
+    )
+
+    # Icon files (target-specific, shared across platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/icon/${ICON_PREFIX}_s.c
+        common/icon/${ICON_PREFIX}_l.c
+    )
+
+    # Per-target menu/config (shared across platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/menu/${MENU_PREFIX}.c
+        common/config/${CONFIG_PREFIX}.c
+    )
+
+    # Portable GUI logic (shared across platforms)
+    set(COMMON_SRC ${COMMON_SRC}
         common/ui.c
         common/ui_menu.c
         common/filer.c
         common/config.c
-        common/wallpaper.c
-        common/menu/${TARGET_MENU}.c
-        common/config/${TARGET_CONFIG}.c
-        common/font/ascii_14.c
-        common/font/ascii_14p.c
-        common/font/latin1_14.c
-        common/font/graphic.c
-        common/font/logo.c
-        common/font/bshadow.c
-        common/font/font_s.c
+        common/png.c
+    )
+
+    # Platform-specific drawing primitives (one per platform)
+    set(OS_SRC ${OS_SRC}
+        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
     )
 endif()
 ```
+
+**Note:** The current CMakeLists.txt compiles fonts from `${PLATFORM_LOWER}/font/`, GUI from `${PLATFORM_LOWER}/`, and icons from `${PLATFORM_LOWER}/icon/`. The PSP build currently works with `NO_GUI=OFF` but PS2 and Desktop would fail because those directories don't exist under `src/ps2/` or `src/desktop/`.
 
 ### 2.6 PNG Loading
 
@@ -473,7 +535,7 @@ endif()
 
 ## File Creation Checklist
 
-### Completed (Emulator Core)
+### Completed (Emulator Core + Driver Abstraction)
 - [x] `src/cps1/sprite_common.h` — Shared declarations
 - [x] `src/cps1/sprite_common.c` — Platform-agnostic code
 - [x] `src/cps1/ps2_sprite.c` — PS2 GSKit rendering
@@ -482,73 +544,89 @@ endif()
 - [x] `src/cps2/sprite_common.c` — Platform-agnostic code
 - [x] `src/cps2/ps2_sprite.c` — PS2 GSKit rendering with Z-buffer masking
 - [x] `src/cps2/desktop_sprite.c` — SDL2 rendering with priority linked-lists
+- [x] `video_driver_t` — Added `drawFrame()`, `showFrame()`, `workFrame()`, `beginFrame()`, `endFrame()`, `frameAddr()`, `scissor()`
+- [x] Eliminated global `draw_frame`, `show_frame`, `work_frame` variables
+- [x] All CPS1/CPS2 `blit_finish()` updated to use vtable
+- [x] All PSP GUI files updated to use vtable (`ui_draw.c`, `ui.c`, `filer.c`, `ui_menu.c`, `png.c`, `adhoc.c`)
+- [x] `src/common/adhoc.c` updated to use vtable
+- [x] `src/mvs/biosmenu.c` updated to use vtable
+- [x] `src/common/state.c` updated to use vtable
 
-### GUI — Common (to create)
-- [ ] `src/common/font/` — Move font data (ascii_14.c, ascii_14p.c, latin1_14.c, graphic.c, logo.c, bshadow.c, font_s.c)
-- [ ] `src/common/font/font.h` — Shared font structures
-- [ ] `src/common/ui.c` — Portable UI framework (from psp/ui.c)
-- [ ] `src/common/ui_menu.c` — Portable menu system (from psp/ui_menu.c)
-- [ ] `src/common/filer.c` — Portable file browser (from psp/filer.c)
-- [ ] `src/common/config.c` — Portable config management (from psp/config.c)
-- [ ] `src/common/wallpaper.c` — Portable wallpaper system (from psp/wallpaper.c)
-- [ ] `src/common/menu/cps.c` — CPS menu definitions (from psp/menu/cps.c)
-- [ ] `src/common/menu/mvs.c` — MVS menu definitions (from psp/menu/mvs.c)
-- [ ] `src/common/menu/ncdz.c` — NCDZ menu definitions (from psp/menu/ncdz.c)
-- [ ] `src/common/config/cps.c` — CPS config (from psp/config/cps.c)
-- [ ] `src/common/config/mvs.c` — MVS config (from psp/config/mvs.c)
-- [ ] `src/common/config/ncdz.c` — NCDZ config (from psp/config/ncdz.c)
+### GUI — Move to Common (pure data, no platform code)
+- [ ] `src/common/font/` — Move 10 font data files from `src/psp/font/`
+- [ ] `src/common/icon/` — Move 6 icon data files from `src/psp/icon/`
+- [ ] `src/common/menu/` — Move 3 menu files from `src/psp/menu/` (cps.c, mvs.c, ncdz.c)
+- [ ] `src/common/config/` — Move 3 per-target config files from `src/psp/config/` (cps.c, mvs.c, ncdz.c)
 
-### GUI — Desktop (to create)
+### GUI — Extract Portable Logic to Common
+- [ ] `src/common/ui.c` — Extract from `src/psp/ui.c` (replace `scePower*` with `power_driver->`)
+- [ ] `src/common/ui_menu.c` — Extract from `src/psp/ui_menu.c` (minimal changes)
+- [ ] `src/common/filer.c` — Expand existing file (currently only `find_file()`), port full browser from `src/psp/filer.c`
+- [ ] `src/common/config.c` — Extract from `src/psp/config.c` (adjust path handling)
+- [ ] `src/common/png.c` — Extract from `src/psp/png.c` (needs portable PNG decode)
+
+### GUI — Platform-Specific Drawing (to create)
 - [ ] `src/desktop/desktop_ui_draw.c` — SDL2 drawing primitives, font rendering, icons
-
-### GUI — PS2 (to create)
 - [ ] `src/ps2/ps2_ui_draw.c` — gsKit drawing primitives, font rendering, icons
 
-### GUI — PSP (to modify)
+### GUI — PSP (to modify after common extraction)
 - [ ] `src/psp/ui_draw.c` — Keep as-is (PSP drawing backend)
-- [ ] `src/psp/ui.c` — Remove, use common/ui.c
-- [ ] `src/psp/ui_menu.c` — Remove, use common/ui_menu.c
-- [ ] `src/psp/filer.c` — Remove, use common/filer.c
-- [ ] `src/psp/config.c` — Remove, use common/config.c
+- [ ] `src/psp/ui.c` — Remove, use `common/ui.c`
+- [ ] `src/psp/ui_menu.c` — Remove, use `common/ui_menu.c`
+- [ ] `src/psp/filer.c` — Remove browser logic, use `common/filer.c`
+- [ ] `src/psp/config.c` — Remove, use `common/config.c`
 
 ---
 
 ## Recommended Task Order
 
-### Completed (Core Functionality)
+### Completed
 
-1. ✅ ~~MVS core for PS2/PC~~ (DONE)
-2. ✅ ~~NCDZ core for PS2/PC~~ (DONE)
-3. ✅ ~~CPS1 sprite rendering for PS2/PC~~ (DONE)
-4. ✅ ~~CPS2 sprite rendering for PS2/PC~~ (DONE)
+1. ✅ MVS core for PS2/PC
+2. ✅ NCDZ core for PS2/PC
+3. ✅ CPS1 sprite rendering for PS2/PC
+4. ✅ CPS2 sprite rendering for PS2/PC
+5. ✅ Video driver abstraction — `drawFrame()`, `showFrame()`, `workFrame()` vtable getters
+6. ✅ Eliminate global `draw_frame`/`show_frame`/`work_frame` variables
+7. ✅ `beginFrame()` / `endFrame()` lifecycle in `video_driver_t`
+8. ✅ `frameAddr()` / `scissor()` implemented in all 3 platform drivers
+9. ✅ All existing code updated to use `video_driver->` instead of globals
 
-### Next: Desktop GUI (Steps 1-6)
+### Next: Move Shared Data to Common (Step 0 — no code changes, just file moves)
 
-5. 🔲 Move font data to `src/common/font/`
-6. 🔲 Create `src/desktop/desktop_ui_draw.c` (drawing primitives + font rendering)
-7. 🔲 Move `ui.c` to common (progress bars, popups, messages)
-8. 🔲 Port file browser to common (replace `sceIoDread` with POSIX)
-9. 🔲 Move config system to common
-10. 🔲 Move menu system to common
-11. 🔲 Add PNG loading (`stb_image.h`)
-12. 🔲 Test complete Desktop GUI end-to-end
+10. 🔲 Move `src/psp/font/*.c` → `src/common/font/`
+11. 🔲 Move `src/psp/icon/*.c` → `src/common/icon/`
+12. 🔲 Move `src/psp/menu/*.c` → `src/common/menu/`
+13. 🔲 Move `src/psp/config/*.c` → `src/common/config/` (per-target configs)
+14. 🔲 Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
+15. 🔲 Verify PSP still builds with `NO_GUI=OFF`
 
-### Then: PS2 GUI (Step 7)
+### Next: Extract Portable GUI Logic (Step 1 — refactor PSP code)
 
-13. 🔲 Create `src/ps2/ps2_ui_draw.c` (gsKit drawing primitives)
-14. 🔲 Test complete PS2 GUI end-to-end
+16. 🔲 Extract `src/psp/ui.c` → `src/common/ui.c` (replace PSP-specific calls)
+17. 🔲 Extract `src/psp/ui_menu.c` → `src/common/ui_menu.c`
+18. 🔲 Extract `src/psp/filer.c` browser logic → `src/common/filer.c` (replace `sceIoDread` with POSIX)
+19. 🔲 Extract `src/psp/config.c` → `src/common/config.c`
+20. 🔲 Verify PSP still builds and runs correctly after extraction
 
-### Then: PSP Compatibility (Step 8)
+### Then: Desktop GUI (Step 2 — new platform drawing)
 
-15. 🔲 Refactor PSP to use common GUI files
-16. 🔲 Verify PSP still builds and runs correctly
+21. 🔲 Create `src/desktop/desktop_ui_draw.c` — SDL2 drawing primitives + font rendering
+22. 🔲 Add PNG loading for Desktop (`stb_image.h` or similar)
+23. 🔲 Build and test Desktop GUI end-to-end
+
+### Then: PS2 GUI (Step 3 — new platform drawing)
+
+24. 🔲 Create `src/ps2/ps2_ui_draw.c` — gsKit drawing primitives + font rendering
+25. 🔲 Add PNG loading for PS2
+26. 🔲 Build and test PS2 GUI end-to-end
 
 ### Finally: Polish
 
-17. 🔲 Save states on all platforms
-18. 🔲 Cheat system on all platforms
-19. 🔲 Command lists (optional)
-20. 🔲 Platform-specific optimizations
+27. 🔲 Save states on all platforms
+28. 🔲 Cheat system on all platforms
+29. 🔲 Command lists (optional)
+30. 🔲 Platform-specific optimizations
 
 ---
 
