@@ -6,6 +6,8 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 ## Current Status Summary
 
+> **Milestone: All emulator cores are fully ported to all platforms (PSP, PS2, Desktop).** The next phase is GUI/menu system porting.
+
 ### Emulator Core Porting
 
 | Emulator | PSP | PS2 | PC | Notes |
@@ -13,7 +15,7 @@ This document outlines the remaining work needed to complete the cross-platform 
 | **MVS** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
 | **NCDZ** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported |
 | **CPS1** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported (incl. stars) |
-| **CPS2** | ✅ Complete | ❌ Not started | ❌ Not started | Next priority - needs sprite refactoring |
+| **CPS2** | ✅ Complete | ✅ Core done | ✅ Core done | Sprite rendering ported (incl. Z-buffer masking) |
 
 ### Platform Drivers
 
@@ -117,35 +119,24 @@ work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes) = 278,528 bytes
                                           Total ≈ 1.5 MB
 ```
 
-### 1.2 Port CPS2 Sprite Rendering
+### 1.2 Port CPS2 Sprite Rendering ✅ COMPLETE
 
-**Current Structure:**
-- `src/cps2/psp_sprite.c` - Currently contains all sprite code (needs refactoring)
+**Structure (matching CPS1 pattern):**
+- `src/cps2/sprite_common.h` - Shared declarations (constants, structures, extern variables)
+- `src/cps2/sprite_common.c` - Platform-agnostic code (hash table management, software rendering)
+- `src/cps2/psp_sprite.c` - PSP-specific rendering (GU commands, swizzling)
+- `src/cps2/ps2_sprite.c` - PS2-specific rendering (GSKit primitives, Z-buffer via GS ZBUF register)
+- `src/cps2/desktop_sprite.c` - Desktop-specific rendering (SDL2, struct Vertex arrays)
 
-**Recommended first step:** Refactor similar to CPS1:
-1. Create `src/cps2/sprite_common.h` - Shared declarations
-2. Create `src/cps2/sprite_common.c` - Platform-agnostic code
-3. Update `src/cps2/psp_sprite.c` - Keep only PSP-specific code
-
-**Additionally required:**
-- Add `emu_layer_textures[]`, `emu_layer_textures_count`, and `emu_clut_info` to `src/cps2/cps2.c`
-- Add `TEXTURE_LAYER_INDEX` enum to `src/cps2/cps2.h`
-- Migrate PSP sprite code from old `workFrame(SCRBITMAP/TEX_SPR0)` API to new `textureLayer()` pattern
-
-**Files to create after refactoring:**
-- `src/cps2/sprite_common.h`
-- `src/cps2/sprite_common.c`
-- `src/cps2/ps2_sprite.c`
-- `src/cps2/desktop_sprite.c`
-
-**Reference:**
-- Use `src/cps1/sprite_common.c` and `src/cps1/sprite_common.h` as template for the refactoring
-- Use `src/cps1/ps2_sprite.c` and `src/cps1/desktop_sprite.c` as closest reference (same Capcom hardware family)
-- Use `src/mvs/ps2_sprite.c` and `src/mvs/desktop_sprite.c` for additional platform patterns
-
-**Estimated effort:**
-- Refactoring: 0.5 day
-- Per platform: 1-2 days (reduced due to shared code)
+**Completed work:**
+- Refactored `psp_sprite.c` into sprite_common + platform-specific files
+- Added `emu_layer_textures[]`, `emu_layer_textures_count`, and `emu_clut_info` to `src/cps2/cps2.c`
+- Added `TEXTURE_LAYER_INDEX` enum to `src/cps2/cps2.h`
+- PS2 sprite rendering with GSKit: priority linked-lists, Z-buffer masking via GS ZBUF register (ZTST modes)
+- Desktop sprite rendering with SDL2: priority linked-lists, CLUT batching, struct Vertex arrays
+- Implemented `desktop_clearFrame` for Z-buffer masking support
+- Implemented PS2 depth test functions (`enableDepthTest`, `disableDepthTest`, `clearDepthBuffer`, `clearColorBuffer`)
+- Unified cache format across all platforms (web converter, romcnv)
 
 #### CPS2 Key Differences from CPS1
 
@@ -200,18 +191,9 @@ work_frame ─┬─ scrbitmap    (512 × 272 × 2 bytes) = 278,528 bytes
 5. **Palette delay:** Some games (xmcota, msh, mshvsf, mvsc, xmvsf) buffer object palettes one frame behind — handled in vidhrdw.c, transparent to sprite code
 6. **Color conversion:** CPS2 uses BRGB 16-bit → `video_clut16[65536]` lookup → 15-bit RGB; this is in vidhrdw.c and is platform-agnostic
 
-### 1.3 Update CMakeLists.txt
+### 1.3 Update CMakeLists.txt ✅ COMPLETE
 
-CPS1 is already fully configured in CMakeLists.txt. For CPS2, add support for building on PS2 and PC platforms:
-
-```cmake
-if (${TARGET} STREQUAL "CPS2")
-    set(TARGET_SRC ${TARGET_SRC}
-        cps2/${PLATFORM_LOWER}_sprite.c
-        # ... other CPS2 files
-    )
-endif()
-```
+All four targets (MVS, CPS1, CPS2, NCDZ) are fully configured in CMakeLists.txt for all three platforms (PSP, PS2, Desktop). CPS2 uses `cps2/${PLATFORM_LOWER}_sprite.c` pattern like the other targets.
 
 ---
 
@@ -377,9 +359,9 @@ Once the GUI abstraction is in place, port the actual menu system.
 2. ✅ ~~NCDZ core for PS2/PC~~ (DONE)
 3. ✅ ~~CPS1 sprite rendering for PS2~~ (DONE)
 4. ✅ ~~CPS1 sprite rendering for PC~~ (DONE)
-5. 🔲 CPS2 sprite rendering refactoring (extract sprite_common)
-6. 🔲 CPS2 sprite rendering for PS2
-7. 🔲 CPS2 sprite rendering for PC
+5. ✅ ~~CPS2 sprite rendering refactoring (extract sprite_common)~~ (DONE)
+6. ✅ ~~CPS2 sprite rendering for PS2~~ (DONE)
+7. ✅ ~~CPS2 sprite rendering for PC~~ (DONE)
 
 ### Short-term (Basic GUI)
 
@@ -414,10 +396,10 @@ Once the GUI abstraction is in place, port the actual menu system.
 - [x] `src/cps1/desktop_sprite.c` - Created (SDL2 rendering)
 
 ### CPS2 Porting
-- [ ] `src/cps2/sprite_common.h` - Refactor from psp_sprite.c
-- [ ] `src/cps2/sprite_common.c` - Refactor from psp_sprite.c
-- [ ] `src/cps2/ps2_sprite.c`
-- [ ] `src/cps2/desktop_sprite.c`
+- [x] `src/cps2/sprite_common.h` - Created (shared declarations, hash tables, texture sizes)
+- [x] `src/cps2/sprite_common.c` - Created (platform-agnostic code, software rendering)
+- [x] `src/cps2/ps2_sprite.c` - Created (PS2 GSKit rendering with Z-buffer masking)
+- [x] `src/cps2/desktop_sprite.c` - Created (SDL2 rendering with priority linked-lists)
 
 ### GUI Abstraction
 - [ ] `src/common/gui_driver.h`
@@ -476,5 +458,8 @@ This is a valid approach for a "debug/development" platform.
 - `src/mvs/ps2_sprite.c` - PS2 sprite rendering example
 - `src/mvs/desktop_sprite.c` - SDL2 sprite rendering example
 - `src/cps1/sprite_common.c` - Example of platform-agnostic sprite code separation
+- `src/cps2/sprite_common.c` - CPS2 platform-agnostic sprite code (Z-buffer masking support)
+- `src/cps2/ps2_sprite.c` - CPS2 PS2 rendering with GS Z-buffer
+- `src/cps2/desktop_sprite.c` - CPS2 SDL2 rendering with priority linked-lists
 - `src/ncdz/sprite_common.c` - Another example of sprite code separation
 

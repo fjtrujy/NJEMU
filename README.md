@@ -59,10 +59,10 @@
 This repository contains the ongoing effort to bring NJEMU to multiple platforms:
 
 - **PSP** - Original platform, fully supported
-- **PS2** - Primary porting target, actively developed
-- **DESKTOP** - Development platform for easier debugging and testing
+- **PS2** - All four emulator cores ported and running
+- **DESKTOP** - All four emulator cores ported (SDL2-based, useful for development and debugging)
 
-The PC port using SDL serves primarily as a development and debugging tool, making it easier to test changes before deploying to the target console platforms (PSP and PS2).
+All four emulator cores (MVS, CPS1, CPS2, NCDZ) are now running on all three platforms. The PC port using SDL serves primarily as a development and debugging tool. The next milestone is porting the GUI/menu system — currently only available on PSP; other platforms use a stub UI for direct game loading.
 
 ### Architecture
 
@@ -80,10 +80,10 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 |----------|-----|-----|-----|
 | **MVS** | ✅ Full | ✅ Core | ✅ Core |
 | **CPS1** | ✅ Full | ✅ Core | ✅ Core |
-| **CPS2** | ✅ Full | ❌ | ❌ |
+| **CPS2** | ✅ Full | ✅ Core | ✅ Core |
 | **NCDZ** | ✅ Full | ✅ Core | ✅ Core |
 
-> **Note:** Currently MVS, NCDZ, and CPS1 cores have been ported to PS2 and PC. CPS2 is next. The menu/GUI system has not been ported yet - only the emulation core runs on the new platforms.
+> **Note:** All four emulator cores (MVS, CPS1, CPS2, NCDZ) have been ported to PS2 and PC. The menu/GUI system has not been ported yet — only the emulation core runs on the new platforms.
 
 📋 See [PORTING_PLAN.md](PORTING_PLAN.md) for detailed roadmap and remaining work.
 
@@ -108,8 +108,8 @@ Each target has specific setup requirements. See the linked README files for:
 | Platform | Description | Status |
 |----------|-------------|--------|
 | **PSP** | Sony PlayStation Portable | ✅ Original platform |
-| **PS2** | Sony PlayStation 2 | 🔄 Active development |
-| **DESKTOP** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
+| **PS2** | Sony PlayStation 2 | ✅ Core complete |
+| **DESKTOP** | PC/Desktop (SDL2) | ✅ Core complete |
 
 ### PSP Firmware Compatibility
 
