@@ -20,7 +20,9 @@
 
 void load_background(int number)
 {
+	video_driver->beginFrame(video_data);
 	ui_fill_frame(draw_frame, UI_PAL_BG2);
+	video_driver->endFrame(video_data);
 
 	draw_bar_shadow();
 
@@ -28,7 +30,9 @@ void load_background(int number)
 	hline_alpha(0, 479, 23, UI_COLOR(UI_PAL_FRAME), 12);
 	hline_alpha(0, 479, 24, UI_COLOR(UI_PAL_FRAME), 10);
 
+	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
+	video_driver->endFrame(video_data);
 }
 
 
@@ -38,7 +42,9 @@ void load_background(int number)
 
 void show_background(void)
 {
+	video_driver->beginFrame(video_data);
 	video_driver->transferWorkFrame(video_data, &full_rect, &full_rect);
+	video_driver->endFrame(video_data);
 }
 
 
@@ -437,7 +443,9 @@ void msg_screen_init(int wallpaper, int icon, const char *title)
 	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), icon);
 	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), title);
 	draw_dialog(14, 37, 465, 259);
+	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, draw_frame, work_frame, &full_rect, &full_rect);
+	video_driver->endFrame(video_data);
 }
 
 
@@ -765,7 +773,9 @@ int messagebox(int number)
 
 	mb = messagebox_init(number);
 
+	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
+	video_driver->endFrame(video_data);
 
 	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
 
@@ -1077,7 +1087,9 @@ int help(int number)
 
 	help = help_init(number);
 
+	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, show_frame, draw_frame, &full_rect, &full_rect);
+	video_driver->endFrame(video_data);
 
 	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
 	draw_dialog(59, 34, 419, 264);

@@ -19,6 +19,8 @@ video_driver_t video_null = {
 	NULL, // free
 	NULL, // waitVsync
 	NULL, // flipScreen
+	NULL, // beginFrame
+	NULL, // endFrame
 	NULL, // frameAddr
 	NULL, // workFrame
 	NULL, // textureLayer

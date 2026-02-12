@@ -540,20 +540,16 @@ static void ps2_flipScreen(void *data, bool vsync)
 	}
 }
 
-
-/*--------------------------------------------------------
-	Get VRAM Address
---------------------------------------------------------*/
-
-static void *ps2_frameAddr(void *data, void *frame, int x, int y)
+static void ps2_beginFrame(void *data)
 {
-	// TODO: FJTRUJY so far just used by the menu
-// 		return (void *)(((uint32_t)frame | 0x44000000) + ((x + (y << 9)) << 1));
-	return NULL;
+	/* No-op: gsKit queues commands implicitly */
 }
 
-static void ps2_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
+static void ps2_endFrame(void *data)
 {
+	/* No-op: gsKit queue is executed in flipScreen */
+}
+
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	gsKit_set_scissor(ps2->gsGlobal, GS_SETREG_SCISSOR(left, right, top, bottom));
 }
@@ -1129,6 +1125,8 @@ video_driver_t video_ps2 = {
 	ps2_free,
 	ps2_waitVsync,
 	ps2_flipScreen,
+	ps2_beginFrame,
+	ps2_endFrame,
 	ps2_frameAddr,
 	ps2_workFrame,
 	ps2_textureLayer,

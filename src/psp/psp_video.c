@@ -210,6 +210,26 @@ static void psp_flipScreen(void *data, bool vsync)
 }
 
 /*--------------------------------------------------------
+		Begin Frame (start GPU command list)
+--------------------------------------------------------*/
+
+static void psp_beginFrame(void *data)
+{
+	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
+	sceGuStart(GU_DIRECT, gulist);
+}
+
+/*--------------------------------------------------------
+		End Frame (finish and sync GPU command list)
+--------------------------------------------------------*/
+
+static void psp_endFrame(void *data)
+{
+	sceGuFinish();
+	sceGuSync(0, GU_SYNC_FINISH);
+}
+
+/*--------------------------------------------------------
 		Get VRAM Address
 --------------------------------------------------------*/
 
@@ -317,8 +337,6 @@ static void psp_copyRect(void *data, void *src, void *dst, RECT *src_rect,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	// sceGuStart(GU_DIRECT, gulist);
-
 	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
 				 dst_rect->bottom);
@@ -373,8 +391,6 @@ static void psp_startWorkFrame(void *data, uint32_t color)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 
-	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
-	sceGuStart(GU_DIRECT, gulist);
 	sceGuDrawBufferList(GU_PSM_5551, (void *)psp->draw_frame, BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
@@ -401,11 +417,6 @@ static void psp_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	psp_copyRect(psp, (void *)psp->scrbitmap, (void *)psp->draw_frame, src_rect,
 				 dst_rect);
 
-	size_t listSize = sceGuFinish();
-	u_int64_t tick = ticker_driver->currentUs(ticker_data);
-	sceGuSync(0, GU_SYNC_FINISH);
-	// printf("Transfer Work Frame GU List Size: %zu bytes, time: %llu us\n",
-	// listSize, ticker_driver->currentUs(ticker_data) - tick);
 	psp->current_tex_layer = NULL;
 	psp->current_clut = NULL;
 }
@@ -423,8 +434,6 @@ static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect,
 	dw = dst_rect->right - dst_rect->left;
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
-
-	// sceGuStart(GU_DIRECT, gulist);
 
 	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
@@ -490,8 +499,6 @@ static void psp_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
 	dw = dst_rect->right - dst_rect->left;
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
-
-	// sceGuStart(GU_DIRECT, gulist);
 
 	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
@@ -561,7 +568,6 @@ static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	// sceGuStart(GU_DIRECT, gulist);
 	sceGuDrawBufferList(dst_fmt, dst, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
 				 dst_rect->bottom);
@@ -694,6 +700,8 @@ video_driver_t video_psp = {
 	psp_free,
 	psp_waitVsync,
 	psp_flipScreen,
+	psp_beginFrame,
+	psp_endFrame,
 	psp_frameAddr,
 	psp_workFrame,
 	psp_textureLayer,

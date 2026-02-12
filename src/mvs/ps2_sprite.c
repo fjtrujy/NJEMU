@@ -107,6 +107,7 @@ void blit_start(int start, int end)
 		if (clear_spr_texture) blit_clear_spr_sprite();
 		if (clear_fix_texture) blit_clear_fix_sprite();
 
+		video_driver->beginFrame(video_data);
 		video_driver->startWorkFrame(video_data, CNVCOL15TO32(video_palette[4095]));
 		video_driver->scissor(video_data, 24, 16, 336, 240);
 	}
@@ -120,6 +121,7 @@ void blit_start(int start, int end)
 void blit_finish(void)
 {
 	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &mvs_clip[option_stretch]);
+	video_driver->endFrame(video_data);
 }
 
 

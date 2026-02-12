@@ -167,6 +167,7 @@ void blit_start(int high_layer)
 	scrollh_num = 0;
 
 	/* Start a new work frame via the video driver */
+	video_driver->beginFrame(video_data);
 	video_driver->startWorkFrame(video_data, 0);
 	video_driver->scissor(video_data, 64, 16, 448, 240);
 }
@@ -195,6 +196,7 @@ void blit_finish(void)
 		else
 			video_driver->transferWorkFrame(video_data, &cps_src_clip, &cps_clip[option_stretch]);
 	}
+	video_driver->endFrame(video_data);
 }
 
 

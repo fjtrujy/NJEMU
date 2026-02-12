@@ -199,9 +199,19 @@ static void desktop_flipScreen(void *data, bool vsync)
 	SDL_RenderPresent(desktop->renderer);
 }
 
+static void desktop_beginFrame(void *data)
+{
+	/* No-op: SDL2 doesn't use command lists */
+}
+
+static void desktop_endFrame(void *data)
+{
+	/* No-op: SDL2 doesn't use command lists */
+}
+
 
 /*--------------------------------------------------------
-	Get VRAM Address
+		Get VRAM Address
 --------------------------------------------------------*/
 
 static void *desktop_frameAddr(void *data, void *frame, int x, int y)
@@ -495,6 +505,8 @@ video_driver_t video_desktop = {
 	desktop_free,
 	desktop_waitVsync,
 	desktop_flipScreen,
+	desktop_beginFrame,
+	desktop_endFrame,
 	desktop_frameAddr,
 	desktop_workFrame,
 	desktop_textureLayer,

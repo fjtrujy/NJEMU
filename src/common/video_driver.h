@@ -127,6 +127,11 @@ typedef struct video_driver
    	void (*free)(void *data);
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
+	/* Begin a new rendering frame (e.g. start GPU command list).
+	 * All draw calls between beginFrame/endFrame just enqueue commands. */
+	void (*beginFrame)(void *data);
+	/* End the current rendering frame (e.g. finish and sync GPU command list). */
+	void (*endFrame)(void *data);
 	void *(*frameAddr)(void *data, void *frame, int x, int y);
 	void *(*workFrame)(void *data);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
