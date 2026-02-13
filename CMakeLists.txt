@@ -181,8 +181,11 @@ set(COMMON_SRC
     common/input_driver.c
     common/video_driver.h
     common/video_driver.c
+    common/ui_draw_driver.h
+    common/ui_draw_driver.c
     common/ui_text_driver.h
     common/ui_text_driver.c
+    common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
     common/sound.h
@@ -229,11 +232,17 @@ else()
         common/font/gbk_tbl.c
     )
 
-    # GUI source files
+    # GUI source files (common portable code)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/ui_draw.h
+        common/ui_draw.c
+    )
+
+    # GUI source files (platform-specific)
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/config.c
         ${PLATFORM_LOWER}/ui.c
-        ${PLATFORM_LOWER}/ui_draw.c
+        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
         ${PLATFORM_LOWER}/ui_menu.c
         ${PLATFORM_LOWER}/png.c
     )

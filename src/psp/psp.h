@@ -41,7 +41,7 @@
 
 #include "psp/config.h"
 #include "psp/ui.h"
-#include "psp/ui_draw.h"
+#include "common/ui_draw.h"
 #include "psp/ui_menu.h"
 #include "psp/psp_video.h"
 #include "psp/png.h"

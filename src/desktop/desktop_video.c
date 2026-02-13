@@ -536,4 +536,10 @@ video_driver_t video_desktop = {
 	desktop_disableDepthTest,
 	desktop_clearDepthBuffer,
 	desktop_clearColorBuffer,
+	NULL, // drawUISprite
+	NULL, // drawUILine
+	NULL, // drawUILineGradient
+	NULL, // drawUIRect
+	NULL, // fillUIRect
+	NULL, // fillUIRectGradient
 };

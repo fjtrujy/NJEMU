@@ -45,17 +45,18 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 | Component | PSP | PS2 | PC | Location | Notes |
 |-----------|-----|-----|-----|----------|-------|
-| Drawing primitives (`ui_draw.c`) | ✅ 2434 lines | ❌ | ❌ | `src/psp/` only | Heavily PSP-specific (sceGu). **Bottleneck file.** |
+| Drawing primitives (`ui_draw.c`) | ✅ 1824 lines | ❌ | ❌ | `src/common/` | Portable — uses `ui_draw_driver`. PSP backend in `psp_ui_draw.c`. |
 | Menu system (`ui_menu.c`) | ✅ 2667 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (uses `video_driver->`, `pad_pressed()`) |
 | File browser (`filer.c`) | ✅ 1396 lines | ❌ | ❌ | `src/psp/` only | Uses `sceIoDread` for dirs |
 | UI framework (`ui.c`) | ✅ 1105 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (dialogs, progress, popups) |
 | Configuration (`config.c`) | ✅ 555 lines | ❌ | ❌ | `src/psp/` only | Portable logic, PSP paths |
 | PNG handling (`png.c`) | ✅ | ❌ | ❌ | `src/psp/` only | PSP-specific texture upload |
-| Font data (`font/*.c`) | ✅ | — | — | `src/psp/font/` only | C arrays, no platform deps — **needs move to common** |
-| Icon data (`icon/*.c`) | ✅ | — | — | `src/psp/icon/` only | C arrays, per-target — **needs move to common** |
-| Per-system menus (`menu/*.c`) | ✅ | — | — | `src/psp/menu/` only | Pure data/logic — **needs move to common** |
-| Per-system config (`config/*.c`) | ✅ | — | — | `src/psp/config/` only | Pure data/logic — **needs move to common** |
+| Font data (`font/*.c`) | ✅ | ✅ | ✅ | `src/common/font/` | C arrays, platform-independent — **moved to common** |
+| Icon data (`icon/*.c`) | ✅ | ✅ | ✅ | `src/common/icon/` | C arrays, per-target — **moved to common** |
+| Per-system menus (`menu/*.c`) | ✅ | ✅ | ✅ | `src/common/menu/` | Pure data/logic — **moved to common** |
+| Per-system config (`config/*.c`) | ✅ | ✅ | ✅ | `src/common/config/` | Pure data/logic — **moved to common** |
 | Localization (`*_ui_text.c`) | ✅ | ✅ | ✅ | Per-platform | `ui_text_driver` already abstracted |
+| UI draw driver interface | ✅ | ✅ | ✅ | `src/common/ui_draw_driver.h/c` | 12 function pointers + null driver |
 | Cross-platform GUI API | ✅ | — | — | `src/common/main_ui_draw.h` | Declares all ~34 GUI functions |
 
 **Total PSP GUI code: ~11,000 lines** (core files) + font data + per-system menu/config data.
@@ -65,16 +66,22 @@ This document outlines the remaining work needed to complete the cross-platform 
 ```
 ✅ DONE                              ❌ REMAINING
 ─────────────────────────            ──────────────────────────────
-Emulator cores (all 4)               ui_draw_driver_t interface
-Platform drivers (all 9)             Refactor ui_draw.c → common (portable)
-Video driver vtable                  PSP ui_draw_driver (wrap sceGu)
-Frame buffer abstraction             Desktop ui_draw_driver (SDL2)
-beginFrame/endFrame                  PS2 ui_draw_driver (gsKit)
-frameAddr/scissor                    Font/icon/menu/config data → common
-PSP GUI (fully working)              Portable GUI logic → src/common/
-main_ui_draw.h (API contract)        CMake NO_GUI for PS2/Desktop
-showFrame removed (no callers)       File browser POSIX porting
-                                     PNG loading cross-platform
+Emulator cores (all 4)               Desktop ui_draw_driver (SDL2)
+Platform drivers (all 9)             PS2 ui_draw_driver (gsKit)
+Video driver vtable                  Portable GUI logic → src/common/
+Frame buffer abstraction             CMake NO_GUI for PS2/Desktop
+beginFrame/endFrame                  File browser POSIX porting
+frameAddr/scissor                    PNG loading cross-platform
+PSP GUI (fully working)
+main_ui_draw.h (API contract)
+showFrame removed (no callers)
+ui_draw_driver_t interface
+Font/icon data → common
+Menu/config data → common
+font_t.h extracted to common
+ui_draw.c refactored → common
+PSP ui_draw_driver backend
+CMake wired: common + psp backend
 ```
 
 ---
@@ -491,44 +498,44 @@ endif()
 
 **Goal:** Create the abstraction layer and move shared data to common
 
-1. [ ] Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` struct with ~8 function pointers:
-   - `init`, `free`, `uploadTexture`, `drawSprite`, `fillRect`, `fillRectGradient`, `drawLine`, `drawLineGradient`, `drawRect`
-2. [ ] Create `src/common/ui_draw_driver.c` — global `ui_draw_driver` pointer + null driver
+1. [x] Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` struct with ~12 function pointers:
+   - `init`, `term`, `uploadTexture`, `clearTexture`, `getTextureBasePtr`, `drawSprite`, `drawLine`, `drawLineGradient`, `drawRect`, `fillRect`, `fillRectGradient`, `setScissor`
+2. [x] Create `src/common/ui_draw_driver.c` — global `ui_draw_driver` pointer + null driver
 3. [x] Move font data files to `src/common/font/` (ascii_14.c, ascii_14p.c, latin1_14.c, graphic.c, logo.c, bshadow.c, font_s.c, etc.)
 4. [x] Move icon data files to `src/common/icon/` (cps_s/l.c, mvs_s/l.c, ncdz_s/l.c)
-5. [ ] Move menu data to `src/common/menu/` (cps.c, mvs.c, ncdz.c)
-6. [ ] Move per-target config to `src/common/config/` (cps.c, mvs.c, ncdz.c)
+5. [x] Move menu data to `src/common/menu/` (cps.c, mvs.c, ncdz.c)
+6. [x] Move per-target config to `src/common/config/` (cps.c, mvs.c, ncdz.c)
 7. [x] Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
-8. [ ] Verify PSP still builds with `NO_GUI=OFF`
+8. [x] Verify PSP still builds with `NO_GUI=OFF`
 
 ### Step 2: Make `ui_draw.c` Portable
 
 **Goal:** Refactor `ui_draw.c` to use `ui_draw_driver` instead of sceGu directly
 
-9. [ ] Copy `src/psp/ui_draw.c` → `src/common/ui_draw.c`
-10. [ ] Replace the 4 VRAM texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) with CPU-side buffers + `uploadTexture()` calls
-11. [ ] Replace all `sceGuStart`/`sceGuFinish`/`sceGuSync` boilerplate blocks with driver calls:
+9. [x] Copy `src/psp/ui_draw.c` → `src/common/ui_draw.c`
+10. [x] Replace the 4 VRAM texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) with CPU-side buffers + `uploadTexture()` calls
+11. [x] Replace all `sceGuStart`/`sceGuFinish`/`sceGuSync` boilerplate blocks with driver calls:
     - `internal_font_putc` → `ui_draw_driver->drawSprite()`
     - `hline`/`vline` + alpha/gradient variants → `ui_draw_driver->drawLine()`/`drawLineGradient()`
     - `boxfill`/`boxfill_alpha`/`boxfill_gradation` → `ui_draw_driver->fillRect()`/`fillRectGradient()`
     - `box` → `ui_draw_driver->drawRect()`
     - `logo()` → `ui_draw_driver->drawSprite()`
-12. [ ] Remove all `#include <pspgu.h>` and sceGu references from common `ui_draw.c`
-13. [ ] Verify the common `ui_draw.c` compiles with no platform-specific headers
+12. [x] Remove all `#include <pspgu.h>` and sceGu references from common `ui_draw.c`
+13. [x] Verify the common `ui_draw.c` compiles with no platform-specific headers
 
 ### Step 3: PSP `ui_draw_driver` Backend
 
 **Goal:** Make PSP work with the new driver interface (regression test)
 
-14. [ ] Create `src/psp/psp_ui_draw.c` — implement `ui_draw_driver_t` wrapping existing sceGu calls:
+14. [x] Create `src/psp/psp_ui_draw.c` — implement `ui_draw_driver_t` wrapping existing sceGu calls:
     - `psp_ui_draw_init()` — set up VRAM texture slots (same as current `ui_init` GPU setup)
     - `psp_ui_draw_uploadTexture()` — copy pixel buffer to VRAM at `0x44000000`
     - `psp_ui_draw_drawSprite()` — `sceGuStart` + tex setup + vertex + `sceGuDrawArray` + `sceGuFinish`
     - `psp_ui_draw_fillRect()` — colored rectangle via sceGu
     - `psp_ui_draw_drawLine()` — line via sceGu
     - etc.
-15. [ ] Wire PSP driver in `psp_platform.c` — `ui_draw_driver = &psp_ui_draw_driver;`
-16. [ ] Build and test PSP with `NO_GUI=OFF` — must be identical to before
+15. [x] Wire PSP driver in `psp_video.c` — `ui_draw_driver = &psp_ui_draw_driver;` (guarded by `#ifndef NO_GUI`)
+16. [x] Build and test PSP with `NO_GUI=OFF` — must be identical to before
 
 ### Step 4: Desktop `ui_draw_driver` Backend
 
@@ -677,12 +684,12 @@ endif()
 ### GUI — Move to Common (pure data, no platform code)
 - [x] `src/common/font/` — Move 11 font data files from `src/psp/font/`
 - [x] `src/common/icon/` — Move 6 icon data files from `src/psp/icon/`
-- [ ] `src/common/menu/` — Move 3 menu files from `src/psp/menu/` (cps.c, mvs.c, ncdz.c)
-- [ ] `src/common/config/` — Move 3 per-target config files from `src/psp/config/` (cps.c, mvs.c, ncdz.c)
+- [x] `src/common/menu/` — Move 3 menu files from `src/psp/menu/` (cps.c, mvs.c, ncdz.c)
+- [x] `src/common/config/` — Move 3 per-target config files from `src/psp/config/` (cps.c, mvs.c, ncdz.c)
 
 ### GUI — Extract Portable Logic to Common
-- [ ] `src/common/ui_draw_driver.h` — Define `ui_draw_driver_t` interface (~8 function pointers)
-- [ ] `src/common/ui_draw_driver.c` — Global `ui_draw_driver` pointer + null driver
+- [x] `src/common/ui_draw_driver.h` — Define `ui_draw_driver_t` interface (~12 function pointers)
+- [x] `src/common/ui_draw_driver.c` — Global `ui_draw_driver` pointer + null driver
 - [ ] `src/common/ui_draw.c` — Refactor from `src/psp/ui_draw.c` — replace all sceGu with `ui_draw_driver->` calls
 - [ ] `src/common/ui.c` — Extract from `src/psp/ui.c` (replace `scePower*` with `power_driver->`)
 - [ ] `src/common/ui_menu.c` — Extract from `src/psp/ui_menu.c` (minimal changes)
@@ -720,14 +727,14 @@ endif()
 
 ### Next: Create `ui_draw_driver` Interface + Move Shared Data (Step 1)
 
-10. 🔲 Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` with ~8 function pointers
-11. 🔲 Create `src/common/ui_draw_driver.c` — global pointer + null driver
+10. ✅ Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` with ~12 function pointers
+11. ✅ Create `src/common/ui_draw_driver.c` — global pointer + null driver
 12. ✅ Move `src/psp/font/*.c` → `src/common/font/`
 13. ✅ Move `src/psp/icon/*.c` → `src/common/icon/`
-14. 🔲 Move `src/psp/menu/*.c` → `src/common/menu/`
-15. 🔲 Move `src/psp/config/*.c` → `src/common/config/` (per-target configs)
+14. ✅ Move `src/psp/menu/*.c` → `src/common/menu/`
+15. ✅ Move `src/psp/config/*.c` → `src/common/config/` (per-target configs)
 16. ✅ Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
-17. 🔲 Verify PSP still builds with `NO_GUI=OFF`
+17. ✅ Verify PSP still builds with `NO_GUI=OFF`
 
 ### Then: Make `ui_draw.c` Portable (Step 2)
 

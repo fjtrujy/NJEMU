@@ -1163,4 +1163,10 @@ video_driver_t video_ps2 = {
 	ps2_disableDepthTest,
 	ps2_clearDepthBuffer,
 	ps2_clearColorBuffer,
+	NULL, // drawUISprite
+	NULL, // drawUILine
+	NULL, // drawUILineGradient
+	NULL, // drawUIRect
+	NULL, // fillUIRect
+	NULL, // fillUIRectGradient
 };

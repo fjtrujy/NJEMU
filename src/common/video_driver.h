@@ -159,6 +159,18 @@ typedef struct video_driver
 	void (*clearDepthBuffer)(void *data);
 	void (*clearColorBuffer)(void *data);
 
+	/* 2D UI drawing primitives (used by ui_draw_driver backends) */
+	void (*drawUISprite)(void *data, void *tex, int tex_format, int tex_swizzled,
+	                    int su, int sv, int sw, int sh,
+	                    int dx, int dy, int dw, int dh, int blend);
+	void (*drawUILine)(void *data, int x1, int y1, int x2, int y2, uint32_t color);
+	void (*drawUILineGradient)(void *data, int x1, int y1, int x2, int y2,
+	                          uint32_t color1, uint32_t color2);
+	void (*drawUIRect)(void *data, int x, int y, int w, int h, uint32_t color);
+	void (*fillUIRect)(void *data, int x, int y, int w, int h, uint32_t color);
+	void (*fillUIRectGradient)(void *data, int x, int y, int w, int h,
+	                          uint32_t color1, uint32_t color2, int direction);
+
 } video_driver_t;
 
 extern int platform_cpuclock;

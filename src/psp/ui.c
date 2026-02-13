@@ -8,6 +8,7 @@
 
 #include "psp.h"
 #include "stdarg.h"
+#include "common/ui_draw_driver.h"
 
 
 /******************************************************************************
@@ -22,7 +23,6 @@ void load_background(int number)
 {
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(video_driver->drawFrame(video_data), UI_PAL_BG2);
-	video_driver->endFrame(video_data);
 
 	draw_bar_shadow();
 
@@ -30,7 +30,6 @@ void load_background(int number)
 	hline_alpha(0, 479, 23, UI_COLOR(UI_PAL_FRAME), 12);
 	hline_alpha(0, 479, 24, UI_COLOR(UI_PAL_FRAME), 10);
 
-	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 	video_driver->endFrame(video_data);
 }
@@ -42,9 +41,7 @@ void load_background(int number)
 
 void show_background(void)
 {
-	video_driver->beginFrame(video_data);
 	video_driver->transferWorkFrame(video_data, &full_rect, &full_rect);
-	video_driver->endFrame(video_data);
 }
 
 
@@ -276,11 +273,13 @@ void init_progress(int total, const char *text)
 	progress_total   = total;
 	strcpy(progress_message, text);
 
+	video_driver->beginFrame(video_data);
 	draw_dialog(240-158, 136-26, 240+158, 136+26);
 	boxfill(240-151, 138+2, 240+151, 138+14, 0, 0, 0);
 
 	uifont_print_shadow_center(118, 255,255,255, text);
 	draw_battery_status(1);
+	video_driver->endFrame(video_data);
 
 	video_driver->flipScreen(video_data, 1);
 }
@@ -294,6 +293,7 @@ void update_progress(void)
 {
 	int width = (++progress_current * 100 / progress_total) * 3;
 
+	video_driver->beginFrame(video_data);
 	show_background();
 
 	draw_dialog(240-158, 136-26, 240+158, 136+26);
@@ -303,6 +303,7 @@ void update_progress(void)
 	draw_battery_status(1);
 
 	boxfill(240-150, 138+3, 240-150+width-1, 138+13, 128, 128, 128);
+	video_driver->endFrame(video_data);
 
 	video_driver->flipScreen(video_data, 1);
 }
@@ -314,6 +315,7 @@ void update_progress(void)
 
 void show_progress(const char *text)
 {
+	video_driver->beginFrame(video_data);
 	show_background();
 
 	draw_dialog(240-158, 136-26, 240+158, 136+26);
@@ -327,6 +329,7 @@ void show_progress(const char *text)
 		int width = (progress_current * 100 / progress_total) * 3;
 		boxfill(240-150, 138+3, 240-150+width-1, 138+13, 128, 128, 128);
 	}
+	video_driver->endFrame(video_data);
 
 	video_driver->flipScreen(video_data, 1);
 }
@@ -440,10 +443,10 @@ void msg_screen_init(int wallpaper, int icon, const char *title)
 	memset(msg_lines, 0, sizeof(msg_lines));
 
 	load_background(wallpaper);
+	video_driver->beginFrame(video_data);
 	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), icon);
 	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), title);
 	draw_dialog(14, 37, 465, 259);
-	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 	video_driver->endFrame(video_data);
 }
@@ -510,12 +513,14 @@ void msg_printf(const char *text, ...)
 	msg_g[cy] = text_g;
 	msg_b[cy] = text_b;
 
+	video_driver->beginFrame(video_data);
 	show_background();
 	draw_battery_status(1);
 	draw_volume_status(1);
 
 	for (y = 0; y <= cy; y++)
 		uifont_print(MIN_X, MIN_Y + y * 16, msg_r[y], msg_g[y], msg_b[y], msg_lines[y]);
+	video_driver->endFrame(video_data);
 
 	if (buf[strlen(buf) - 1] == '\n')
 	{
@@ -775,7 +780,6 @@ int messagebox(int number)
 
 	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
-	video_driver->endFrame(video_data);
 
 	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
 
@@ -812,6 +816,7 @@ int messagebox(int number)
 		uifont_print_shadow_center(sy + (i << 4), r, g, b, mb->mes[i].text);
 	}
 
+	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
 	pad_wait_clear();
 
@@ -1089,7 +1094,6 @@ int help(int number)
 
 	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
-	video_driver->endFrame(video_data);
 
 	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
 	draw_dialog(59, 34, 419, 264);
@@ -1109,6 +1113,7 @@ int help(int number)
 
 	uifont_print_shadow_center(240, UI_COLOR(UI_PAL_SELECT), TEXT(PRESS_ANY_BUTTON_TO_RETURN_TO_MENU));
 
+	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
 	pad_wait_press(PAD_WAIT_INFINITY);
 	video_driver->flipScreen(video_data, 1);

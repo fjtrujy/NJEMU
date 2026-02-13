@@ -169,11 +169,11 @@ typedef struct {
 #define INCLUDE_GAMECFG_STRUCT
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "menu/ncdz.c"
+#include "common/menu/ncdz.c"
 #endif
 
 #undef INCLUDE_GAMECFG_STRUCT
@@ -192,11 +192,11 @@ static int menu_gamecfg(void)
 #define INCLUDE_GAMECFG_MENU
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "menu/ncdz.c"
+#include "common/menu/ncdz.c"
 #endif
 
 #undef INCLUDE_GAMECFG_MENU
@@ -1368,11 +1368,11 @@ enum
 #define INCLUDE_KEYCFG_STRUCT
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "menu/ncdz.c"
+#include "common/menu/ncdz.c"
 #endif
 
 #undef INCLUDE_KEYCFG_STRUCT
@@ -1395,11 +1395,11 @@ static int menu_keycfg(void)
 #define INCLUDE_KEYCFG_MENU
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "menu/ncdz.c"
+#include "common/menu/ncdz.c"
 #endif
 
 #undef INCLUDE_KEYCFG_MENU
@@ -1787,9 +1787,9 @@ static int menu_dipswitch(void)
 #define INCLUDE_LOAD_DIPSWITCH
 
 #if (EMU_SYSTEM == CPS1)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #endif
 
 #undef INCLUDE_LOAD_DIPSWITCH
@@ -1973,9 +1973,9 @@ static int menu_dipswitch(void)
 #define INCLUDE_SAVE_DIPSWITCH
 
 #if (EMU_SYSTEM == CPS1)
-#include "menu/cps.c"
+#include "common/menu/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "menu/mvs.c"
+#include "common/menu/mvs.c"
 #endif
 
 #undef INCLUDE_SAVE_DIPSWITCH

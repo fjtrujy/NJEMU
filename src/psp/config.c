@@ -69,11 +69,11 @@ static int ini_version;
 #define INCLUDE_INIFILENAME
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "config/cps.c"
+#include "common/config/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "config/mvs.c"
+#include "common/config/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "config/ncdz.c"
+#include "common/config/ncdz.c"
 #endif
 
 #undef INCLUDE_INIFILENAME
@@ -102,11 +102,11 @@ static cfg2_type default_options2[] =
 #define INCLUDE_CONFIG_STRUCT
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "config/cps.c"
+#include "common/config/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "config/mvs.c"
+#include "common/config/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "config/ncdz.c"
+#include "common/config/ncdz.c"
 #endif
 
 #undef INCLUDE_CONFIG_STRUCT
@@ -489,11 +489,11 @@ void load_gamecfg(const char *name)
 #define INCLUDE_SETUP_CONFIG_STRUCT
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "config/cps.c"
+#include "common/config/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "config/mvs.c"
+#include "common/config/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "config/ncdz.c"
+#include "common/config/ncdz.c"
 #endif
 
 #undef INCLUDE_SETUP_CONFIG_STRUCT
@@ -507,9 +507,9 @@ void load_gamecfg(const char *name)
 #define INCLUDE_SETUP_DIPSWITCH
 
 #if (EMU_SYSTEM == CPS1)
-#include "config/cps.c"
+#include "common/config/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "config/mvs.c"
+#include "common/config/mvs.c"
 #endif
 
 #undef INCLUDE_SETUP_DIPSWITCH
@@ -542,11 +542,11 @@ void save_gamecfg(const char *name)
 #define INCLUDE_SETUP_CONFIG_STRUCT
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "config/cps.c"
+#include "common/config/cps.c"
 #elif (EMU_SYSTEM == MVS)
-#include "config/mvs.c"
+#include "common/config/mvs.c"
 #elif (EMU_SYSTEM == NCDZ)
-#include "config/ncdz.c"
+#include "common/config/ncdz.c"
 #endif
 
 #undef INCLUDE_SETUP_CONFIG_STRUCT

@@ -46,6 +46,7 @@ typedef struct psp_video
 
 	texture_layer_t *current_tex_layer;
 	uint16_t *current_clut;
+	int frame_active;  /* assert: beginFrame/endFrame called exactly once per frame */
 } psp_video_t;
 
 static uint16_t next_pow2(uint16_t v)
@@ -193,7 +194,9 @@ static void psp_free(void *data)
 		Wait for VSYNC
 --------------------------------------------------------*/
 
-static void psp_waitVsync(void *data) { sceDisplayWaitVblankStart(); }
+static void psp_waitVsync(void *data) { 
+	sceDisplayWaitVblankStart(); 
+}
 
 /*--------------------------------------------------------
 		Flip Screen
@@ -215,8 +218,13 @@ static void psp_flipScreen(void *data, bool vsync)
 
 static void psp_beginFrame(void *data)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	assert(!psp->frame_active && "beginFrame called while frame already active");
+	psp->frame_active = 1;
 	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
 	sceGuStart(GU_DIRECT, gulist);
+	sceGuDrawBufferList(pixel_format, (void *)psp->draw_frame, BUF_WIDTH);
+	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 }
 
 /*--------------------------------------------------------
@@ -225,6 +233,9 @@ static void psp_beginFrame(void *data)
 
 static void psp_endFrame(void *data)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	assert(psp->frame_active && "endFrame called without matching beginFrame");
+	psp->frame_active = 0;
 	sceGuFinish();
 	sceGuSync(0, GU_SYNC_FINISH);
 }
@@ -729,6 +740,283 @@ static void psp_clearColorBuffer(void *data)
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
 }
 
+/*--------------------------------------------------------
+		2D UI Drawing Primitives
+--------------------------------------------------------*/
+
+typedef struct Vertex16_t
+{
+	uint32_t color;
+	int16_t x, y, z;
+} Vertex16;
+
+static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int su, int sv, int sw, int sh,
+	int dx, int dy, int dw, int dh, int blend)
+{
+	struct Vertex *vertices;
+
+	if (!tex) return;
+
+	if (blend)
+	{
+		sceGuEnable(GU_BLEND);
+		sceGuDisable(GU_ALPHA_TEST);
+	}
+
+	sceGuTexMode(tex_format, 0, 0, tex_swizzled);
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex);
+	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+
+	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+
+	if (vertices)
+	{
+		vertices[0].u = su;
+		vertices[0].v = sv;
+		vertices[0].x = dx;
+		vertices[0].y = dy;
+		vertices[0].z = 0;
+		vertices[0].color = 0;
+
+		vertices[1].u = su + sw;
+		vertices[1].v = sv + sh;
+		vertices[1].x = dx + dw;
+		vertices[1].y = dy + dh;
+		vertices[1].z = 0;
+		vertices[1].color = 0;
+
+		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
+	}
+
+	if (blend)
+		sceGuDisable(GU_BLEND);
+}
+
+static void psp_drawUILine(void *data,
+	int x1, int y1, int x2, int y2, uint32_t color)
+{
+	Vertex16 *vertices;
+	int has_alpha = ((color >> 24) & 0xff) != 0xff;
+
+	sceGuDisable(GU_TEXTURE_2D);
+
+	if (has_alpha)
+		sceGuEnable(GU_BLEND);
+
+	vertices = (Vertex16 *)sceGuGetMemory(2 * sizeof(Vertex16));
+
+	if (vertices)
+	{
+		vertices[0].x = x1;
+		vertices[0].y = y1;
+		vertices[0].z = 0;
+		vertices[0].color = color;
+
+		vertices[1].x = x2;
+		vertices[1].y = y2;
+		vertices[1].z = 0;
+		vertices[1].color = color;
+
+		sceGuDrawArray(GU_LINES, PRIMITIVE_FLAGS, 2, NULL, vertices);
+	}
+
+	if (has_alpha)
+		sceGuDisable(GU_BLEND);
+
+	sceGuEnable(GU_TEXTURE_2D);
+}
+
+static void psp_drawUILineGradient(void *data,
+	int x1, int y1, int x2, int y2,
+	uint32_t color1, uint32_t color2)
+{
+	Vertex16 *vertices;
+
+	sceGuDisable(GU_TEXTURE_2D);
+	sceGuEnable(GU_BLEND);
+	sceGuShadeModel(GU_SMOOTH);
+	sceGuEnable(GU_DITHER);
+
+	vertices = (Vertex16 *)sceGuGetMemory(2 * sizeof(Vertex16));
+
+	if (vertices)
+	{
+		vertices[0].x = x1;
+		vertices[0].y = y1;
+		vertices[0].z = 0;
+		vertices[0].color = color1;
+
+		vertices[1].x = x2;
+		vertices[1].y = y2;
+		vertices[1].z = 0;
+		vertices[1].color = color2;
+
+		sceGuDrawArray(GU_LINES, PRIMITIVE_FLAGS, 2, NULL, vertices);
+	}
+
+	sceGuDisable(GU_DITHER);
+	sceGuShadeModel(GU_FLAT);
+	sceGuDisable(GU_BLEND);
+	sceGuEnable(GU_TEXTURE_2D);
+}
+
+static void psp_drawUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	Vertex16 *vertices;
+
+	sceGuDisable(GU_TEXTURE_2D);
+
+	vertices = (Vertex16 *)sceGuGetMemory(5 * sizeof(Vertex16));
+
+	if (vertices)
+	{
+		int sx = x;
+		int sy = y;
+		int ex = x + w;
+		int ey = y + h;
+
+		vertices[0].x = sx;
+		vertices[0].y = sy;
+		vertices[0].z = 0;
+		vertices[0].color = color;
+
+		vertices[1].x = ex;
+		vertices[1].y = sy;
+		vertices[1].z = 0;
+		vertices[1].color = color;
+
+		vertices[2].x = ex;
+		vertices[2].y = ey;
+		vertices[2].z = 0;
+		vertices[2].color = color;
+
+		vertices[3].x = sx;
+		vertices[3].y = ey - 1;
+		vertices[3].z = 0;
+		vertices[3].color = color;
+
+		vertices[4].x = sx;
+		vertices[4].y = sy;
+		vertices[4].z = 0;
+		vertices[4].color = color;
+
+		sceGuDrawArray(GU_LINE_STRIP, PRIMITIVE_FLAGS, 5, NULL, vertices);
+	}
+
+	sceGuEnable(GU_TEXTURE_2D);
+}
+
+static void psp_fillUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	Vertex16 *vertices;
+	int has_alpha = ((color >> 24) & 0xff) != 0xff;
+
+	sceGuDisable(GU_TEXTURE_2D);
+
+	if (has_alpha)
+		sceGuEnable(GU_BLEND);
+
+	vertices = (Vertex16 *)sceGuGetMemory(4 * sizeof(Vertex16));
+
+	if (vertices)
+	{
+		int sx = x;
+		int sy = y;
+		int ex = x + w;
+		int ey = y + h;
+
+		vertices[0].x = sx;
+		vertices[0].y = sy;
+		vertices[0].z = 0;
+		vertices[0].color = color;
+
+		vertices[1].x = ex;
+		vertices[1].y = sy;
+		vertices[1].z = 0;
+		vertices[1].color = color;
+
+		vertices[2].x = sx;
+		vertices[2].y = ey;
+		vertices[2].z = 0;
+		vertices[2].color = color;
+
+		vertices[3].x = ex;
+		vertices[3].y = ey;
+		vertices[3].z = 0;
+		vertices[3].color = color;
+
+		sceGuDrawArray(GU_TRIANGLE_STRIP, PRIMITIVE_FLAGS, 4, NULL, vertices);
+	}
+
+	if (has_alpha)
+		sceGuDisable(GU_BLEND);
+
+	sceGuEnable(GU_TEXTURE_2D);
+}
+
+static void psp_fillUIRectGradient(void *data,
+	int x, int y, int w, int h,
+	uint32_t color1, uint32_t color2, int direction)
+{
+	Vertex16 *vertices;
+
+	sceGuDisable(GU_TEXTURE_2D);
+	sceGuEnable(GU_BLEND);
+	sceGuShadeModel(GU_SMOOTH);
+	sceGuEnable(GU_DITHER);
+
+	vertices = (Vertex16 *)sceGuGetMemory(4 * sizeof(Vertex16));
+
+	if (vertices)
+	{
+		int sx = x;
+		int sy = y;
+		int ex = x + w;
+		int ey = y + h;
+
+		vertices[0].x = sx;
+		vertices[0].y = sy;
+		vertices[0].z = 0;
+
+		vertices[1].x = ex;
+		vertices[1].y = sy;
+		vertices[1].z = 0;
+
+		vertices[2].x = sx;
+		vertices[2].y = ey;
+		vertices[2].z = 0;
+
+		vertices[3].x = ex;
+		vertices[3].y = ey;
+		vertices[3].z = 0;
+
+		if (direction)
+		{
+			vertices[0].color = color1;
+			vertices[1].color = color1;
+			vertices[2].color = color2;
+			vertices[3].color = color2;
+		}
+		else
+		{
+			vertices[0].color = color1;
+			vertices[2].color = color1;
+			vertices[1].color = color2;
+			vertices[3].color = color2;
+		}
+
+		sceGuDrawArray(GU_TRIANGLE_STRIP, PRIMITIVE_FLAGS, 4, NULL, vertices);
+	}
+
+	sceGuDisable(GU_DITHER);
+	sceGuShadeModel(GU_FLAT);
+	sceGuDisable(GU_BLEND);
+	sceGuEnable(GU_TEXTURE_2D);
+}
+
 video_driver_t video_psp = {
 	"psp",
 	psp_init,
@@ -761,4 +1049,10 @@ video_driver_t video_psp = {
 	psp_disableDepthTest,
 	psp_clearDepthBuffer,
 	psp_clearColorBuffer,
+	psp_drawUISprite,
+	psp_drawUILine,
+	psp_drawUILineGradient,
+	psp_drawUIRect,
+	psp_fillUIRect,
+	psp_fillUIRectGradient,
 };

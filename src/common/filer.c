@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include "emumain.h"
+#include "common/ui_draw_driver.h"
 
 
 /******************************************************************************
@@ -343,9 +344,7 @@ static void show_title(int sx, int sy)
 	RECT clip2 = { sx, sy, sx + 144, sy + 80 };
 
 	draw_box_shadow(sx, sy, sx + 144, sy + 80);
-	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
-	video_driver->endFrame(video_data);
 }
 
 
@@ -910,9 +909,9 @@ void show_exit_screen(void)
 	{
 		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
-		video_driver->endFrame(video_data);
 		boxfill(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_DARKGRAY);
 		uifont_print_shadow_center(129, COLOR_WHITE, TEXT(PLEASE_WAIT));
+		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 	}
 }
@@ -950,6 +949,7 @@ void file_browser(void)
 	video_driver->endFrame(video_data);
 
 	load_background(WP_LOGO);
+	video_driver->beginFrame(video_data);
 	show_background();
 	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 	logo(32, 5, UI_COLOR(UI_PAL_TITLE));
@@ -968,6 +968,7 @@ void file_browser(void)
 	uifont_print_shadow_center(136+ 6, 200,200,200, "NJ (http://nj-emu.tfact.net)");
 	uifont_print_shadow_center(136+20, 200,200,200, "2011-2016 (https://github.com/phoe-nix/NJEMU)");
 #endif
+	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
 
 #if (EMU_SYSTEM != NCDZ)
@@ -985,9 +986,12 @@ void file_browser(void)
 #if defined(LARGE_MEMORY) && ((EMU_SYSTEM == CPS2) || (EMU_SYSTEM == MVS))
 	if (platform_driver->getDevkitVersion(platform_data) < 0x03070110 || platform_driver->getHardwareModel(platform_data) == 0)
 	{
+		video_driver->beginFrame(video_data);
 		show_background();
 		small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 		logo(32, 5, UI_COLOR(UI_PAL_TITLE));
+		video_driver->endFrame(video_data);
+		video_driver->flipScreen(video_data, 1);
 		messagebox(MB_PSPVERSIONERROR);
 		show_exit_screen();
 		goto error;
@@ -1004,9 +1008,11 @@ void file_browser(void)
 #if (EMU_SYSTEM == NCDZ)
 	if (bios_error)
 	{
+		video_driver->beginFrame(video_data);
 		show_background();
 		small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 		logo(32, 5, UI_COLOR(UI_PAL_TITLE));
+		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 
 		switch (bios_error)
@@ -1086,6 +1092,7 @@ void file_browser(void)
 
 			modify_display_path(path, curr_dir, 368);
 
+			video_driver->beginFrame(video_data);
 			show_background();
 			small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_MEMSTICK);
 			uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), path);
@@ -1185,6 +1192,7 @@ void file_browser(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else if (update & UI_PARTIAL_REFRESH)
@@ -1192,6 +1200,7 @@ void file_browser(void)
 			int x, y, w, h;
 			RECT clip1, clip2;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			for (i = 0; i < rows; i++)
@@ -1215,7 +1224,6 @@ void file_browser(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);

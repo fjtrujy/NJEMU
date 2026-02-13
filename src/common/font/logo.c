@@ -6,7 +6,8 @@
 
 ******************************************************************************/
 
-#include "psp/psp.h"
+#include "emucfg.h"
+#include <stdint.h>
 
 #if (EMU_SYSTEM == CPS1)
 

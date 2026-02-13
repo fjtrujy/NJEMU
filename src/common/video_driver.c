@@ -41,6 +41,12 @@ video_driver_t video_null = {
 	NULL, // disableDepthTest
 	NULL, // clearDepthBuffer
 	NULL, // clearColorBuffer
+	NULL, // drawUISprite
+	NULL, // drawUILine
+	NULL, // drawUILineGradient
+	NULL, // drawUIRect
+	NULL, // fillUIRect
+	NULL, // fillUIRectGradient
 };
 
 video_driver_t *video_drivers[] = {

@@ -10,7 +10,9 @@
 
 #ifdef COMMAND_LIST
 
-#include "psp/psp.h"
+#include "emucfg.h"
+#include <stdint.h>
+#include "common/font_t.h"
 
 #define NUM_FONTS	0x80
 

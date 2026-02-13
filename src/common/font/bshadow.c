@@ -6,7 +6,8 @@
 
 ******************************************************************************/
 
-#include "psp/psp.h"
+#include "emucfg.h"
+#include <stdint.h>
 
 const unsigned char ALIGN16_DATA shadow[9][8][4] = {
 	{	//	00 - left top
