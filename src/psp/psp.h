@@ -40,7 +40,6 @@
 #include "emumain.h"
 
 #include "psp/config.h"
-#include "psp/filer.h"
 #include "psp/ui.h"
 #include "psp/ui_draw.h"
 #include "psp/ui_menu.h"

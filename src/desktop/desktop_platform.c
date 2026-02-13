@@ -53,6 +53,14 @@ static int32_t desktop_getDevkitVersion(void *data) {
 	return 0;
 }
 
+static bool desktop_getWlanSwitchState(void *data) {
+	return false;
+}
+
+static int desktop_getHardwareModel(void *data) {
+	return 0;
+}
+
 platform_driver_t platform_desktop = {
 	"desktop",
 	desktop_init,
@@ -60,4 +68,6 @@ platform_driver_t platform_desktop = {
 	desktop_main,
 	desktop_startSystemButtons,
 	desktop_getDevkitVersion,
+	desktop_getWlanSwitchState,
+	desktop_getHardwareModel,
 };

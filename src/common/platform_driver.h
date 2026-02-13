@@ -24,6 +24,8 @@ typedef struct platform_driver
 	void (*main)(void *data, int argc, char *argv[]);
 	bool (*startSystemButtons)(void *data);
 	int32_t (*getDevkitVersion)(void *data);
+	bool (*getWlanSwitchState)(void *data);
+	int (*getHardwareModel)(void *data);
 
 } platform_driver_t;
 

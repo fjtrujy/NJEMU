@@ -232,7 +232,6 @@ else()
     # GUI source files
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/config.c
-        ${PLATFORM_LOWER}/filer.c
         ${PLATFORM_LOWER}/ui.c
         ${PLATFORM_LOWER}/ui_draw.c
         ${PLATFORM_LOWER}/ui_menu.c
@@ -525,6 +524,7 @@ elseif(PLATFORM STREQUAL "PSP")
         pspaudio
         pspgu
         psppower
+        pspwlan
         pspdebug
     )
 endif()

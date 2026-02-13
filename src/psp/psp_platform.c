@@ -2,7 +2,7 @@
 
 	psp.c
 
-	PSP¥á¥¤¥ó
+	PSPï¿½á¥¤ï¿½ï¿½
 
 ******************************************************************************/
 
@@ -11,6 +11,7 @@
 #include <pspsdk.h>
 #include <pspctrl.h>
 #include <pspimpose_driver.h>
+#include <pspwlan.h>
 
 #include "SystemButtons.h"
 #include "psp.h"
@@ -34,11 +35,11 @@ typedef struct psp_platform {
 
 
 /******************************************************************************
-	¥°¥í©`¥Ð¥ëévÊý
+	ï¿½ï¿½ï¿½ï¿½ï¿½`ï¿½Ð¥ï¿½ï¿½vï¿½ï¿½
 ******************************************************************************/
 
 /******************************************************************************
-	¥í©`¥«¥ëévÊý
+	ï¿½ï¿½ï¿½`ï¿½ï¿½ï¿½ï¿½ï¿½vï¿½ï¿½
 ******************************************************************************/
 
 /*--------------------------------------------------------
@@ -101,7 +102,7 @@ static SceKernelCallbackFunction PowerCallback(int unknown, int pwrflags, void *
 }
 
 /*--------------------------------------------------------
-	¥³©`¥ë¥Ð¥Ã¥¯¥¹¥ì¥Ã¥É×÷³É
+	ï¿½ï¿½ï¿½`ï¿½ï¿½Ð¥Ã¥ï¿½ï¿½ï¿½ï¿½ï¿½Ã¥ï¿½ï¿½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 static int CallbackThread(SceSize args, void *argp)
@@ -118,7 +119,7 @@ static int CallbackThread(SceSize args, void *argp)
 
 
 /*--------------------------------------------------------
-	¥³©`¥ë¥Ð¥Ã¥¯¥¹¥ì¥Ã¥ÉÔO¶¨
+	ï¿½ï¿½ï¿½`ï¿½ï¿½Ð¥Ã¥ï¿½ï¿½ï¿½ï¿½ï¿½Ã¥ï¿½ï¿½Oï¿½ï¿½
 --------------------------------------------------------*/
 
 static int SetupCallbacks(void)
@@ -139,7 +140,7 @@ static int SetupCallbacks(void)
 
 
 /*--------------------------------------------------------
-	Kernel¥â©`¥É main()
+	Kernelï¿½ï¿½`ï¿½ï¿½ main()
 --------------------------------------------------------*/
 
 // #ifdef KERNEL_MODE
@@ -191,6 +192,19 @@ static void psp_free(void *data) {
 
 static void psp_main(void *data, int argc, char *argv[]) {
 	psp_platform_t *psp = (psp_platform_t*)data;
+
+	// Override launchDir from argv[0] for PPSSPP compatibility.
+	// getcwd() may return "umd0:" which is not browsable, but argv[0]
+	// contains the full path to EBOOT.PBP on the memory stick.
+	if (argc > 0 && argv[0]) {
+		char *last_slash = strrchr(argv[0], '/');
+		if (last_slash) {
+			size_t len = last_slash - argv[0] + 1;
+			strncpy(launchDir, argv[0], len);
+			launchDir[len] = '\0';
+		}
+	}
+
 #if	(EMU_SYSTEM == CPS1)
 	strcat(screenshotDir, "ms0:/PICTURE/CPS1");
 #endif
@@ -231,6 +245,18 @@ static int32_t psp_getDevkitVersion(void *data) {
 	return psp->devkit_version;
 }
 
+static bool psp_getWlanSwitchState(void *data) {
+	return sceWlanGetSwitchState() != 0;
+}
+
+static int psp_getHardwareModel(void *data) {
+#ifdef LARGE_MEMORY
+	return kuKernelGetModel();
+#else
+	return 0;
+#endif
+}
+
 platform_driver_t platform_psp = {
 	"psp",
 	psp_init,
@@ -238,4 +264,6 @@ platform_driver_t platform_psp = {
 	psp_main,
 	psp_startSystemButtons,
 	psp_getDevkitVersion,
+	psp_getWlanSwitchState,
+	psp_getHardwareModel,
 };

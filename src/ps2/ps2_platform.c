@@ -84,6 +84,14 @@ static int32_t ps2_getDevkitVersion(void *data) {
 	return 0;
 }
 
+static bool ps2_getWlanSwitchState(void *data) {
+	return false;
+}
+
+static int ps2_getHardwareModel(void *data) {
+	return 0;
+}
+
 platform_driver_t platform_ps2 = {
 	"ps2",
 	ps2_init,
@@ -91,4 +99,6 @@ platform_driver_t platform_ps2 = {
 	ps2_main,
 	ps2_startSystemButtons,
 	ps2_getDevkitVersion,
+	ps2_getWlanSwitchState,
+	ps2_getHardwareModel,
 };

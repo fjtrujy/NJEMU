@@ -177,10 +177,6 @@ void load_gamecfg(const char *name) {
 
 }
 
-void delete_files(const char *dirname, const char *pattern) {
-
-}
-
 void small_icon(int sx, int sy, int r, int g, int b, int no) {
 
 }
