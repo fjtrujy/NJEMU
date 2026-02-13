@@ -238,8 +238,7 @@ static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int 
 {
 	uint32_t tile, lines = 16;
 	uint32_t *src = (uint32_t *)(spr + tileno * 128);
-	void *tex_frame = video_driver->textureLayer(video_data, 0);
-	uint16_t *dst = (uint16_t *)video_driver->frameAddr(video_data, tex_frame, sx, sy);
+	uint16_t *dst = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, sx, sy);
 	uint16_t *pal = &palette[tileno << 4];
 
 	while (lines--)
@@ -344,9 +343,8 @@ static void show_title(int sx, int sy)
 	RECT clip2 = { sx, sy, sx + 144, sy + 80 };
 
 	draw_box_shadow(sx, sy, sx + 144, sy + 80);
-	void *tex_frame = video_driver->textureLayer(video_data, 0);
 	video_driver->beginFrame(video_data);
-	video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip1, &clip2);
+	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	video_driver->endFrame(video_data);
 }
 
@@ -1217,11 +1215,10 @@ void file_browser(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			void *tex_frame = video_driver->textureLayer(video_data, 0);
 			video_driver->beginFrame(video_data);
-			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
 			video_driver->endFrame(video_data);
 
 			update = draw_battery_status(0);

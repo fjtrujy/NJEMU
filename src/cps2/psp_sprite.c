@@ -175,25 +175,22 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	void *wf = video_driver->workFrame(video_data);
-	void *df = video_driver->drawFrame(video_data);
-
 	if (cps2_has_mask) video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
 	if (cps_rotate_screen)
 	{
 		if (cps_flip_screen)
 		{
-			video_driver->copyRectFlip(video_data, wf, df, &cps_src_clip, &cps_src_clip);
-			video_driver->copyRect(video_data, df, wf, &cps_src_clip, &cps_src_clip);
+			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_src_clip);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &cps_src_clip, &cps_src_clip);
 			video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
-		video_driver->copyRectRotate(video_data, wf, df, &cps_src_clip, &cps_clip[5]);
+		video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[5]);
 	}
 	else
 	{
 		if (cps_flip_screen)
-			video_driver->copyRectFlip(video_data, wf, df, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[option_stretch]);
 		else
 			video_driver->transferWorkFrame(video_data, &cps_src_clip, &cps_clip[option_stretch]);
 	}

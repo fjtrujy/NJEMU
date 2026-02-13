@@ -233,9 +233,10 @@ static void psp_endFrame(void *data)
 		Get VRAM Address
 --------------------------------------------------------*/
 
-static void *psp_frameAddr(void *data, void *frame, int x, int y)
+static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 {
-	// Buffers are stored as relative offsets, convert to pointer
+	psp_video_t *psp = (psp_video_t *)data;
+	void *frame = psp_resolveFrame(psp, frameIndex);
 	return (void *)((uintptr_t)frame + ((x + (y << 9)) << 1));
 }
 
@@ -249,12 +250,6 @@ static void *psp_drawFrame(void *data)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 	return (void *)psp->draw_frame;
-}
-
-static void *psp_showFrame(void *data)
-{
-	psp_video_t *psp = (psp_video_t *)data;
-	return (void *)psp->show_frame;
 }
 
 static void *psp_textureLayer(void *data, uint8_t layerIndex)
@@ -335,12 +330,32 @@ static void psp_fillFrame(void *data, void *frame, uint32_t color)
 }
 
 /*--------------------------------------------------------
+		Resolve frame index to VRAM pointer
+--------------------------------------------------------*/
+
+static void *psp_resolveFrame(psp_video_t *psp, int index) {
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		return (void *)psp->show_frame;
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		return (void *)psp->draw_frame;
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
+		return (void *)psp->scrbitmap;
+	default:
+		return (void *)psp->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].buffer;
+	}
+}
+
+/*--------------------------------------------------------
 		Copy Rectangular Area
 --------------------------------------------------------*/
 
-static void psp_copyRect(void *data, void *src, void *dst, RECT *src_rect,
+static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 						 RECT *dst_rect)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	void *src_ptr = psp_resolveFrame(psp, srcIndex);
+	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
 	struct Vertex *vertices;
 
@@ -349,13 +364,13 @@ static void psp_copyRect(void *data, void *src, void *dst, RECT *src_rect,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
 				 dst_rect->bottom);
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
+	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -426,7 +441,7 @@ static void psp_startWorkFrame(void *data, uint32_t color)
 static void psp_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
 	psp_video_t *psp = (psp_video_t *)data;
-	psp_copyRect(psp, (void *)psp->scrbitmap, (void *)psp->draw_frame, src_rect,
+	psp_copyRect(psp, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, src_rect,
 				 dst_rect);
 
 	psp->current_tex_layer = NULL;
@@ -436,9 +451,12 @@ static void psp_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 		Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
-static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect,
+static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 							 RECT *dst_rect)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	void *src_ptr = psp_resolveFrame(psp, srcIndex);
+	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int16_t j, sw, dw, sh, dh;
 	struct Vertex *vertices;
 
@@ -447,13 +465,13 @@ static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
 				 dst_rect->bottom);
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src));
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -501,9 +519,12 @@ static void psp_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect,
 		Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
-static void psp_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
+static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 							   RECT *dst_rect)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	void *src_ptr = psp_resolveFrame(psp, srcIndex);
+	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int16_t j, sw, dw, sh, dh;
 	struct Vertex *vertices;
 
@@ -512,13 +533,13 @@ static void psp_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
 				 dst_rect->bottom);
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src));
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
 	if (sw == dh && sh == dw)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -717,7 +738,6 @@ video_driver_t video_psp = {
 	psp_frameAddr,
 	psp_workFrame,
 	psp_drawFrame,
-	psp_showFrame,
 	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,

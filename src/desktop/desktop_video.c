@@ -214,7 +214,7 @@ static void desktop_endFrame(void *data)
 		Get VRAM Address
 --------------------------------------------------------*/
 
-static void *desktop_frameAddr(void *data, void *frame, int x, int y)
+static void *desktop_frameAddr(void *data, int frameIndex, int x, int y)
 {
 	return NULL;
 }
@@ -226,11 +226,6 @@ static void *desktop_workFrame(void *data)
 }
 
 static void *desktop_drawFrame(void *data)
-{
-	return NULL;
-}
-
-static void *desktop_showFrame(void *data)
 {
 	return NULL;
 }
@@ -365,7 +360,7 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
 
 }
 
-static void desktop_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -374,7 +369,7 @@ static void desktop_copyRect(void *data, void *src, void *dst, RECT *src_rect, R
 	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
-static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -383,7 +378,7 @@ static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rec
 	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
-static void desktop_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -520,7 +515,6 @@ video_driver_t video_desktop = {
 	desktop_frameAddr,
 	desktop_workFrame,
 	desktop_drawFrame,
-	desktop_showFrame,
 	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,

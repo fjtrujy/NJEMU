@@ -622,8 +622,6 @@ error:
 
 void state_make_thumbnail(void)
 {
-	uint16_t *tex = UI_TEXTURE;
-
 	{
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 		RECT clip1 = { 64, 16, 64 + 384, 16 + 224 };
@@ -631,18 +629,18 @@ void state_make_thumbnail(void)
 		if (machine_screen_type)
 		{
 			RECT clip2 = { 152, 0, 152 + 112, 152 };
-			video_driver->copyRectRotate(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
+			video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 		}
 		else
 		{
 			RECT clip2 = { 152, 0, 152 + 152, 112 };
-			video_driver->copyRect(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 		}
 #elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
 		RECT clip1 = { 24, 16, 336, 240 };
 		RECT clip2 = { 152, 0, 152 + 152, 112 };
 
-		video_driver->copyRect(video_data, video_driver->workFrame(video_data), tex, &clip1, &clip2);
+		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 #endif
 	}
 }

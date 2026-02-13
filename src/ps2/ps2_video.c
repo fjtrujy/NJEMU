@@ -372,11 +372,6 @@ static void *ps2_drawFrame(void *data)
 	return NULL;
 }
 
-static void *ps2_showFrame(void *data)
-{
-	return NULL;
-}
-
 static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -560,7 +555,7 @@ static void ps2_endFrame(void *data)
 	/* No-op: gsKit queue is executed in flipScreen */
 }
 
-static void *ps2_frameAddr(void *data, void *frame, int x, int y)
+static void *ps2_frameAddr(void *data, int frameIndex, int x, int y)
 {
 	return NULL;
 }
@@ -727,7 +722,7 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	free(verts2);
 }
 
-static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	// TODO: FJTRUJY so far just used by the menu, adhoc, and state
 	// It is also used in the biosmenu but let's ignore it for now
@@ -796,7 +791,7 @@ static void ps2_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT 
 	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
-static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	// TODO: FJTRUJY not used so far in MVS
 
@@ -865,7 +860,7 @@ static void ps2_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, R
 	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
-static void ps2_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	// TODO: FJTRUJY not used so far in MVS (juat in state.c, but not used in the game)
 	// int16_t j, sw, dw, sh, dh;
@@ -1147,7 +1142,6 @@ video_driver_t video_ps2 = {
 	ps2_frameAddr,
 	ps2_workFrame,
 	ps2_drawFrame,
-	ps2_showFrame,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,

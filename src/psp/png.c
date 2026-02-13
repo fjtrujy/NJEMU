@@ -542,7 +542,7 @@ int load_png(const char *name, int number)
 		sy = (SCR_HEIGHT - p.height) >> 1;
 		uint16_t *vptr, *dst;
 
-		vptr = (uint16_t *)video_driver->frameAddr(video_data, video_driver->drawFrame(video_data), sx, sy);
+		vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, sx, sy);
 
 		switch (p.bpp * p.bit_depth)
 		{
@@ -784,7 +784,7 @@ static int png_create_datastream(SceUID fd)
 	dst = p.image;
 	uint16_t *vptr, *src;
 
-	vptr = (uint16_t *)video_driver->frameAddr(video_data, video_driver->showFrame(video_data), 0, 0);
+	vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0, 0);
 
 	for (y = 0; y < p.height; y++)
 	{

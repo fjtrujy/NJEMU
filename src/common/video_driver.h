@@ -132,10 +132,9 @@ typedef struct video_driver
 	void (*beginFrame)(void *data);
 	/* End the current rendering frame (e.g. finish and sync GPU command list). */
 	void (*endFrame)(void *data);
-	void *(*frameAddr)(void *data, void *frame, int x, int y);
+	void *(*frameAddr)(void *data, int frameIndex, int x, int y);
 	void *(*workFrame)(void *data);
 	void *(*drawFrame)(void *data);
-	void *(*showFrame)(void *data);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
@@ -143,9 +142,9 @@ typedef struct video_driver
 	void (*fillFrame)(void *data, void *frame, uint32_t color);
 	void (*startWorkFrame)(void *data, uint32_t color);
 	void (*transferWorkFrame)(void *data, RECT *src_rect, RECT *dst_rect);
-	void (*copyRect)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
-	void (*copyRectFlip)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
-	void (*copyRectRotate)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
+	void (*copyRect)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
 	void *(*getNativeObjects)(void *data, int index);
 	void (*uploadMem)(void *data, uint8_t textureIndex);

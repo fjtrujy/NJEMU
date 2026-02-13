@@ -125,7 +125,7 @@ static void adhoc_init_progress(int total, const char *text)
 	sprintf(buf, "AdHoc - %s", game_name);
 	uifont_print(32, 5, UI_COLOR(UI_PAL_TITLE), buf);
 
-	video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
+	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 
 	init_progress(total, text);
 }
@@ -226,7 +226,7 @@ static void DisplayPspList(int top, int rows)
 		int i;
 		char temp[20];
 
-		video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
+		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 
 		draw_scrollbar(470, 26, 479, 270, rows, max, pos);
 
@@ -254,7 +254,7 @@ static void DisplayPspList(int top, int rows)
 
 
 /*--------------------------------------------------------
-	‘I‘ğ’†‚ÌPSP‚Ìî•ñ‚ğæ“¾
+	ï¿½Iï¿½ğ’†‚ï¿½PSPï¿½Ìï¿½ï¿½ï¿½ï¿½æ“¾
 --------------------------------------------------------*/
 
 static int GetPspEntry(unsigned char *mac, char *name)
@@ -407,7 +407,7 @@ int adhocUnloadModules(void)
 
 
 /*--------------------------------------------------------
-	‰Šú‰»
+	ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 --------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS1)
@@ -530,7 +530,7 @@ int adhocInit(const char *matchingData)
 
 
 /*--------------------------------------------------------
-	Ø’f
+	ï¿½Ø’f
 --------------------------------------------------------*/
 
 int adhocTerm(void)
@@ -713,7 +713,7 @@ static int adhocStartP2P(void)
 
 
 /*--------------------------------------------------------
-	Ú‘±æ‚Ì‘I‘ğ
+	ï¿½Ú‘ï¿½ï¿½ï¿½Ì‘Iï¿½ï¿½
 --------------------------------------------------------*/
 
 int adhocSelect(void)
@@ -1018,7 +1018,7 @@ int adhocRecvSendAck(void *buffer, int length, int timeout, int type)
 
 
 /*--------------------------------------------------------
-	‘Šè‚Æ‚Ì“¯Šú‚ğ‘Ò‚Â
+	ï¿½ï¿½ï¿½ï¿½Æ‚Ì“ï¿½ï¿½ï¿½ï¿½ï¿½Ò‚ï¿½
 --------------------------------------------------------*/
 
 int adhocSync(void)
@@ -1077,7 +1077,7 @@ check_packet:
 
 /*--------------------------------------------------------
 	Receive data of specified size or until buffer is empty
-	‚È‚é‚Ü‚Å‘Ò‚Â
+	ï¿½È‚ï¿½Ü‚Å‘Ò‚ï¿½
 --------------------------------------------------------*/
 
 void adhocWait(int data_size)

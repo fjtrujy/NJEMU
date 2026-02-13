@@ -2176,7 +2176,7 @@ static int state_save_slot(void)
 
 		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
-		video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
+		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
 		power_driver->setCpuClock(power_data, platform_cpuclock);
@@ -2190,7 +2190,7 @@ static int state_save_slot(void)
 			state_refresh_screen(1);
 			draw_battery_status(1);
 			video_driver->beginFrame(video_data);
-			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->showFrame(video_data), &full_rect, &full_rect);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->endFrame(video_data);
 			res = messagebox(MB_FINISHSAVESTATE);
 		}
@@ -2207,7 +2207,7 @@ static int state_load_slot(void)
 
 		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
-		video_driver->copyRect(video_data, video_driver->drawFrame(video_data), video_driver->workFrame(video_data), &full_rect, &full_rect);
+		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
 		power_driver->setCpuClock(power_data, platform_cpuclock);
@@ -2300,11 +2300,10 @@ static int menu_state(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			void *tex_frame = video_driver->textureLayer(video_data, 0);
 			video_driver->beginFrame(video_data);
-			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
 			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
@@ -2566,11 +2565,10 @@ void showmenu(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			void *tex_frame = video_driver->textureLayer(video_data, 0);
 			video_driver->beginFrame(video_data);
-			video_driver->copyRect(video_data, video_driver->drawFrame(video_data), tex_frame, &clip1, &clip2);
-			video_driver->copyRect(video_data, video_driver->showFrame(video_data), video_driver->drawFrame(video_data), &full_rect, &full_rect);
-			video_driver->copyRect(video_data, tex_frame, video_driver->drawFrame(video_data), &clip2, &clip1);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
 			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
