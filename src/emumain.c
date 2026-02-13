@@ -47,8 +47,8 @@ int machine_sound_type;
 uint32_t frames_displayed;
 int fatal_error;
 
-char launchDir[PATH_MAX];
-char screenshotDir[PATH_MAX];
+char launchDir[PATH_MAX] = {0};
+char screenshotDir[PATH_MAX] = {0};
 bool systembuttons_available;
 void *platform_data = NULL;
 void *power_data = NULL;

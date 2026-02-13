@@ -45,6 +45,7 @@ string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
 
 # Add platform to compiler definitions
 add_definitions(-D${PLATFORM})
+add_definitions(-DPLATFORM_STR="${PLATFORM}")
 
 # Different options availables
 option(LARGE_MEMORY "Large Memory" OFF)

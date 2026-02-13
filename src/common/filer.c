@@ -955,19 +955,11 @@ void file_browser(void)
 	logo(32, 5, UI_COLOR(UI_PAL_TITLE));
 
 	i = uifont_get_string_width(APPNAME_STR " " VERSION_STR) / 2;
-#ifdef LARGE_MEMORY
 	draw_dialog(240-(i+62), 136-48, 240+(i+62), 136+48);
 	uifont_print_shadow_center(136-30, 255,255,120, APPNAME_STR " " VERSION_STR);
-	uifont_print_shadow_center(136-07, 255,255,255, "for PSP Slim");
-	uifont_print_shadow_center(136+06, 200,200,200, "NJ (http://nj-emu.tfact.net)");
-	uifont_print_shadow_center(136+20, 200,200,200, "2011-2016 (https://github.com/phoe-nix/NJEMU)");
-#else
-	draw_dialog(240-(i+62), 136-48, 240+(i+62), 136+48);
-	uifont_print_shadow_center(136-30, 255,255,120, APPNAME_STR " " VERSION_STR);
-	uifont_print_shadow_center(136-07, 255,255,255, "for PSP");
-	uifont_print_shadow_center(136+ 6, 200,200,200, "NJ (http://nj-emu.tfact.net)");
-	uifont_print_shadow_center(136+20, 200,200,200, "2011-2016 (https://github.com/phoe-nix/NJEMU)");
-#endif
+	uifont_print_shadow_center(136-07, 255,255,255, "for " PLATFORM_STR);
+	uifont_print_shadow_center(136+ 6, 200,200,200, "NJ (https://fjtrujy.github.io/NJEMU/)");
+	uifont_print_shadow_center(136+20, 200,200,200, "2011-2026 (https://github.com/fjtrujy/NJEMU)");
 	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
 

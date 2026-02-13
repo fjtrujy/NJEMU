@@ -51,7 +51,7 @@
 #define TICKS_PER_FRAME			16666.666666
 #define USE_CACHE				0
 #define EEPROM_SIZE				128
-#define GULIST_SIZE				48*1024		// 48KB
+#define GULIST_SIZE				300*1024	// 300KB
 #define ENABLE_RASTER_OPTION	1			// on
 
 
@@ -75,7 +75,7 @@
 #define CACHE_VERSION			"V24"
 #endif
 #define EEPROM_SIZE				128
-#define GULIST_SIZE				48*1024		// 48KB
+#define GULIST_SIZE				300*1024	// 300KB
 #define ENABLE_RASTER_OPTION	0			// off
 
 
