@@ -216,17 +216,17 @@ if (NO_GUI)
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
 else()
-    # Font data files
-    set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/font/graphic.c
-        ${PLATFORM_LOWER}/font/ascii_14p.c
-        ${PLATFORM_LOWER}/font/font_s.c
-        ${PLATFORM_LOWER}/font/bshadow.c
-        ${PLATFORM_LOWER}/font/command.c
-        ${PLATFORM_LOWER}/font/ascii_14.c
-        ${PLATFORM_LOWER}/font/latin1_14.c
-        ${PLATFORM_LOWER}/font/gbk_s14.c
-        ${PLATFORM_LOWER}/font/gbk_tbl.c
+    # Font data files (shared across all platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/font/graphic.c
+        common/font/ascii_14p.c
+        common/font/font_s.c
+        common/font/bshadow.c
+        common/font/command.c
+        common/font/ascii_14.c
+        common/font/latin1_14.c
+        common/font/gbk_s14.c
+        common/font/gbk_tbl.c
     )
 
     # GUI source files
@@ -238,7 +238,7 @@ else()
         ${PLATFORM_LOWER}/png.c
     )
 
-    # Icon files (target-specific)
+    # Icon files (target-specific, shared across platforms)
     if (${TARGET} STREQUAL "CPS1" OR ${TARGET} STREQUAL "CPS2")
         set(ICON_PREFIX "cps")
     elseif (${TARGET} STREQUAL "MVS")
@@ -247,9 +247,9 @@ else()
         set(ICON_PREFIX "ncdz")
     endif()
 
-    set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/icon/${ICON_PREFIX}_s.c
-        ${PLATFORM_LOWER}/icon/${ICON_PREFIX}_l.c
+    set(COMMON_SRC ${COMMON_SRC}
+        common/icon/${ICON_PREFIX}_s.c
+        common/icon/${ICON_PREFIX}_l.c
     )
 endif()
 

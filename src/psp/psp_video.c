@@ -233,6 +233,8 @@ static void psp_endFrame(void *data)
 		Get VRAM Address
 --------------------------------------------------------*/
 
+static void *psp_resolveFrame(psp_video_t *psp, int index);
+
 static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 {
 	psp_video_t *psp = (psp_video_t *)data;

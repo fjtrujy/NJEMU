@@ -51,8 +51,8 @@ This document outlines the remaining work needed to complete the cross-platform 
 | UI framework (`ui.c`) | ✅ 1105 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (dialogs, progress, popups) |
 | Configuration (`config.c`) | ✅ 555 lines | ❌ | ❌ | `src/psp/` only | Portable logic, PSP paths |
 | PNG handling (`png.c`) | ✅ | ❌ | ❌ | `src/psp/` only | PSP-specific texture upload |
-| Font data (`font/*.c`) | ✅ | — | — | `src/psp/font/` only | Embedded C arrays — **replace with external files loaded at runtime** |
-| Icon data (`icon/*.c`) | ✅ | — | — | `src/psp/icon/` only | Embedded C arrays — **replace with external files loaded at runtime** |
+| Font data (`font/*.c`) | ✅ | — | — | `src/psp/font/` only | C arrays, no platform deps — **needs move to common** |
+| Icon data (`icon/*.c`) | ✅ | — | — | `src/psp/icon/` only | C arrays, per-target — **needs move to common** |
 | Per-system menus (`menu/*.c`) | ✅ | — | — | `src/psp/menu/` only | Pure data/logic — **needs move to common** |
 | Per-system config (`config/*.c`) | ✅ | — | — | `src/psp/config/` only | Pure data/logic — **needs move to common** |
 | Localization (`*_ui_text.c`) | ✅ | ✅ | ✅ | Per-platform | `ui_text_driver` already abstracted |
@@ -70,31 +70,12 @@ Platform drivers (all 9)             Refactor ui_draw.c → common (portable)
 Video driver vtable                  PSP ui_draw_driver (wrap sceGu)
 Frame buffer abstraction             Desktop ui_draw_driver (SDL2)
 beginFrame/endFrame                  PS2 ui_draw_driver (gsKit)
-frameAddr/scissor                    Font/icon → external files (not C arrays)
+frameAddr/scissor                    Font/icon/menu/config data → common
 PSP GUI (fully working)              Portable GUI logic → src/common/
 main_ui_draw.h (API contract)        CMake NO_GUI for PS2/Desktop
 showFrame removed (no callers)       File browser POSIX porting
                                      PNG loading cross-platform
 ```
-
----
-
-## ⚠️ Key Design Principle: No Embedded Image or Font Data
-
-> **All image and font data must be loaded from external files at runtime — NEVER embedded as C arrays in source files.**
-
-The current PSP codebase embeds font glyphs and icon bitmaps as large C arrays (e.g., `src/psp/font/ascii_14.c` = 308 lines of hex data, `src/psp/icon/cps_s.c` = 539 lines, `gbk_s14.c` = 15MB). This approach:
-- Bloats the binary and compile times
-- Makes assets hard to edit or replace
-- Couples data to the build system
-
-**New approach for the cross-platform port:**
-- Convert all font glyph arrays and icon bitmap arrays to **external binary files** (e.g., `.bin`, `.dat`, or a custom format) stored in `resources/`
-- Load them at runtime via standard file I/O in `ui_init()` → `ui_draw_driver->uploadTexture()`
-- The font/icon `.c` files under `src/psp/font/` and `src/psp/icon/` will **NOT** be moved to `src/common/` — they will be **replaced** by runtime-loaded external assets
-- Only the PSP build may retain the embedded C arrays if needed for backward compatibility (PSP has limited file I/O bandwidth), but even PSP should migrate if feasible
-
-This applies to: font glyphs (ascii_14, latin1_14, graphic, logo, bshadow, font_s, command, gbk_s14, volume_icon), icons (cps_s/l, mvs_s/l, ncdz_s/l), and any future image assets.
 
 ---
 
@@ -219,7 +200,7 @@ With this, `ui_draw.c` becomes **fully portable**:
 - `boxfill()` → `fillRect(...)`, `boxfill_gradation()` → `fillRectGradient(...)`
 - `logo()` → build texture + `drawSprite(SLOT_FONT, ...)`
 
-The 4 static texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) that currently point into PSP VRAM at `0x44000000` would instead be CPU-side buffers **loaded from external binary files at runtime** and uploaded via `uploadTexture()`.
+The 4 static texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) that currently point into PSP VRAM at `0x44000000` would instead be CPU-side buffers that get uploaded via `uploadTexture()`.
 
 #### Platform Implementations
 
@@ -239,8 +220,8 @@ These directories currently live under `src/psp/` but contain **no PSP-specific 
 
 | Directory | Contents | Action |
 |-----------|----------|--------|
-| `src/psp/font/` | 10 bitmap font C arrays (ascii_14, latin1_14, graphic, logo, etc.) | **Convert to external binary files** in `resources/fonts/` — load at runtime, do NOT move as C files |
-| `src/psp/icon/` | 6 icon C arrays (cps_s/l, mvs_s/l, ncdz_s/l) | **Convert to external binary files** in `resources/icons/` — load at runtime, do NOT move as C files |
+| `src/psp/font/` | 10 bitmap font C arrays (ascii_14, latin1_14, graphic, logo, etc.) | Move to `src/common/font/` |
+| `src/psp/icon/` | 6 icon C arrays (cps_s/l, mvs_s/l, ncdz_s/l) | Move to `src/common/icon/` |
 | `src/psp/menu/` | 3 per-target menu definitions (cps.c, mvs.c, ncdz.c) | Move to `src/common/menu/` |
 | `src/psp/config/` | 3 per-target config logic (cps.c, mvs.c, ncdz.c) | Move to `src/common/config/` |
 
@@ -377,13 +358,13 @@ This is the most critical file — implements all low-level 2D rendering. The PS
 | Font bitmap rendering | `SDL_CreateTexture` for glyph atlas, `SDL_RenderCopy` per char |
 | Icon rendering | Same as font — bitmap data from `font/graphic.c` |
 
-**Font approach:** Load bitmap font data from external binary files at runtime (converted from the original `font/ascii_14.c`, etc.). No embedded C arrays. No need for SDL_ttf.
+**Font approach:** Reuse existing bitmap font C arrays (`font/ascii_14.c`, `font/ascii_14p.c`, `font/latin1_14.c`, etc.) from `src/common/font/`. These are pure data that can be rendered to platform-native textures. No need for SDL_ttf.
 
 **Key implementation details:**
 - PSP renders at 480x272; Desktop can use the same virtual resolution with SDL scaling
 - Alpha blending: SDL2 has native `SDL_BLENDMODE_BLEND`
 - Gradient fills: render line-by-line with interpolated colors
-- Icon/font: loaded from external files at `ui_init()`, then uploaded as SDL textures
+- Icon/font: create platform-native textures from the C array bitmap data at init time
 
 **Estimated effort:** ~800-1000 lines (simpler than PSP since SDL2 abstracts more)
 
@@ -412,7 +393,7 @@ These files are already mostly platform-agnostic and can be shared:
 | `src/psp/wallpaper.c` | `src/common/wallpaper.c` | Needs portable PNG loading |
 | `src/psp/menu/*.c` | `src/common/menu/*.c` | No changes (pure data/logic) |
 | `src/psp/config/*.c` | `src/common/config/*.c` | No changes (pure data/logic) |
-| `src/psp/font/*.c` | `resources/fonts/*.bin` | **Convert to external binary files** — no longer compiled as C source |
+| `src/psp/font/*.c` | `src/common/font/*.c` | No changes (pure data arrays) |
 
 **Key principle:** The PSP version should still work after refactoring — `src/psp/ui_draw.c` remains PSP-specific, everything else moves to common.
 
@@ -429,7 +410,7 @@ PS2 uses gsKit for 2D rendering. Drawing primitive mapping:
 | `hline()` / `vline()` | `gsKit_prim_line` or thin `gsKit_prim_sprite` |
 | `boxfill_gradation()` | `gsKit_prim_sprite_goraud` (gouraud-shaded sprite) |
 | Font rendering | Upload glyph bitmaps to GS texture, render with `gsKit_prim_sprite_texture` |
-| Icon rendering | Same as font — texture upload from external binary file data |
+| Icon rendering | Same as font — texture upload from C array data |
 
 **Key considerations:**
 - PS2 GS operates on 2D primitives natively — good fit for GUI
@@ -446,8 +427,24 @@ if (NO_GUI)
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
 else()
-    # NOTE: Font and icon data are NO LONGER compiled as C source.
-    # They are loaded from external files at runtime (resources/fonts/, resources/icons/).
+    # Font data files (shared across all platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/font/graphic.c
+        common/font/ascii_14p.c
+        common/font/font_s.c
+        common/font/bshadow.c
+        common/font/command.c
+        common/font/ascii_14.c
+        common/font/latin1_14.c
+        common/font/gbk_s14.c
+        common/font/gbk_tbl.c
+    )
+
+    # Icon files (target-specific, shared across platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/icon/${ICON_PREFIX}_s.c
+        common/icon/${ICON_PREFIX}_l.c
+    )
 
     # Per-target menu/config (shared across platforms)
     set(COMMON_SRC ${COMMON_SRC}
@@ -473,7 +470,7 @@ else()
 endif()
 ```
 
-**Note:** The current CMakeLists.txt compiles fonts from `${PLATFORM_LOWER}/font/`, GUI from `${PLATFORM_LOWER}/`, and icons from `${PLATFORM_LOWER}/icon/`. The PSP build currently works with `NO_GUI=OFF` but PS2 and Desktop would fail because those directories don't exist under `src/ps2/` or `src/desktop/`. After the refactor, font/icon `.c` files are removed entirely — all image/font data is loaded from external binary files at runtime via `ui_init()`.
+**Note:** The current CMakeLists.txt compiles fonts from `${PLATFORM_LOWER}/font/`, GUI from `${PLATFORM_LOWER}/`, and icons from `${PLATFORM_LOWER}/icon/`. The PSP build currently works with `NO_GUI=OFF` but PS2 and Desktop would fail because those directories don't exist under `src/ps2/` or `src/desktop/`.
 
 ### 2.6 PNG Loading
 
@@ -492,16 +489,16 @@ endif()
 
 ### Step 1: Foundation — `ui_draw_driver` Interface + Data Migration
 
-**Goal:** Create the abstraction layer and convert embedded assets to external files
+**Goal:** Create the abstraction layer and move shared data to common
 
 1. [ ] Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` struct with ~8 function pointers:
    - `init`, `free`, `uploadTexture`, `drawSprite`, `fillRect`, `fillRectGradient`, `drawLine`, `drawLineGradient`, `drawRect`
 2. [ ] Create `src/common/ui_draw_driver.c` — global `ui_draw_driver` pointer + null driver
-3. [ ] Convert font C arrays (`src/psp/font/*.c`) to external binary files in `resources/fonts/`
-4. [ ] Convert icon C arrays (`src/psp/icon/*.c`) to external binary files in `resources/icons/`
+3. [x] Move font data files to `src/common/font/` (ascii_14.c, ascii_14p.c, latin1_14.c, graphic.c, logo.c, bshadow.c, font_s.c, etc.)
+4. [x] Move icon data files to `src/common/icon/` (cps_s/l.c, mvs_s/l.c, ncdz_s/l.c)
 5. [ ] Move menu data to `src/common/menu/` (cps.c, mvs.c, ncdz.c)
 6. [ ] Move per-target config to `src/common/config/` (cps.c, mvs.c, ncdz.c)
-7. [ ] Update CMakeLists.txt — remove font/icon .c from build, add resource file copy rules
+7. [x] Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
 8. [ ] Verify PSP still builds with `NO_GUI=OFF`
 
 ### Step 2: Make `ui_draw.c` Portable
@@ -509,8 +506,7 @@ endif()
 **Goal:** Refactor `ui_draw.c` to use `ui_draw_driver` instead of sceGu directly
 
 9. [ ] Copy `src/psp/ui_draw.c` → `src/common/ui_draw.c`
-10. [ ] Replace embedded C array font/icon data with runtime loading from external binary files via file I/O
-11. [ ] Replace the 4 VRAM texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) with CPU-side buffers loaded from files + `uploadTexture()` calls
+10. [ ] Replace the 4 VRAM texture pointers (`tex_font`, `tex_volicon`, `tex_smallfont`, `tex_boxshadow`) with CPU-side buffers + `uploadTexture()` calls
 11. [ ] Replace all `sceGuStart`/`sceGuFinish`/`sceGuSync` boilerplate blocks with driver calls:
     - `internal_font_putc` → `ui_draw_driver->drawSprite()`
     - `hline`/`vline` + alpha/gradient variants → `ui_draw_driver->drawLine()`/`drawLineGradient()`
@@ -679,8 +675,8 @@ endif()
 - [x] `src/common/state.c` updated to use vtable
 
 ### GUI — Move to Common (pure data, no platform code)
-- [ ] `resources/fonts/` — Convert font C arrays from `src/psp/font/*.c` to external binary files
-- [ ] `resources/icons/` — Convert icon C arrays from `src/psp/icon/*.c` to external binary files
+- [x] `src/common/font/` — Move 11 font data files from `src/psp/font/`
+- [x] `src/common/icon/` — Move 6 icon data files from `src/psp/icon/`
 - [ ] `src/common/menu/` — Move 3 menu files from `src/psp/menu/` (cps.c, mvs.c, ncdz.c)
 - [ ] `src/common/config/` — Move 3 per-target config files from `src/psp/config/` (cps.c, mvs.c, ncdz.c)
 
@@ -726,20 +722,19 @@ endif()
 
 10. 🔲 Create `src/common/ui_draw_driver.h` — define `ui_draw_driver_t` with ~8 function pointers
 11. 🔲 Create `src/common/ui_draw_driver.c` — global pointer + null driver
-12. 🔲 Convert `src/psp/font/*.c` → `resources/fonts/*.bin` (external binary files)
-13. 🔲 Convert `src/psp/icon/*.c` → `resources/icons/*.bin` (external binary files)
+12. ✅ Move `src/psp/font/*.c` → `src/common/font/`
+13. ✅ Move `src/psp/icon/*.c` → `src/common/icon/`
 14. 🔲 Move `src/psp/menu/*.c` → `src/common/menu/`
 15. 🔲 Move `src/psp/config/*.c` → `src/common/config/` (per-target configs)
-16. 🔲 Update CMakeLists.txt — remove font/icon .c, add resource file copy rules
+16. ✅ Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
 17. 🔲 Verify PSP still builds with `NO_GUI=OFF`
 
 ### Then: Make `ui_draw.c` Portable (Step 2)
 
 18. 🔲 Copy `src/psp/ui_draw.c` → `src/common/ui_draw.c`
-19. 🔲 Replace embedded C array data with runtime loading from external binary files
-20. 🔲 Replace VRAM texture pointers with CPU-side buffers + `uploadTexture()`
-21. 🔲 Replace all sceGu boilerplate with `ui_draw_driver->` calls
-22. 🔲 Remove all PSP-specific headers from common `ui_draw.c`
+19. 🔲 Replace VRAM texture pointers with CPU-side buffers + `uploadTexture()`
+20. 🔲 Replace all sceGu boilerplate with `ui_draw_driver->` calls
+21. 🔲 Remove all PSP-specific headers from common `ui_draw.c`
 
 ### Then: PSP `ui_draw_driver` Backend (Step 3 — regression test)
 
@@ -789,20 +784,12 @@ The PSP GUI is designed for 480x272. Options:
 
 **Recommendation:** Option 1 for initial port. Use `SCR_WIDTH` / `SCR_HEIGHT` constants which are already used throughout the code. Desktop SDL2 can scale the render target to window size.
 
-### Font & Icon Asset Strategy
+### Font Strategy
 
-**Principle: No embedded C arrays.** All font glyph and icon bitmap data must live in **external binary files** loaded at runtime.
-
-**Approach:**
-1. Write a one-time conversion tool (or script) to extract the pixel data from the existing `src/psp/font/*.c` and `src/psp/icon/*.c` C arrays into binary files (e.g., `resources/fonts/ascii_14.bin`, `resources/icons/cps_s.bin`)
-2. Define a simple binary format: header (width, height, glyph count, format) + raw pixel data
-3. At runtime, `ui_init()` loads each binary file via standard file I/O → pixel buffer → `ui_draw_driver->uploadTexture()`
-4. Each platform driver converts the pixel buffer to its native texture format:
-   - Desktop: `SDL_CreateTexture` from pixel data
-   - PS2: GS VRAM texture uploaded via gsKit
-   - PSP: Copy to VRAM at `0x44000000` (same result as before, but loaded from file)
-
-**Benefits:** Smaller binaries, faster compile times, assets editable without recompilation, consistent approach across all platforms.
+**Recommendation:** Reuse existing bitmap font C arrays from `src/common/font/`. They're compact, tested, and platform-independent. Each platform's `ui_draw_driver` converts them to native textures at init time:
+- Desktop: SDL2 texture created from pixel data
+- PS2: GS VRAM texture uploaded via gsKit
+- PSP: Already working (VRAM copy)
 
 ### PNG Strategy
 
@@ -853,6 +840,6 @@ The PSP GUI is designed for 480x272. Options:
 - `src/psp/ui_menu.c` — Menu system (2667 lines, mostly portable)
 - `src/psp/filer.c` — File browser (1396 lines, needs `sceIoDread` replacement)
 - `src/psp/ui.c` — UI framework (1105 lines, mostly portable)
-- `src/psp/font/*.c` — Bitmap font data (reference for conversion to external binary files)
+- `src/common/font/*.c` — Bitmap font data (reusable as-is, moved from `src/psp/font/`)
 - `src/desktop/desktop_video.c` — Desktop video driver (reference for SDL2 patterns)
 - `src/ps2/ps2_video.c` — PS2 video driver (reference for gsKit patterns)

@@ -141,7 +141,7 @@ static uint16_t *texture16_addr(int x, int y)
 }
 
 
-#include "font/volume_icon.c"
+#include "common/font/volume_icon.c"
 
 void ui_init(void)
 {
@@ -2358,7 +2358,7 @@ void draw_bar_shadow(void)
 	•Ì•¥√Ëª≠
 ******************************************************************************/
 
-#include "psp/font/logo.c"
+#include "common/font/logo.c"
 
 /*------------------------------------------------------
 	•Ì•¥√Ëª≠
