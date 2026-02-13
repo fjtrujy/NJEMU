@@ -2,12 +2,14 @@
 
 	ui_menu.c
 
-	PSP ¥á¥Ë¥å©`
+	ãƒ¡ãƒ‹ãƒ¥ãƒ¼
 
 ******************************************************************************/
 
 #include <limits.h>
 #include "emumain.h"
+#include "common/ui.h"
+#include "common/ui_draw.h"
 
 #define MENU_BLANK	{ LF, }
 #define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
@@ -21,7 +23,7 @@ gamecheat_t* gamecheat[MAX_CHEATS];
 
 
 /*------------------------------------------------------
-	¥¨¥ß¥å¥ì©`¥·¥ç¥ó¥ê¥»¥Ã¥È
+	ã‚¨ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³ãƒªã‚»ãƒƒãƒˆ
 ------------------------------------------------------*/
 
 static int menu_reset(void)
@@ -42,7 +44,7 @@ static int menu_reset(void)
 
 
 /*------------------------------------------------------
-	¥¨¥ß¥å¥ì©`¥·¥ç¥óÔÙÆð„Ó
+	ã‚¨ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚·ãƒ§ãƒ³å†èµ·å‹•
 ------------------------------------------------------*/
 #if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
 static int menu_resetdip(void)
@@ -79,7 +81,7 @@ static int menu_restart(void)
 
 
 /*------------------------------------------------------
-	¥Õ¥¡¥¤¥ë¥Ö¥é¥¦¥¶¤Ë‘ø¤ë
+	ãƒ•ã‚¡ã‚¤ãƒ«ãƒ–ãƒ©ã‚¦ã‚¶ã«æˆ»ã‚‹
 ------------------------------------------------------*/
 
 static int menu_browser(void)
@@ -96,7 +98,7 @@ static int menu_browser(void)
 
 
 /*------------------------------------------------------
-	¥¨¥ß¥å¥ì©`¥¿½KÁË
+	ã‚¨ãƒŸãƒ¥ãƒ¬ãƒ¼ã‚¿çµ‚äº†
 ------------------------------------------------------*/
 
 static int menu_exit(void)
@@ -112,7 +114,7 @@ static int menu_exit(void)
 
 
 /*------------------------------------------------------
-	¥³¥Þ¥ó¥É¥ê¥¹¥È±íÊ¾
+	ã‚³ãƒžãƒ³ãƒ‰ãƒªã‚¹ãƒˆè¡¨ç¤º
 ------------------------------------------------------*/
 
 #ifdef COMMAND_LIST
@@ -127,7 +129,7 @@ static int menu_cmdlist(void)
 
 
 /*------------------------------------------------------
-	¥²©`¥àÔO¶¨¥á¥Ë¥å©`
+	ã‚²ãƒ¼ãƒ è¨­å®šãƒ¡ãƒ‹ãƒ¥ãƒ¼
 ------------------------------------------------------*/
 
 #define GAMECFG_MAX_ITEMS	32
@@ -668,6 +670,8 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
 
 
 #define MAX_BUFF 512
+
+void cheats_load_file(char *fn);
 
 void cheats_load(void){
 		
@@ -1314,7 +1318,7 @@ int menu_cheatcfg(void)
 
 */
 /*------------------------------------------------------
-	¥Ü¥¿¥óÔO¶¨¥á¥Ë¥å©`
+	ãƒœã‚¿ãƒ³è¨­å®šãƒ¡ãƒ‹ãƒ¥ãƒ¼
 ------------------------------------------------------*/
 
 #define KEYCFG_MAX_ITEMS	40
@@ -1772,7 +1776,7 @@ static int menu_keycfg(void)
 
 
 /*------------------------------------------------------
-	¥Ç¥£¥Ã¥×¥¹¥¤¥Ã¥ÁÔO¶¨¥á¥Ë¥å©`
+	ãƒ‡ã‚£ãƒƒãƒ—ã‚¹ã‚¤ãƒƒãƒè¨­å®šãƒ¡ãƒ‹ãƒ¥ãƒ¼
 ------------------------------------------------------*/
 
 #if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
@@ -1987,7 +1991,7 @@ static int menu_dipswitch(void)
 
 
 /*------------------------------------------------------
-	¥»©`¥Ö/¥í©`¥É¥¹¥Æ©`¥È
+	ã‚»ãƒ¼ãƒ–/ãƒ­ãƒ¼ãƒ‰ã‚¹ãƒ†ãƒ¼ãƒˆ
 ------------------------------------------------------*/
 
 #ifdef SAVE_STATE
@@ -2011,14 +2015,14 @@ static void state_draw_thumbnail(void)
 	{
 		RECT clip1 = { 0, 0, 112, 152 };
 		RECT clip2 = { 317, 34, 317+112, 34+152 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, video_driver->drawFrame(video_data), &clip1, &clip2);
+		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	else
 #endif
 	{
 		RECT clip1 = { 0, 0, 152, 112 };
 		RECT clip2 = { 298, 52, 298+152, 52+112 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, video_driver->drawFrame(video_data), &clip1, &clip2);
+		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, tex, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	video_driver->endFrame(video_data);
 }
@@ -2406,7 +2410,7 @@ static int menu_state(void)
 
 
 /*------------------------------------------------------
-	¥á¥¤¥ó¥á¥Ë¥å©`
+	ãƒ¡ã‚¤ãƒ³ãƒ¡ãƒ‹ãƒ¥ãƒ¼
 ------------------------------------------------------*/
 
 #define MENU_MAX_ITEMS	16

@@ -10,33 +10,10 @@
 
 #include <stdlib.h>
 #include <SDL.h>
+#include "desktop/desktop.h"
 
 #define OUTPUT_WIDTH 640
 #define OUTPUT_HEIGHT 480
-
-typedef struct texture_layer {
-	SDL_Texture *texture;
-	uint8_t *buffer;
-	uint8_t bytes_per_pixel;
-} texture_layer_t;
-
-typedef struct desktop_video {
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-	bool draw_extra_info;
-	SDL_BlendMode blendMode;
-    
-    // Base clut starting address
-    uint16_t *clut_base;
-	uint8_t *texturesMem;
-
-	// Original buffers containing clut indexes
-	SDL_Texture *sdl_texture_scrbitmap;
-	uint8_t *scrbitmap;
-	
-	texture_layer_t *tex_layers;
-	uint8_t tex_layers_count;
-} desktop_video_t;
 
 /******************************************************************************
 	Global Functions
@@ -134,8 +111,6 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 		texOffset += layer_textures[i].width * layer_textures[i].height * layer_textures[i].bytes_per_pixel;
 	}
 
-	ui_init();
-
 	return desktop;
 }
 
@@ -225,11 +200,6 @@ static void *desktop_workFrame(void *data)
 	return desktop->scrbitmap;
 }
 
-static void *desktop_drawFrame(void *data)
-{
-	return NULL;
-}
-
 static void *desktop_textureLayer(void *data, uint8_t layerIndex)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
@@ -285,7 +255,7 @@ static void desktop_clearFrame(void *data, int index)
 	Fill Specified Frame
 --------------------------------------------------------*/
 
-static void desktop_fillFrame(void *data, void *frame, uint32_t color)
+static void desktop_fillFrame(void *data, int frameIndex, uint32_t color)
 {
 }
 
@@ -387,7 +357,7 @@ static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT 
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -514,7 +484,6 @@ video_driver_t video_desktop = {
 	desktop_endFrame,
 	desktop_frameAddr,
 	desktop_workFrame,
-	desktop_drawFrame,
 	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,

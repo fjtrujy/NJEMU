@@ -36,7 +36,7 @@ This document outlines the remaining work needed to complete the cross-platform 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Frame buffer globals eliminated | ✅ Complete | `draw_frame`, `show_frame`, `work_frame` replaced by vtable getters |
-| `drawFrame()` / `workFrame()` | ✅ Complete | Added to `video_driver_t`, implemented in PSP/PS2/Desktop. `showFrame()` was added then removed (no callers). |
+| `workFrame()` | ✅ Complete | Added to `video_driver_t`, implemented in PSP/PS2/Desktop. `showFrame()` and `drawFrame()` were added then removed (no callers — replaced by frame index parameters). |
 | `beginFrame()` / `endFrame()` | ✅ Complete | Frame lifecycle abstraction for all platforms |
 | `frameAddr()` / `scissor()` | ✅ Complete | Implemented in all 3 platform drivers |
 | All GUI code uses `video_driver->` | ✅ Complete | No remaining bare global references |
@@ -69,7 +69,7 @@ This document outlines the remaining work needed to complete the cross-platform 
 Emulator cores (all 4)               Desktop ui_draw_driver (SDL2)
 Platform drivers (all 9)             PS2 ui_draw_driver (gsKit)
 Video driver vtable                  Portable GUI logic → src/common/
-Frame buffer abstraction             CMake NO_GUI for PS2/Desktop
+Frame buffer abstraction             CMake GUI for PS2/Desktop
 beginFrame/endFrame                  File browser POSIX porting
 frameAddr/scissor                    PNG loading cross-platform
 PSP GUI (fully working)
@@ -426,10 +426,10 @@ PS2 uses gsKit for 2D rendering. Drawing primitive mapping:
 
 ### 2.5 Update CMakeLists.txt
 
-The current `NO_GUI=OFF` block in `CMakeLists.txt` uses `${PLATFORM_LOWER}/` prefix for **all** GUI files, which only works for PSP since only `src/psp/` has the full file tree. After moving shared data to common, it should become:
+The current `GUI=ON` block in `CMakeLists.txt` uses `${PLATFORM_LOWER}/` prefix for **all** GUI files, which only works for PSP since only `src/psp/` has the full file tree. After moving shared data to common, it should become:
 
 ```cmake
-if (NO_GUI)
+if (NOT GUI)
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
@@ -477,7 +477,7 @@ else()
 endif()
 ```
 
-**Note:** The current CMakeLists.txt compiles fonts from `${PLATFORM_LOWER}/font/`, GUI from `${PLATFORM_LOWER}/`, and icons from `${PLATFORM_LOWER}/icon/`. The PSP build currently works with `NO_GUI=OFF` but PS2 and Desktop would fail because those directories don't exist under `src/ps2/` or `src/desktop/`.
+**Note:** The current CMakeLists.txt compiles fonts from `${PLATFORM_LOWER}/font/`, GUI from `${PLATFORM_LOWER}/`, and icons from `${PLATFORM_LOWER}/icon/`. The PSP build currently works with `GUI=ON` but PS2 and Desktop would fail because those directories don't exist under `src/ps2/` or `src/desktop/`.
 
 ### 2.6 PNG Loading
 
@@ -506,7 +506,7 @@ endif()
 5. [x] Move menu data to `src/common/menu/` (cps.c, mvs.c, ncdz.c)
 6. [x] Move per-target config to `src/common/config/` (cps.c, mvs.c, ncdz.c)
 7. [x] Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
-8. [x] Verify PSP still builds with `NO_GUI=OFF`
+8. [x] Verify PSP still builds with `GUI=ON`
 
 ### Step 2: Make `ui_draw.c` Portable
 
@@ -534,8 +534,8 @@ endif()
     - `psp_ui_draw_fillRect()` — colored rectangle via sceGu
     - `psp_ui_draw_drawLine()` — line via sceGu
     - etc.
-15. [x] Wire PSP driver in `psp_video.c` — `ui_draw_driver = &psp_ui_draw_driver;` (guarded by `#ifndef NO_GUI`)
-16. [x] Build and test PSP with `NO_GUI=OFF` — must be identical to before
+15. [x] Wire PSP driver in `psp_video.c` — `ui_draw_driver = &psp_ui_draw_driver;` (guarded by `#ifdef GUI`)
+16. [x] Build and test PSP with `GUI=ON` — must be identical to before
 
 ### Step 4: Desktop `ui_draw_driver` Backend
 
@@ -549,16 +549,16 @@ endif()
     - `desktop_ui_draw_drawLine()` — `SDL_RenderDrawLine`
     - `desktop_ui_draw_fillRectGradient()` — multiple `SDL_RenderDrawLine` with interpolation
 18. [ ] Wire Desktop driver in `desktop_platform.c`
-19. [ ] Build Desktop with `NO_GUI=OFF` — test text rendering + boxes
+19. [ ] Build Desktop with `GUI=ON` — test text rendering + boxes
 20. [ ] Create simple test: file browser + menu visible and interactive
 
 ### Step 5: Extract Portable GUI Logic
 
 **Goal:** Move the rest of the GUI code to common
 
-21. [ ] Extract `src/psp/ui.c` → `src/common/ui.c` (replace `scePower*` with `power_driver->`)
-22. [ ] Extract `src/psp/ui_menu.c` → `src/common/ui_menu.c` (minimal changes)
-23. [ ] Extract `src/psp/filer.c` browser → `src/common/filer.c` (replace `sceIoDread` with POSIX)
+21. [x] Extract `src/psp/filer.c` browser → `src/common/filer.c` (replace `sceIoDread` with POSIX `opendir`/`readdir`)
+22. [ ] Extract `src/psp/ui.c` → `src/common/ui.c` (replace `scePower*` with `power_driver->`)
+23. [ ] Extract `src/psp/ui_menu.c` → `src/common/ui_menu.c` (minimal changes)
 24. [ ] Extract `src/psp/config.c` → `src/common/config.c` (adjust paths)
 25. [ ] Verify PSP still builds and runs correctly after extraction
 26. [ ] Test Desktop GUI end-to-end (file browser → load ROM → in-game menu)
@@ -734,7 +734,7 @@ endif()
 14. ✅ Move `src/psp/menu/*.c` → `src/common/menu/`
 15. ✅ Move `src/psp/config/*.c` → `src/common/config/` (per-target configs)
 16. ✅ Update CMakeLists.txt paths to reference `common/` instead of `${PLATFORM_LOWER}/`
-17. ✅ Verify PSP still builds with `NO_GUI=OFF`
+17. ✅ Verify PSP still builds with `GUI=ON`
 
 ### Then: Make `ui_draw.c` Portable (Step 2)
 
@@ -747,13 +747,13 @@ endif()
 
 22. 🔲 Create `src/psp/psp_ui_draw.c` wrapping existing sceGu calls
 23. 🔲 Wire driver in `psp_platform.c`
-24. 🔲 Build and test PSP with `NO_GUI=OFF` — must be identical to before
+24. 🔲 Build and test PSP with `GUI=ON` — must be identical to before
 
 ### Then: Desktop `ui_draw_driver` Backend (Step 4)
 
 25. 🔲 Create `src/desktop/desktop_ui_draw.c` using SDL2 renderer
 26. 🔲 Wire driver in `desktop_platform.c`
-27. 🔲 Build and test Desktop with `NO_GUI=OFF`
+27. 🔲 Build and test Desktop with `GUI=ON`
 
 ### Then: Extract Portable GUI Logic (Step 5)
 

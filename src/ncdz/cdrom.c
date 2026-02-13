@@ -145,7 +145,7 @@ static void show_loading_image(void)
 
 	sprintf(path, "%sdata/%s", launchDir, "loading.png");
 
-#if !defined(NO_GUI)
+#if defined(GUI)
 	if (load_png(path, -1) == 0) 
 #endif
 	{

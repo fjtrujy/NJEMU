@@ -7,8 +7,8 @@
 ******************************************************************************/
 
 #include <limits.h>
-#include "psp.h"
 #include "emumain.h"
+#include "common/config.h"
 
 #define LINEBUF_SIZE	256
 
@@ -21,6 +21,11 @@ enum
 	CFG_PAD,
 	CFG_STR
 };
+
+/* PSP clock constants (fallback for non-PSP platforms) */
+#ifndef PSPCLOCK_333
+#define PSPCLOCK_333		333
+#endif
 
 enum
 {
@@ -59,7 +64,7 @@ typedef struct cfg2_t
 
 
 /******************************************************************************
-	¥í©`¥«¥ë˜‹ÔìÌå/‰äÊı
+	ãƒ­ãƒ¼ã‚«ãƒ«æ§‹é€ ä½“/å¤‰æ•°
 ******************************************************************************/
 
 #define INIVERSION	23
@@ -136,11 +141,11 @@ static const PADNAME pad_name[13] =
 
 
 /******************************************************************************
-	¥í©`¥«¥ëévÊı
+	ãƒ­ãƒ¼ã‚«ãƒ«é–¢æ•°
 ******************************************************************************/
 
 /*------------------------------------------------------
-	CFG_BOOL¤Î‚¤òÕi¤ßŞz¤à
+	CFG_BOOLã®å€¤ã‚’èª­ã¿è¾¼ã‚€
 ------------------------------------------------------*/
 
 static int get_config_bool(char *str)
@@ -153,7 +158,7 @@ static int get_config_bool(char *str)
 
 
 /*------------------------------------------------------
-	CFG_INT¤Î‚¤òÕi¤ßŞz¤à
+	CFG_INTã®å€¤ã‚’èª­ã¿è¾¼ã‚€
 ------------------------------------------------------*/
 
 static int get_config_int(char *str, int maxval)
@@ -167,7 +172,7 @@ static int get_config_int(char *str, int maxval)
 
 
 /*------------------------------------------------------
-	CFG_PAD¤Î‚¤òÕi¤ßŞz¤à
+	CFG_PADã®å€¤ã‚’èª­ã¿è¾¼ã‚€
 ------------------------------------------------------*/
 
 static int get_config_pad(char *str)
@@ -185,7 +190,7 @@ static int get_config_pad(char *str)
 
 
 /*------------------------------------------------------
-	CFG_BOOL¤Î‚¤ò±£´æ¤¹¤ë
+	CFG_BOOLã®å€¤ã‚’ä¿å­˜ã™ã‚‹
 ------------------------------------------------------*/
 
 static const char *set_config_bool(int value)
@@ -198,7 +203,7 @@ static const char *set_config_bool(int value)
 
 
 /*------------------------------------------------------
-	CFG_INT¤Î‚¤ò±£´æ¤¹¤ë
+	CFG_INTã®å€¤ã‚’ä¿å­˜ã™ã‚‹
 ------------------------------------------------------*/
 
 static char *set_config_int(int value, int maxval)
@@ -215,7 +220,7 @@ static char *set_config_int(int value, int maxval)
 
 
 /*------------------------------------------------------
-	CFG_PAD¤Î‚¤ò±£´æ¤¹¤ë
+	CFG_PADã®å€¤ã‚’ä¿å­˜ã™ã‚‹
 ------------------------------------------------------*/
 
 static const char *set_config_pad(int value)
@@ -233,7 +238,7 @@ static const char *set_config_pad(int value)
 
 
 /*------------------------------------------------------
-	.ini¥Õ¥¡¥¤¥ë¤«¤éÔO¶¨¤òÕi¤ßŞz¤à
+	.iniãƒ•ã‚¡ã‚¤ãƒ«ã‹ã‚‰è¨­å®šã‚’èª­ã¿è¾¼ã‚€
 ------------------------------------------------------*/
 
 static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
@@ -249,7 +254,7 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 		{
 			char *name, *value;
 
-			memset(linebuf, LINEBUF_SIZE, 0);
+			memset(linebuf, 0, LINEBUF_SIZE);
 			if (fgets(linebuf, LINEBUF_SIZE - 1, fp) == NULL)
 				break;
 
@@ -288,7 +293,7 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 				char *name, *value;
 				char *p1, *p2, temp[LINEBUF_SIZE];
 
-				memset(linebuf, LINEBUF_SIZE, 0);
+			memset(linebuf, 0, LINEBUF_SIZE);
 				if (fgets(linebuf, LINEBUF_SIZE - 1, fp) == NULL)
 					break;
 
@@ -341,7 +346,7 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 
 
 /*------------------------------------------------------
-	.ini¥Õ¥¡¥¤¥ë¤ËÔO¶¨¤ò±£´æ
+	.iniãƒ•ã‚¡ã‚¤ãƒ«ã«è¨­å®šã‚’ä¿å­˜
 ------------------------------------------------------*/
 
 static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
@@ -389,7 +394,7 @@ static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 
 
 /******************************************************************************
-	¥°¥í©`¥Ğ¥ëévÊı
+	ã‚°ãƒ­ãƒ¼ãƒãƒ«é–¢æ•°
 ******************************************************************************/
 
 /*------------------------------------------------------
@@ -428,6 +433,8 @@ void load_settings(void)
 	}
 	else if (ini_version != INIVERSION)
 	{
+		char inipath[PATH_MAX];
+
 		for (i = 0; default_options[i].name; i++)
 		{
 			if (default_options[i].value)
@@ -449,7 +456,8 @@ void load_settings(void)
 
 		sprintf(startupDir, "%sroms", launchDir);
 
-		remove(inifile_name);
+		sprintf(inipath, "%s%s", launchDir, inifile_name);
+		remove(inipath);
 		delete_files("nvram", "nv");
 		delete_files("config", "ini");
 
@@ -473,7 +481,7 @@ void save_settings(void)
 
 
 /*------------------------------------------------------
-	¥²©`¥à¤ÎÔO¶¨¤òÕi¤ßŞz¤à
+	ã‚²ãƒ¼ãƒ ã®è¨­å®šã‚’èª­ã¿è¾¼ã‚€
 ------------------------------------------------------*/
 
 void load_gamecfg(const char *name)
@@ -529,7 +537,7 @@ void load_gamecfg(const char *name)
 
 
 /*------------------------------------------------------
-	¥²©`¥à¤ÎÔO¶¨¤ò±£´æ¤¹¤ë
+	ã‚²ãƒ¼ãƒ ã®è¨­å®šã‚’ä¿å­˜ã™ã‚‹
 ------------------------------------------------------*/
 
 void save_gamecfg(const char *name)

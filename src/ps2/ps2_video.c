@@ -27,6 +27,11 @@
 /* turn black GS Screen */
 #define GS_BLACK GS_SETREG_RGBA(0x00, 0x00, 0x00, 0x80)
 
+/* Alpha blending: Cs*As + Cd*(1-As) */
+#define GS_ALPHA_BLEND GS_SETREG_ALPHA(0, 1, 0, 1, 0)
+#define gs_enable_alpha_blend(gsGlobal)  gsKit_set_primalpha(gsGlobal, GS_ALPHA_BLEND, 0)
+#define gs_disable_alpha_blend(gsGlobal) gsKit_set_primalpha(gsGlobal, GS_ALPHA_BLEND, 1)
+
 /******************************************************************************
  * PS2 CLUT (Color Look-Up Table) Architecture
  * ============================================
@@ -100,7 +105,6 @@ typedef struct ps2_video {
 	gs_rgbaq clearScreenColor;
 	gs_texclut currentTexclut;
 	GSGLOBAL *gsGlobal;
-	bool drawExtraInfo;
 
 	GSTEXTURE *scrbitmap;
 
@@ -367,11 +371,6 @@ static void *ps2_workFrame(void *data)
 	return (void *)ps2->scrbitmap->Vram;
 }
 
-static void *ps2_drawFrame(void *data)
-{
-	return NULL;
-}
-
 static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -462,9 +461,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->vram_cluts = vram_cluts;
 
 	ps2->vertexColor = color_to_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
-	ps2->clearScreenColor = color_to_RGBAQ(0x00, 0x00, 0x00, 0x0, 0);
-
-	ui_init();
+	ps2->clearScreenColor = color_to_RGBAQ(0x00, 0x00, 0x00, 0x80, 0);
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
 
@@ -472,8 +469,6 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
 	ps2_flipScreen(ps2, true);
-
-	ps2->drawExtraInfo = false;
 
 	return ps2;
 }
@@ -521,9 +516,8 @@ static void ps2_free(void *data)
 
 static void ps2_waitVsync(void *data)
 {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-
-	gsKit_sync_flip(ps2->gsGlobal);
+	(void)data;
+	gsKit_vsync_wait();
 }
 
 
@@ -547,7 +541,8 @@ static void ps2_flipScreen(void *data, bool vsync)
 
 static void ps2_beginFrame(void *data)
 {
-	/* No-op: gsKit queues commands implicitly */
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gsKit_renderToScreen(ps2->gsGlobal);
 }
 
 static void ps2_endFrame(void *data)
@@ -623,17 +618,46 @@ static void ps2_clearFrame(void *data, int index)
 	Fill Specified Frame
 --------------------------------------------------------*/
 
-static void ps2_fillFrame(void *data, void *frame, uint32_t color)
+static void ps2_fillFrame(void *data, int frameIndex, uint32_t color)
 {
-	// TODO: FJTRUJY so far just used by the menu
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	uint8_t alpha = color >> 24;
+	uint8_t blue = color >> 16;
+	uint8_t green = color >> 8;
+	uint8_t red = color >> 0;
+	gs_rgbaq ps2_color = color_to_RGBAQ(red, green, blue, 0x80, 0);
 
-	// sceGuStart(GU_DIRECT, gulist);
-	// sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
-	// sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
-	// sceGuClearColor(color);
-	// sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	gsKit_clear(ps2->gsGlobal, ps2_color.color.rgbaq);
+
+
+
+	// /* Temporarily disable alpha testing so the fill isn't rejected */
+	// u8 prevATE = ps2->gsGlobal->Test->ATE;
+	// ps2->gsGlobal->Test->ATE = GS_SETTING_OFF;
+	// gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
+
+	// /* Fill the scrbitmap render texture with the desired color,
+	//    then blit it to the screen — mimicking the game rendering pipeline. */
+
+	// /* Step 1: Render to scrbitmap and clear with color */
+	// gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
+	// gsKit_renderToTexture(ps2->gsGlobal, ps2->scrbitmap);
+	// gsKit_custom_clear(ps2->gsGlobal, ps2_color, ps2->scrbitmap->Width, ps2->scrbitmap->Height);
+
+	// /* Step 2: Blit scrbitmap to screen */
+	// GSPRIMUVPOINTFLAT textureVertex[2];
+	// textureVertex[0].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, -0.5f, -0.5f, 0);
+	// textureVertex[0].uv = vertex_to_UV(ps2->scrbitmap, 0, 0);
+	// textureVertex[1].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, ps2->gsGlobal->Width - 0.5f, ps2->gsGlobal->Height - 0.5f, 0);
+	// textureVertex[1].uv = vertex_to_UV(ps2->scrbitmap, ps2->gsGlobal->Width, ps2->gsGlobal->Height);
+
+	// gsKit_renderToScreen(ps2->gsGlobal);
+	// gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
+	// gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, 2, textureVertex);
+
+	// /* Restore alpha testing */
+	// ps2->gsGlobal->Test->ATE = prevATE;
+	// gsKit_set_test(ps2->gsGlobal, 0);
 }
 
 
@@ -674,52 +698,6 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	gsKit_renderToScreen(ps2->gsGlobal);
 	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, textureVertexCount, textureVertex);
-
-
-
-	// printf("transferWorkFrame %d\n", transfer_count);
-	// // sleep(1);
-    // if (transfer_count == 530) {
-        // SleepThread();
-    // }
-	if (!ps2->drawExtraInfo) return;
-	gs_rgbaq color = color_to_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
-
-	// Choose texture to print
-	GSTEXTURE *tex = ps2->tex_layers[0].texture;
-
-	#define LEFT 350
-	#define TOP 20
-	#define RIGHT (LEFT + tex->Width / 2)
-	#define BOTTOM (TOP + tex->Height / 2)
-	#define BORDER_LEFT LEFT - 1
-	#define BORDER_TOP TOP - 1
-	#define BORDER_RIGHT RIGHT + 1
-	#define BORDER_BOTTOM BOTTOM + 1
-
-	gsKit_prim_quad(ps2->gsGlobal, 
-		BORDER_LEFT, BORDER_TOP, 
-		BORDER_RIGHT, BORDER_TOP, 
-		BORDER_LEFT, BORDER_BOTTOM, 
-		BORDER_RIGHT, BORDER_BOTTOM, 
-		0, GS_SETREG_RGBA(0x80, 0, 0, 0x80));
-	gsKit_prim_quad(ps2->gsGlobal, 
-		LEFT, TOP, 
-		RIGHT, TOP, 
-		LEFT, BOTTOM, 
-		RIGHT, BOTTOM, 
-		0, GS_SETREG_RGBA(0, 0, 0, 0x80));
-
-	GSPRIMUVPOINTFLAT *verts2 = (GSPRIMUVPOINTFLAT *)malloc(sizeof(GSPRIMUVPOINTFLAT) * 2);
-	verts2[0].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, LEFT, TOP, 0);
-	verts2[0].uv = vertex_to_UV(tex, 0, 0);
-
-	verts2[1].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, RIGHT, BOTTOM, 0);
-	verts2[1].uv = vertex_to_UV(tex, tex->Width, tex->Height);
-
-	gskit_prim_list_sprite_texture_uv_flat_color(ps2->gsGlobal, tex, color, 2, verts2);
-
-	free(verts2);
 }
 
 static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
@@ -929,7 +907,7 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	// TODO: FJTRUJY so far just used by the menu
 
@@ -1131,6 +1109,249 @@ static void ps2_clearColorBuffer(void *data) {
 					   RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
 }
 
+/*------------------------------------------------------
+	UI Drawing Functions (for menu/GUI)
+------------------------------------------------------*/
+
+static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int su, int sv, int sw, int sh,
+	int dx, int dy, int dw, int dh, int blend)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	
+	if (!tex) return;
+
+	/* For UI sprites, we receive a texture pointer but can't easily wrap it in GSTEXTURE
+	   For now, implement a simple colored rect that matches the sprite dimensions
+	   TODO: Properly integrate GSTEXTURE wrapper for UI textures */
+	
+	uint32_t color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+
+	if (blend) {
+		gs_enable_alpha_blend(gsGlobal);
+	}
+
+	gsKit_prim_quad(gsGlobal, dx, dy, dx + dw, dy, dx, dy + dh, dx + dw, dy + dh, 0, color);
+
+	if (blend) {
+		gs_disable_alpha_blend(gsGlobal);
+	}
+}
+
+static void ps2_drawUILine(void *data,
+	int x1, int y1, int x2, int y2, uint32_t color)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	
+	uint8_t a = (color >> 24) & 0xFF;
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+
+	int has_alpha = a != 0xFF;
+
+	if (has_alpha) {
+		gs_enable_alpha_blend(gsGlobal);
+	}
+
+	gsKit_prim_line(gsGlobal, x1, y1, x2, y2, 0, GS_SETREG_RGBA(r, g, b, a));
+
+	if (has_alpha) {
+		gs_disable_alpha_blend(gsGlobal);
+	}
+}
+
+static void ps2_drawUILineGradient(void *data,
+	int x1, int y1, int x2, int y2,
+	uint32_t color1, uint32_t color2)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	int steps, i;
+	int dx, dy;
+
+	gs_enable_alpha_blend(gsGlobal);
+
+	dx = x2 - x1;
+	dy = y2 - y1;
+	steps = (dx > 0 ? dx : -dx) > (dy > 0 ? dy : -dy) ? 
+	        (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
+
+	if (steps == 0) return;
+
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+
+	for (i = 0; i <= steps; i++) {
+		float t = (float)i / steps;
+		int x = x1 + (int)(dx * t);
+		int y = y1 + (int)(dy * t);
+		
+		uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
+		uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
+		uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+		uint8_t a = (uint8_t)(a1 + (a2 - a1) * t);
+
+		gsKit_prim_point(gsGlobal, x, y, 0, GS_SETREG_RGBA(r, g, b, a));
+	}
+
+	gs_disable_alpha_blend(gsGlobal);
+}
+
+static void ps2_drawUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	uint8_t a = (color >> 24) & 0xFF;
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+	gs_rgbaq rgbaq = color_to_RGBAQ(r, g, b, a, 0);
+
+	int sx = x;
+	int sy = y;
+	int ex = x + w;
+	int ey = y + h;
+
+	/* 4 lines = 8 vertices (line list: each pair is a segment) */
+	GSPRIMPOINT vertices[8];
+
+	/* top */
+	vertices[0].xyz2 = vertex_to_XYZ2(gsGlobal, sx, sy, 0);
+	vertices[0].rgbaq = rgbaq;
+	vertices[1].xyz2 = vertex_to_XYZ2(gsGlobal, ex, sy, 0);
+	vertices[1].rgbaq = rgbaq;
+
+	/* right */
+	vertices[2].xyz2 = vertex_to_XYZ2(gsGlobal, ex, sy, 0);
+	vertices[2].rgbaq = rgbaq;
+	vertices[3].xyz2 = vertex_to_XYZ2(gsGlobal, ex, ey, 0);
+	vertices[3].rgbaq = rgbaq;
+
+	/* bottom */
+	vertices[4].xyz2 = vertex_to_XYZ2(gsGlobal, ex, ey, 0);
+	vertices[4].rgbaq = rgbaq;
+	vertices[5].xyz2 = vertex_to_XYZ2(gsGlobal, sx, ey, 0);
+	vertices[5].rgbaq = rgbaq;
+
+	/* left */
+	vertices[6].xyz2 = vertex_to_XYZ2(gsGlobal, sx, ey, 0);
+	vertices[6].rgbaq = rgbaq;
+	vertices[7].xyz2 = vertex_to_XYZ2(gsGlobal, sx, sy, 0);
+	vertices[7].rgbaq = rgbaq;
+
+	gsKit_prim_list_line_goraud_3d(gsGlobal, 8, vertices);
+}
+
+static void ps2_fillUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	uint8_t a = (color >> 24) & 0xFF;
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+	gs_rgbaq rgbaq = color_to_RGBAQ(r, g, b, a, 0);
+	int has_alpha = a != 0xFF;
+
+	int sx = x;
+	int sy = y;
+	int ex = x + w;
+	int ey = y + h;
+
+	gs_xyz2 vertices[2];
+	vertices[0] = vertex_to_XYZ2(gsGlobal, sx, sy, 0);
+	vertices[1] = vertex_to_XYZ2(gsGlobal, ex, ey, 0);
+
+	if (has_alpha) {
+		gs_enable_alpha_blend(gsGlobal);
+	}
+
+	gsKit_prim_list_sprite_flat_color(gsGlobal, rgbaq, 2, vertices);
+
+	if (has_alpha) {
+		gs_disable_alpha_blend(gsGlobal);
+	}
+}
+
+static void ps2_fillUIRectGradient(void *data,
+	int x, int y, int w, int h,
+	uint32_t color1, uint32_t color2, int direction)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+
+	gs_enable_alpha_blend(gsGlobal);
+
+	int sx = x;
+	int sy = y;
+	int ex = x + w;
+	int ey = y + h;
+	int i;
+	int lines = direction == 0 ? w : h;
+	int count = lines * 2;
+	GSPRIMPOINT vertices[count];
+
+	if (direction == 0) {
+		/* Horizontal gradient: w vertical lines */
+		for (i = 0; i < lines; i++) {
+			float t = (float)i / (lines - 1);
+			gs_rgbaq rgbaq = color_to_RGBAQ(
+				(uint8_t)(r1 + (r2 - r1) * t),
+				(uint8_t)(g1 + (g2 - g1) * t),
+				(uint8_t)(b1 + (b2 - b1) * t),
+				(uint8_t)(a1 + (a2 - a1) * t), 0);
+
+			vertices[i * 2].xyz2 = vertex_to_XYZ2(gsGlobal, sx + i, sy, 0);
+			vertices[i * 2].rgbaq = rgbaq;
+			vertices[i * 2 + 1].xyz2 = vertex_to_XYZ2(gsGlobal, sx + i, ey, 0);
+			vertices[i * 2 + 1].rgbaq = rgbaq;
+		}
+	} else {
+		/* Vertical gradient: h horizontal lines */
+		for (i = 0; i < lines; i++) {
+			float t = (float)i / (lines - 1);
+			gs_rgbaq rgbaq = color_to_RGBAQ(
+				(uint8_t)(r1 + (r2 - r1) * t),
+				(uint8_t)(g1 + (g2 - g1) * t),
+				(uint8_t)(b1 + (b2 - b1) * t),
+				(uint8_t)(a1 + (a2 - a1) * t), 0);
+
+			vertices[i * 2].xyz2 = vertex_to_XYZ2(gsGlobal, sx, sy + i, 0);
+			vertices[i * 2].rgbaq = rgbaq;
+			vertices[i * 2 + 1].xyz2 = vertex_to_XYZ2(gsGlobal, ex, sy + i, 0);
+			vertices[i * 2 + 1].rgbaq = rgbaq;
+		}
+	}
+
+	gsKit_prim_list_line_goraud_3d(gsGlobal, count, vertices);
+
+	gs_disable_alpha_blend(gsGlobal);
+}
+
 video_driver_t video_ps2 = {
 	"ps2",
 	ps2_init,
@@ -1141,7 +1362,6 @@ video_driver_t video_ps2 = {
 	ps2_endFrame,
 	ps2_frameAddr,
 	ps2_workFrame,
-	ps2_drawFrame,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,
@@ -1163,10 +1383,10 @@ video_driver_t video_ps2 = {
 	ps2_disableDepthTest,
 	ps2_clearDepthBuffer,
 	ps2_clearColorBuffer,
-	NULL, // drawUISprite
-	NULL, // drawUILine
-	NULL, // drawUILineGradient
-	NULL, // drawUIRect
-	NULL, // fillUIRect
-	NULL, // fillUIRectGradient
+	ps2_drawUISprite,
+	ps2_drawUILine,
+	ps2_drawUILineGradient,
+	ps2_drawUIRect,
+	ps2_fillUIRect,
+	ps2_fillUIRectGradient,
 };

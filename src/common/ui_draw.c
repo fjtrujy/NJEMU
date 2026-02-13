@@ -12,6 +12,7 @@
 
 #include "common/ui_draw.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui.h"
 #include "stdarg.h"
 
 

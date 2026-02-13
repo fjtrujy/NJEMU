@@ -384,7 +384,7 @@ cmake --build build_psp_cps1
 | `KERNEL_MODE` | Enable kernel mode (PSP) | OFF |
 | `COMMAND_LIST` | Enable command list display | OFF |
 | `ADHOC` | Enable Ad Hoc multiplayer | OFF |
-| `NO_GUI` | Disable GUI (headless mode) | ON |
+| `GUI` | Enable GUI menu system | OFF |
 | `SAVE_STATE` | Enable save state support | OFF |
 | `RELEASE` | Release build | OFF |
 
@@ -534,9 +534,9 @@ After a successful build, you'll find the following files in the build directory
 - `EBOOT.PBP` - The main executable for PSP
 - Resource files copied from `resources/{TARGET}/`
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "sf2" > game_name.ini
@@ -640,9 +640,9 @@ After a successful build, you'll find the following files in the build directory
 - `{TARGET}.elf` - The main executable for PS2
 - Resource files copied from `resources/{TARGET}/`
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "mslug" > game_name.ini
@@ -742,9 +742,9 @@ After a successful build, you'll find the following files in the build directory
 - `{TARGET}` - The main executable
 - Resource files copied from `resources/{TARGET}/`
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "mslug" > game_name.ini

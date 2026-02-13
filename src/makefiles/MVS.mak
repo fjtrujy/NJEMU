@@ -55,7 +55,7 @@ COREOBJS = \
 	sound/2610intf.o \
 	sound/ym2610.o
 
-ifeq ($(NO_GUI), 0)
+ifeq ($(GUI), 1)
 ICONOBJS = \
 	$(OS)/icon/mvs_s.o \
 	$(OS)/icon/mvs_l.o

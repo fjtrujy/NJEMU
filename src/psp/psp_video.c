@@ -164,8 +164,6 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 	sceDisplayWaitVblankStart();
 	sceGuDisplay(GU_TRUE);
 
-	ui_init();
-
 	psp->current_tex_layer = NULL;
 	psp->current_clut = NULL;
 
@@ -241,10 +239,25 @@ static void psp_endFrame(void *data)
 }
 
 /*--------------------------------------------------------
-		Get VRAM Address
+		Resolve frame index to VRAM pointer
 --------------------------------------------------------*/
 
-static void *psp_resolveFrame(psp_video_t *psp, int index);
+static void *psp_resolveFrame(psp_video_t *psp, int index) {
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		return (void *)psp->show_frame;
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		return (void *)psp->draw_frame;
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
+		return (void *)psp->scrbitmap;
+	default:
+		return (void *)psp->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].buffer;
+	}
+}
+
+/*--------------------------------------------------------
+		Get VRAM Address
+--------------------------------------------------------*/
 
 static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 {
@@ -257,12 +270,6 @@ static void *psp_workFrame(void *data)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 	return (void *)psp->scrbitmap;
-}
-
-static void *psp_drawFrame(void *data)
-{
-	psp_video_t *psp = (psp_video_t *)data;
-	return (void *)psp->draw_frame;
 }
 
 static void *psp_textureLayer(void *data, uint8_t layerIndex)
@@ -334,29 +341,14 @@ static void psp_clearFrame(void *data, int index) {
 		Fill Specified Frame
 --------------------------------------------------------*/
 
-static void psp_fillFrame(void *data, void *frame, uint32_t color)
+static void psp_fillFrame(void *data, int frameIndex, uint32_t color)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	void *frame = psp_resolveFrame(psp, frameIndex);
 	sceGuDrawBufferList(pixel_format, frame, BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuClearColor(color);
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-}
-
-/*--------------------------------------------------------
-		Resolve frame index to VRAM pointer
---------------------------------------------------------*/
-
-static void *psp_resolveFrame(psp_video_t *psp, int index) {
-	switch (index) {
-	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
-		return (void *)psp->show_frame;
-	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
-		return (void *)psp->draw_frame;
-	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
-		return (void *)psp->scrbitmap;
-	default:
-		return (void *)psp->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].buffer;
-	}
 }
 
 /*--------------------------------------------------------
@@ -603,9 +595,11 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 --------------------------------------------------------*/
 
 static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
-							void *src, void *dst, RECT *src_rect,
+							void *src, int dstIndex, RECT *src_rect,
 							RECT *dst_rect)
 {
+	psp_video_t *psp = (psp_video_t *)data;
+	void *dst = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
 	struct Vertex *vertices;
 
@@ -1027,7 +1021,6 @@ video_driver_t video_psp = {
 	psp_endFrame,
 	psp_frameAddr,
 	psp_workFrame,
-	psp_drawFrame,
 	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,

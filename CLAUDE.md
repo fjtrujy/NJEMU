@@ -57,7 +57,7 @@ make -j4
 
 ### Useful CMake Options
 
-- `NO_GUI=ON` (default) - Disable GUI, use stub UI
+- `GUI=OFF` (default) - Enable GUI menu system
 - `USE_ASAN=ON` - AddressSanitizer
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording

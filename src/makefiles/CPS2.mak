@@ -42,7 +42,7 @@ COREOBJS = \
 	cps2/eeprom.o \
 	sound/qsound.o
 
-ifeq ($(NO_GUI), 0)
+ifeq ($(GUI), 1)
 ICONOBJS = \
 	$(OS)/icon/cps_s.o \
 	$(OS)/icon/cps_l.o

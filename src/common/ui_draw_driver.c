@@ -10,7 +10,7 @@
 #include <stddef.h>
 
 /******************************************************************************
-	Null Driver — used when NO_GUI is set or before platform init
+	Null Driver — used when GUI is not set or before platform init
 ******************************************************************************/
 
 static void *null_init(void *video_data)
@@ -128,7 +128,7 @@ const ui_draw_driver_t null_ui_draw_driver = {
 ******************************************************************************/
 
 const ui_draw_driver_t *ui_draw_drivers[] = {
-#if !defined(NO_GUI)
+#if defined(GUI)
 #  if defined(PSP)
 	&psp_ui_draw_driver,
 #  elif defined(PS2)

@@ -451,7 +451,7 @@ void save_snapshot(void)
 
 int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-#if defined(NO_GUI)
+#if !defined(GUI)
 	// Some default values
 	option_speedlimit = 1;
 	option_vsync = 0;
@@ -524,6 +524,8 @@ int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
+
+	ui_init();
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	// Platform system buttom

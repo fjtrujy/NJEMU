@@ -14,6 +14,9 @@
 #include <stdio.h>
 #include "emumain.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui.h"
+#include "common/ui_draw.h"
+#include "common/config.h"
 
 
 /******************************************************************************
@@ -156,7 +159,7 @@ void find_state_file(uint8_t *slot)
 	GUI File Browser (only compiled when GUI is enabled)
 ******************************************************************************/
 
-#ifndef NO_GUI
+#ifdef GUI
 
 #include <zlib.h>
 #include <ctype.h>
@@ -945,7 +948,7 @@ void file_browser(void)
 	strcpy(startupDir, curr_dir);
 	load_settings();
 	video_driver->beginFrame(video_data);
-	ui_fill_frame(video_driver->drawFrame(video_data), UI_PAL_BG2);
+	video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, UI_PAL_BG2);
 	video_driver->endFrame(video_data);
 
 	load_background(WP_LOGO);
@@ -1472,4 +1475,4 @@ error:
 #endif
 }
 
-#endif /* !NO_GUI */
+#endif /* GUI */

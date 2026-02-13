@@ -52,7 +52,7 @@ option(LARGE_MEMORY "Large Memory" OFF)
 option(KERNEL_MODE "Kernel Mode" OFF)
 option(COMMAND_LIST "Command List" OFF)
 option(ADHOC "Ad Hoc" OFF)
-option(NO_GUI "No GUI" ON)
+option(GUI "GUI" OFF)
 option(SAVE_STATE "Save State" OFF)
 option(RELEASE "Release" OFF)
 option(SYSTEM_BUTTONS "System Buttons" OFF)
@@ -60,8 +60,8 @@ option(USE_ASAN "Use ASAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 
 # Add options to compiler definitions
-if (NO_GUI)
-    add_definitions(-DNO_GUI)
+if (GUI)
+    add_definitions(-DGUI)
 endif()
 
 # Version
@@ -215,7 +215,7 @@ if (SAVE_STATE)
     )
 endif()
 
-if (NO_GUI)
+if (NOT GUI)
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
@@ -233,18 +233,21 @@ else()
         common/font/gbk_tbl.c
     )
 
-    # GUI source files (common portable code)
+    # UI drawing primitives (portable core)
     set(COMMON_SRC ${COMMON_SRC}
-        common/ui_draw.h
         common/ui_draw.c
     )
 
-    # GUI source files (platform-specific)
+    # GUI source files (portable code now in common/)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/ui.c
+        common/ui_menu.c
+        common/config.c
+    )
+
+    # GUI source files (platform-specific UI drawing driver)
     set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/config.c
-        ${PLATFORM_LOWER}/ui.c
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
-        ${PLATFORM_LOWER}/ui_menu.c
         ${PLATFORM_LOWER}/png.c
     )
 

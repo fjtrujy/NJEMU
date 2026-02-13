@@ -1,33 +1,33 @@
 /******************************************************************************
 
-	ui.c
+	ui.h
 
-	��`�����󥿥ե��`���I��
+	User Interface Functions
 
 ******************************************************************************/
 
-#ifndef PSP_UI_H
-#define PSP_UI_H
+#ifndef COMMON_UI_H
+#define COMMON_UI_H
 
 #define UI_FULL_REFRESH		1
 #define UI_PARTIAL_REFRESH	2
 
 /*------------------------------------------------------
-	���������ʾ
+	Background Display
 ------------------------------------------------------*/
 
 
 
 
 /*------------------------------------------------------
-	�������`��Щ`��ʾ
+	Battery Status Display
 ------------------------------------------------------*/
 
 void draw_scrollbar(int sx, int sy, int ex, int ey, int disp_lines, int total_lines, int current_line);
 
 
 /*------------------------------------------------------
-	��ʽ�������б�ʾ
+	Format Floating Display
 ------------------------------------------------------*/
 
 void msg_set_text_color(uint32_t color);
@@ -35,7 +35,7 @@ void msg_set_text_color(uint32_t color);
 
 
 /*------------------------------------------------------
-	�ץ����쥹�Щ`��ʾ
+	Progress Box Display
 ------------------------------------------------------*/
 
 void init_progress(int total, const char *text);
@@ -44,7 +44,7 @@ void show_progress(const char *text);
 
 
 /*--------------------------------------------------------
-	��å��`���ܥå�����ʾ
+	Message Box Display
 --------------------------------------------------------*/
 
 enum
@@ -84,8 +84,8 @@ int messagebox(int number);
 
 
 /*--------------------------------------------------------
-	�إ�ױ�ʾ
+	Help Display
 --------------------------------------------------------*/
 
 
-#endif /* PSP_UI_H */
+#endif /* COMMON_UI_H */

@@ -17,7 +17,7 @@ make -j4
 
 - **Resources behavior:** during configure CMake copies `resources/<target>/` into the build directory (see the `file(COPY ...)` block in [CMakeLists.txt](CMakeLists.txt#L300)). Expect assets and ROM descriptors under `resources/` and `build/` after configure.
 
-- **Common flags & options:** useful CMake options exposed in the top-level file include `NO_GUI` (defaults ON), `USE_ASAN`, `SAVE_STATE`, `COMMAND_LIST`, and platform-specific warning tweaks. Toggle them with `-D<OPTION>=ON` when running `cmake`.
+- **Common flags & options:** useful CMake options exposed in the top-level file include `GUI` (defaults OFF), `USE_ASAN`, `SAVE_STATE`, `COMMAND_LIST`, and platform-specific warning tweaks. Toggle them with `-D<OPTION>=ON` when running `cmake`.
 
 - **Where to make changes:**
   - Modify emulator core logic in `src/common/` and `src/cpu/`.
