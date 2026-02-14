@@ -144,7 +144,7 @@ typedef struct video_driver
 	void (*copyRect)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
-	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void *(*getNativeObjects)(void *data, int index);
 	void (*uploadMem)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);

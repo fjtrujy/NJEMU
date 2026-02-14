@@ -595,10 +595,11 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 --------------------------------------------------------*/
 
 static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
-							void *src, int dstIndex, RECT *src_rect,
+							int srcIndex, int dstIndex, RECT *src_rect,
 							RECT *dst_rect)
 {
 	psp_video_t *psp = (psp_video_t *)data;
+	void *src = psp_resolveFrame(psp, srcIndex);
 	void *dst = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
 	struct Vertex *vertices;

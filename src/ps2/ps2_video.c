@@ -907,7 +907,7 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, int dstIndex, RECT *src_rect, RECT *dst_rect)
+static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	// TODO: FJTRUJY so far just used by the menu
 

@@ -357,7 +357,7 @@ static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT 
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, int dstIndex, RECT *src_rect, RECT *dst_rect)
+static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
