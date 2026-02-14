@@ -575,7 +575,7 @@ static void ps2_clearScreen(void *data) {
 	Clear Specified Frame
 --------------------------------------------------------*/
 
-static void ps2_clearFrame(void *data, int index)
+static void ps2_fillFrameRGBAQ(void *data, int index, gs_rgbaq color)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	uint32_t buffer_width;
@@ -610,7 +610,14 @@ static void ps2_clearFrame(void *data, int index)
 	}
 
 	gsKit_setRegFrame(ps2->gsGlobal, fbp, buffer_width, buffer_height, psm);
-	gsKit_custom_clear(ps2->gsGlobal, ps2->clearScreenColor, buffer_width, buffer_height);
+	gsKit_custom_clear(ps2->gsGlobal, color, buffer_width, buffer_height);
+}
+	
+static void ps2_clearFrame(void *data, int index)
+{
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	gs_rgbaq color = ps2->clearScreenColor;
+	ps2_fillFrameRGBAQ(data, index, color);
 }
 
 
@@ -621,43 +628,13 @@ static void ps2_clearFrame(void *data, int index)
 static void ps2_fillFrame(void *data, int frameIndex, uint32_t color)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	uint8_t alpha = color >> 24;
-	uint8_t blue = color >> 16;
-	uint8_t green = color >> 8;
-	uint8_t red = color >> 0;
-	gs_rgbaq ps2_color = color_to_RGBAQ(red, green, blue, 0x80, 0);
-
-	gsKit_clear(ps2->gsGlobal, ps2_color.color.rgbaq);
-
-
-
-	// /* Temporarily disable alpha testing so the fill isn't rejected */
-	// u8 prevATE = ps2->gsGlobal->Test->ATE;
-	// ps2->gsGlobal->Test->ATE = GS_SETTING_OFF;
-	// gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
-
-	// /* Fill the scrbitmap render texture with the desired color,
-	//    then blit it to the screen — mimicking the game rendering pipeline. */
-
-	// /* Step 1: Render to scrbitmap and clear with color */
-	// gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
-	// gsKit_renderToTexture(ps2->gsGlobal, ps2->scrbitmap);
-	// gsKit_custom_clear(ps2->gsGlobal, ps2_color, ps2->scrbitmap->Width, ps2->scrbitmap->Height);
-
-	// /* Step 2: Blit scrbitmap to screen */
-	// GSPRIMUVPOINTFLAT textureVertex[2];
-	// textureVertex[0].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, -0.5f, -0.5f, 0);
-	// textureVertex[0].uv = vertex_to_UV(ps2->scrbitmap, 0, 0);
-	// textureVertex[1].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, ps2->gsGlobal->Width - 0.5f, ps2->gsGlobal->Height - 0.5f, 0);
-	// textureVertex[1].uv = vertex_to_UV(ps2->scrbitmap, ps2->gsGlobal->Width, ps2->gsGlobal->Height);
-
-	// gsKit_renderToScreen(ps2->gsGlobal);
-	// gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
-	// gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, 2, textureVertex);
-
-	// /* Restore alpha testing */
-	// ps2->gsGlobal->Test->ATE = prevATE;
-	// gsKit_set_test(ps2->gsGlobal, 0);
+	gs_rgbaq rgbaq_color = color_to_RGBAQ(
+		(color >> 0) & 0xFF,
+		(color >> 8) & 0xFF,
+		(color >> 16) & 0xFF,
+		(color >> 24) & 0xFF,
+		0);
+	ps2_fillFrameRGBAQ(data, frameIndex, rgbaq_color);
 }
 
 
@@ -700,68 +677,92 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, textureVertexCount, textureVertex);
 }
 
+/*--------------------------------------------------------
+	Helpers: resolve source/destination buffer indices
+--------------------------------------------------------*/
+
+/* Resolve a source index to a stack-local GSTEXTURE.
+   For frame buffers (SHOW/DRAW), builds a temporary GSTEXTURE
+   referencing the VRAM address. */
+static GSTEXTURE ps2_resolveSourceTexture(ps2_video_t *ps2, int index) {
+	GSTEXTURE tex;
+	memset(&tex, 0, sizeof(tex));
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		tex.Vram = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
+		tex.Width = ps2->gsGlobal->Width;
+		tex.Height = ps2->gsGlobal->Height;
+		tex.PSM = ps2->gsGlobal->PSM;
+		tex.Filter = GS_FILTER_NEAREST;
+		gsKit_setup_tbw(&tex);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		tex.Vram = ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
+		tex.Width = ps2->gsGlobal->Width;
+		tex.Height = ps2->gsGlobal->Height;
+		tex.PSM = ps2->gsGlobal->PSM;
+		tex.Filter = GS_FILTER_NEAREST;
+		gsKit_setup_tbw(&tex);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
+		tex = *ps2->scrbitmap;
+		break;
+	default:
+		tex = *ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
+		break;
+	}
+	return tex;
+}
+
+/* Set the GS render target to the buffer identified by index. */
+static void ps2_setDestination(ps2_video_t *ps2, int index) {
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		gsKit_setRegFrame(gsGlobal,
+			gsGlobal->ScreenBuffer[!(gsGlobal->ActiveBuffer & 1)],
+			gsGlobal->Width, gsGlobal->Height, gsGlobal->PSM);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		gsKit_setRegFrame(gsGlobal,
+			gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1],
+			gsGlobal->Width, gsGlobal->Height, gsGlobal->PSM);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
+		gsKit_renderToTexture(gsGlobal, ps2->scrbitmap);
+		break;
+	default: {
+		GSTEXTURE *layerTex = ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
+		gsKit_renderToTexture(gsGlobal, layerTex);
+		break;
+	}
+	}
+}
+
 static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	// TODO: FJTRUJY so far just used by the menu, adhoc, and state
-	// It is also used in the biosmenu but let's ignore it for now
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
 
-	// int j, sw, dw, sh, dh;
-	// struct Vertex *vertices;
+	int sw = src_rect->right - src_rect->left;
+	int dw = dst_rect->right - dst_rect->left;
+	int sh = src_rect->bottom - src_rect->top;
+	int dh = dst_rect->bottom - dst_rect->top;
 
-	// sw = src_rect->right - src_rect->left;
-	// dw = dst_rect->right - dst_rect->left;
-	// sh = src_rect->bottom - src_rect->top;
-	// dh = dst_rect->bottom - dst_rect->top;
+	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	// sceGuStart(GU_DIRECT, gulist);
+	ps2_setDestination(ps2, dstIndex);
 
-	// sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
-	// sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right, dst_rect->bottom);
-	// sceGuDisable(GU_ALPHA_TEST);
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
-	// sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	// sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
-	// if (sw == dw && sh == dh)
-	// 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-	// else
-	// 	sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+	gsKit_prim_sprite_texture(gsGlobal, &srcTex,
+		dst_rect->left, dst_rect->top, src_rect->left, src_rect->top,
+		dst_rect->right, dst_rect->bottom, src_rect->right, src_rect->bottom,
+		0, color);
 
-	// for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->left + j * dw / sw;
-	// 	vertices[0].y = dst_rect->top;
-
-	// 	vertices[1].u = src_rect->left + j + SLICE_SIZE;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->left + (j + SLICE_SIZE) * dw / sw;
-	// 	vertices[1].y = dst_rect->bottom;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// if (j < sw)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->left + j * dw / sw;
-	// 	vertices[0].y = dst_rect->top;
-
-	// 	vertices[1].u = src_rect->right;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->right;
-	// 	vertices[1].y = dst_rect->bottom;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 
@@ -771,66 +772,31 @@ static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	// TODO: FJTRUJY not used so far in MVS
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
 
+	int sw = src_rect->right - src_rect->left;
+	int dw = dst_rect->right - dst_rect->left;
+	int sh = src_rect->bottom - src_rect->top;
+	int dh = dst_rect->bottom - dst_rect->top;
 
-	// int16_t j, sw, dw, sh, dh;
-	// struct Vertex *vertices;
+	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	// sw = src_rect->right - src_rect->left;
-	// dw = dst_rect->right - dst_rect->left;
-	// sh = src_rect->bottom - src_rect->top;
-	// dh = dst_rect->bottom - dst_rect->top;
+	ps2_setDestination(ps2, dstIndex);
 
-	// sceGuStart(GU_DIRECT, gulist);
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
-	// sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
-	// sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right, dst_rect->bottom);
-	// sceGuDisable(GU_ALPHA_TEST);
+	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+	/* Horizontal flip: swap U coordinates between left and right */
+	gsKit_prim_quad_texture(gsGlobal, &srcTex,
+		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->top,
+		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->top,
+		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->bottom,
+		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->bottom,
+		0, color);
 
-	// sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	// sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src));
-	// if (sw == dw && sh == dh)
-	// 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-	// else
-	// 	sceGuTexFilter(GU_LINEAR, GU_LINEAR);
-
-	// for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
-	// {
-    // 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->right - j * dw / sw;
-	// 	vertices[0].y = dst_rect->bottom;
-
-	// 	vertices[1].u = src_rect->left + j + SLICE_SIZE;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->right - (j + SLICE_SIZE) * dw / sw;
-	// 	vertices[1].y = dst_rect->top;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// if (j < sw)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->right - j * dw / sw;
-	// 	vertices[0].y = dst_rect->bottom;
-
-	// 	vertices[1].u = src_rect->right;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->left;
-	// 	vertices[1].y = dst_rect->top;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 
@@ -840,66 +806,34 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	// TODO: FJTRUJY not used so far in MVS (juat in state.c, but not used in the game)
-	// int16_t j, sw, dw, sh, dh;
-	// struct Vertex *vertices;
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
 
-	// sw = src_rect->right - src_rect->left;
-	// dw = dst_rect->right - dst_rect->left;
-	// sh = src_rect->bottom - src_rect->top;
-	// dh = dst_rect->bottom - dst_rect->top;
+	int sw = src_rect->right - src_rect->left;
+	int dw = dst_rect->right - dst_rect->left;
+	int sh = src_rect->bottom - src_rect->top;
+	int dh = dst_rect->bottom - dst_rect->top;
 
-	// sceGuStart(GU_DIRECT, gulist);
+	/* For 270-degree CCW rotation, source width maps to dest height and vice versa */
+	srcTex.Filter = (sw == dh && sh == dw) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	// sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
-	// sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right, dst_rect->bottom);
-	// sceGuDisable(GU_ALPHA_TEST);
+	ps2_setDestination(ps2, dstIndex);
 
-	// sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	// sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src));
-	// if (sw == dh && sh == dw)
-	// 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-	// else
-	// 	sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
-	// vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+	/* 270-degree CCW (= 90-degree CW) rotation UV mapping:
+	   Dest TL <- Source BL, Dest TR <- Source TL,
+	   Dest BL <- Source BR, Dest BR <- Source TR */
+	gsKit_prim_quad_texture(gsGlobal, &srcTex,
+		dst_rect->left,  dst_rect->top,    src_rect->left,  src_rect->bottom,
+		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->top,
+		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->bottom,
+		dst_rect->right, dst_rect->bottom, src_rect->right, src_rect->top,
+		0, color);
 
-	// for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->right - j;
-	// 	vertices[0].v = src_rect->bottom;
-	// 	vertices[0].x = dst_rect->right;
-	// 	vertices[0].y = dst_rect->top - j * dh / sw;
-
-	// 	vertices[1].u = src_rect->right - j + SLICE_SIZE;
-	// 	vertices[1].v = src_rect->top;
-	// 	vertices[1].x = dst_rect->right;
-	// 	vertices[1].y = dst_rect->bottom - (j + SLICE_SIZE) * dh / sw;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// if (j < sw)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->right + j;
-	// 	vertices[0].v = src_rect->bottom;
-	// 	vertices[0].x = dst_rect->right;
-	// 	vertices[0].y = dst_rect->top - j * dh / sw;
-
-	// 	vertices[1].u = src_rect->left;
-	// 	vertices[1].v = src_rect->top;
-	// 	vertices[1].x = dst_rect->left;
-	// 	vertices[1].y = dst_rect->bottom;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 
@@ -909,63 +843,30 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 
 static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	// TODO: FJTRUJY so far just used by the menu
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
 
-	// int j, sw, dw, sh, dh;
-	// struct Vertex *vertices;
+	/* Override PSM to direct-color (CT16) since drawTexture reinterprets
+	   the source buffer with the requested pixel format.
+	   On PS2, CT16 (16-bit RGBA 5551) is the standard framebuffer format. */
+	srcTex.PSM = GS_PSM_CT16;
+	gsKit_setup_tbw(&srcTex);
 
-	// sw = src_rect->right - src_rect->left;
-	// dw = dst_rect->right - dst_rect->left;
-	// sh = src_rect->bottom - src_rect->top;
-	// dh = dst_rect->bottom - dst_rect->top;
+	int sw = src_rect->right - src_rect->left;
+	int dw = dst_rect->right - dst_rect->left;
+	int sh = src_rect->bottom - src_rect->top;
+	int dh = dst_rect->bottom - dst_rect->top;
 
-	// sceGuStart(GU_DIRECT, gulist);
-	// sceGuDrawBufferList(dst_fmt, dst, BUF_WIDTH);
-	// sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right, dst_rect->bottom);
+	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	// sceGuTexMode(src_fmt, 0, 0, GU_FALSE);
-	// sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
-	// if (sw == dw && sh == dh)
-	// 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-	// else
-	// 	sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+	ps2_setDestination(ps2, dstIndex);
 
-	// for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
-	// {
-    // 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->left + j * dw / sw;
-	// 	vertices[0].y = dst_rect->top;
-
-	// 	vertices[1].u = src_rect->left + j + SLICE_SIZE;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->left + (j + SLICE_SIZE) * dw / sw;
-	// 	vertices[1].y = dst_rect->bottom;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// if (j < sw)
-	// {
-	// 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
-
-	// 	vertices[0].u = src_rect->left + j;
-	// 	vertices[0].v = src_rect->top;
-	// 	vertices[0].x = dst_rect->left + j * dw / sw;
-	// 	vertices[0].y = dst_rect->top;
-
-	// 	vertices[1].u = src_rect->right;
-	// 	vertices[1].v = src_rect->bottom;
-	// 	vertices[1].x = dst_rect->right;
-	// 	vertices[1].y = dst_rect->bottom;
-
-	// 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
-	// }
-
-	// sceGuFinish();
-	// sceGuSync(0, GU_SYNC_FINISH);
+	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+	gsKit_prim_sprite_texture(gsGlobal, &srcTex,
+		dst_rect->left, dst_rect->top, src_rect->left, src_rect->top,
+		dst_rect->right, dst_rect->bottom, src_rect->right, src_rect->bottom,
+		0, color);
 }
 
 static void *ps2_getNativeObjects(void *data, int index) {
