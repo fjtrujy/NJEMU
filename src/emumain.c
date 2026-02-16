@@ -525,18 +525,18 @@ int main(int argc, char *argv[]) {
 
 	video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
 
-#if defined(GUI) && defined(PS2)
-	while(1) {
-		printf("==> emumain: before beginFrame\n");
-		video_driver->beginFrame(video_data);
-		video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, 0xFFFF0000);
-		printf("==> emumain: before endFrame\n");
-		video_driver->endFrame(video_data);
-		printf("==> emumain: before flipScreen\n");
-		video_driver->flipScreen(video_data, 1);
-		printf("==> emumain: after flipScreen, sleeping\n");
-	}
-#endif
+// #if defined(GUI) && defined(PS2)
+// 	while(1) {
+// 		printf("==> emumain: before beginFrame\n");
+// 		video_driver->beginFrame(video_data);
+// 		video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0x00FF0000);
+// 		printf("==> emumain: before endFrame\n");
+// 		video_driver->endFrame(video_data);
+// 		printf("==> emumain: before flipScreen\n");
+// 		video_driver->flipScreen(video_data, 1);
+// 		printf("==> emumain: after flipScreen, sleeping\n");
+// 	}
+// #endif
 
 	ui_init();
 

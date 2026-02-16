@@ -472,7 +472,9 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	Video Processing Termination (Common)
 --------------------------------------------------------*/
 
-static void ps2_exit(ps2_video_t *ps2) {
+static void ps2_free(void *data)
+{
+	ps2_video_t *ps2 = (ps2_video_t*)data;
 	gsKit_clear(ps2->gsGlobal, GS_BLACK);
 	gsKit_vram_clear(ps2->gsGlobal);
 	gsKit_deinit_global(ps2->gsGlobal);
@@ -493,13 +495,7 @@ static void ps2_exit(ps2_video_t *ps2) {
 	free(ps2->tex_layers);
 	ps2->tex_layers = NULL;
 	// We don't need to free vram, it's done with gsKit_vram_clear
-}
 
-static void ps2_free(void *data)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	
-	ps2_exit(ps2);
 	free(ps2);
 }
 
@@ -652,6 +648,9 @@ static void ps2_startWorkFrame(void *data, uint32_t color) {
 	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
 	gsKit_renderToTexture(ps2->gsGlobal, ps2->scrbitmap);
 	gsKit_custom_clear(ps2->gsGlobal, ps2_color, ps2->scrbitmap->Width, ps2->scrbitmap->Height);
+
+	/* Enable alpha test so transparent pixels are discarded during sprite rendering */
+	gsKit_set_test(ps2->gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
@@ -666,9 +665,15 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	textureVertex[1].xyz2 = vertex_to_XYZ2(ps2->gsGlobal, dst_rect->right - 0.5, dst_rect->bottom - 0.5, 0);
 	textureVertex[1].uv = vertex_to_UV(ps2->scrbitmap, src_rect->right, src_rect->bottom);
 
+	/* Disable alpha test for frame copy (all pixels should transfer) */
+	gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
+
 	gsKit_renderToScreen(ps2->gsGlobal);
 	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, textureVertexCount, textureVertex);
+
+	/* Re-enable alpha test */
+	gsKit_set_test(ps2->gsGlobal, GS_ATEST_ON);
 }
 
 /*--------------------------------------------------------
@@ -917,7 +922,11 @@ static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_
 
 static void ps2_blitPoints(void *data, uint32_t points_count, void *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+
+	/* Disable alpha test for point drawing (matches PSP behavior) */
+	gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
 	gsKit_prim_list_points(ps2->gsGlobal, points_count, (GSPRIMPOINT *)vertices);
+	gsKit_set_test(ps2->gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_flushCache(void *data, void *addr, size_t size) {
@@ -1025,12 +1034,14 @@ static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 
 	if (blend) {
 		gs_enable_alpha_blend(gsGlobal);
+		gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	}
 
 	gsKit_prim_quad(gsGlobal, dx, dy, dx + dw, dy, dx, dy + dh, dx + dw, dy + dh, 0, color);
 
 	if (blend) {
 		gs_disable_alpha_blend(gsGlobal);
+		gsKit_set_test(gsGlobal, GS_ATEST_ON);
 	}
 }
 
@@ -1047,6 +1058,9 @@ static void ps2_drawUILine(void *data,
 
 	int has_alpha = a != 0xFF;
 
+	/* Disable alpha test for non-textured UI drawing */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
+
 	if (has_alpha) {
 		gs_enable_alpha_blend(gsGlobal);
 	}
@@ -1056,6 +1070,8 @@ static void ps2_drawUILine(void *data,
 	if (has_alpha) {
 		gs_disable_alpha_blend(gsGlobal);
 	}
+
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_drawUILineGradient(void *data,
@@ -1067,6 +1083,8 @@ static void ps2_drawUILineGradient(void *data,
 	int steps, i;
 	int dx, dy;
 
+	/* Disable alpha test for non-textured UI drawing */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	gs_enable_alpha_blend(gsGlobal);
 
 	dx = x2 - x1;
@@ -1100,6 +1118,7 @@ static void ps2_drawUILineGradient(void *data,
 	}
 
 	gs_disable_alpha_blend(gsGlobal);
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_drawUIRect(void *data,
@@ -1113,6 +1132,9 @@ static void ps2_drawUIRect(void *data,
 	uint8_t g = (color >> 8) & 0xFF;
 	uint8_t b = color & 0xFF;
 	gs_rgbaq rgbaq = color_to_RGBAQ(r, g, b, a, 0);
+
+	/* Disable alpha test for non-textured UI drawing */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
 	int sx = x;
 	int sy = y;
@@ -1147,6 +1169,8 @@ static void ps2_drawUIRect(void *data,
 	vertices[7].rgbaq = rgbaq;
 
 	gsKit_prim_list_line_goraud_3d(gsGlobal, 8, vertices);
+
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_fillUIRect(void *data,
@@ -1161,6 +1185,9 @@ static void ps2_fillUIRect(void *data,
 	uint8_t b = color & 0xFF;
 	gs_rgbaq rgbaq = color_to_RGBAQ(r, g, b, a, 0);
 	int has_alpha = a != 0xFF;
+
+	/* Disable alpha test for non-textured UI drawing */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
 	int sx = x;
 	int sy = y;
@@ -1180,6 +1207,8 @@ static void ps2_fillUIRect(void *data,
 	if (has_alpha) {
 		gs_disable_alpha_blend(gsGlobal);
 	}
+
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 static void ps2_fillUIRectGradient(void *data,
@@ -1199,6 +1228,8 @@ static void ps2_fillUIRectGradient(void *data,
 	uint8_t g2 = (color2 >> 8) & 0xFF;
 	uint8_t b2 = color2 & 0xFF;
 
+	/* Disable alpha test for non-textured UI drawing */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	gs_enable_alpha_blend(gsGlobal);
 
 	int sx = x;
@@ -1245,6 +1276,7 @@ static void ps2_fillUIRectGradient(void *data,
 	gsKit_prim_list_line_goraud_3d(gsGlobal, count, vertices);
 
 	gs_disable_alpha_blend(gsGlobal);
+	gsKit_set_test(gsGlobal, GS_ATEST_ON);
 }
 
 video_driver_t video_ps2 = {
