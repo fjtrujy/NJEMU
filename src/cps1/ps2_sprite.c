@@ -26,15 +26,6 @@
 	Prototypes
 ******************************************************************************/
 
-void (*blit_draw_scroll2)(int16_t x, int16_t y, uint32_t code, uint16_t attr);
-static void blit_draw_scroll2_software(int16_t x, int16_t y, uint32_t code, uint16_t attr);
-static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr);
-
-void (*blit_draw_scroll2h)(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens);
-static void blit_draw_scroll2h_software(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens);
-static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens);
-
-
 /******************************************************************************
 	Platform-specific constants/variables
 ******************************************************************************/
@@ -131,7 +122,6 @@ void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *p
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_scrollh = (uint16_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLLH);
 	tex_object  = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_OBJECT);
 	tex_scroll1 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL1);
@@ -482,48 +472,6 @@ void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
 {
 	scroll2_min_y = min_y;
 	scroll2_max_y = max_y + 1;
-
-	if (scroll2_max_y - scroll2_min_y >= 16)
-	{
-		blit_draw_scroll2  = blit_draw_scroll2_hardware;
-		blit_draw_scroll2h = blit_draw_scroll2h_hardware;
-	}
-	else
-	{
-		blit_draw_scroll2  = blit_draw_scroll2_software;
-		blit_draw_scroll2h = blit_draw_scroll2h_software;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	Draw SCROLL2 (line scroll) directly to VRAM
-------------------------------------------------------------------------*/
-
-static void blit_draw_scroll2_software(int16_t x, int16_t y, uint32_t code, uint16_t attr)
-{
-	uint32_t src, dst;
-	uint8_t func;
-
-	src = code << 7;
-
-	if (attr & 0x40)
-	{
-		src += ((y + 16) - scroll2_ey) << 3;
-		dst = ((scroll2_ey - 1) << 9) + x;
-	}
-	else
-	{
-		src += (scroll2_sy - y) << 3;
-		dst = (scroll2_sy << 9) + x;
-	}
-
-	func = pen_usage[code] | ((attr & 0x60) >> 4);
-
-	(*drawgfx16[func])((uint32_t *)&gfx_scroll2[src],
-					&scrbitmap[dst],
-					&video_palette[((attr & 0x1f) + 64) << 4],
-					scroll2_ey - scroll2_sy);
 }
 
 
@@ -531,7 +479,7 @@ static void blit_draw_scroll2_software(int16_t x, int16_t y, uint32_t code, uint
 	Register SCROLL2 to draw list
 ------------------------------------------------------------------------*/
 
-static void blit_draw_scroll2_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
 	int16_t idx;
 	GSPRIMUVPOINTFLAT *vertices;
@@ -832,54 +780,10 @@ void blit_draw_scroll1h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint
 
 
 /*------------------------------------------------------------------------
-	Draw SCROLL2 (high layer/line scroll) directly to VRAM
-------------------------------------------------------------------------*/
-
-static void blit_draw_scroll2h_software(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
-{
-	uint32_t src, dst;
-	uint8_t func;
-
-	src = code << 7;
-
-	if (attr & 0x40)
-	{
-		src += ((y + 16) - scroll2_ey) << 3;
-		dst = ((scroll2_ey - 1) << 9) + x;
-	}
-	else
-	{
-		src += (scroll2_sy - y) << 3;
-		dst = (scroll2_sy << 9) + x;
-	}
-
-	if (tpens == 0x7fff)
-	{
-		func = pen_usage[code] | ((attr & 0x60) >> 4);
-
-		(*drawgfx16[func])((uint32_t *)&gfx_scroll2[src],
-						&scrbitmap[dst],
-						&video_palette[((attr & 0x1f) + 64) << 4],
-						scroll2_ey - scroll2_sy);
-	}
-	else
-	{
-		func = (attr & 0x60) >> 5;
-
-		(*drawgfx16h[func])((uint32_t *)&gfx_scroll2[src],
-						&scrbitmap[dst],
-						&video_palette[((attr & 0x1f) + 64) << 4],
-						scroll2_ey - scroll2_sy,
-						tpens);
-	}
-}
-
-
-/*------------------------------------------------------------------------
 	Register SCROLL2 (high layer) to draw list
 ------------------------------------------------------------------------*/
 
-static void blit_draw_scroll2h_hardware(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
+void blit_draw_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr, uint16_t tpens)
 {
 	int16_t idx;
 	GSPRIMUVPOINTFLAT *vertices;

@@ -365,12 +365,6 @@ static inline void gskit_prim_list_sprite_texture_uv_flat_color2(GSGLOBAL *gsGlo
 	memcpy(p_data, vertices, bytes);
 }
 
-static void *ps2_workFrame(void *data)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	return (void *)ps2->scrbitmap->Vram;
-}
-
 static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -1262,7 +1256,6 @@ video_driver_t video_ps2 = {
 	ps2_beginFrame,
 	ps2_endFrame,
 	ps2_frameAddr,
-	ps2_workFrame,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,

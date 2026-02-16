@@ -18,7 +18,6 @@ video_driver_t video_null = {
 	NULL, // beginFrame
 	NULL, // endFrame
 	NULL, // frameAddr
-	NULL, // workFrame
 	NULL, // textureLayer
 	NULL, // scissor
 	NULL, // clearScreen

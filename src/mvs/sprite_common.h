@@ -71,13 +71,11 @@ extern int clip_max_y;
 extern int clear_spr_texture;
 extern int clear_fix_texture;
 
-extern uint16_t *scrbitmap;
 extern uint8_t *tex_fix;
 extern uint8_t *tex_spr[3];
 extern uint16_t *clut;
 
 extern const uint32_t ALIGN16_DATA color_table[16];
-extern const uint8_t zoom_x_tables[][16];
 
 /******************************************************************************
 	Common function declarations
@@ -94,18 +92,6 @@ void spr_delete_sprite(void);
 
 void blit_clear_fix_sprite(void);
 void blit_clear_spr_sprite(void);
-
-/* Software rendering functions */
-void drawgfxline_fixed(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_fixed_flip(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_zoom(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_zoom_flip(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_fixed_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_fixed_flip_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_zoom_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-void drawgfxline_zoom_flip_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
-
-extern void ALIGN16_DATA (*drawgfxline[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int zoom);
 
 /* Common sprite interface functions */
 void blit_clear_all_sprite(void);

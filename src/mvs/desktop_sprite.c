@@ -47,7 +47,6 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_spr[0] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR0);
 	tex_spr[1] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR1);
 	tex_spr[2] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR2);
@@ -307,18 +306,4 @@ void blit_finish_spr(void)
 }
 
 
-/*------------------------------------------------------------------------
-	Draw sprite line (software rendering)
-------------------------------------------------------------------------*/
 
-void blit_draw_spr_line(int x, int y, int zoom_x, int sprite_y, uint32_t code, uint16_t attr, uint8_t opaque)
-{
-    uint32_t gfx3_offset = read_cache ? read_cache(code << 7): code << 7;
-	uint32_t dst = (y << 9) + x;
-	uint8_t flag = (attr & 1) | (opaque & SPRITE_OPAQUE) | ((zoom_x & 0x10) >> 2);
-
-	if (attr & 0x0002) sprite_y ^= 0x0f;
-    gfx3_offset += sprite_y << 3;
-
-	(*drawgfxline[flag])((uint32_t *)&memory_region_gfx3[gfx3_offset], &scrbitmap[dst], &video_palette[(attr >> 8) << 4], zoom_x);
-}

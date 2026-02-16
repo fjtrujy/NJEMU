@@ -59,7 +59,6 @@ void blit_reset(void)
 {
 	int i;
 
-	scrbitmap  = (uint16_t *)video_driver->workFrame(video_data);
 	tex_spr[0] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR0);
 	tex_spr[1] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR1);
 	tex_spr[2] = video_driver->textureLayer(video_data, TEXTURE_LAYER_SPR2);
@@ -331,19 +330,3 @@ void blit_finish_spr(void)
 		video_driver->blitTexture(video_data, tex_layer_index, clut_tmp, palette_bank, total_sprites, vertices);
 }
 
-
-/******************************************************************************
-	SPR Software rendering
-******************************************************************************/
-
-void blit_draw_spr_line(int x, int y, int zoom_x, int sprite_y, uint32_t code, uint16_t attr, uint8_t opaque)
-{
-	uint32_t src = code << 7;
-	uint32_t dst = (y << 9) + x;
-	uint8_t flag = (attr & 1) | (opaque & SPRITE_OPAQUE) | ((zoom_x & 0x10) >> 2);
-
-	if (attr & 0x0002) sprite_y ^= 0x0f;
-	src += sprite_y << 3;
-
-	(*drawgfxline[flag])((uint32_t *)&memory_region_gfx2[src], &scrbitmap[dst], &video_palette[(attr >> 8) << 4], zoom_x);
-}

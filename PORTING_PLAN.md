@@ -93,7 +93,7 @@ CMake wired: common + psp backend
 The PSP GUI code is better structured than expected. The higher-level files (`ui_menu.c`, `filer.c`, `ui.c`) already use platform-agnostic abstractions:
 
 1. **Video output:** `video_driver->flipScreen()`, `video_driver->clearScreen()`, `video_driver->waitVsync()`, `video_driver->beginFrame()`, `video_driver->endFrame()`
-2. **Frame buffers:** `video_driver->drawFrame()`, `video_driver->workFrame()` — no more global variables
+2. **Frame buffers:** `video_driver->drawFrame()` — no more global variables
 3. **Input:** `pad_pressed(PLATFORM_PAD_UP)`, `pad_update()`, `pad_wait_clear()` — all platform-independent
 4. **Text:** `TEXT()` macro via `ui_text_driver` — already has PS2/Desktop drivers
 

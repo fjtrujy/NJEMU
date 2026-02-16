@@ -133,7 +133,6 @@ typedef struct video_driver
 	/* End the current rendering frame (e.g. finish and sync GPU command list). */
 	void (*endFrame)(void *data);
 	void *(*frameAddr)(void *data, int frameIndex, int x, int y);
-	void *(*workFrame)(void *data);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);

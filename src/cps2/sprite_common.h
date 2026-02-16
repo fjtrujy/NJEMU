@@ -101,9 +101,6 @@ extern int16_t object_min_y;
 /* Pen usage */
 extern uint8_t *pen_usage;
 
-/* Screen bitmap */
-extern uint16_t *scrbitmap;
-
 /* Color table for palette index encoding */
 extern const uint32_t ALIGN16_DATA color_table[16];
 
@@ -112,20 +109,6 @@ extern const int ALIGN16_DATA swizzle_table_8bit[32];
 
 /* Frame counter (from vidhrdw.c) */
 extern uint32_t frames_displayed;
-
-/* Software rendering functions for SCROLL2 */
-void drawgfx16_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-void drawgfx16_16x16_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-/* Function pointer array for software rendering */
-extern void ALIGN16_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
 
 /******************************************************************************
 	Common function declarations

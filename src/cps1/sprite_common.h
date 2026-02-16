@@ -153,9 +153,6 @@ extern int16_t scroll2_ey;
 /* Pen usage */
 extern uint8_t *pen_usage;
 
-/* Screen bitmap */
-extern uint16_t *scrbitmap;
-
 /* Color table */
 extern const uint32_t ALIGN16_DATA color_table[16];
 
@@ -193,26 +190,6 @@ int16_t scrollh_insert_sprite(uint32_t key);
 void scrollh_delete_sprite(void);
 void scrollh_delete_sprite_tpens(uint16_t tpens);
 void scrollh_delete_dirty_palette(void);
-
-/* Software rendering functions for SCROLL2 */
-void drawgfx16_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-void drawgfx16_16x16_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-
-void drawgfx16h_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-void drawgfx16h_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-void drawgfx16h_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-void drawgfx16h_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
-
-/* Function pointer arrays for software rendering */
-extern void ALIGN16_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines);
-extern void ALIGN16_DATA (*drawgfx16h[4])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens);
 
 /* Platform-agnostic blit functions */
 void blit_clear_all_sprite(void);
