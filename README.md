@@ -532,7 +532,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `EBOOT.PBP` - The main executable for PSP
-- Resource files copied from `resources/{TARGET}/`
+- Resources directory is now **linked** back to `resources/{TARGET}/` by default (set `-DCOPY_RESOURCES=ON` to force a copy)
 
 #### Configuring the Game (without GUI)
 
@@ -638,7 +638,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}.elf` - The main executable for PS2
-- Resource files copied from `resources/{TARGET}/`
+- Resources directory is now **linked** back to `resources/{TARGET}/` by default (use `-DCOPY_RESOURCES=ON` to copy instead)
 
 #### Configuring the Game (without GUI)
 
@@ -740,7 +740,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}` - The main executable
-- Resource files copied from `resources/{TARGET}/`
+- The resources directory is linked back to `resources/{TARGET}/` by default (or copied with `-DCOPY_RESOURCES=ON`)
 
 #### Configuring the Game (without GUI)
 

@@ -505,10 +505,28 @@ set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 
-# Copy the resources during the configure stage
-file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
+# By default we don't want to duplicate a potentially large resource tree
+# in every build directory.  Older CMake versions copied the contents with
+# file(COPY ...), wasting space when multiple builds coexist.  Instead we
+# create a symbolic link pointing from the build tree back to the source
+# folder.  A helper option `COPY_RESOURCES` is provided to fall back to the
+# old behaviour on platforms where symlinks are problematic.
+option(COPY_RESOURCES "Copy resources into the build directory instead of linking" OFF)
 
-message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
+if(COPY_RESOURCES)
+    message(STATUS "Copying resources (COPY_RESOURCES=ON)")
+    file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
+    message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
+else()
+    # create a symlink named after the target (e.g. build/mvs -> ../resources/mvs)
+    set(LINK_PATH "${DESTINATION_DIR}/${TARGET_LOWER}")
+    if(NOT EXISTS "${LINK_PATH}")
+        file(CREATE_LINK "${RESOURCE_DIR}" "${LINK_PATH}" SYMBOLIC)
+        message(STATUS "Resources linked from ${RESOURCE_DIR} to: ${LINK_PATH}")
+    else()
+        message(STATUS "Resource link already exists at ${LINK_PATH}")
+    endif()
+endif()
 
 target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASAN_OPTIONS})
 target_link_options(${TARGET} PUBLIC ${ASAN_OPTIONS})

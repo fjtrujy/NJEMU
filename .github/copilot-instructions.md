@@ -15,7 +15,7 @@ cmake -DTARGET=MVS -DPLATFORM=DESKTOP ..
 make -j4
 ```
 
-- **Resources behavior:** during configure CMake copies `resources/<target>/` into the build directory (see the `file(COPY ...)` block in [CMakeLists.txt](CMakeLists.txt#L300)). Expect assets and ROM descriptors under `resources/` and `build/` after configure.
+- **Resources behavior:** during configure CMake now creates a symbolic link from the build directory back to `resources/<target>/` by default (see the `file(CREATE_LINK ...)` block in [CMakeLists.txt](CMakeLists.txt#L500)). A `-DCOPY_RESOURCES=ON` option forces the old copy behaviour.
 
 - **Common flags & options:** useful CMake options exposed in the top-level file include `GUI` (defaults OFF), `USE_ASAN`, `SAVE_STATE`, `COMMAND_LIST`, and platform-specific warning tweaks. Toggle them with `-D<OPTION>=ON` when running `cmake`.
 
