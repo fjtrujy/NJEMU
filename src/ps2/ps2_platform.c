@@ -1,4 +1,5 @@
 #include "emumain.h"
+#include "common/memory_sizes.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
@@ -31,6 +32,8 @@ static void init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
 	init_audio_driver();
+
+	fileXioSetRWBufferSize(CACHE_BLOCK_SIZE); // Match cache block size for better performance
 }
 
 static void deinit_drivers()

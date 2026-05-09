@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <sys/param.h>
 #include "emumain.h"
+#include "common/memory_sizes.h"
 
 #if USE_CACHE
 #ifdef LARGE_MEMORY
@@ -26,7 +27,6 @@
 #define MAX_CACHE_SIZE		0x140		// Upper limit 20MB 0x140
 #endif
 #define CACHE_SAFETY		0x20000		// Free memory size after cache allocation 128KB
-#define BLOCK_SIZE			0x10000		// Size of 1 block = 64KB 0x10000 (related to images)
 #define BLOCK_MASK			0xffff
 #define BLOCK_SHIFT			16			// 16
 #define BLOCK_NOT_CACHED	0xffff
@@ -114,7 +114,7 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 		pcm_blocks[new_block] = p->idx;
 
 		lseek(pcm_fd, new_block << BLOCK_SHIFT, SEEK_SET);
-		read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+		read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 	}
 	else p = &pcm_data[idx];
 
@@ -177,9 +177,9 @@ static int zip_cache_open(int number)
 	Read Data File from ZIP Cache File
 ------------------------------------------------------*/
 
-#define zip_cache_load(offs)							\
-	zread(cache_fd, &GFX_MEMORY[offs << 16], 0x10000);	\
-	zclose(cache_fd);									\
+#define zip_cache_load(offs)									\
+	zread(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
+	zclose(cache_fd);											\
 	cache_fd = -1;
 
 
@@ -211,9 +211,9 @@ static int folder_cache_open(int number)
 	Read Data File from Folder Cache
 ------------------------------------------------------*/
 
-#define folder_cache_load(offs)							\
-	read(cache_fd, &GFX_MEMORY[offs << 16], 0x10000);	\
-	close(cache_fd);									\
+#define folder_cache_load(offs)									\
+	read(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
+	close(cache_fd);											\
 	cache_fd = -1;
 
 /*------------------------------------------------------
@@ -242,7 +242,7 @@ static int fill_cache(void)
 			blocks[block] = p->idx;
 
 			lseek((int32_t)cache_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 			head = p->next;
 			head->prev = NULL;
@@ -312,7 +312,7 @@ static int fill_cache(void)
 			pcm_blocks[block] = p->idx;
 
 			lseek(pcm_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+			read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 			pcm_head = p->next;
 			pcm_head->prev = NULL;
@@ -338,7 +338,7 @@ static int fill_cache(void)
 				blocks[block] = p->idx;
 
 				lseek(cache_fd, block_offset[block], SEEK_SET);
-				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 				head = p->next;
 				head->prev = NULL;
@@ -445,7 +445,7 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 #else
 		lseek((int32_t)cache_fd, block_offset[new_block], SEEK_SET);
 #endif
-		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 	}
 	else p = &cache_data[idx];
 
@@ -763,7 +763,7 @@ int cache_start(void)
 		{
 			if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
 			{
-				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * BLOCK_SIZE)) != NULL)
+				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * CACHE_BLOCK_SIZE)) != NULL)
 				{
 					pcm_cache_enable = 1;
 					disable_sound = 0;
