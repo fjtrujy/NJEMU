@@ -182,11 +182,43 @@ Converting Category C requires always compiling in both code paths and always al
    - Function pointer set from `g_profile.preload_crypto`
    - Hot path stays branch-free (single indirect call instead of 67 inline branches)
 
-### Phase 4 — Cleanup
+### Phase 4 — Cleanup (DONE, scope reduced)
 
-8. Remove `LARGE_MEMORY` CMake option (`CMakeLists.txt:51`)
-9. Delete dead `#ifdef LARGE_MEMORY` blocks
-10. Update `CLAUDE.md` build commands (drop `-DLARGE_MEMORY=ON` line)
+While preparing Phase 4 we discovered the `LARGE_MEMORY` CMake option had
+**never been wired through to the C preprocessor** -- only the legacy
+`Makefile:217-218` actually adds `-DLARGE_MEMORY=1` to the compile line.
+Every CMake build (every config in `build_*/CMakeFiles/*/flags.make`) was
+running with `LARGE_MEMORY` undefined the entire time.
+
+This means: in CMake builds, all `#ifdef LARGE_MEMORY` paths have been dead
+code since the migration to CMake; the corresponding `#ifndef LARGE_MEMORY`
+paths were the live ones. The Phase 1-3 runtime infrastructure
+(`memory_profile_t`, `cps2_use_preload`, neocrypt scratch helpers) is the
+correct replacement for that machinery and works identically to today's
+behaviour in CMake builds.
+
+The Phase 4 done in this branch:
+
+8. **Remove the dead CMake option** from `CMakeLists.txt:51`. Replaced with
+   a comment explaining the discovery for future contributors.
+9. **Update `CLAUDE.md`**: drop the `-DLARGE_MEMORY=ON` line from the PSP
+   build instructions and the bullet from "Useful CMake Options". Replaced
+   with a note pointing at `NJEMU_MEM_TIER` env override.
+
+The Phase 4 explicitly **NOT** done (deferred):
+
+10. **Decoupling PSP2K symbols** (`#ifdef LARGE_MEMORY` → `#ifdef PSP`).
+    Newly enables LARGE_MEMORY-equivalent preload paths in CMake PSP Slim
+    builds. Cannot be tested without real PSP Slim hardware -- regression
+    risk on Slim.
+11. **Runtime PSP-Slim detection** via `kuKernelGetModel()`. Coupled with
+    (10).
+12. **Deleting dead `#ifdef LARGE_MEMORY` blocks** across the codebase.
+    Would break the legacy Makefile builds that still use `LARGE_MEMORY=1`.
+
+The Phase 2a `LARGE_MEMORY -> tier=large` bridge in `memory_profile.c`
+remains in place. It still serves Makefile builds that define the macro,
+even though it never fires in CMake builds.
 
 ## Risks & Test Plan
 

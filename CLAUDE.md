@@ -32,9 +32,9 @@ mkdir build_desktop_cps2 && cd build_desktop_cps2
 cmake -DTARGET=CPS2 -DPLATFORM=DESKTOP ..
 make -j4
 
-# PSP build with extended memory
+# PSP build (memory tier auto-selected at runtime)
 mkdir build_psp_mvs && cd build_psp_mvs
-cmake -DTARGET=MVS -DPLATFORM=PSP -DLARGE_MEMORY=ON ..
+cmake -DTARGET=MVS -DPLATFORM=PSP ..
 make -j4
 
 # PS2 CPS1 build
@@ -61,7 +61,11 @@ make -j4
 - `USE_ASAN=ON` - AddressSanitizer
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording
-- `LARGE_MEMORY=ON` - PSP Slim extended memory
+
+The previous `LARGE_MEMORY` option has been removed. Memory tier (cache size,
+preload strategy) is now selected at runtime by `memory_profile_select()` from
+the platform's reported available RAM. Override with the `NJEMU_MEM_TIER` env
+var (`tiny|small|medium|large`) for testing.
 
 ## Architecture
 

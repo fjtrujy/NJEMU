@@ -48,7 +48,10 @@ add_definitions(-D${PLATFORM})
 add_definitions(-DPLATFORM_STR="${PLATFORM}")
 
 # Different options availables
-option(LARGE_MEMORY "Large Memory" OFF)
+# (LARGE_MEMORY removed: was never wired through to the C preprocessor in
+# CMake builds, so the #ifdef LARGE_MEMORY paths were always inactive here.
+# Memory tier selection is now runtime via memory_profile_t. The legacy
+# Makefile still wires -DLARGE_MEMORY=1 for Makefile-based PSP Slim builds.)
 option(KERNEL_MODE "Kernel Mode" OFF)
 option(COMMAND_LIST "Command List" OFF)
 option(ADHOC "Ad Hoc" OFF)
