@@ -68,9 +68,7 @@ uint16_t ALIGN16_DATA cps2_output[CPS2_OUTPUT_SIZE >> 1];
 uint8_t *qsound_sharedram1;
 uint8_t *qsound_sharedram2;
 
-#if !USE_CACHE
-char cache_parent_name[16];
-#endif
+/* cache_parent_name is now declared unconditionally in emumain.c */
 
 #ifdef LARGE_MEMORY
 uint32_t psp2k_mem_offset = PSP2K_MEM_TOP;
@@ -84,16 +82,14 @@ int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
 
 static struct rom_t cpu1rom[MAX_CPU1ROM];
 static struct rom_t cpu2rom[MAX_CPU2ROM];
-#if !USE_CACHE
+/* Phase 2b.5-prep: always declared. Used only in preload mode at runtime;
+ * unused (bytes of bss) in cache mode. */
 static struct rom_t gfx1rom[MAX_GFX1ROM];
-#endif
 static struct rom_t snd1rom[MAX_SND1ROM];
 
 static int num_cpu1rom;
 static int num_cpu2rom;
-#if !USE_CACHE
 static int num_gfx1rom;
-#endif
 static int num_snd1rom;
 
 static uint8_t *static_ram1;

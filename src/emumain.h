@@ -225,10 +225,8 @@ extern char game_name[16];
 extern char parent_name[16];
 extern char game_dir[PATH_MAX];
 
-#if USE_CACHE
 extern char cache_parent_name[16];
 extern char cache_dir[PATH_MAX];
-#endif
 
 extern layer_texture_info_t emu_layer_textures[];
 extern uint8_t emu_layer_textures_count;

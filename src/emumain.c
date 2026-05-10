@@ -22,10 +22,11 @@ char game_name[16];
 char parent_name[16];
 
 char game_dir[PATH_MAX];
-#if USE_CACHE
+/* Phase 2b.5-prep: always declared so CPS2 doesn't need a duplicate
+ * declaration in cps2/memintrf.c. Unused on CPS1/NCDZ where USE_CACHE=0
+ * (small bytes-of-bss cost). */
 char cache_dir[PATH_MAX];
 char cache_parent_name[16];
-#endif
 
 int option_showfps;
 int option_speedlimit;
