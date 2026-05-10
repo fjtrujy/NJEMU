@@ -51,37 +51,42 @@ static ps2_ui_data_t ps2_ui;
 ******************************************************************************/
 
 /*
- * Convert 16-bit ARGB values between different formats
+ * Convert 16-bit pixels to GS RGBA registers.
+ *
+ * The codebase uses ABGR layout in 16-bit pixels (matching the PSP format
+ * and the MAKECOL15/MAKECOL32 macros in common/video_driver.h):
+ *   4444: AAAA.BBBB.GGGG.RRRR  (alpha in bits 12-15, red in bits 0-3)
+ *   5551: A.BBBBB.GGGGG.RRRRR  (alpha in bit 15, red in bits 0-4)
+ *   32-bit color params: 0xAABBGGRR
+ * Earlier names "rgba4444 / rgba5551" suggested RGBA layout and led to
+ * channel-swapped colors in the menu (see Desktop fix in
+ * desktop_ui_draw.c).
  */
 static inline uint32_t rgba4444_to_gs(uint16_t c)
 {
-	/* RGBA4444: R in bits 12-15, G in 8-11, B in 4-7, A in 0-3 */
-	int r = (c >> 12) & 0xF;
-	int g = (c >> 8) & 0xF;
-	int b = (c >> 4) & 0xF;
-	int a = (c >> 0) & 0xF;
-	/* Expand to 8-bit: shift left by 4 */
+	int a = (c >> 12) & 0xF;
+	int b = (c >> 8)  & 0xF;
+	int g = (c >> 4)  & 0xF;
+	int r =  c        & 0xF;
 	return GS_SETREG_RGBA(r << 4, g << 4, b << 4, a << 4);
 }
 
 static inline uint32_t rgba5551_to_gs(uint16_t c)
 {
-	/* RGBA5551: R in bits 11-15, G in 6-10, B in 1-5, A in 0 */
-	int r = (c >> 11) & 0x1F;
-	int g = (c >> 6) & 0x1F;
-	int b = (c >> 1) & 0x1F;
-	int a = (c >> 0) & 0x01 ? 0xFF : 0x00;
-	/* Expand to 8-bit: shift left by 3 */
+	int a = (c & 0x8000) ? 0xFF : 0x00;
+	int b = (c >> 10) & 0x1F;
+	int g = (c >> 5)  & 0x1F;
+	int r =  c        & 0x1F;
 	return GS_SETREG_RGBA(r << 3, g << 3, b << 3, a);
 }
 
-static inline uint32_t color_argb_to_gs(uint32_t argb)
+static inline uint32_t color_argb_to_gs(uint32_t abgr)
 {
-	/* Input: 0xRRGGBBAA */
-	int r = (argb >> 24) & 0xFF;
-	int g = (argb >> 16) & 0xFF;
-	int b = (argb >> 8) & 0xFF;
-	int a = (argb >> 0) & 0xFF;
+	/* Input is ABGR8888 (matches MAKECOL32) */
+	int a = (abgr >> 24) & 0xFF;
+	int b = (abgr >> 16) & 0xFF;
+	int g = (abgr >> 8)  & 0xFF;
+	int r =  abgr        & 0xFF;
 	return GS_SETREG_RGBA(r, g, b, a);
 }
 
