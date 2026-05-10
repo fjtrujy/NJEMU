@@ -1134,27 +1134,30 @@ void cache_sleep(int flag)
 	Temporarily Allocate State Save Area
 ------------------------------------------------------*/
 
-#ifdef LARGE_MEMORY
+/* Phase 2b.6: cache_alloc_type is always declared. 1 = state-save was
+ * staged into the PSP2K kernel region; 0 = staged into a file. The
+ * !LARGE_MEMORY path always uses the file (use_psp2k=false keeps it 0).
+ */
 static int cache_alloc_type = 0;
-#endif
 
 uint8_t *cache_alloc_state_buffer(int32_t size)
 {
+	cache_alloc_type = 0;
+
 #ifdef LARGE_MEMORY
-	if (size < psp2k_mem_left)
 	{
-		cache_alloc_type = 1;
-		return (uint8_t *)psp2k_mem_offset;
+		const memory_profile_t *profile = memory_profile_current();
+		if ((profile == NULL || profile->use_psp2k_region) &&
+		    size < psp2k_mem_left)
+		{
+			cache_alloc_type = 1;
+			return (uint8_t *)psp2k_mem_offset;
+		}
 	}
-	else
 #endif
 	{
 		int32_t fd;
 		char path[PATH_MAX];
-
-#ifdef LARGE_MEMORY
-		cache_alloc_type = 0;
-#endif
 
 		sprintf(path, "%sstate/cache.tmp", launchDir);
 
@@ -1174,9 +1177,7 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 
 void cache_free_state_buffer(int32_t size)
 {
-#ifdef LARGE_MEMORY
 	if (!cache_alloc_type)
-#endif
 	{
 		uint32_t fd;
 		char path[PATH_MAX];
@@ -1191,9 +1192,7 @@ void cache_free_state_buffer(int32_t size)
 		remove(path);
 	}
 
-#ifdef LARGE_MEMORY
 	cache_alloc_type = 0;
-#endif
 }
 
 #endif /* STATE_SAVE */
