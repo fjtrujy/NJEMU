@@ -17,16 +17,20 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = false,
+		.cache_min_mb         = 2,
+		.cache_max_mb         = 8,
 		.safety_threshold_mb  = 1,
 		.cache_floor_mb       = 2,
 	},
 	[MEMORY_TIER_SMALL] = {
 		.name                 = "small",
-		.min_ram_mb           = 24,
+		.min_ram_mb           = 16,  /* PSP base ~20 MB free lands here */
 		.preload_sound        = false,
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = false,
+		.cache_min_mb         = 2,   /* matches old !LARGE_MEMORY MIN_CACHE_SIZE (0x20) */
+		.cache_max_mb         = 20,  /* matches old !LARGE_MEMORY MAX_CACHE_SIZE (0x140) */
 		.safety_threshold_mb  = 2,
 		.cache_floor_mb       = 4,
 	},
@@ -37,6 +41,8 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = true,
+		.cache_min_mb         = 4,
+		.cache_max_mb         = 24,
 		.safety_threshold_mb  = 2,
 		.cache_floor_mb       = 8,
 	},
@@ -47,6 +53,8 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.preload_crypto       = true,
 		.preload_gfx          = true,
 		.use_psp2k_region     = true,
+		.cache_min_mb         = 4,   /* matches old LARGE_MEMORY MIN_CACHE_SIZE (0x40) */
+		.cache_max_mb         = 32,  /* matches old LARGE_MEMORY MAX_CACHE_SIZE (0x200) */
 		.safety_threshold_mb  = 4,
 		.cache_floor_mb       = 8,
 	},
@@ -91,6 +99,17 @@ const memory_profile_t *memory_profile_select(uint32_t available_ram_bytes) {
 			       override_env);
 		}
 	}
+
+#ifdef LARGE_MEMORY
+	/* Compile-time LARGE_MEMORY is the legacy switch for PSP Slim builds.
+	 * Force the large tier so existing builds keep their preload + 32 MB
+	 * cache behaviour regardless of what available_ram() reports.
+	 */
+	if (chosen == NULL) {
+		chosen = &profile_table[MEMORY_TIER_LARGE];
+		source = "LARGE_MEMORY";
+	}
+#endif
 
 	if (chosen == NULL) {
 		chosen = select_for_ram(available_mb);

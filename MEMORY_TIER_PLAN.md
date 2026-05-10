@@ -139,11 +139,40 @@ Cache itself is **uncapped** — on a 256 MB host it can grow to ~240 MB if that
 
 ### Phase 2 — Migrate call sites
 
-4. **Cache sizing** (`cache.c`, ~20 refs) → at game-load time, compute `cache_size = available_ram - baseline - game_required_ram - preload_costs - safety_threshold`. If the game's full GFX fits within that budget without streaming, allocate it as a single load and skip the cache (`cache_size = 0`). Otherwise, allocate the cache; abort only if below `cache_floor_mb` *and* the GFX won't fit fully either. Keep malloc-probe as final fallback for fragmentation.
+The 36 `LARGE_MEMORY` refs (excluding `mvs/neocrypt.c`, deferred to Phase 3) split into three categories. Phase 2 is split into 2a (clean swaps) and 2b (structural refactor), executed as separate PRs.
 
-5. **Boolean feature flags** (`mvs/memintrf.c`, `cps2/memintrf.c`, `ym2610.c`, `emucfg.h` — ~25 refs) → convert `#ifdef LARGE_MEMORY` to `if (g_profile.preload_sound)` / `if (g_profile.cache_enabled)`.
+#### Category A — Pure sizing constants (Phase 2a)
+- `cache.c:15-28` — `MIN_CACHE_SIZE` / `MAX_CACHE_SIZE` differ by `LARGE_MEMORY`. Trivially convertible to profile reads.
 
-6. **PSP2K region** (`psp.h`, `cache.c`) → guard with `if (g_profile.use_psp2k_region)`, keep inside PSP-only files.
+#### Category B — PSP2K kernel region (Phase 2a)
+- `cache.c:953-961` (cache_start) — selects PSP2K region for the cache. Outer `#ifdef LARGE_MEMORY` stays (symbols `PSP2K_MEM_TOP`, `psp2k_mem_left` only declared then), inner runtime check `if (profile->use_psp2k_region)` added.
+- `cache.c:1145-1213` (state-save buffers) and `mvs/memintrf.c:116-119`, `cps2/memintrf.c:75-78` — also PSP2K, but tangled with mode-bifurcated static state. **Deferred to 2b.**
+
+#### Category C — Structural code (Phase 2b — separate PR)
+- `emucfg.h:71-76` — `USE_CACHE` is *derived* from `LARGE_MEMORY` for CPS2, then used in `#if USE_CACHE` to add or remove entire variables, struct fields, and functions across the codebase.
+- `ym2610.c:672-675, 703-706` — `ADPCMA` / `ADPCMB` structs have fields (`block`, `buf`) only when `!LARGE_MEMORY`.
+- `cache.c:79, 97, 302, 645, 759, 1011, 1050, 1098, 1119` — gate the entire **PCM cache** infrastructure (separate from the GFX cache; only present when not preloading).
+- `mvs/memintrf.c:460, 863, 967, 1643, 1800, 2057` — variable definitions and code paths that exist only in one mode.
+
+Converting Category C requires always compiling in both code paths and always allocating both struct layouts, with runtime dispatch on the active mode. Several thousand lines, real risk of subtle bugs — too large for a single session, so split off.
+
+#### Phase 2a steps (sized for one PR)
+
+1. **Bridge old flag to new system**: when `LARGE_MEMORY` is defined at compile time, force `memory_profile_select()` to choose the `large` tier regardless of detected RAM. Preserves existing PSP Slim behaviour exactly.
+
+2. **Cache sizing migration** (`cache.c`): replace runtime uses of `MIN_CACHE_SIZE` / `MAX_CACHE_SIZE` in `cache_start()` with profile-derived values (`cache_min_mb` / `cache_max_mb`), clamped to compile-time bounds so the static `cache_data[MAX_CACHE_SIZE]` array stays valid. Keep malloc-probe as final fallback.
+
+3. **PSP2K runtime guard** (`cache.c:953-961`): inside the existing `#ifdef LARGE_MEMORY` (needed for symbol existence), add inner runtime check `if (profile->use_psp2k_region)` so the profile drives the actual decision.
+
+4. **No call-site changes outside `cache.c`** — Category C waits for 2b.
+
+#### Phase 2b steps (later, separate PR)
+
+5. **`USE_CACHE` runtime conversion**: redesign `cps2/memintrf.c` so the same code path handles both modes; the cache infrastructure becomes optionally-active rather than compiled-out. Likely requires data layout changes.
+
+6. **PCM cache infrastructure** (`cache.c`, `ym2610.c`, `mvs/memintrf.c`): make ADPCMA/ADPCMB struct layouts identical regardless of mode, branch at runtime on `profile->preload_sound`.
+
+7. **State-save PSP2K paths** (`cache.c:1145-1213`): finish migrating `cache_alloc_state_buffer` / `cache_free_state_buffer` to runtime check; needs the static `cache_alloc_type` to exist unconditionally.
 
 ### Phase 3 — Neocrypt refactor (separate, focused PR)
 
@@ -172,9 +201,11 @@ Cache itself is **uncapped** — on a 256 MB host it can grow to ~240 MB if that
 
 ## Suggested PR Breakdown
 
-1. **PR1** — Phase 1 + 2 (foundation + sizing/flag migration). No behavior change on PSP if tier values map cleanly to old `LARGE_MEMORY` values.
-2. **PR2** — Phase 3 (neocrypt refactor). Isolated, easier to review.
-3. **PR3** — Phase 4 (remove `LARGE_MEMORY` flag, cleanup). Trivial once 1 + 2 are in.
+1. **PR1** — Phase 1 (foundation: `available_ram()` + `memory_profile_t` + selector). Already merged.
+2. **PR2** — Phase 2a (cache sizing + PSP2K runtime guard + LARGE_MEMORY→tier bridge). Behaviour-preserving.
+3. **PR3** — Phase 2b (`USE_CACHE` runtime conversion + PCM cache infrastructure + state-save PSP2K). Largest single chunk — likely needs further splitting.
+4. **PR4** — Phase 3 (neocrypt refactor). Isolated.
+5. **PR5** — Phase 4 (remove `LARGE_MEMORY` CMake flag, cleanup). Trivial once everything above is in.
 
 ## Starting Point
 

@@ -47,7 +47,15 @@ typedef struct {
 	bool       preload_gfx;        /* CPS2 full GFX preload */
 	bool       use_psp2k_region;   /* PSP Slim 32 MB kernel region */
 
-	/* Sizing knobs -- cache itself is uncapped (absorbs remainder). */
+	/* Cache-size bounds in MB. These are interim Phase 2a knobs that
+	 * preserve the old compile-time MIN_CACHE_SIZE / MAX_CACHE_SIZE
+	 * behaviour. Phase 2b will replace them with a budget formula
+	 * (available_ram - baseline - game_required - preload_costs - safety).
+	 */
+	uint32_t   cache_min_mb;       /* lower bound for the malloc-probe */
+	uint32_t   cache_max_mb;       /* upper bound for the malloc-probe */
+
+	/* Sizing knobs -- reserved for Phase 2b. */
 	uint32_t   safety_threshold_mb;/* hold-back for OS / fragmentation */
 	uint32_t   cache_floor_mb;     /* minimum cache; abort if unreachable */
 } memory_profile_t;

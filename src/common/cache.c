@@ -950,38 +950,54 @@ int cache_start(void)
 
 		// Check allocatable size
 
+		{
+			/* Translate profile MB bounds to cache blocks, clamped to the
+			 * compile-time MIN/MAX (which size the static cache_data[] array
+			 * and the malloc-probe envelope).
+			 */
+			const memory_profile_t *profile = memory_profile_current();
+			int profile_max_blocks = MAX_CACHE_SIZE;
+			int profile_min_blocks = MIN_CACHE_SIZE;
+			if (profile != NULL) {
+				int p_max = (int)((profile->cache_max_mb << 20) >> BLOCK_SHIFT);
+				int p_min = (int)((profile->cache_min_mb << 20) >> BLOCK_SHIFT);
+				if (p_max > 0 && p_max < profile_max_blocks) profile_max_blocks = p_max;
+				if (p_min > profile_min_blocks)              profile_min_blocks = p_min;
+			}
+
 #ifdef LARGE_MEMORY
-		if (psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
-		{
-			GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
-			i = MAX_CACHE_SIZE;
-			size = i << BLOCK_SHIFT;
-		}
-		else
+			if ((profile == NULL || profile->use_psp2k_region)
+			    && psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
+			{
+				GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
+				i = profile_max_blocks;
+				size = i << BLOCK_SHIFT;
+			}
+			else
 #endif
-
-		{
-			for (i = MIN(GFX_SIZE >> BLOCK_SHIFT, MAX_CACHE_SIZE); i >= MIN_CACHE_SIZE; i--)
 			{
-				if ((GFX_MEMORY = (uint8_t *)malloc((i << BLOCK_SHIFT) + CACHE_SAFETY)) != NULL)
+				for (i = MIN(GFX_SIZE >> BLOCK_SHIFT, profile_max_blocks); i >= profile_min_blocks; i--)
 				{
-					size = i << BLOCK_SHIFT;
-					free(GFX_MEMORY);
-					GFX_MEMORY = NULL;
-					break;
+					if ((GFX_MEMORY = (uint8_t *)malloc((i << BLOCK_SHIFT) + CACHE_SAFETY)) != NULL)
+					{
+						size = i << BLOCK_SHIFT;
+						free(GFX_MEMORY);
+						GFX_MEMORY = NULL;
+						break;
+					}
 				}
-			}
 
-			if (i < MIN_CACHE_SIZE)
-			{
-				msg_printf(TEXT(MEMORY_NOT_ENOUGH));
-				return 0;
-			}
+				if (i < profile_min_blocks)
+				{
+					msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+					return 0;
+				}
 
-			if ((GFX_MEMORY = (uint8_t *)malloc(size)) == NULL)
-			{
-				msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
-				return 0;
+				if ((GFX_MEMORY = (uint8_t *)malloc(size)) == NULL)
+				{
+					msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
+					return 0;
+				}
 			}
 		}
 
