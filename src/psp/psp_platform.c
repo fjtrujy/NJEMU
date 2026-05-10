@@ -257,6 +257,17 @@ static int psp_getHardwareModel(void *data) {
 #endif
 }
 
+static uint32_t psp_availableRam(void *data) {
+	uint32_t total = (uint32_t)sceKernelTotalFreeMemSize();
+#if defined(LARGE_MEMORY) && ((EMU_SYSTEM == CPS2) || (EMU_SYSTEM == MVS))
+	extern int32_t psp2k_mem_left;
+	if (psp2k_mem_left > 0) {
+		total += (uint32_t)psp2k_mem_left;
+	}
+#endif
+	return total;
+}
+
 platform_driver_t platform_psp = {
 	"psp",
 	psp_init,
@@ -266,4 +277,5 @@ platform_driver_t platform_psp = {
 	psp_getDevkitVersion,
 	psp_getWlanSwitchState,
 	psp_getHardwareModel,
+	psp_availableRam,
 };

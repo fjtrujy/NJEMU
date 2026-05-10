@@ -1,3 +1,5 @@
+#define NEWLIB_PORT_AWARE 1
+
 #include "emumain.h"
 #include "common/memory_sizes.h"
 
@@ -5,6 +7,7 @@
 #include <sifrpc.h>
 #include <iopcontrol.h>
 #include <sbv_patches.h>
+#include <fileXio_rpc.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
 
@@ -95,6 +98,18 @@ static int ps2_getHardwareModel(void *data) {
 	return 0;
 }
 
+static uint32_t ps2_availableRam(void *data) {
+	/* PS2 has a fixed 32 MB main RAM. GetMemorySize() returns the physical
+	 * total; we hold back a baseline for kernel, stacks, and late mallocs.
+	 */
+	const uint32_t baseline_reservation = 4u * 1024u * 1024u;
+	uint32_t total = (uint32_t)GetMemorySize();
+	if (total <= baseline_reservation) {
+		return 0;
+	}
+	return total - baseline_reservation;
+}
+
 platform_driver_t platform_ps2 = {
 	"ps2",
 	ps2_init,
@@ -104,4 +119,5 @@ platform_driver_t platform_ps2 = {
 	ps2_getDevkitVersion,
 	ps2_getWlanSwitchState,
 	ps2_getHardwareModel,
+	ps2_availableRam,
 };

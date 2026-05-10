@@ -498,6 +498,9 @@ int main(int argc, char *argv[]) {
 
     // Init process
 	platform_data = platform_driver->init();
+	if (platform_driver->availableRam != NULL) {
+		memory_profile_select(platform_driver->availableRam(platform_data));
+	}
 	ticker_data = ticker_driver->init();
 	power_data = power_driver->init();
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);

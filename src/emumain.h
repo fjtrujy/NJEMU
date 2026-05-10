@@ -184,6 +184,7 @@ extern UI_PALETTE ui_palette[UI_PAL_MAX];
 #include "common/power_driver.h"
 #include "common/ticker_driver.h"
 #include "common/platform_driver.h"
+#include "common/memory_profile.h"
 #include "common/video_driver.h"
 #include "common/ui_text_driver.h"
 #include "common/input_driver.h"

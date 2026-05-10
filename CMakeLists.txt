@@ -189,6 +189,8 @@ set(COMMON_SRC
     common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
+    common/memory_profile.h
+    common/memory_profile.c
     common/sound.h
     common/sound.c
 )
