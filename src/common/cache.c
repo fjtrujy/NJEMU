@@ -76,7 +76,10 @@ int cache_type;
 static char spr_cache_name[PATH_MAX];
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
+/* Phase 2b.1: PCM cache infrastructure is always compiled. pcm_cache_enable
+ * is the runtime gate; LARGE_MEMORY (or large tier with preload_sound) keeps
+ * it at 0 so the streaming paths are inert.
+ */
 int pcm_cache_enable;
 
 static cache_t ALIGN16_DATA pcm_data[MAX_PCM_SIZE];
@@ -86,7 +89,6 @@ static cache_t *pcm_tail;
 static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
 #endif
-#endif
 
 
 /******************************************************************************
@@ -94,7 +96,6 @@ static int32_t pcm_fd;
 ******************************************************************************/
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 
 /*------------------------------------------------------
 	Read PCM Cache
@@ -146,7 +147,6 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 	return &memory_region_sound1[p->idx << BLOCK_SHIFT];
 }
 
-#endif
 #endif
 
 /*------------------------------------------------------
@@ -299,7 +299,6 @@ static int fill_cache(void)
 				break;
 		}
 	}
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		i = 0;
@@ -325,7 +324,6 @@ static int fill_cache(void)
 			i++;
 		}
 	}
-#endif
 #else
 	if (cache_type == CACHE_RAWFILE)
 	{
@@ -642,13 +640,11 @@ void cache_init(void)
 		blocks[i] = BLOCK_NOT_CACHED;
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
 
 	for (i = 0; i < MAX_PCM_BLOCKS; i++)
 		pcm_blocks[i] = BLOCK_NOT_CACHED;
-#endif
 #endif
 }
 
@@ -756,7 +752,6 @@ int cache_start(void)
 		return 0;
 	}
 
-#ifndef LARGE_MEMORY
 	if (cache_type == CACHE_RAWFILE)
 	{
 		if (option_sound_enable && disable_sound)
@@ -781,7 +776,6 @@ int cache_start(void)
 			}
 		}
 	}
-#endif
 
 	/* Open crom for block access (folder format only) */
 	if (cache_type == CACHE_RAWFILE)
@@ -1024,7 +1018,6 @@ int cache_start(void)
 	tail = &cache_data[num_cache - 1];
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	for (i = 0; i < MAX_PCM_SIZE; i++)
 		pcm_data[i].idx = i;
 
@@ -1039,7 +1032,6 @@ int cache_start(void)
 
 	pcm_head = &pcm_data[0];
 	pcm_tail = &pcm_data[MAX_PCM_SIZE - 1];
-#endif
 #endif
 
 	if (!fill_cache())
@@ -1063,7 +1055,6 @@ int cache_start(void)
 void cache_shutdown(void)
 {
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		if (pcm_fd != -1)
@@ -1072,7 +1063,6 @@ void cache_shutdown(void)
 		}
 		pcm_cache_enable = 0;
 	}
-#endif
 #endif
 	if (cache_type == CACHE_RAWFILE)
 	{
@@ -1111,9 +1101,7 @@ void cache_sleep(int flag)
 				zip_close();
 			}
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 			if (pcm_cache_enable) close(pcm_fd);
-#endif
 #endif
 		}
 		else
@@ -1132,10 +1120,8 @@ void cache_sleep(int flag)
 			}
 			/* CACHE_FOLDER: nothing to reopen */
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 			if (pcm_cache_enable)
 				pcm_fd = cachefile_open(CACHE_VROM);
-#endif
 #endif
 		}
 	}
