@@ -406,6 +406,18 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 		ui_disable_alpha_blend(gsGlobal);
 		gsKit_set_test(gsGlobal, GS_ATEST_ON);
 	}
+
+	/* Force the upload+draw pair to complete before the next one. The
+	 * font texture is rewritten between glyphs (make_font_texture always
+	 * writes to position 0,0), so multiple deferred uploads to the same
+	 * VRAM region race -- without this, every queued draw samples the
+	 * last-uploaded glyph. Not great for performance but the menu only
+	 * draws ~hundreds of glyphs per frame which is fine.
+	 *
+	 * The proper fix is a real font atlas (write each glyph to its own
+	 * UV sub-rect, upload once per frame); leaving as a TODO. */
+	gsKit_queue_exec(gsGlobal);
+	gsKit_finish();
 }
 
 static void ps2_ui_draw_drawLine(void *data,
