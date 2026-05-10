@@ -68,12 +68,12 @@
 #define SYSTEM_NAME				"CPS2"
 #define FPS						59.633333
 #define TICKS_PER_FRAME			16769.144773
-#ifdef LARGE_MEMORY
-#define USE_CACHE				0
-#else
+/* Phase 2b.5: USE_CACHE compiled in unconditionally for CPS2. The
+ * preload-vs-stream choice is now runtime via cps2_use_preload, set
+ * from memory_profile_current()->preload_gfx (effective only when
+ * LARGE_MEMORY is defined and PSP2K symbols are available). */
 #define USE_CACHE				1
 #define CACHE_VERSION			"V24"
-#endif
 #define EEPROM_SIZE				128
 #define GULIST_SIZE				300*1024	// 300KB
 #define ENABLE_RASTER_OPTION	0			// off
