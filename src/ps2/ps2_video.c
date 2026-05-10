@@ -144,6 +144,13 @@ static int finish_handler(int reason)
    return 0;
 }
 
+/* Public accessor used by ps2_ui_draw.c. */
+void *ps2_video_get_gsGlobal(void *video_data)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)video_data;
+	return ps2 ? ps2->gsGlobal : NULL;
+}
+
 static GSTEXTURE *initializeTexture(GSGLOBAL *gsGlobal, int width, int height, uint8_t bytes_per_pixel, void *mem) {
 	GSTEXTURE *tex = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
 	uint32_t psm = bytes_per_pixel == 1 ? GS_PSM_T8 : GS_PSM_CT16;
