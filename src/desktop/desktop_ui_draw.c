@@ -43,34 +43,42 @@ typedef struct desktop_ui_data {
 	Helpers — Color conversion
 ******************************************************************************/
 
-/* Convert 16-bit RGBA4444 to SDL color (32-bit ARGB) */
+/* The codebase uses ABGR layout in 16-bit pixels (matching PSP / MAKECOL15
+ * / MAKECOL32 in common/video_driver.h):
+ *   4444: AAAA.BBBB.GGGG.RRRR  (alpha high, red low)
+ *   5551: A.BBBBB.GGGGG.RRRRR  (alpha high, red low)
+ * Earlier versions of this file mis-named it "rgba4444" and pulled red from
+ * the high nibble, producing channel-swapped artifacts in the menu.
+ */
+
+/* Convert 16-bit ABGR4444 to SDL color (32-bit ARGB8888) */
 static uint32_t rgba4444_to_sdl(uint16_t c)
 {
-	uint8_t r = ((c >> 12) & 0xF) * 17;  /* 0xF * 17 = 255 */
-	uint8_t g = ((c >> 8) & 0xF) * 17;
-	uint8_t b = ((c >> 4) & 0xF) * 17;
-	uint8_t a = ((c & 0xF) * 17);
+	uint8_t a = ((c >> 12) & 0xF) * 17;
+	uint8_t b = ((c >> 8)  & 0xF) * 17;
+	uint8_t g = ((c >> 4)  & 0xF) * 17;
+	uint8_t r =  (c        & 0xF) * 17;
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
-/* Convert 16-bit RGBA5551 to SDL color (32-bit ARGB) */
+/* Convert 16-bit ABGR1555 to SDL color (32-bit ARGB8888) */
 static uint32_t rgba5551_to_sdl(uint16_t c)
 {
-	uint8_t r = ((c >> 11) & 0x1F) * 8;
-	uint8_t g = ((c >> 6) & 0x1F) * 8;
-	uint8_t b = ((c >> 1) & 0x1F) * 8;
-	uint8_t a = (c & 1) ? 255 : 0;
+	uint8_t a = (c & 0x8000) ? 255 : 0;
+	uint8_t b = ((c >> 10) & 0x1F) * 8;
+	uint8_t g = ((c >> 5)  & 0x1F) * 8;
+	uint8_t r =  (c        & 0x1F) * 8;
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
-/* Convert SDL color to 16-bit RGBA4444 */
+/* Convert SDL color (ARGB8888) to 16-bit ABGR4444 */
 static uint16_t sdl_to_rgba4444(uint32_t c)
 {
 	uint8_t a = (c >> 24) & 0xFF;
 	uint8_t r = (c >> 16) & 0xFF;
-	uint8_t g = (c >> 8) & 0xFF;
-	uint8_t b = c & 0xFF;
-	return ((r >> 4) << 12) | ((g >> 4) << 8) | ((b >> 4) << 4) | (a >> 4);
+	uint8_t g = (c >> 8)  & 0xFF;
+	uint8_t b =  c        & 0xFF;
+	return ((a >> 4) << 12) | ((b >> 4) << 8) | ((g >> 4) << 4) | (r >> 4);
 }
 
 /** Get SDL_Renderer from video_data */
@@ -215,13 +223,20 @@ static uint16_t *desktop_ui_draw_getTextureBasePtr(void *data, int slot)
 	Drawing primitives
 ------------------------------------------------------*/
 
-/* Helper: Update SDL_Texture from buffer if needed */
+/* Helper: Update SDL_Texture from buffer.
+ *
+ * The buffer can be modified by callers via getTextureBasePtr (see
+ * make_font_texture in common/ui_draw.c) without going through
+ * uploadTexture, so we cannot trust the sdl_tex_valid flag for fonts.
+ * Instead we (re)create the SDL_Texture every call. Performance is fine
+ * for the menu because draws happen at UI rates, not game rates.
+ */
 static void update_sdl_texture(desktop_ui_data_t *d, desktop_ui_texture_t *tex)
 {
-	if (tex->sdl_tex_valid) return;
-
 	if (tex->sdl_tex)
 		SDL_DestroyTexture(tex->sdl_tex);
+	tex->sdl_tex = NULL;
+	tex->sdl_tex_valid = 0;
 
 	/* Create SDL surface from buffer */
 	SDL_Surface *surf = SDL_CreateRGBSurface(0, tex->width, tex->height, 32,

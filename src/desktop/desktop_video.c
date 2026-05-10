@@ -251,6 +251,26 @@ static void desktop_clearFrame(void *data, int index)
 
 static void desktop_fillFrame(void *data, int frameIndex, uint32_t color)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	uint8_t r = (color >> 0)  & 0xFF;
+	uint8_t g = (color >> 8)  & 0xFF;
+	uint8_t b = (color >> 16) & 0xFF;
+	uint8_t a = (color >> 24) & 0xFF;
+
+	switch (frameIndex) {
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	default:
+		break;
+	}
 }
 
 
@@ -326,6 +346,31 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
 
 static void desktop_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	SDL_Rect src = { src_rect->left, src_rect->top,
+	                 src_rect->right - src_rect->left,
+	                 src_rect->bottom - src_rect->top };
+	SDL_Rect dst = { dst_rect->left, dst_rect->top,
+	                 dst_rect->right - dst_rect->left,
+	                 dst_rect->bottom - dst_rect->top };
+
+	/* The only meaningful copies in the UI flow are
+	 * DRAW_FRAME_BUFFER -> SCREEN_BITMAP (load_background) and similar
+	 * scrbitmap -> screen movements. Both treat scrbitmap as the source
+	 * offscreen canvas; the screen is the renderer's default target. */
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
+	    dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
+	{
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
+	}
+	else if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
+	         dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER)
+	{
+		/* Copying screen back to work frame: rare; leave a no-op for
+		 * now since we cannot read back from the SDL window framebuffer
+		 * without SDL_RenderReadPixels. */
+	}
 }
 
 
