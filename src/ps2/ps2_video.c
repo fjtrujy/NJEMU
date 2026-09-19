@@ -548,8 +548,12 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	}
 
-	gsGlobal->Mode = GS_MODE_NTSC;
-    gsGlobal->Height = 448;
+	/* gsKit_init_global() auto-detects the console's PAL/NTSC signal from
+	 * ROMVER. Preserve that mode instead of forcing NTSC on every console.
+	 * Keep NJEMU's 448-line framebuffer on both standards to retain the
+	 * existing VRAM budget; gsKit centers shorter framebuffers in PAL's
+	 * 576-line display area during gsKit_init_screen(). */
+	gsGlobal->Height = 448;
 
 	gsGlobal->PSM  = GS_PSM_CT16;
 	gsGlobal->PSMZ = GS_PSMZ_16S;
@@ -826,7 +830,7 @@ static void ps2_fillFrameRGBAQ(void *data, int index, gs_rgbaq color)
 	uint8_t psm = GS_PSM_CT16;
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
-		assert("Cannot clear global context");
+		assert(!"Cannot clear global context");
 		return;
 	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
 		fbp = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
@@ -847,7 +851,7 @@ static void ps2_fillFrameRGBAQ(void *data, int index, gs_rgbaq color)
 		psm = ps2->scrbitmap->PSM;
 		break;
 	default:
-		assert("Shouldn't clear texture layers");
+		assert(!"Shouldn't clear texture layers");
 		return;
 	}
 
@@ -940,42 +944,50 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 /* Resolve a source index to a stack-local GSTEXTURE.
    For frame buffers (SHOW/DRAW), builds a temporary GSTEXTURE
    referencing the VRAM address. */
-static GSTEXTURE ps2_resolveSourceTexture(ps2_video_t *ps2, int index) {
-	GSTEXTURE tex;
-	memset(&tex, 0, sizeof(tex));
+static bool ps2_resolveSourceTexture(ps2_video_t *ps2, int index, GSTEXTURE *tex) {
+	if (!ps2 || !tex)
+		return false;
+
+	memset(tex, 0, sizeof(*tex));
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
-		tex.Vram = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
-		tex.Width = ps2->gsGlobal->Width;
-		tex.Height = ps2->gsGlobal->Height;
-		tex.PSM = ps2->gsGlobal->PSM;
-		tex.Filter = GS_FILTER_NEAREST;
-		gsKit_setup_tbw(&tex);
+		tex->Vram = ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
+		tex->Width = ps2->gsGlobal->Width;
+		tex->Height = ps2->gsGlobal->Height;
+		tex->PSM = ps2->gsGlobal->PSM;
+		tex->Filter = GS_FILTER_NEAREST;
+		gsKit_setup_tbw(tex);
 		break;
 	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
-		tex.Vram = ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
-		tex.Width = ps2->gsGlobal->Width;
-		tex.Height = ps2->gsGlobal->Height;
-		tex.PSM = ps2->gsGlobal->PSM;
-		tex.Filter = GS_FILTER_NEAREST;
-		gsKit_setup_tbw(&tex);
+		tex->Vram = ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
+		tex->Width = ps2->gsGlobal->Width;
+		tex->Height = ps2->gsGlobal->Height;
+		tex->PSM = ps2->gsGlobal->PSM;
+		tex->Filter = GS_FILTER_NEAREST;
+		gsKit_setup_tbw(tex);
 		break;
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
-		tex = *ps2->scrbitmap;
+		*tex = *ps2->scrbitmap;
 		break;
 	case COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER:
 #if defined(GUI)
 		ps2_syncUiScratchToVram(ps2);
-		tex = *ps2->ui_scratch;
+		*tex = *ps2->ui_scratch;
 #else
-		tex = *ps2->tex_layers[0].texture;
+		if (ps2->tex_layers_count <= 0)
+			return false;
+		*tex = *ps2->tex_layers[0].texture;
 #endif
 		break;
-	default:
-		tex = *ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
+	default: {
+		int layer_index = index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER;
+		if (layer_index < 0 || layer_index >= ps2->tex_layers_count)
+			return false;
+		*tex = *ps2->tex_layers[layer_index].texture;
 		break;
 	}
-	return tex;
+	}
+	return true;
 }
 
 int ps2_video_read_frame(void *data, int frame_index,
@@ -994,7 +1006,8 @@ int ps2_video_read_frame(void *data, int frame_index,
 		return 0;
 	gsGlobal = ps2->gsGlobal;
 
-	source = ps2_resolveSourceTexture(ps2, frame_index);
+	if (!ps2_resolveSourceTexture(ps2, frame_index, &source))
+		return 0;
 	/* VRAM address 0 is valid (it is commonly the first screen buffer). */
 	if (source.PSM != GS_PSM_CT16)
 		return 0;
@@ -1056,7 +1069,7 @@ int ps2_video_read_frame(void *data, int frame_index,
 }
 
 /* Set the GS render target to the buffer identified by index. */
-static void ps2_setDestination(ps2_video_t *ps2, int index) {
+static bool ps2_setDestination(ps2_video_t *ps2, int index) {
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
@@ -1083,11 +1096,15 @@ static void ps2_setDestination(ps2_video_t *ps2, int index) {
 #endif
 		break;
 	default: {
-		GSTEXTURE *layerTex = ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
+		int layer_index = index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER;
+		if (layer_index < 0 || layer_index >= ps2->tex_layers_count)
+			return false;
+		GSTEXTURE *layerTex = ps2->tex_layers[layer_index].texture;
 		gsKit_renderToTexture(gsGlobal, layerTex);
 		break;
 	}
 	}
+	return true;
 }
 
 static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
@@ -1096,7 +1113,9 @@ static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
 	int prev_alpha = gsGlobal->PrimAlphaEnable;
 	int prev_alpha_test = gsGlobal->Test->ATE;
-	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
+	GSTEXTURE srcTex;
+	if (!ps2_resolveSourceTexture(ps2, srcIndex, &srcTex))
+		return;
 
 	int sw = src_rect->right - src_rect->left;
 	int dw = dst_rect->right - dst_rect->left;
@@ -1105,7 +1124,8 @@ static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	ps2_setDestination(ps2, dstIndex);
+	if (!ps2_setDestination(ps2, dstIndex))
+		return;
 
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	ps2_flushTextureCache(gsGlobal);
@@ -1132,7 +1152,9 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
 	int prev_alpha = gsGlobal->PrimAlphaEnable;
 	int prev_alpha_test = gsGlobal->Test->ATE;
-	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
+	GSTEXTURE srcTex;
+	if (!ps2_resolveSourceTexture(ps2, srcIndex, &srcTex))
+		return;
 
 	int sw = src_rect->right - src_rect->left;
 	int dw = dst_rect->right - dst_rect->left;
@@ -1141,7 +1163,8 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	ps2_setDestination(ps2, dstIndex);
+	if (!ps2_setDestination(ps2, dstIndex))
+		return;
 
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	ps2_flushTextureCache(gsGlobal);
@@ -1171,7 +1194,9 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
 	int prev_alpha = gsGlobal->PrimAlphaEnable;
 	int prev_alpha_test = gsGlobal->Test->ATE;
-	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
+	GSTEXTURE srcTex;
+	if (!ps2_resolveSourceTexture(ps2, srcIndex, &srcTex))
+		return;
 
 	int sw = src_rect->right - src_rect->left;
 	int dw = dst_rect->right - dst_rect->left;
@@ -1181,7 +1206,8 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	/* For 270-degree CCW rotation, source width maps to dest height and vice versa */
 	srcTex.Filter = (sw == dh && sh == dw) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	ps2_setDestination(ps2, dstIndex);
+	if (!ps2_setDestination(ps2, dstIndex))
+		return;
 
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	ps2_flushTextureCache(gsGlobal);
@@ -1213,7 +1239,9 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
 	int prev_alpha = gsGlobal->PrimAlphaEnable;
 	int prev_alpha_test = gsGlobal->Test->ATE;
-	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
+	GSTEXTURE srcTex;
+	if (!ps2_resolveSourceTexture(ps2, srcIndex, &srcTex))
+		return;
 
 	/* src_fmt/dst_fmt are PSP-format legacy parameters.  PS2 render targets
 	 * carry their actual GS PSM in GSTEXTURE/GSGLOBAL, so reinterpreting the
@@ -1228,7 +1256,8 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 
 	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
-	ps2_setDestination(ps2, dstIndex);
+	if (!ps2_setDestination(ps2, dstIndex))
+		return;
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 	ps2_flushTextureCache(gsGlobal);
 	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
