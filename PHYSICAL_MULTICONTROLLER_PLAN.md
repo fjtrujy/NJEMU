@@ -1,5 +1,29 @@
 # Physical Multi-Controller Plan
 
+## Implementation status (2026-09-19)
+
+- ✅ Phase 0 complete: clean non-resource baseline established and preserved.
+- ✅ Phase 1 complete: common input API supports physical-controller count and
+  indexed polling while legacy `poll_gamepad()` remains controller 0.
+- ✅ Phase 2 complete: PS2 enumerates direct pads/multitap slots in stable
+  connector order and periodically refreshes late multitap attachment.
+- ✅ Phase 3 complete: NCDZ and MVS route simultaneous physical pads directly to
+  emulated players. MVS `popbounc` keeps per-player analog routing; hardware
+  special cases that are not independent multiplayer controllers retain the
+  legacy path.
+- ✅ Phase 4 complete: CPS1/CPS2 support 2/3/4 simultaneous physical pads using
+  the existing per-game mappings and active-low port aggregation. Forgotten
+  Worlds and `pzloop2` analog accumulators remain per emulated player.
+- ✅ Phase 5 complete for routing semantics: `option_controller` and Switch
+  Player remain compatible for one-pad operation and are ignored for gameplay
+  routing while 2+ physical pads are active. Controller 0 owns emulator/UI
+  hotkeys in multi mode.
+- ✅ Phase 6 build validation: 12/12 PS2 builds pass (baseline, GUI, and GUI +
+  SAVE_STATE + COMMAND_LIST for CPS1/CPS2/MVS/NCDZ).
+- ⚠️ Remaining runtime validation requires multiple real/virtual PS2 pads:
+  direct P1+P2, multitap 3/4-player CPS titles, MVS `fatfursp`/`popbounc`, and
+  NCDZ two-player play.
+
 ## Goal
 
 Add simultaneous physical-controller support, starting with PS2, while preserving the

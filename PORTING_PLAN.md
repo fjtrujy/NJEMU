@@ -34,7 +34,19 @@ This document outlines the remaining work needed to complete the cross-platform 
   these ~60 Hz arcade systems.
 - ✅ A current CPS1 GUI + SAVE_STATE + COMMAND_LIST ELF remains running in
   PCSX2 through initialization/file-browser idle without an abort.
-- ⚠️ The common input API still exposes one logical physical controller. The PS2 backend discovers multiple ports/multitap slots, but using multiple physical controllers simultaneously needs an input-abstraction extension rather than another PS2-local stub.
+- ✅ The common input API now exposes indexed physical-controller polling and a
+  controller count while preserving the legacy controller-0 wrappers.
+- ✅ PS2 supports simultaneous direct/multitap controllers with deterministic
+  physical pad 0→P1, 1→P2, 2→P3, 3→P4 routing when 2+ pads are available.
+- ✅ NCDZ, MVS, CPS1, and CPS2 all implement simultaneous local routing while
+  preserving the legacy `option_controller`/Switch Player behavior for a
+  single physical pad.
+- ✅ Multi-controller autofire state is independent per player; CPS1 Forgotten
+  Worlds, CPS2 `pzloop2`, and MVS `popbounc` preserve their per-player analog
+  state. MVS special hardware cases that do not model independent local players
+  remain on the legacy path.
+- ⚠️ Multi-controller runtime behavior still needs a real-hardware (or reliably
+  configured multi-pad PCSX2) pass, especially 3/4-player multitap titles.
 - ⚠️ A final pass on real PS2 hardware is still desirable after the latest
   GUI/input/readback changes, especially screenshot output and NCDZ CDDA.
 
