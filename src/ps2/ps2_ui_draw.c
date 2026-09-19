@@ -49,6 +49,7 @@ typedef struct ps2_ui_data {
 static ps2_ui_data_t ps2_ui;
 
 static int ensure_vram(ps2_ui_texture_t *tex);
+static void ps2_ui_release_buffers(ps2_ui_data_t *d);
 
 
 /******************************************************************************
@@ -91,8 +92,10 @@ static void *ps2_ui_draw_init(void *video_data)
 		tex->vram_valid = 0;
 
 		tex->buffer = (uint16_t *)memalign(64, 512 * 512 * 2);
-		if (!tex->buffer)
+		if (!tex->buffer) {
+			ps2_ui_release_buffers(&ps2_ui);
 			return NULL;
+		}
 		memset(tex->buffer, 0, 512 * 512 * 2);
 
 		/* upload_buffer is the 32-bit ABGR8888 version we hand to the GS.
@@ -112,7 +115,10 @@ static void *ps2_ui_draw_init(void *video_data)
 	 * 512x48 the Desktop reference uses for the font scratch area. */
 	ps2_ui.textures[UI_TEXTURE_FONT].width  = 512;
 	ps2_ui.textures[UI_TEXTURE_FONT].height = 48;
-	ensure_vram(&ps2_ui.textures[UI_TEXTURE_FONT]);
+	if (!ensure_vram(&ps2_ui.textures[UI_TEXTURE_FONT])) {
+		ps2_ui_release_buffers(&ps2_ui);
+		return NULL;
+	}
 
 	return &ps2_ui;
 }
@@ -153,6 +159,25 @@ static int ensure_vram(ps2_ui_texture_t *tex)
 		tex->vram_valid = 0;
 	}
 	return tex->texture.Vram != 0 && tex->upload_buffer != NULL;
+}
+
+static void ps2_ui_release_buffers(ps2_ui_data_t *d)
+{
+	int i;
+
+	if (!d)
+		return;
+
+	for (i = 0; i < UI_TEXTURE_MAX; i++)
+	{
+		free(d->textures[i].buffer);
+		d->textures[i].buffer = NULL;
+		free(d->textures[i].upload_buffer);
+		d->textures[i].upload_buffer = NULL;
+		d->textures[i].texture.Mem = NULL;
+		d->textures[i].buffer_valid = 0;
+		d->textures[i].vram_valid = 0;
+	}
 }
 
 /* Convert one row of 16-bit ABGR4444 / ABGR1555 to 32-bit ABGR8888. */
@@ -221,16 +246,8 @@ static void expand_buffer_to_upload(ps2_ui_texture_t *tex)
 static void ps2_ui_draw_term(void *data)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	int i;
-
-	for (i = 0; i < UI_TEXTURE_MAX; i++)
-	{
-		if (d->textures[i].buffer)
-			free(d->textures[i].buffer);
-		if (d->textures[i].upload_buffer)
-			free(d->textures[i].upload_buffer);
-		/* VRAM cleanup is handled by gsKit */
-	}
+	ps2_ui_release_buffers(d);
+	/* VRAM cleanup is handled by gsKit */
 }
 
 /*------------------------------------------------------
@@ -245,7 +262,9 @@ static void ps2_ui_draw_uploadTexture(void *data, int slot,
 	int x, y;
 	uint16_t *src, *dst;
 
-	if (slot >= UI_TEXTURE_MAX)
+	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
+	    w <= 0 || h <= 0 || pitch < w ||
+	    w > 512 || h > 512 || pitch > 512)
 		return;
 
 	tex = &d->textures[slot];
@@ -275,7 +294,9 @@ static void ps2_ui_draw_clearTexture(void *data, int slot, int w, int h, int pit
 	ps2_ui_texture_t *tex;
 	int x, y;
 
-	if (slot >= UI_TEXTURE_MAX)
+	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
+	    w <= 0 || h <= 0 || pitch < w ||
+	    w > 512 || h > 512 || pitch > 512)
 		return;
 
 	tex = &d->textures[slot];
@@ -295,7 +316,7 @@ static uint16_t *ps2_ui_draw_getTextureBasePtr(void *data, int slot)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 
-	if (slot >= UI_TEXTURE_MAX)
+	if (slot < 0 || slot >= UI_TEXTURE_MAX)
 		return NULL;
 
 	/* The caller (ui_draw.c make_font_texture etc.) will write directly to
@@ -319,7 +340,7 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	GSTEXTURE *gst;
 	GSGLOBAL *gsGlobal = d->gsGlobal;
 
-	if (slot >= UI_TEXTURE_MAX || !gsGlobal)
+	if (slot < 0 || slot >= UI_TEXTURE_MAX || !gsGlobal)
 		return;
 
 	tex = &d->textures[slot];
