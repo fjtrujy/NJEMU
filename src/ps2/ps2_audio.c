@@ -270,6 +270,30 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 		/* No buffer available, nothing to do */
 		return;
 	}
+
+	/* The common NCDZ pause path submits one zero-volume block to silence
+	 * CDDA immediately.  On PSP this changes the channel volume at once; in
+	 * the PS2 software mixer, merely enqueueing zeroes would leave already
+	 * buffered MP3 audio audible for a short tail.  Drop the queued CDDA
+	 * samples instead and wake a producer that may be blocked on free space. */
+	if (leftvol <= 0 && rightvol <= 0) {
+		g_mp3_left_vol = 0;
+		g_mp3_right_vol = 0;
+		g_mp3_read_pos = 0;
+		g_mp3_write_pos = 0;
+		g_mp3_last_read_pos = 0;
+		memset(g_mp3_ring_buffer, 0,
+			MP3_RING_BUFFER_SIZE * sizeof(int16_t));
+		if (g_mp3_sema_id >= 0)
+			SignalSema(g_mp3_sema_id);
+		return;
+	}
+
+	/* Stereo samples are written in pairs. Reject malformed or impossible
+	 * blocks rather than reading past src or waiting forever for ring space
+	 * that can never become large enough. */
+	if ((num_samples & 1) != 0 || num_samples >= MP3_RING_BUFFER_SIZE)
+		return;
 	
 	/* Store volume levels */
 	g_mp3_left_vol = leftvol;
