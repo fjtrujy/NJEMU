@@ -548,11 +548,12 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	}
 
-	/* gsKit_init_global() auto-detects the console's PAL/NTSC signal from
-	 * ROMVER. Preserve that mode instead of forcing NTSC on every console.
-	 * Keep NJEMU's 448-line framebuffer on both standards to retain the
-	 * existing VRAM budget; gsKit centers shorter framebuffers in PAL's
-	 * 576-line display area during gsKit_init_screen(). */
+	/* NJEMU's emulated systems run around 60 Hz and the common frame scheduler
+	 * may use VSync as part of its limiter (CPS2 enables it by default).
+	 * gsKit's automatic PAL detection would make that wait run at 50 Hz on
+	 * European consoles and slow emulation down. Keep the historical NTSC
+	 * 60-Hz output deliberately, even on PAL-region PS2 hardware. */
+	gsGlobal->Mode = GS_MODE_NTSC;
 	gsGlobal->Height = 448;
 
 	gsGlobal->PSM  = GS_PSM_CT16;
