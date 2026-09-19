@@ -144,7 +144,7 @@ typedef struct ps2_video {
 	uint32_t finish_callback_id;
 } ps2_video_t;
 
-static uint32_t finish_sema_id = 0;
+static int32_t finish_sema_id = -1;
 
 /*--------------------------------------------------------
 	Video Processing Initialization
@@ -152,7 +152,7 @@ static uint32_t finish_sema_id = 0;
 
 static int finish_handler(int reason)
 {
-	if (GS_CSR_FINISH) {
+	if (GS_CSR_FINISH && finish_sema_id >= 0) {
 		iSignalSema(finish_sema_id);
 	}
 
@@ -394,9 +394,11 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 {
 	if (gsGlobal->FirstFrame)
 		return;
+	if (finish_sema_id < 0)
+		return;
 
 	if (!GS_CSR_FINISH)
-    	WaitSema(finish_sema_id);
+		WaitSema(finish_sema_id);
 
    	while (PollSema(finish_sema_id) >= 0);
 }
@@ -469,14 +471,29 @@ static void ps2_flipScreen(void *data, bool vsync);
 static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {
 	ee_sema_t sema;
-	ps2_video_t *ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
-	GSGLOBAL *gsGlobal = gsKit_init_global();
+	ps2_video_t *ps2;
+	GSGLOBAL *gsGlobal;
+
+	ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
+	if (!ps2)
+		return NULL;
+
+	gsGlobal = gsKit_init_global();
+	if (!gsGlobal) {
+		free(ps2);
+		return NULL;
+	}
 
    	sema.init_count = 0;
    	sema.max_count  = 1;
    	sema.option     = 0;
 
-   	finish_sema_id   = CreateSema(&sema);
+	finish_sema_id = CreateSema(&sema);
+	if (finish_sema_id < 0) {
+		gsKit_deinit_global(gsGlobal);
+		free(ps2);
+		return NULL;
+	}
 
 	gsGlobal->Mode = GS_MODE_NTSC;
     gsGlobal->Height = 448;
@@ -561,7 +578,10 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		free(ps2->scrbitmap);
 		gsKit_vram_clear(gsGlobal);
 		gsKit_deinit_global(gsGlobal);
-		DeleteSema(finish_sema_id);
+		if (finish_sema_id >= 0) {
+			DeleteSema(finish_sema_id);
+			finish_sema_id = -1;
+		}
 		free(ps2);
 		return NULL;
 	}
@@ -593,7 +613,10 @@ static void ps2_free(void *data)
 	gsKit_deinit_global(ps2->gsGlobal);
 	gsKit_remove_finish_handler(ps2->finish_callback_id);
 	if (finish_sema_id >= 0)
-    	DeleteSema(finish_sema_id);
+	{
+		DeleteSema(finish_sema_id);
+		finish_sema_id = -1;
+	}
 	
 	free(ps2->scrbitmap);
 	ps2->scrbitmap = NULL;
@@ -938,7 +961,8 @@ int ps2_video_read_frame(void *data, int frame_index,
 		 * no previous frame left after this synchronous readback, so reset the
 		 * queue state to the same one-shot state used before an initial submit.
 		 * The next queue execution automatically switches FirstFrame back off. */
-		while (PollSema(finish_sema_id) >= 0);
+		if (finish_sema_id >= 0)
+			while (PollSema(finish_sema_id) >= 0);
 		gsGlobal->FirstFrame = GS_SETTING_ON;
 	}
 
@@ -1420,6 +1444,8 @@ static void ps2_drawUILineGradient(void *data,
 	        (dx > 0 ? dx : -dx) : (dy > 0 ? dy : -dy);
 
 	if (steps == 0) {
+		gs_rgbaq rgbaq = ps2_ui_color_to_rgbaq(color1);
+		gsKit_prim_point(gsGlobal, x1, y1, 0, rgbaq.color.rgbaq);
 		ps2_ui_restore_alpha_blend(gsGlobal, alpha_state);
 		gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 		return;
@@ -1554,6 +1580,14 @@ static void ps2_fillUIRectGradient(void *data,
 	uint8_t r2 = (uint8_t)(color2 & 0xFF);
 	uint8_t g2 = (uint8_t)((color2 >> 8) & 0xFF);
 	uint8_t b2 = (uint8_t)((color2 >> 16) & 0xFF);
+
+	if (w <= 0 || h <= 0)
+		return;
+
+	if ((direction == 0 && w == 1) || (direction != 0 && h == 1)) {
+		ps2_fillUIRect(data, x, y, w, h, color1);
+		return;
+	}
 
 	/* Disable alpha test for non-textured UI drawing */
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
