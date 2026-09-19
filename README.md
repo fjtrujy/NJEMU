@@ -532,7 +532,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `EBOOT.PBP` - The main executable for PSP
-- Resources directory is now **linked** back to `resources/{TARGET}/` by default (set `-DCOPY_RESOURCES=ON` to force a copy)
+- Resource entries are staged directly in the build root. Large/read-only assets are **linked** back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Set `-DCOPY_RESOURCES=ON` to force a full copy.
 
 #### Configuring the Game (without GUI)
 
@@ -609,7 +609,7 @@ cmake -DCMAKE_TOOLCHAIN_FILE=${PS2SDK}/ps2dev.cmake \
       ..
 ```
 
-Replace `{TARGET}` with one of: `MVS`, `NCDZ`, or `CPS1` (currently supported on PS2).
+Replace `{TARGET}` with one of: `MVS`, `NCDZ`, `CPS1`, or `CPS2`.
 
 3. Build the project:
 
@@ -636,9 +636,9 @@ make
 
 #### Output
 
-After a successful build, you'll find the following files in the build directory:
-- `{TARGET}.elf` - The main executable for PS2
-- Resources directory is now **linked** back to `resources/{TARGET}/` by default (use `-DCOPY_RESOURCES=ON` to copy instead)
+After a successful build, you'll find the following in the build directory:
+- `{TARGET}` - The main executable for PS2
+- Resource entries are staged directly in the build root. Large/read-only assets such as `roms/`, `data/`, `cache/`, `rominfo.*`, and `zipname.*` are **linked** from `resources/{target}/`; writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. This matches the runtime `launchDir` layout and PCSX2's `host:` root without letting runtime writes modify `resources/`. Use `-DCOPY_RESOURCES=ON` to force a full copy.
 
 #### Configuring the Game (without GUI)
 
@@ -663,7 +663,7 @@ From the build directory, run:
 /Applications/PCSX2.app/Contents/MacOS/PCSX2 -elf $(pwd)/{TARGET}
 ```
 
-Replace `{TARGET}` with the target name (e.g., `MVS`, `NCDZ`).
+Replace `{TARGET}` with the target name (e.g., `MVS`, `NCDZ`, `CPS1`, `CPS2`). PCSX2 exposes the executable's directory as the PS2 `host:` root, so the resource links/copies must remain beside the executable.
 
 #### Debugging
 
@@ -740,7 +740,7 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}` - The main executable
-- The resources directory is linked back to `resources/{TARGET}/` by default (or copied with `-DCOPY_RESOURCES=ON`)
+- Resource entries are staged directly in the build root. Large/read-only assets are linked back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Use `-DCOPY_RESOURCES=ON` to force a full copy.
 
 #### Configuring the Game (without GUI)
 

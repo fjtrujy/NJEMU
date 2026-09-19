@@ -511,11 +511,11 @@ set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 
 # By default we don't want to duplicate a potentially large resource tree
-# in every build directory.  Older CMake versions copied the contents with
-# file(COPY ...), wasting space when multiple builds coexist.  Instead we
-# create a symbolic link pointing from the build tree back to the source
-# folder.  A helper option `COPY_RESOURCES` is provided to fall back to the
-# old behaviour on platforms where symlinks are problematic.
+# in every build directory. Read-only assets are therefore linked back to the
+# source tree, while files/directories that the emulator writes at runtime are
+# copied once into the build so running a build never modifies resources/.
+# COPY_RESOURCES keeps the fully self-contained/copy-only behaviour available
+# for platforms where symlinks are problematic.
 option(COPY_RESOURCES "Copy resources into the build directory instead of linking" OFF)
 
 if(COPY_RESOURCES)
@@ -523,14 +523,51 @@ if(COPY_RESOURCES)
     file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
     message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
 else()
-    # create a symlink named after the target (e.g. build/mvs -> ../resources/mvs)
-    set(LINK_PATH "${DESTINATION_DIR}/${TARGET_LOWER}")
-    if(NOT EXISTS "${LINK_PATH}")
-        file(CREATE_LINK "${RESOURCE_DIR}" "${LINK_PATH}" SYMBOLIC)
-        message(STATUS "Resources linked from ${RESOURCE_DIR} to: ${LINK_PATH}")
-    else()
-        message(STATUS "Resource link already exists at ${LINK_PATH}")
-    endif()
+    # The application resolves resources directly below launchDir (for example
+    # launchDir/roms and launchDir/zipname.cps1), so mirror the contents of the
+    # target resource directory into the build root.  Linking the directory as
+    # build/cps1 is not only the wrong runtime layout, it also collides with the
+    # CPS1 executable on case-insensitive filesystems such as default macOS.
+    # These entries may be edited by the user or written by the emulator.
+    # Compare lower-cased names so legacy files such as MVSPSP.INI are also
+    # recognized on case-sensitive hosts.
+    set(MUTABLE_RESOURCE_ENTRIES
+        "config"
+        "memcard"
+        "nvram"
+        "state"
+        "picture"
+        "game_name.ini"
+        "cps1psp.ini"
+        "cps2psp.ini"
+        "mvspsp.ini"
+        "ncdzpsp.ini"
+        "command.dat"
+        "backup.bin"
+    )
+
+    file(GLOB RESOURCE_ENTRIES RELATIVE "${RESOURCE_DIR}" "${RESOURCE_DIR}*")
+    foreach(RESOURCE_ENTRY IN LISTS RESOURCE_ENTRIES)
+        set(RESOURCE_SOURCE "${RESOURCE_DIR}${RESOURCE_ENTRY}")
+        set(RESOURCE_LINK "${DESTINATION_DIR}/${RESOURCE_ENTRY}")
+        string(TOLOWER "${RESOURCE_ENTRY}" RESOURCE_ENTRY_LOWER)
+        list(FIND MUTABLE_RESOURCE_ENTRIES "${RESOURCE_ENTRY_LOWER}" MUTABLE_RESOURCE_INDEX)
+
+        if(NOT MUTABLE_RESOURCE_INDEX EQUAL -1)
+            # Migrate a build produced by the old layout without touching the
+            # linked source. Existing real files/directories are intentionally
+            # left alone so re-configuring never overwrites runtime saves.
+            if(IS_SYMLINK "${RESOURCE_LINK}")
+                file(REMOVE "${RESOURCE_LINK}")
+            endif()
+            if(NOT EXISTS "${RESOURCE_LINK}")
+                file(COPY "${RESOURCE_SOURCE}" DESTINATION "${DESTINATION_DIR}")
+            endif()
+        elseif(NOT EXISTS "${RESOURCE_LINK}" AND NOT IS_SYMLINK "${RESOURCE_LINK}")
+            file(CREATE_LINK "${RESOURCE_SOURCE}" "${RESOURCE_LINK}" SYMBOLIC)
+        endif()
+    endforeach()
+    message(STATUS "Resources staged from ${RESOURCE_DIR} into: ${DESTINATION_DIR}")
 endif()
 
 target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASAN_OPTIONS})

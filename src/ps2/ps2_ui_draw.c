@@ -28,7 +28,6 @@
  * toggle alpha blending without round-tripping through the video driver. */
 #define UI_GS_ALPHA_BLEND  GS_SETREG_ALPHA(0, 1, 0, 1, 0)
 #define ui_enable_alpha_blend(g)   gsKit_set_primalpha((g), UI_GS_ALPHA_BLEND, 0)
-#define ui_disable_alpha_blend(g)  gsKit_set_primalpha((g), UI_GS_ALPHA_BLEND, 1)
 
 
 /******************************************************************************
@@ -60,51 +59,6 @@ static int ensure_vram(ps2_ui_texture_t *tex);
 /******************************************************************************
 	Helpers
 ******************************************************************************/
-
-/*
- * Convert 16-bit pixels to GS RGBA registers.
- *
- * The codebase uses ABGR layout in 16-bit pixels (matching the PSP format
- * and the MAKECOL15/MAKECOL32 macros in common/video_driver.h):
- *   4444: AAAA.BBBB.GGGG.RRRR  (alpha in bits 12-15, red in bits 0-3)
- *   5551: A.BBBBB.GGGGG.RRRRR  (alpha in bit 15, red in bits 0-4)
- *   32-bit color params: 0xAABBGGRR
- *
- * GS modulation/blending convention: 0x80 = 1.0, so we right-shift the
- * 8-bit components by one before stuffing them into RGBAQ. Passing 0xFF
- * directly was getting interpreted as ~2.0 and saturating, which is why
- * the dialog was rendering full-bright instead of translucent dark.
- */
-static inline uint32_t rgba4444_to_gs(uint16_t c)
-{
-	int a = (c >> 12) & 0xF;
-	int b = (c >> 8)  & 0xF;
-	int g = (c >> 4)  & 0xF;
-	int r =  c        & 0xF;
-	/* 4-bit -> 7-bit-ish (max 0x78 ~= 0x80). */
-	return GS_SETREG_RGBA(r << 3, g << 3, b << 3, a << 3);
-}
-
-static inline uint32_t rgba5551_to_gs(uint16_t c)
-{
-	int a = (c & 0x8000) ? 0x80 : 0x00;
-	int b = (c >> 10) & 0x1F;
-	int g = (c >> 5)  & 0x1F;
-	int r =  c        & 0x1F;
-	/* 5-bit -> 7-bit (max 0x7C). */
-	return GS_SETREG_RGBA(r << 2, g << 2, b << 2, a);
-}
-
-static inline uint32_t color_argb_to_gs(uint32_t abgr)
-{
-	/* Input is ABGR8888 (matches MAKECOL32). Halve to GS 0..0x80 scale. */
-	int a = ((abgr >> 24) & 0xFF) >> 1;
-	int b = ((abgr >> 16) & 0xFF) >> 1;
-	int g = ((abgr >> 8)  & 0xFF) >> 1;
-	int r = ( abgr        & 0xFF) >> 1;
-	return GS_SETREG_RGBA(r, g, b, a);
-}
-
 
 /******************************************************************************
 	Driver interface implementation
@@ -215,7 +169,10 @@ static void convert_row_to_8888(uint32_t *dst, const uint16_t *src, int w, int f
 		for (x = 0; x < w; x++)
 		{
 			uint16_t p = src[x];
-			uint8_t a = ((p >> 12) & 0xF) * 17;  /* 0xF * 17 = 255 */
+			/* The GS uses 0x80 as 1.0 alpha for blending.  Expanding the
+			 * 4-bit UI alpha to 0xFF makes source alpha almost 2.0, which
+			 * produces dark/inverted-looking glyphs over the menu. */
+			uint8_t a = (uint8_t)((((p >> 12) & 0xF) * 0x80) / 0xF);
 			uint8_t b = ((p >> 8)  & 0xF) * 17;
 			uint8_t g = ((p >> 4)  & 0xF) * 17;
 			uint8_t r =  (p        & 0xF) * 17;
@@ -229,7 +186,10 @@ static void convert_row_to_8888(uint32_t *dst, const uint16_t *src, int w, int f
 		for (x = 0; x < w; x++)
 		{
 			uint16_t p = src[x];
-			uint8_t a = (p & 0x8000) ? 255 : 0;
+			/* The UI's 5551 atlas uses bit 15 as a transparency marker:
+			 * empty pixels are written as 0x8000 while glyph pixels come from
+			 * MAKECOL15() with bit 15 clear. */
+			uint8_t a = (p & 0x8000) ? 0 : 0x80;
 			uint8_t b = (((p >> 10) & 0x1F) * 255) / 31;
 			uint8_t g = (((p >> 5)  & 0x1F) * 255) / 31;
 			uint8_t r = (( p        & 0x1F) * 255) / 31;
@@ -363,6 +323,10 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	ps2_ui_texture_t *tex;
 	GSTEXTURE *gst;
 	GSGLOBAL *gsGlobal = d->gsGlobal;
+	int prev_alpha_enable;
+	int prev_alpha_test;
+	u64 prev_alpha_mode;
+	u8 prev_pabe;
 
 	if (slot >= UI_TEXTURE_MAX || !gsGlobal)
 		return;
@@ -376,12 +340,16 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	 * clearTexture, getTextureBasePtr) clears vram_valid. Expand the
 	 * 16-bit ABGR4444/1555 staging buffer into 32-bit ABGR8888 (PS2 has
 	 * no native 4444 format) and push it over GIF. */
-	if (tex->buffer_valid && !tex->vram_valid)
+	/* UI_TEXTURE_FONT is a scratch texture: common/ui_draw.c obtains its CPU
+	 * pointer once and rewrites it directly for every glyph/shadow.  There is
+	 * no callback that can invalidate vram_valid after those writes, so it must
+	 * be uploaded on every draw (same policy as the Desktop backend). */
+	if (tex->buffer_valid && (!tex->vram_valid || slot == UI_TEXTURE_FONT))
 	{
 		expand_buffer_to_upload(tex);
 		gsKit_texture_send_inline(gsGlobal, gst->Mem,
 			gst->Width, gst->Height, gst->Vram,
-			gst->PSM, gst->TBW, GS_CLUT_TEXTURE);
+			gst->PSM, gst->TBW, GS_CLUT_NONE);
 		tex->vram_valid = 1;
 	}
 
@@ -392,32 +360,43 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	(void)color;
 	u64 gs_color = GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
 
-	if (blend) {
+	prev_alpha_enable = gsGlobal->PrimAlphaEnable;
+	prev_alpha_test = gsGlobal->Test->ATE;
+	prev_alpha_mode = gsGlobal->PrimAlpha;
+	prev_pabe = gsGlobal->PABE;
+
+	/* gsKit uses PrimAlphaEnable both for PRIM.ABE and TEX0.TCC.  Keep both
+	 * enabled only for sprites that actually request alpha blending; opaque
+	 * copies should neither blend nor consume texture alpha. */
+	gsGlobal->PrimAlphaEnable = blend ? GS_SETTING_ON : GS_SETTING_OFF;
+
+	/* Game rendering uses TEQUAL/AREF=0 for indexed CT16 textures.  UI CT32
+	 * textures use their own alpha values, so keep the global alpha test out of
+	 * UI sprite evaluation.  Transparent UI sprites are handled by blending. */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
+
+	if (blend)
 		ui_enable_alpha_blend(gsGlobal);
-		gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-	}
 
 	gsKit_prim_sprite_texture(gsGlobal, gst,
 		(float)dx,         (float)dy,         (float)su,         (float)sv,
 		(float)(dx + dw),  (float)(dy + dh),  (float)(su + sw),  (float)(sv + sh),
 		0,                 gs_color);
 
-	if (blend) {
-		ui_disable_alpha_blend(gsGlobal);
-		gsKit_set_test(gsGlobal, GS_ATEST_ON);
-	}
+	gsGlobal->PrimAlphaEnable = prev_alpha_enable;
 
-	/* Force the upload+draw pair to complete before the next one. The
-	 * font texture is rewritten between glyphs (make_font_texture always
-	 * writes to position 0,0), so multiple deferred uploads to the same
-	 * VRAM region race -- without this, every queued draw samples the
-	 * last-uploaded glyph. Not great for performance but the menu only
-	 * draws ~hundreds of glyphs per frame which is fine.
-	 *
-	 * The proper fix is a real font atlas (write each glyph to its own
-	 * UV sub-rect, upload once per frame); leaving as a TODO. */
-	gsKit_queue_exec(gsGlobal);
-	gsKit_finish();
+	if (blend)
+		gsKit_set_primalpha(gsGlobal, prev_alpha_mode, prev_pabe);
+
+	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
+
+	/* The font scratch buffer is rewritten between glyphs (always at UV 0,0),
+	 * so its upload+draw must complete before the next glyph overwrites the
+	 * same VRAM area. Static UI atlases do not need this per-sprite stall. */
+	if (slot == UI_TEXTURE_FONT) {
+		gsKit_queue_exec(gsGlobal);
+		gsKit_finish();
+	}
 }
 
 static void ps2_ui_draw_drawLine(void *data,
@@ -425,10 +404,7 @@ static void ps2_ui_draw_drawLine(void *data,
 	uint32_t color)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	uint32_t gs_color = color_argb_to_gs(color);
-
-	/* Delegate to video_driver */
-	video_driver->drawUILine(d->video_data, x1, y1, x2, y2, gs_color);
+	video_driver->drawUILine(d->video_data, x1, y1, x2, y2, color);
 }
 
 static void ps2_ui_draw_drawLineGradient(void *data,
@@ -436,11 +412,7 @@ static void ps2_ui_draw_drawLineGradient(void *data,
 	uint32_t color1, uint32_t color2)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	uint32_t gs_color1 = color_argb_to_gs(color1);
-	uint32_t gs_color2 = color_argb_to_gs(color2);
-
-	/* Delegate to video_driver */
-	video_driver->drawUILineGradient(d->video_data, x1, y1, x2, y2, gs_color1, gs_color2);
+	video_driver->drawUILineGradient(d->video_data, x1, y1, x2, y2, color1, color2);
 }
 
 static void ps2_ui_draw_drawRect(void *data,
@@ -448,10 +420,7 @@ static void ps2_ui_draw_drawRect(void *data,
 	uint32_t color)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	uint32_t gs_color = color_argb_to_gs(color);
-
-	/* Delegate to video_driver */
-	video_driver->drawUIRect(d->video_data, x, y, w, h, gs_color);
+	video_driver->drawUIRect(d->video_data, x, y, w, h, color);
 }
 
 static void ps2_ui_draw_fillRect(void *data,
@@ -459,10 +428,7 @@ static void ps2_ui_draw_fillRect(void *data,
 	uint32_t color)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	uint32_t gs_color = color_argb_to_gs(color);
-
-	/* Delegate to video_driver */
-	video_driver->fillUIRect(d->video_data, x, y, w, h, gs_color);
+	video_driver->fillUIRect(d->video_data, x, y, w, h, color);
 }
 
 static void ps2_ui_draw_fillRectGradient(void *data,
@@ -471,17 +437,31 @@ static void ps2_ui_draw_fillRectGradient(void *data,
 	int direction)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	uint32_t gs_color1 = color_argb_to_gs(color1);
-	uint32_t gs_color2 = color_argb_to_gs(color2);
-
-	/* Delegate to video_driver */
-	video_driver->fillUIRectGradient(d->video_data, x, y, w, h, gs_color1, gs_color2, direction);
+	video_driver->fillUIRectGradient(d->video_data, x, y, w, h, color1, color2, direction);
 }
 
 static void ps2_ui_draw_setScissor(void *data, int x, int y, int w, int h)
 {
-	(void)data; (void)x; (void)y; (void)w; (void)h;
-	/* TODO: Implement scissor rectangle via GS SCISSOR register */
+	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
+	GSGLOBAL *gsGlobal = d->gsGlobal;
+	int left, top, right, bottom;
+
+	if (!gsGlobal || w <= 0 || h <= 0)
+		return;
+
+	/* UI rectangles use x/y/width/height while the GS SCISSOR register uses
+	 * inclusive min/max coordinates. */
+	left = x < 0 ? 0 : x;
+	top = y < 0 ? 0 : y;
+	right = x + w - 1;
+	bottom = y + h - 1;
+	if (right >= SCR_WIDTH) right = SCR_WIDTH - 1;
+	if (bottom >= SCR_HEIGHT) bottom = SCR_HEIGHT - 1;
+	if (left > right || top > bottom)
+		return;
+
+	gsKit_set_scissor(gsGlobal,
+		GS_SETREG_SCISSOR(left, right, top, bottom));
 }
 
 

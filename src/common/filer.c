@@ -949,7 +949,7 @@ void file_browser(void)
 	strcpy(startupDir, curr_dir);
 	load_settings();
 	video_driver->beginFrame(video_data);
-	video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, UI_PAL_BG2);
+	ui_fill_frame(UI_PAL_BG2);
 	video_driver->endFrame(video_data);
 
 	load_background(WP_LOGO);
