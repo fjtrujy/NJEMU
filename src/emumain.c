@@ -518,9 +518,22 @@ int main(int argc, char *argv[]) {
 		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
-	getcwd(launchDir, PATH_MAX - 1);
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	strcat(launchDir, "/");
+		if (getcwd(launchDir, sizeof(launchDir)) == NULL) {
+			printf("Failed to determine launch directory\n");
+			goto cleanup_power;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		{
+			size_t launch_len = strlen(launchDir);
+			if (launch_len == 0 || launchDir[launch_len - 1] != '/') {
+				if (launch_len + 1 >= sizeof(launchDir)) {
+					printf("Launch directory path is too long\n");
+					goto cleanup_power;
+				}
+				launchDir[launch_len++] = '/';
+				launchDir[launch_len] = '\0';
+			}
+		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	memset(screenshotDir, 0x00, sizeof(screenshotDir));

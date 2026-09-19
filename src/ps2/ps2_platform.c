@@ -73,22 +73,37 @@ static void ps2_free(void *data) {
 
 static void ps2_main(void *data, int argc, char *argv[]) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
-    
-	getcwd(screenshotDir, sizeof(screenshotDir));
-    strcat(screenshotDir, "/PICTURE");
-    mkdir(screenshotDir, 0777);
+	char picture_dir[PATH_MAX];
+	const char *system_dir;
+
+	(void)ps2;
+	(void)argc;
+	(void)argv;
+
+	if (snprintf(picture_dir, sizeof(picture_dir), "%sPICTURE", launchDir) >=
+		(int)sizeof(picture_dir)) {
+		screenshotDir[0] = '\0';
+		return;
+	}
+	mkdir(picture_dir, 0777);
+
 #if	(EMU_SYSTEM == CPS1)
-	strcat(screenshotDir, "/CPS1");
+	system_dir = "CPS1";
 #endif
 #if	(EMU_SYSTEM == CPS2)
-	strcat(screenshotDir, "/CPS2");
+	system_dir = "CPS2";
 #endif
 #if	(EMU_SYSTEM == MVS)
-	strcat(screenshotDir, "/MVS");
+	system_dir = "MVS";
 #endif
 #if	(EMU_SYSTEM == NCDZ)
-	strcat(screenshotDir, "/NCDZ");
+	system_dir = "NCDZ";
 #endif
+
+	if (snprintf(screenshotDir, sizeof(screenshotDir), "%s/%s",
+		picture_dir, system_dir) >= (int)sizeof(screenshotDir)) {
+		screenshotDir[0] = '\0';
+	}
 }
 
 static bool ps2_startSystemButtons(void *data) {
