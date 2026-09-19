@@ -6,15 +6,10 @@
 
 #include <stddef.h>
 #include <time.h>
-#include <stddef.h>
 
-#include "input_driver.h"
 #include "input_driver.h"
 #include "ticker_driver.h"
 #include "video_driver.h"
-
-// TODO: Use video driver function instead
-void video_wait_vsync(void);
 
 /******************************************************************************
 	Local Variables
@@ -167,11 +162,13 @@ bool pad_pressed_any(void)
 
 void pad_wait_clear(void)
 {
-	// while (poll_gamepad())
-	// {
-	// 	video_driver->waitVsync(video_data);
-	// 	if (!Loop) break;
-	// }
+#if defined(PS2)
+	while (poll_gamepad())
+	{
+		video_driver->waitVsync(video_data);
+		if (!Loop) break;
+	}
+#endif
 
 	pad = 0;
 	pressed_check = 0;

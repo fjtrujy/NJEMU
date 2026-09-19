@@ -13,7 +13,8 @@
 #define PS2_BUTTONS       16
 #define PS2_TOTAL_AXIS    (PS2_ANALOG_STICKS * PS2_ANALOG_AXIS)
 
-#define tolerance 0x30
+#define PS2_ANALOG_LOW_THRESHOLD  0x30
+#define PS2_ANALOG_HIGH_THRESHOLD 0xd0
 
 struct JoyInfo
 {
@@ -90,7 +91,7 @@ static void ps2_free(void *data) {
 	free(ps2);
 }
 
-static struct  JoyInfo *getFirstJoyInfo(uint32_t pad){
+static struct JoyInfo *getFirstJoyInfo(void) {
 	uint32_t i;
 	struct JoyInfo *info = NULL;
 
@@ -101,23 +102,15 @@ static struct  JoyInfo *getFirstJoyInfo(uint32_t pad){
 		}
 	}
 
-	return NULL;	
+	return NULL;
 }
 
-static inline int16_t convert_u8_to_s16(uint8_t val)
-{
-    if (val == 0) {
-        return -0x7fff;
-    }
-    return val * 0x0101 - 0x8000;
-}
-
-static uint32_t basicPoll(struct padButtonStatus *paddata, bool exclusive) {
+static uint32_t basicPoll(struct padButtonStatus *paddata) {
 	uint32_t data = 0;
 	int32_t state, pressed_buttons, ret;
 	struct JoyInfo *info = NULL;
 
-	info = getFirstJoyInfo(0);
+	info = getFirstJoyInfo();
 	if (info == NULL) {
 		return data;
 	}
@@ -143,15 +136,32 @@ static uint32_t basicPoll(struct padButtonStatus *paddata, bool exclusive) {
 			
 			data |= (pressed_buttons & PAD_START) ? PLATFORM_PAD_START : 0;
 			data |= (pressed_buttons & PAD_SELECT) ? PLATFORM_PAD_SELECT : 0;
-
-			/* Analog */
-            if (paddata->ljoy_h || paddata->ljoy_v || paddata->rjoy_h || paddata->rjoy_v) {
-				if ((convert_u8_to_s16(paddata->ljoy_v) < 0) && !(exclusive && (pressed_buttons & PAD_UP))) data |=  PLATFORM_PAD_DOWN;
-				if ((convert_u8_to_s16(paddata->ljoy_v) > 0) && !(exclusive && (pressed_buttons & PAD_DOWN))) data |=  PLATFORM_PAD_UP;
-				if ((convert_u8_to_s16(paddata->ljoy_h) < 0) && !(exclusive && (pressed_buttons & PAD_LEFT))) data |=  PLATFORM_PAD_LEFT;
-				if ((convert_u8_to_s16(paddata->ljoy_h) > 0) && !(exclusive && (pressed_buttons & PAD_RIGHT))) data |=  PLATFORM_PAD_RIGHT;
-			}
 		}
+	}
+
+	return data;
+}
+
+static uint32_t addAnalogDirections(const struct padButtonStatus *paddata,
+		uint32_t data, bool exclusive) {
+	uint32_t pressed_buttons = 0xffff ^ paddata->btns;
+
+	/* Match the PSP frontend's dead zone. DualShock axes are centered around
+	 * 0x80; treating every value below/above the exact center as a direction
+	 * makes a resting analog stick generate continuous input. */
+	if (paddata->ljoy_h || paddata->ljoy_v || paddata->rjoy_h || paddata->rjoy_v) {
+		if (paddata->ljoy_v >= PS2_ANALOG_HIGH_THRESHOLD &&
+		    !(exclusive && (pressed_buttons & PAD_UP)))
+			data |= PLATFORM_PAD_DOWN;
+		if (paddata->ljoy_v <= PS2_ANALOG_LOW_THRESHOLD &&
+		    !(exclusive && (pressed_buttons & PAD_DOWN)))
+			data |= PLATFORM_PAD_UP;
+		if (paddata->ljoy_h <= PS2_ANALOG_LOW_THRESHOLD &&
+		    !(exclusive && (pressed_buttons & PAD_RIGHT)))
+			data |= PLATFORM_PAD_LEFT;
+		if (paddata->ljoy_h >= PS2_ANALOG_HIGH_THRESHOLD &&
+		    !(exclusive && (pressed_buttons & PAD_LEFT)))
+			data |= PLATFORM_PAD_RIGHT;
 	}
 
 	return data;
@@ -159,24 +169,26 @@ static uint32_t basicPoll(struct padButtonStatus *paddata, bool exclusive) {
 
 static uint32_t ps2_poll(void *data) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
-	struct padButtonStatus paddata;
+	struct padButtonStatus paddata = {0};
 	uint32_t btnsData = 0;
 
 	if (ps2->enabled_pads == 0) {
 		return btnsData;
 	}
 
-	btnsData = basicPoll(&paddata, false);
+	btnsData = basicPoll(&paddata);
+	btnsData = addAnalogDirections(&paddata, btnsData, false);
 
 	return btnsData;
 }
 
 #if (EMU_SYSTEM == MVS)
 static uint32_t ps2_pollFatfursp(void *data) {
-	struct padButtonStatus paddata;
+	struct padButtonStatus paddata = {0};
 	uint32_t btnsData = 0;
 
-	btnsData = basicPoll(&paddata, true);
+	btnsData = basicPoll(&paddata);
+	btnsData = addAnalogDirections(&paddata, btnsData, true);
 
 	return btnsData;
 }
@@ -185,9 +197,12 @@ static uint32_t ps2_pollAnalog(void *data) {
 	uint32_t btnsData;
 	struct padButtonStatus paddata = {0};
 
-	btnsData = basicPoll(&paddata, false);
+	btnsData = basicPoll(&paddata);
 
-	btnsData  = paddata.btns & 0xffff;
+	/* Keep the portable button mask returned by basicPoll() in the low
+	 * 16 bits. padButtonStatus::btns is a raw, active-low PS2 mask and is
+	 * not compatible with the PLATFORM_PAD_* values used by input_map[]. */
+	btnsData &= 0xffff;
 	btnsData |= paddata.ljoy_h << 16;
 	btnsData |= paddata.ljoy_v << 24;
 
