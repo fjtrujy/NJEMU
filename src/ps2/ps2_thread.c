@@ -5,82 +5,120 @@
 
 typedef struct ps2_thread {
 	int32_t threadId;
-	void *endfunc;
+	int32_t endSemaId;
+	void *stack;
 	int32_t (*threadFunc)(uint32_t, void *);
 } ps2_thread_t;
 
-static void FinishThread(ps2_thread_t *ps2)
+static void cleanupThread(ps2_thread_t *ps2)
 {
-    ee_thread_status_t info;
-    int res;
+	if (ps2->threadId >= 0) {
+		DeleteThread(ps2->threadId);
+		ps2->threadId = -1;
+	}
 
-    res = ReferThreadStatus(ps2->threadId, &info);
-    TerminateThread(ps2->threadId);
-    DeleteThread(ps2->threadId);
-    DeleteSema((int)ps2->endfunc);
+	if (ps2->endSemaId >= 0) {
+		DeleteSema(ps2->endSemaId);
+		ps2->endSemaId = -1;
+	}
 
-    if (res > 0) {
-        free(info.stack);
-    }
+	free(ps2->stack);
+	ps2->stack = NULL;
+	ps2->threadFunc = NULL;
 }
 
 static int childThread(void *arg)
 {
-    ps2_thread_t *ps2 = (ps2_thread_t *)arg;
-    ps2->threadFunc(0, NULL);
-    SignalSema((int)ps2->endfunc);
+	ps2_thread_t *ps2 = (ps2_thread_t *)arg;
+	int32_t result = ps2->threadFunc(0, NULL);
+
+	SignalSema(ps2->endSemaId);
 	ExitThread();
-    return 0;
+	return result;
 }
 
-static void *ps2_init(void) {
+static void *ps2_init(void)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)calloc(1, sizeof(ps2_thread_t));
+
+	if (ps2 != NULL) {
+		ps2->threadId = -1;
+		ps2->endSemaId = -1;
+	}
+
 	return ps2;
 }
 
-static void ps2_free(void *data) {
+static void ps2_free(void *data)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
+
+	if (ps2 == NULL)
+		return;
+
+	cleanupThread(ps2);
 	free(ps2);
 }
 
-static bool ps2_createThread(void *data, const char *name, int32_t (*threadFunc)(uint32_t, void *), uint32_t priority, uint32_t stackSize) {
+static bool ps2_createThread(void *data, const char *name, int32_t (*threadFunc)(uint32_t, void *), uint32_t priority, uint32_t stackSize)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
+	ee_thread_t eethread = {0};
+	ee_sema_t sema = {0};
 
-	ee_thread_t eethread;
-	ee_sema_t sema;
+	(void)name;
 
-	/* Create EE Thread */
-    eethread.attr = 0;
-    eethread.option = 0;
-    eethread.func = &childThread;
-    eethread.stack = malloc(stackSize);
-    eethread.stack_size = stackSize;
-    eethread.gp_reg = &_gp;
-    eethread.initial_priority = priority;
-    ps2->threadId = CreateThread(&eethread);
+	if (ps2 == NULL || threadFunc == NULL || stackSize == 0)
+		return false;
 
-	// Prepare el semaphore for the ending function
-    sema.init_count = 0;
-    sema.max_count = 1;
-    sema.option = 0;
-    ps2->endfunc = (void *)CreateSema(&sema);
+	ps2->stack = malloc(stackSize);
+	if (ps2->stack == NULL)
+		return false;
 
 	ps2->threadFunc = threadFunc;
 
-	return ps2->threadId >= 0 && ps2->endfunc >= 0;
+	/* Create EE Thread */
+	eethread.attr = 0;
+	eethread.option = 0;
+	eethread.func = &childThread;
+	eethread.stack = ps2->stack;
+	eethread.stack_size = stackSize;
+	eethread.gp_reg = &_gp;
+	eethread.initial_priority = priority;
+	ps2->threadId = CreateThread(&eethread);
+	if (ps2->threadId < 0) {
+		cleanupThread(ps2);
+		return false;
+	}
+
+	/* The completion semaphore lets waitThreadEnd() wait without taking
+	 * ownership of the EE thread object. deleteThread() performs cleanup. */
+	sema.init_count = 0;
+	sema.max_count = 1;
+	sema.option = 0;
+	ps2->endSemaId = CreateSema(&sema);
+	if (ps2->endSemaId < 0) {
+		cleanupThread(ps2);
+		return false;
+	}
+
+	return true;
 }
 
-static void ps2_startThread(void *data) {
+static void ps2_startThread(void *data)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
 
-	StartThread(ps2->threadId, ps2);
+	if (ps2 != NULL && ps2->threadId >= 0)
+		StartThread(ps2->threadId, ps2);
 }
 
-static void ps2_waitThreadEnd(void *data) {
+static void ps2_waitThreadEnd(void *data)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
-	WaitSema((int)ps2->endfunc);
-    ReleaseWaitThread(ps2->threadId);
-    FinishThread(ps2);
+
+	if (ps2 != NULL && ps2->endSemaId >= 0)
+		WaitSema(ps2->endSemaId);
 }
 
 static void ps2_wakeupThread(void *data) {
@@ -88,9 +126,12 @@ static void ps2_wakeupThread(void *data) {
 	WakeupThread(ps2->threadId);
 }
 
-static void ps2_deleteThread(void *data) {
+static void ps2_deleteThread(void *data)
+{
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
-	DeleteThread(ps2->threadId);
+
+	if (ps2 != NULL)
+		cleanupThread(ps2);
 }
 
 static void ps2_resumeThread(void *data) {
@@ -108,7 +149,10 @@ static void ps2_sleepThread(void *data) {
 }
 
 static void ps2_exitThread(void *data, int32_t exitCode) {
-	// We don't need to do anything here as we will call ExitThread in the childThread
+	/* The wrapper must signal endSemaId before exiting, so the common
+	 * exitThread() hook intentionally does not call ExitThread() directly. */
+	(void)data;
+	(void)exitCode;
 }
 
 thread_driver_t thread_ps2 = {
