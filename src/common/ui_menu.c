@@ -810,9 +810,11 @@ done:
 
 int get_free_memory()
 {
-  const int 
+  enum
+  {
     chunk_size = 65536, // 64 kB
-    chunks = 1024; // 65536 * 1024 = 64 MB
+    chunks = 1024 // 65536 * 1024 = 64 MB
+  };
   void *mem_reserv[chunks];
   int total_mem = 0, i;
  

@@ -603,9 +603,14 @@ if (PLATFORM STREQUAL "DESKTOP")
     target_include_directories(${TARGET} PUBLIC 
         ${SDL2_INCLUDE_DIRS}
     )
-    target_link_libraries(${TARGET} PUBLIC
-        SDL2::SDL2-static
-    )
+    if(TARGET SDL2::SDL2-static)
+        set(NJEMU_SDL2_TARGET SDL2::SDL2-static)
+    elseif(TARGET SDL2::SDL2)
+        set(NJEMU_SDL2_TARGET SDL2::SDL2)
+    else()
+        set(NJEMU_SDL2_TARGET ${SDL2_LIBRARIES})
+    endif()
+    target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
     target_link_libraries(${TARGET} PUBLIC
         patches
