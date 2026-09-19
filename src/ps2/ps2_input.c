@@ -55,6 +55,13 @@ static void refreshJoyInfo(ps2_input_t *ps2)
 
 	for (port = 0; port < PS2_MAX_PORT; port++) {
 		uint32_t slot;
+
+		/* mtapPortOpen() can fail when no multitap is present at startup. Retry
+		 * it during the periodic refresh so a multitap connected later becomes
+		 * discoverable without requiring an emulator restart. */
+		if (!ps2->mtap_opened[port])
+			ps2->mtap_opened[port] = (mtapPortOpen(port) == 1);
+
 		uint32_t max_slots =
 			(ps2->mtap_opened[port] && mtapGetConnection(port) == 1) ?
 			PS2_MAX_SLOT : 1;
