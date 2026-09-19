@@ -50,6 +50,10 @@ The following work is already committed:
 - `ecf0460` — document multi-controller support.
 - `a647d0c` — fix Desktop/ROMCNV/Web CI builds.
 - `f176a5a` — restrict MVS service/test system inputs to the primary controller.
+- `f6de133` — prevent CPS2 legacy `Start2` from crossing physical players in
+  true multi-pad mode.
+- `d773d19` — select the Fat Fury Special poller by NGH id so parent and clone
+  sets share the same special input semantics.
 
 Current semantics:
 
@@ -102,6 +106,12 @@ single physical controller; PS2 exposes indexed pads/multitap slots.
 - CPS1 `captcomm`: P3 (`controller 2`, `(0,1)`) and P4 (`controller 3`, `(1,1)`)
   were exercised and routed exclusively to the P3/P4 arcade ports.
 - CPS2 `ssf2`: direct P1/P2 runtime routing verified on independent port bits.
+- CPS2 legacy `P2_START` / `Start2` compatibility routing was found to be
+  inappropriate in true multi-pad mode because it can intentionally start the
+  opposite emulated player from one physical pad. The multi-controller path now
+  suppresses `P2_START`; a temporary `Start2=L` runtime test confirmed both pads
+  receive L independently without cross-player Start leakage. Test logging and
+  forced mappings were removed afterwards.
 - NCDZ `Windjammers`: direct P1/P2 runtime routing verified on independent NCDZ
   ports.
 - A fresh PS2 `GUI + SAVE_STATE + COMMAND_LIST` build matrix passes for all four
@@ -115,6 +125,50 @@ single physical controller; PS2 exposes indexed pads/multitap slots.
 
 All temporary runtime logging/instrumentation used for these checks was removed
 before committing source changes.
+
+## Recommended ROM validation corpus
+
+Use parent sets unless noted. This is a coverage-oriented corpus: each entry
+exercises a distinct input-routing path rather than duplicating equivalent
+clones.
+
+### CPS1
+
+- `captcomm` — canonical 4-player routing; P3/P4 already validated in PCSX2.
+- `slammast` — 4-player path with the three-button mapping.
+- `mercs` — canonical 3-player CPS1 routing.
+- `wofch3p` — alternate 3-player port layout (`INPTYPE_wofch3p`).
+- `forgottn` — per-player dial/analog accumulator path.
+- `sf2` — normal two-player six-button split-port path.
+- `1941` — rotated/vertical input-adjustment path.
+
+### CPS2
+
+- `ssf2` — normal two-player six-button path; already validated in PCSX2.
+- `avsp` — three-player routing and P3 start/coin handling.
+- `ddtod` — four-player, four-button routing and 4-player coin/start handling.
+- `batcir` — four-player, two-button routing with a different coin-chute table.
+- `pzloop2` — per-player dial/analog path.
+- `progear` — real legacy `Start2` binding; validates that it remains a one-pad
+  compatibility feature and cannot cross players in multi-pad mode.
+- `19xx` — rotated two-button CPS2 mapping.
+
+### MVS
+
+- `pbobbl2n` (or another ordinary two-player MVS title) — normal P1/P2 routing,
+  MVS/AES start/coin and global-hotkey baseline.
+- `fatfursp` — exclusive digital/analog special poller.
+- `fatfursa` — clone regression for the NGH-based Fat Fury Special poller.
+- `popbounc` — independent per-player analog/paddle accumulators.
+- `irrmaze` — special analog hardware; intentionally remains on legacy routing.
+- `vliner` — special non-standard controller/coin path; intentionally legacy.
+- `jockeygp` — special non-standard controller path; intentionally legacy.
+
+### NCDZ
+
+- `Windjammers` — representative simultaneous two-player NCDZ path; already
+  validated in PCSX2. Additional ordinary NCDZ two-player titles are redundant
+  for input routing unless a game-specific issue appears.
 
 ## Next-session objective
 

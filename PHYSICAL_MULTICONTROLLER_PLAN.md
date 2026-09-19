@@ -28,6 +28,12 @@
   `(0,1)` / `(1,1)` and routed to the correct CPS1 ports.
 - ✅ MVS secondary controllers can no longer trigger remappable service/test
   system inputs (`f176a5a`).
+- ✅ CPS2 multi-pad routing now suppresses the legacy `P2_START` compatibility
+  binding, preventing a physical pad from starting the opposite emulated player
+  while true multi-controller routing is active.
+- ✅ Fat Fury Special special-poller selection now uses `NGH_fatfursp` rather
+  than the literal parent set name, so clones such as `fatfursa` use the same
+  input semantics (`d773d19`).
 - ⚠️ Remaining runtime coverage is limited to cases for which no local ROM is
   currently available (`fatfursp`, `popbounc`, CPS2 `avsp`/`ddtod`/`batcir`),
   plus real-hardware hotplug/late-multitap and explicit global-hotkey checks.
@@ -168,6 +174,9 @@ Runtime checks where possible:
   the legacy special-hardware path; `popbounc` per-player analog routing audited,
   ROM not available locally for runtime validation;
 - ✅ NCDZ two-player input (`Windjammers`);
+- ✅ CPS2 legacy `Start2` cross-player binding was explicitly exercised with a
+  temporary runtime mapping and verified not to leak between physical players in
+  multi-controller mode; the temporary instrumentation was removed afterwards;
 - ⚠️ menu/screenshot/save-state/command-list ownership and live pad/multitap
   hotplug still need an explicit real-hardware smoke test.
 
