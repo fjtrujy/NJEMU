@@ -537,17 +537,27 @@ int load_png(const char *name, int number)
 	if ((res = png_read_file(fd, &p)))
 	{
 		uint32_t x, y, sx, sy;
+		int decoded = 0;
 		uint8_t *src = p.image;
 
 		sx = (SCR_WIDTH - p.width) >> 1;
 		sy = (SCR_HEIGHT - p.height) >> 1;
 		uint16_t *vptr, *dst;
 
-		vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, sx, sy);
+		/* GS frame buffers are not CPU-addressable on PS2.  Decode into the
+		 * driver's CPU-backed GUI scratch surface, then upload/blit that region
+		 * through the normal video-driver path. */
+		vptr = (uint16_t *)video_driver->frameAddr(video_data,
+			COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, sx, sy);
+		if (!vptr) {
+			res = 0;
+			goto cleanup;
+		}
 
 		switch (p.bpp * p.bit_depth)
 		{
 		case 8:
+			decoded = 1;
 			for (y = 0; y < p.height; y++)
 			{
 				src++;
@@ -566,6 +576,7 @@ int load_png(const char *name, int number)
 			break;
 
 		case 24:
+			decoded = 1;
 			for (y = 0; y < p.height; y++)
 			{
 				src++;
@@ -586,8 +597,20 @@ int load_png(const char *name, int number)
 			ui_popup(TEXT(xBIT_COLOR_PNG_IMAGE_NOT_SUPPORTED), p.bpp * p.bit_depth);
 			break;
 		}
+
+		if (decoded) {
+			RECT clip = {
+				(int16_t)sx, (int16_t)sy,
+				(int16_t)(sx + p.width), (int16_t)(sy + p.height)
+			};
+			video_driver->copyRect(video_data,
+				COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
+				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+				&clip, &clip);
+		}
 	}
 
+cleanup:
 	if (p.palette) free(p.palette);
 	if (p.image) png_free(p.image);
 
@@ -786,6 +809,13 @@ static int png_create_datastream(int fd)
 	uint16_t *vptr, *src;
 
 	vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0, 0);
+	if (!vptr) {
+		/* GS local memory is not directly CPU-readable.  Keep screenshot capture
+		 * fail-safe until the PS2 driver grows an explicit local-to-host readback
+		 * operation instead of dereferencing a fake framebuffer pointer. */
+		png_free(p.image);
+		return 0;
+	}
 
 	for (y = 0; y < p.height; y++)
 	{
@@ -839,6 +869,8 @@ int save_png(const char *path)
 		}
 
 		close(fd);
+		if (!res)
+			remove(path);
 	}
 
 	png_mem_exit();

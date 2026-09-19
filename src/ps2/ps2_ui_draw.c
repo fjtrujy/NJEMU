@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
+#include <kernel.h>
 #include <gsKit.h>
 #include <gsInline.h>
 #include <gsToolkit.h>
@@ -23,12 +24,6 @@
 #include "ps2/ps2.h"
 #include "common/ui_draw_driver.h"
 #include "common/video_driver.h"
-
-/* Mirror gs_enable/disable_alpha_blend from ps2_video.c so this TU can
- * toggle alpha blending without round-tripping through the video driver. */
-#define UI_GS_ALPHA_BLEND  GS_SETREG_ALPHA(0, 1, 0, 1, 0)
-#define ui_enable_alpha_blend(g)   gsKit_set_primalpha((g), UI_GS_ALPHA_BLEND, 0)
-
 
 /******************************************************************************
 	Texture management
@@ -323,10 +318,6 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	ps2_ui_texture_t *tex;
 	GSTEXTURE *gst;
 	GSGLOBAL *gsGlobal = d->gsGlobal;
-	int prev_alpha_enable;
-	int prev_alpha_test;
-	u64 prev_alpha_mode;
-	u8 prev_pabe;
 
 	if (slot >= UI_TEXTURE_MAX || !gsGlobal)
 		return;
@@ -347,48 +338,18 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	if (tex->buffer_valid && (!tex->vram_valid || slot == UI_TEXTURE_FONT))
 	{
 		expand_buffer_to_upload(tex);
+		size_t upload_size = gsKit_texture_size_ee(gst->Width, gst->Height, gst->PSM);
+		SyncDCache(gst->Mem, (uint8_t *)gst->Mem + upload_size);
 		gsKit_texture_send_inline(gsGlobal, gst->Mem,
 			gst->Width, gst->Height, gst->Vram,
 			gst->PSM, gst->TBW, GS_CLUT_NONE);
 		tex->vram_valid = 1;
 	}
 
-	/* Modulation tint for textured sprites. Most callers (font, icons) pass
-	 * 0xFFFFFFFF for pass-through white; the texture itself carries the
-	 * actual colors via make_font_texture. Use the gsKit-canonical 0x80 =
-	 * identity in each channel so MODULATE doesn't darken or saturate. */
+	/* The texture itself carries the final font/icon colors. */
 	(void)color;
-	u64 gs_color = GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
-
-	prev_alpha_enable = gsGlobal->PrimAlphaEnable;
-	prev_alpha_test = gsGlobal->Test->ATE;
-	prev_alpha_mode = gsGlobal->PrimAlpha;
-	prev_pabe = gsGlobal->PABE;
-
-	/* gsKit uses PrimAlphaEnable both for PRIM.ABE and TEX0.TCC.  Keep both
-	 * enabled only for sprites that actually request alpha blending; opaque
-	 * copies should neither blend nor consume texture alpha. */
-	gsGlobal->PrimAlphaEnable = blend ? GS_SETTING_ON : GS_SETTING_OFF;
-
-	/* Game rendering uses TEQUAL/AREF=0 for indexed CT16 textures.  UI CT32
-	 * textures use their own alpha values, so keep the global alpha test out of
-	 * UI sprite evaluation.  Transparent UI sprites are handled by blending. */
-	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-
-	if (blend)
-		ui_enable_alpha_blend(gsGlobal);
-
-	gsKit_prim_sprite_texture(gsGlobal, gst,
-		(float)dx,         (float)dy,         (float)su,         (float)sv,
-		(float)(dx + dw),  (float)(dy + dh),  (float)(su + sw),  (float)(sv + sh),
-		0,                 gs_color);
-
-	gsGlobal->PrimAlphaEnable = prev_alpha_enable;
-
-	if (blend)
-		gsKit_set_primalpha(gsGlobal, prev_alpha_mode, prev_pabe);
-
-	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
+	video_driver->drawUISprite(d->video_data, gst, gst->PSM, 0,
+		su, sv, sw, sh, dx, dy, dw, dh, blend);
 
 	/* The font scratch buffer is rewritten between glyphs (always at UV 0,0),
 	 * so its upload+draw must complete before the next glyph overwrites the

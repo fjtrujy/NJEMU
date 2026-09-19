@@ -111,6 +111,18 @@ typedef struct ps2_video {
 
 	GSTEXTURE *scrbitmap;
 
+#if defined(GUI)
+	/* Legacy PSP GUI code historically had a dedicated 16-bit `tex_frame`
+	 * scratch surface.  COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER ended up
+	 * being used for that scratch during the driver abstraction, but on PS2 the
+	 * real layer 0 may be an indexed T8 atlas.  Keep a separate CT16 scratch
+	 * surface so GUI/NCDZ/title/state operations do not corrupt the emulator
+	 * atlas or reinterpret T8 storage as 16-bit pixels. */
+	GSTEXTURE *ui_scratch;
+	uint8_t *ui_scratch_mem;
+	uint8_t ui_scratch_cpu_dirty;
+#endif
+
 	/* CLUT configuration from emu_clut_info */
 	uint16_t *clut_base;
 	uint16_t clut_entries_per_bank;
@@ -184,6 +196,29 @@ static GSTEXTURE *initializeRenderTexture(GSGLOBAL *gsGlobal, int width, int hei
 	gsKit_setup_tbw(tex);
 	return tex;
 }
+
+#if defined(GUI)
+static GSTEXTURE *initializeCpuTexture(GSGLOBAL *gsGlobal, int width, int height,
+	uint8_t bytes_per_pixel, void **out_mem)
+{
+	size_t size = (size_t)width * height * bytes_per_pixel;
+	void *mem = memalign(64, size);
+	if (!mem)
+		return NULL;
+
+	memset(mem, 0, size);
+	GSTEXTURE *texture = initializeTexture(gsGlobal, width, height,
+		bytes_per_pixel, mem);
+	if (!texture || texture->Vram == GSKIT_ALLOC_ERROR) {
+		free(texture);
+		free(mem);
+		return NULL;
+	}
+
+	*out_mem = mem;
+	return texture;
+}
+#endif
 
 static inline void *ps2_vramClutForBankIndex(void *data, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -270,6 +305,25 @@ static inline void ps2_flushTextureCache(GSGLOBAL *gsGlobal)
 	*p_data++ = 0;
 	*p_data++ = GS_TEXFLUSH;
 }
+
+#if defined(GUI)
+static void ps2_syncUiScratchToVram(ps2_video_t *ps2)
+{
+	if (!ps2->ui_scratch || !ps2->ui_scratch_cpu_dirty)
+		return;
+
+	size_t size = gsKit_texture_size_ee(ps2->ui_scratch->Width,
+		ps2->ui_scratch->Height, ps2->ui_scratch->PSM);
+	SyncDCache(ps2->ui_scratch->Mem,
+		(uint8_t *)ps2->ui_scratch->Mem + size);
+	gsKit_texture_send_inline(ps2->gsGlobal,
+		(u32 *)ps2->ui_scratch->Mem,
+		ps2->ui_scratch->Width, ps2->ui_scratch->Height,
+		ps2->ui_scratch->Vram, ps2->ui_scratch->PSM,
+		ps2->ui_scratch->TBW, GS_CLUT_NONE);
+	ps2->ui_scratch_cpu_dirty = 0;
+}
+#endif
 
 static inline void gsKit_renderToScreen(GSGLOBAL *gsGlobal)
 {
@@ -491,6 +545,24 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->clut_vram_size = clut_vram_size;
 	ps2->vram_cluts = vram_cluts;
 
+#if defined(GUI)
+	/* Allocate GUI-only VRAM after mandatory game atlases and CLUTs. */
+	ps2->ui_scratch = initializeCpuTexture(gsGlobal, BUF_WIDTH, SCR_HEIGHT, 2,
+		(void **)&ps2->ui_scratch_mem);
+	if (!ps2->ui_scratch) {
+		for (int i = 0; i < ps2->tex_layers_count; i++)
+			free(ps2->tex_layers[i].texture);
+		free(ps2->texturesMem);
+		free(ps2->tex_layers);
+		free(ps2->scrbitmap);
+		gsKit_vram_clear(gsGlobal);
+		gsKit_deinit_global(gsGlobal);
+		DeleteSema(finish_sema_id);
+		free(ps2);
+		return NULL;
+	}
+#endif
+
 	ps2->vertexColor = color_to_RGBAQ(0x80, 0x80, 0x80, 0x80, 0);
 	ps2->clearScreenColor = color_to_RGBAQ(0x00, 0x00, 0x00, 0x80, 0);
 
@@ -521,6 +593,13 @@ static void ps2_free(void *data)
 	
 	free(ps2->scrbitmap);
 	ps2->scrbitmap = NULL;
+
+#if defined(GUI)
+	free(ps2->ui_scratch_mem);
+	ps2->ui_scratch_mem = NULL;
+	free(ps2->ui_scratch);
+	ps2->ui_scratch = NULL;
+#endif
 
 	free(ps2->texturesMem);
 	ps2->texturesMem = NULL;
@@ -579,7 +658,39 @@ static void ps2_endFrame(void *data)
 
 static void *ps2_frameAddr(void *data, int frameIndex, int x, int y)
 {
-	return NULL;
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSTEXTURE *texture = NULL;
+	uint8_t bytes_per_pixel = 0;
+
+#if defined(GUI)
+	/* See ps2_video_t::ui_scratch.  The GUI's legacy CPU-accessible surface is
+	 * intentionally separate from emulator texture layer 0. */
+	if (frameIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		texture = ps2->ui_scratch;
+		bytes_per_pixel = 2;
+		ps2->ui_scratch_cpu_dirty = 1;
+	}
+#endif
+
+	if (!texture && frameIndex >= COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		int layer_index = frameIndex - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER;
+		if (layer_index < 0 || layer_index >= ps2->tex_layers_count)
+			return NULL;
+		texture = ps2->tex_layers[layer_index].texture;
+		bytes_per_pixel = texture->PSM == GS_PSM_T8 ? 1 : 2;
+	}
+
+	/* GS frame buffers and render textures live only in local GS VRAM and have
+	 * no directly CPU-addressable pointer on PS2.  Callers that need readback
+	 * must use an explicit local-to-host transfer rather than frameAddr(). */
+	if (!texture || !texture->Mem)
+		return NULL;
+
+	if (x < 0 || y < 0 || x >= texture->Width || y >= texture->Height)
+		return NULL;
+
+	return (uint8_t *)texture->Mem +
+		((size_t)y * texture->Width + (size_t)x) * bytes_per_pixel;
 }
 
 static void ps2_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
@@ -748,6 +859,14 @@ static GSTEXTURE ps2_resolveSourceTexture(ps2_video_t *ps2, int index) {
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		tex = *ps2->scrbitmap;
 		break;
+	case COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER:
+#if defined(GUI)
+		ps2_syncUiScratchToVram(ps2);
+		tex = *ps2->ui_scratch;
+#else
+		tex = *ps2->tex_layers[0].texture;
+#endif
+		break;
 	default:
 		tex = *ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
 		break;
@@ -771,6 +890,16 @@ static void ps2_setDestination(ps2_video_t *ps2, int index) {
 		break;
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		gsKit_renderToTexture(gsGlobal, ps2->scrbitmap);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER:
+#if defined(GUI)
+		/* Preserve any CPU-written part of the scratch surface before a partial
+		 * GPU render modifies it.  After this point VRAM is authoritative. */
+		ps2_syncUiScratchToVram(ps2);
+		gsKit_renderToTexture(gsGlobal, ps2->ui_scratch);
+#else
+		gsKit_renderToTexture(gsGlobal, ps2->tex_layers[0].texture);
+#endif
 		break;
 	default: {
 		GSTEXTURE *layerTex = ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
@@ -901,13 +1030,15 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	int prev_alpha = gsGlobal->PrimAlphaEnable;
+	int prev_alpha_test = gsGlobal->Test->ATE;
 	GSTEXTURE srcTex = ps2_resolveSourceTexture(ps2, srcIndex);
 
-	/* Override PSM to direct-color (CT16) since drawTexture reinterprets
-	   the source buffer with the requested pixel format.
-	   On PS2, CT16 (16-bit RGBA 5551) is the standard framebuffer format. */
-	srcTex.PSM = GS_PSM_CT16;
-	gsKit_setup_tbw(&srcTex);
+	/* src_fmt/dst_fmt are PSP-format legacy parameters.  PS2 render targets
+	 * carry their actual GS PSM in GSTEXTURE/GSGLOBAL, so reinterpreting the
+	 * source from these values would corrupt indexed surfaces. */
+	(void)src_fmt;
+	(void)dst_fmt;
 
 	int sw = src_rect->right - src_rect->left;
 	int dw = dst_rect->right - dst_rect->left;
@@ -917,12 +1048,18 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 	srcTex.Filter = (sw == dw && sh == dh) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
 	ps2_setDestination(ps2, dstIndex);
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
+	ps2_flushTextureCache(gsGlobal);
+	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
 	gsKit_prim_sprite_texture(gsGlobal, &srcTex,
 		dst_rect->left, dst_rect->top, src_rect->left, src_rect->top,
 		dst_rect->right, dst_rect->bottom, src_rect->right, src_rect->bottom,
 		0, color);
+
+	gsGlobal->PrimAlphaEnable = prev_alpha;
+	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
 static void *ps2_getNativeObjects(void *data, int index) {
@@ -944,14 +1081,21 @@ static void *ps2_getNativeObjects(void *data, int index) {
 static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
-   	gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height, tex->Vram, tex->PSM, tex->TBW, GS_CLUT_TEXTURE);
+	size_t size = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
+	SyncDCache(tex->Mem, (uint8_t *)tex->Mem + size);
+	gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height,
+		tex->Vram, tex->PSM, tex->TBW, GS_CLUT_TEXTURE);
 }
 
 static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	void *vram = ps2_vramClutForBankIndex(data, bank_index);
 	/* Upload CLUT using target-specific dimensions */
-   	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)clut, CLUT_WIDTH, CLUT_HEIGHT * ps2->clut_bank_height, (u32)vram, GS_PSM_CT16, 1, GS_CLUT_PALLETE);
+	size_t size = (size_t)CLUT_WIDTH * ps2->clut_bank_height * sizeof(uint16_t);
+	SyncDCache(clut, (uint8_t *)clut + size);
+	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)clut, CLUT_WIDTH,
+		CLUT_HEIGHT * ps2->clut_bank_height, (u32)vram, GS_PSM_CT16, 1,
+		GS_CLUT_PALLETE);
 }
 
 static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
@@ -988,7 +1132,10 @@ static void ps2_blitPoints(void *data, uint32_t points_count, void *vertices) {
 }
 
 static void ps2_flushCache(void *data, void *addr, size_t size) {
-	// No cache to flush on PS2
+	(void)data;
+	if (!addr || size == 0)
+		return;
+	SyncDCache(addr, (uint8_t *)addr + size);
 }
 
 /*--------------------------------------------------------
@@ -1127,29 +1274,28 @@ static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 {
 	ps2_video_t *ps2 = (ps2_video_t *)data;
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
-	int prev_alpha_test;
+	GSTEXTURE *texture = (GSTEXTURE *)tex;
+	int prev_alpha_test = gsGlobal->Test->ATE;
 	ps2_ui_alpha_state_t alpha_state;
-	
-	if (!tex) return;
 
-	/* For UI sprites, we receive a texture pointer but can't easily wrap it in GSTEXTURE
-	   For now, implement a simple colored rect that matches the sprite dimensions
-	   TODO: Properly integrate GSTEXTURE wrapper for UI textures */
-	
-	uint32_t color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
+	(void)tex_format;
+	(void)tex_swizzled;
+	if (!texture || !texture->Vram)
+		return;
 
-	if (blend) {
-		prev_alpha_test = gsGlobal->Test->ATE;
-		alpha_state = ps2_ui_set_alpha_blend(gsGlobal, 1);
-		gsKit_set_test(gsGlobal, GS_ATEST_OFF);
-	}
+	alpha_state = ps2_ui_set_alpha_blend(gsGlobal, blend);
+	/* UI CT32 textures carry their own alpha convention; keep the game's
+	 * indexed-texture alpha test out of this draw. */
+	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
-	gsKit_prim_quad(gsGlobal, dx, dy, dx + dw, dy, dx, dy + dh, dx + dw, dy + dh, 0, color);
+	gsKit_prim_sprite_texture(gsGlobal, texture,
+		(float)dx, (float)dy, (float)su, (float)sv,
+		(float)(dx + dw), (float)(dy + dh),
+		(float)(su + sw), (float)(sv + sh),
+		0, GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80));
 
-	if (blend) {
-		ps2_ui_restore_alpha_blend(gsGlobal, alpha_state);
-		gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
-	}
+	ps2_ui_restore_alpha_blend(gsGlobal, alpha_state);
+	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
 static void ps2_drawUILine(void *data,
