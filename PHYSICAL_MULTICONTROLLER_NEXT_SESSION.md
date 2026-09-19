@@ -49,6 +49,7 @@ The following work is already committed:
 - `0e15f91` — preserve legacy controller selection in multi-pad mode.
 - `ecf0460` — document multi-controller support.
 - `a647d0c` — fix Desktop/ROMCNV/Web CI builds.
+- `f176a5a` — restrict MVS service/test system inputs to the primary controller.
 
 Current semantics:
 
@@ -85,10 +86,35 @@ single physical controller; PS2 exposes indexed pads/multitap slots.
   - Web ROM Converter
   - PS2 CMAKE
   - PSP CMAKE
-- A normal CPS1 PS2 GUI + SAVE_STATE + COMMAND_LIST ELF has been smoke-tested in
-  PCSX2.
+- PCSX2 2.9.70 was exercised with isolated `-datapath` configurations so the
+  user's normal PCSX2 settings were not modified.
+- One-pad regression: NJEMU reports exactly one active controller with only
+  `P1/S1` configured, preserving the legacy one-pad routing branch.
+- Two direct pads: NJEMU reports two active controllers and independently polls
+  `(port 0, slot 0)` and `(port 1, slot 0)`.
+- MVS normal 2P runtime routing verified: P1 and P2 modify independent MVS input
+  ports. During this validation a real bug was found and fixed: secondary pads
+  could propagate remapped `TEST_SWITCH`; `f176a5a` now clears secondary
+  service/test system flags.
+- Multitap runtime: with both multitaps enabled PCSX2 configured all eight
+  endpoints and NJEMU reported eight active controllers in stable order:
+  `(0,0), (1,0), (0,1), (1,1), ... (0,3), (1,3)`.
+- CPS1 `captcomm`: P3 (`controller 2`, `(0,1)`) and P4 (`controller 3`, `(1,1)`)
+  were exercised and routed exclusively to the P3/P4 arcade ports.
+- CPS2 `ssf2`: direct P1/P2 runtime routing verified on independent port bits.
+- NCDZ `Windjammers`: direct P1/P2 runtime routing verified on independent NCDZ
+  ports.
+- A fresh PS2 `GUI + SAVE_STATE + COMMAND_LIST` build matrix passes for all four
+  cores after removing all test instrumentation.
+- Desktop MVS `GUI + COMMAND_LIST` (SAVE_STATE off) also passes. Desktop
+  `SAVE_STATE=ON` currently fails in pre-existing `src/common/state.c` code
+  (`UI_TEXTURE` plus pointer-to-`uint32_t` casts), unrelated to multi-controller
+  input.
+- No local PSP toolchain is installed under `/Users/fjtrujy/toolchains`; the most
+  recent PR #10 PSP CI supplied by the user is green.
 
-This does **not** constitute multi-controller runtime validation.
+All temporary runtime logging/instrumentation used for these checks was removed
+before committing source changes.
 
 ## Next-session objective
 
@@ -99,32 +125,26 @@ Do not redesign unrelated input/config systems.
 Start by auditing the existing implementation rather than rewriting it. Then
 perform runtime tests and fix every issue found.
 
-Priority validation/fix order:
+Remaining validation/fix order:
 
 1. One PS2 pad:
-   - legacy behavior unchanged;
-   - Switch Player still works.
-2. Two direct PS2 pads:
-   - simultaneous P1 + P2;
-   - independent held directions/actions;
-   - only primary pad controls global UI/hotkeys.
-3. CPS1/CPS2 3/4-player games through multitap:
-   - examples: `captcomm`, `slammast`, `avsp`, `ddtod`, `batcir`;
-   - verify deterministic player ordering and coin/start routing.
-4. MVS:
-   - normal 2-player title;
-   - `fatfursp`;
-   - `popbounc` analog routing;
-   - investigate special cases such as `irrmaze` without forcing an incorrect
-     independent-player model.
-5. NCDZ:
-   - two-player simultaneous input.
-6. While several pads are attached:
+   - explicitly exercise Switch Player in the GUI (the one-pad branch itself is
+     already runtime-validated).
+2. CPS2 3/4-player games through multitap when legal local ROMs are available:
+   - `avsp`, `ddtod`, `batcir`;
+   - verify P3/P4 coin/start routing in addition to the CPS1 `captcomm` validation
+     already completed.
+3. MVS special cases when legal local ROMs are available:
+   - `fatfursp` exclusive digital/analog poller;
+   - `popbounc` per-player analog routing;
+   - keep `irrmaze` on the legacy special-hardware path unless runtime evidence
+     shows an independent-player model is correct.
+4. While several pads are attached:
    - menu;
    - screenshot;
    - save/load state;
    - command list.
-7. Hotplug/multitap:
+5. Hotplug/multitap on real hardware:
    - second direct pad attach/remove where supported;
    - multitap present at boot;
    - late multitap discovery where supported.

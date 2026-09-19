@@ -1,6 +1,6 @@
 # Physical Multi-Controller Plan
 
-## Implementation status (2026-09-19)
+## Implementation status (2026-09-20)
 
 - ✅ Phase 0 complete: clean non-resource baseline established and preserved.
 - ✅ Phase 1 complete: common input API supports physical-controller count and
@@ -20,9 +20,17 @@
   hotkeys in multi mode.
 - ✅ Phase 6 build validation: 12/12 PS2 builds pass (baseline, GUI, and GUI +
   SAVE_STATE + COMMAND_LIST for CPS1/CPS2/MVS/NCDZ).
-- ⚠️ Remaining runtime validation requires multiple real/virtual PS2 pads:
-  direct P1+P2, multitap 3/4-player CPS titles, MVS `fatfursp`/`popbounc`, and
-  NCDZ two-player play.
+- ✅ PCSX2 2.9.70 runtime validation now confirms one-pad fallback, two direct
+  pads, multitap enumeration, MVS two-player routing, CPS1 four-player routing,
+  CPS2 two-player routing, and NCDZ two-player routing.
+- ✅ With both PS2 multitaps enabled, NJEMU enumerates all eight active endpoints
+  in the intended stable order. `captcomm` was exercised with P3/P4 mapped to
+  `(0,1)` / `(1,1)` and routed to the correct CPS1 ports.
+- ✅ MVS secondary controllers can no longer trigger remappable service/test
+  system inputs (`f176a5a`).
+- ⚠️ Remaining runtime coverage is limited to cases for which no local ROM is
+  currently available (`fatfursp`, `popbounc`, CPS2 `avsp`/`ddtod`/`batcir`),
+  plus real-hardware hotplug/late-multitap and explicit global-hotkey checks.
 
 ## Goal
 
@@ -148,14 +156,20 @@ Build matrix for CPS1/CPS2/MVS/NCDZ:
 
 Runtime checks where possible:
 
-- one PS2 pad: old behavior and Switch Player;
-- two direct PS2 pads: P1 + P2 simultaneous;
-- multitap: 3/4-player CPS titles;
-- MVS normal game with two pads;
-- MVS Fat Fury Special;
-- MVS Irritating Maze / Pop '\''n Bounce;
-- NCDZ two-player input;
-- menu/screenshot/save-state while multiple pads are attached.
+- ✅ one PS2 pad: NJEMU reports one active controller and therefore uses the
+  legacy one-pad path; explicit Switch Player action still needs a hardware/UI
+  smoke test;
+- ✅ two direct PS2 pads: indexed polling and independent P1/P2 routing verified;
+- ✅ multitap: eight endpoints detected; CPS1 `captcomm` P3/P4 routing verified;
+- ✅ MVS normal game with two pads;
+- ⚠️ MVS Fat Fury Special: special poller audited, ROM not available locally for
+  runtime validation;
+- ⚠️ MVS Irritating Maze / Pop '\''n Bounce: `irrmaze` intentionally remains on
+  the legacy special-hardware path; `popbounc` per-player analog routing audited,
+  ROM not available locally for runtime validation;
+- ✅ NCDZ two-player input (`Windjammers`);
+- ⚠️ menu/screenshot/save-state/command-list ownership and live pad/multitap
+  hotplug still need an explicit real-hardware smoke test.
 
 ## Non-goals
 
