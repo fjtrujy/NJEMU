@@ -100,11 +100,27 @@ single physical controller; PS2 exposes indexed pads/multitap slots.
   ports. During this validation a real bug was found and fixed: secondary pads
   could propagate remapped `TEST_SWITCH`; `f176a5a` now clears secondary
   service/test system flags.
+- The MVS system-flag fix was explicitly runtime-tested with a temporary mapping:
+  P2 kept `TEST_SWITCH=0`, while the same input from P1 produced
+  `TEST_SWITCH=1`. Temporary mapping/logging was removed afterwards.
 - Multitap runtime: with both multitaps enabled PCSX2 configured all eight
   endpoints and NJEMU reported eight active controllers in stable order:
   `(0,0), (1,0), (0,1), (1,1), ... (0,3), (1,3)`.
 - CPS1 `captcomm`: P3 (`controller 2`, `(0,1)`) and P4 (`controller 3`, `(1,1)`)
   were exercised and routed exclusively to the P3/P4 arcade ports.
+- CPS1 `mercs`: P3 (`controller 2`) was exercised through multitap and modified
+  only the P3 arcade port.
+- CPS1 `slammast`: P4 (`controller 3`) was exercised through multitap and
+  modified only the P4 arcade port.
+- CPS1 `forgottn`: P1 and P2 dial inputs were held independently; only the
+  corresponding `input_analog_value[]` accumulator advanced for each pad.
+- CPS1 `1941`: rotated input adjustment was exercised with both direct pads and
+  retained independent P1/P2 routing after rotation.
+- CPS1 `sf2`: the six-button split-port path was exercised from both pads; the
+  same extra button set distinct P1/P2 bits without cross-talk.
+- One-pad Switch Player was explicitly runtime-tested with a temporary binding:
+  `option_controller` cycled `0 -> 1` (and back after the normal debounce period).
+  Temporary mapping/logging was removed afterwards.
 - CPS2 `ssf2`: direct P1/P2 runtime routing verified on independent port bits.
 - CPS2 legacy `P2_START` / `Start2` compatibility routing was found to be
   inappropriate in true multi-pad mode because it can intentionally start the
@@ -182,8 +198,8 @@ perform runtime tests and fix every issue found.
 Remaining validation/fix order:
 
 1. One PS2 pad:
-   - explicitly exercise Switch Player in the GUI (the one-pad branch itself is
-     already runtime-validated).
+   - routing and Switch Player are runtime-validated; retain a final visual smoke
+     test on real hardware if convenient.
 2. CPS2 3/4-player games through multitap when legal local ROMs are available:
    - `avsp`, `ddtod`, `batcir`;
    - verify P3/P4 coin/start routing in addition to the CPS1 `captcomm` validation

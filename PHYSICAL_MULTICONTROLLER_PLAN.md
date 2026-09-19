@@ -23,11 +23,18 @@
 - ✅ PCSX2 2.9.70 runtime validation now confirms one-pad fallback, two direct
   pads, multitap enumeration, MVS two-player routing, CPS1 four-player routing,
   CPS2 two-player routing, and NCDZ two-player routing.
+- ✅ Additional CPS1 runtime coverage confirms `mercs` 3P, `slammast` 4P,
+  `forgottn` independent P1/P2 dial accumulators, `1941` rotated input routing,
+  and `sf2` six-button split-port routing.
+- ✅ The one-pad legacy Switch Player path was explicitly exercised in PCSX2;
+  `option_controller` still cycles as expected while only one physical pad is
+  present.
 - ✅ With both PS2 multitaps enabled, NJEMU enumerates all eight active endpoints
   in the intended stable order. `captcomm` was exercised with P3/P4 mapped to
   `(0,1)` / `(1,1)` and routed to the correct CPS1 ports.
 - ✅ MVS secondary controllers can no longer trigger remappable service/test
-  system inputs (`f176a5a`).
+  system inputs (`f176a5a`); a temporary runtime mapping confirmed P2's test flag
+  is cleared while the same input from P1 remains active.
 - ✅ CPS2 multi-pad routing now suppresses the legacy `P2_START` compatibility
   binding, preventing a physical pad from starting the opposite emulated player
   while true multi-controller routing is active.
@@ -162,11 +169,11 @@ Build matrix for CPS1/CPS2/MVS/NCDZ:
 
 Runtime checks where possible:
 
-- ✅ one PS2 pad: NJEMU reports one active controller and therefore uses the
-  legacy one-pad path; explicit Switch Player action still needs a hardware/UI
-  smoke test;
+- ✅ one PS2 pad: NJEMU reports one active controller, uses the legacy one-pad
+  path, and Switch Player was runtime-validated by cycling `option_controller`;
 - ✅ two direct PS2 pads: indexed polling and independent P1/P2 routing verified;
-- ✅ multitap: eight endpoints detected; CPS1 `captcomm` P3/P4 routing verified;
+- ✅ multitap: eight endpoints detected; CPS1 `captcomm` P3/P4, `mercs` P3, and
+  `slammast` P4 routing verified;
 - ✅ MVS normal game with two pads;
 - ⚠️ MVS Fat Fury Special: special poller audited, ROM not available locally for
   runtime validation;
@@ -177,7 +184,9 @@ Runtime checks where possible:
 - ✅ CPS2 legacy `Start2` cross-player binding was explicitly exercised with a
   temporary runtime mapping and verified not to leak between physical players in
   multi-controller mode; the temporary instrumentation was removed afterwards;
-- ⚠️ menu/screenshot/save-state/command-list ownership and live pad/multitap
+- ✅ primary-only MVS test/service ownership is covered structurally and the
+  `TEST_SWITCH` path has runtime validation;
+- ⚠️ menu/screenshot/save-state/command-list interaction and live pad/multitap
   hotplug still need an explicit real-hardware smoke test.
 
 ## Non-goals
