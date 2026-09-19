@@ -183,6 +183,7 @@ static void mix_mp3_audio(int16_t *buffer, uint32_t num_samples) {
 	uint32_t available;
 	uint32_t read_pos;
 	uint32_t consumed;
+	uint32_t freed_since_signal;
 	int32_t mixed;
 	
 	if (!g_mp3_active || !g_mp3_ring_buffer) {
@@ -215,16 +216,38 @@ static void mix_mp3_audio(int16_t *buffer, uint32_t num_samples) {
 	
 	g_mp3_read_pos = read_pos;
 	
-	/* Signal MP3 thread if we've freed up enough space */
-	if (g_mp3_sema_id >= 0 && consumed >= MP3_SIGNAL_THRESHOLD) {
+	/* A normal game-audio callback consumes roughly half an MP3 frame, so
+	 * accumulate freed space across callbacks before waking the producer. */
+	freed_since_signal =
+		(read_pos - g_mp3_last_read_pos) & MP3_RING_BUFFER_MASK;
+	if (g_mp3_sema_id >= 0 && freed_since_signal >= MP3_SIGNAL_THRESHOLD) {
+		g_mp3_last_read_pos = read_pos;
 		SignalSema(g_mp3_sema_id);
 	}
 }
 
+static void apply_game_volume(int16_t *buffer, uint32_t sample_count, int32_t volume)
+{
+	uint32_t i;
+
+	if (volume >= MAX_VOLUME)
+		return;
+	if (volume < 0)
+		volume = 0;
+
+	for (i = 0; i < sample_count; i++)
+		buffer[i] = (int16_t)(((int32_t)buffer[i] * volume) / MAX_VOLUME);
+}
+
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
+	uint32_t sample_count = size / sizeof(int16_t);
 	uint32_t num_samples = size / sizeof(int16_t) / 2; /* Stereo samples */
-	
-	/* Mix MP3 audio into the buffer before output */
+
+	/* audsrv exposes one global stream/volume. Scale game audio in software so
+	 * NCDZ CDDA can keep its independent volume before both streams are mixed. */
+	apply_game_volume((int16_t*)buffer, sample_count, volume);
+
+	/* Mix MP3 audio into the output buffer before output. */
 	mix_mp3_audio((int16_t*)buffer, num_samples);
 	
 	audsrv_wait_audio(size);
