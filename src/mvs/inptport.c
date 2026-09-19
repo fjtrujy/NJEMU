@@ -753,7 +753,7 @@ int input_init(void)
 			poll_pad_index = poll_gamepad_analog_index;
 		}
 	}
-	else if (!strcmp(game_name, "fatfursp"))
+	else if (neogeo_ngh == NGH_fatfursp)
 	{
 		poll_pad = poll_gamepad_fatfursp;
 		poll_pad_index = poll_gamepad_fatfursp_index;
