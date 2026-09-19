@@ -33,8 +33,10 @@ static gamecfg2_t gamecfg_normal[] =
 	MENU_BLANK,
 	{ CONTROLLER,     &option_controller,    CFG_CONTINUE, 3,  { CONTROLLER1,CONTROLLER2,CONTROLLER3,CONTROLLER4 } },
 	MENU_BLANK,
+#if defined(PSP)
 	{ PSP_CLOCK,      &platform_cpuclock,         CFG_CONTINUE, 3,  { CLK222MHz,CLK266MHz,CLK300MHz,CLK333MHz } },
 	MENU_BLANK,
+#endif
 	MENU_RETURN,
 	MENU_END
 };
@@ -61,8 +63,10 @@ static gamecfg2_t gamecfg_vertical[] =
 	MENU_BLANK,
 	{ CONTROLLER,     &option_controller,    CFG_CONTINUE, 1,  { CONTROLLER1,CONTROLLER2 } },
 	MENU_BLANK,
+#if defined(PSP)
 	{ PSP_CLOCK,      &platform_cpuclock,         CFG_CONTINUE, 3,  { CLK222MHz,CLK266MHz,CLK300MHz,CLK333MHz } },
 	MENU_BLANK,
+#endif
 	MENU_RETURN,
 	MENU_END
 };
@@ -87,8 +91,10 @@ static gamecfg2_t gamecfg_mercs[] =
 	MENU_BLANK,
 	{ CONTROLLER,     &option_controller,    CFG_CONTINUE, 2,  { CONTROLLER1,CONTROLLER2,CONTROLLER3 } },
 	MENU_BLANK,
+#if defined(PSP)
 	{ PSP_CLOCK,      &platform_cpuclock,         CFG_CONTINUE, 3,  { CLK222MHz,CLK266MHz,CLK300MHz,CLK333MHz } },
 	MENU_BLANK,
+#endif
 	MENU_RETURN,
 	MENU_END
 };
@@ -109,8 +115,10 @@ static gamecfg2_t gamecfg_qsound[] =
 	MENU_BLANK,
 	{ CONTROLLER,     &option_controller,    CFG_CONTINUE, 3,  { CONTROLLER1,CONTROLLER2,CONTROLLER3,CONTROLLER4 } },
 	MENU_BLANK,
+#if defined(PSP)
 	{ PSP_CLOCK,      &platform_cpuclock,         CFG_CONTINUE, 3,  { CLK222MHz,CLK266MHz,CLK300MHz,CLK333MHz } },
 	MENU_BLANK,
+#endif
 	MENU_RETURN,
 	MENU_END
 };
