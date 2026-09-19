@@ -51,6 +51,18 @@ static ps2_ui_data_t ps2_ui;
 static int ensure_vram(ps2_ui_texture_t *tex);
 static void ps2_ui_release_buffers(ps2_ui_data_t *d);
 
+typedef struct ps2_ui_buffer_shape {
+	uint16_t pitch;
+	uint16_t height;
+} ps2_ui_buffer_shape_t;
+
+static const ps2_ui_buffer_shape_t ps2_ui_buffer_shapes[UI_TEXTURE_MAX] = {
+	[UI_TEXTURE_FONT]      = { BUF_WIDTH, 48 },
+	[UI_TEXTURE_SMALLFONT] = { BUF_WIDTH, 16 },
+	[UI_TEXTURE_BOXSHADOW] = { 72, 8 },
+	[UI_TEXTURE_VOLICON]   = { BUF_WIDTH, 32 },
+};
+
 
 /******************************************************************************
 	Helpers
@@ -72,31 +84,30 @@ static void *ps2_ui_draw_init(void *video_data)
 	ps2_ui.video_data = video_data;
 	ps2_ui.gsGlobal = (GSGLOBAL *)ps2_video_get_gsGlobal(video_data);
 
-	/* Initialize texture slots with a 512x512 CPU staging buffer each. VRAM
-	 * is allocated *lazily* by ensure_vram() once we know the real width/
-	 * height; the GS has only ~4 MB total and pre-allocating four 512x512
-	 * 16-bit textures would burn 2 MB we don't have after the framebuffer
-	 * and game-sprite atlases stake their claim. The ui_draw layer always
-	 * tells us the meaningful w/h via clearTexture or uploadTexture before
-	 * the first drawSprite. */
+	/* CPU staging buffers only need the maximum shape used by each common UI
+	 * texture. The old four 512x512 allocations consumed ~2 MiB of EE RAM even
+	 * though the live atlases total under 100 KiB. VRAM remains lazy. */
 	for (i = 0; i < UI_TEXTURE_MAX; i++)
 	{
 		ps2_ui_texture_t *tex = &ps2_ui.textures[i];
 		GSTEXTURE *gst = &tex->texture;
+		const ps2_ui_buffer_shape_t shape = ps2_ui_buffer_shapes[i];
+		size_t buffer_size =
+			(size_t)shape.pitch * (size_t)shape.height * sizeof(uint16_t);
 
 		tex->width = 0;
 		tex->height = 0;
-		tex->pitch = 512;
+		tex->pitch = shape.pitch;
 		tex->format = UI_PIXFMT_4444;
 		tex->buffer_valid = 0;
 		tex->vram_valid = 0;
 
-		tex->buffer = (uint16_t *)memalign(64, 512 * 512 * 2);
+		tex->buffer = (uint16_t *)memalign(64, buffer_size);
 		if (!tex->buffer) {
 			ps2_ui_release_buffers(&ps2_ui);
 			return NULL;
 		}
-		memset(tex->buffer, 0, 512 * 512 * 2);
+		memset(tex->buffer, 0, buffer_size);
 
 		/* upload_buffer is the 32-bit ABGR8888 version we hand to the GS.
 		 * The PS2 has no native 4444 format, so we expand from tex->buffer
@@ -272,7 +283,8 @@ static void ps2_ui_draw_uploadTexture(void *data, int slot,
 
 	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
 	    w <= 0 || h <= 0 || pitch < w ||
-	    w > 512 || h > 512 || pitch > 512)
+	    pitch > ps2_ui_buffer_shapes[slot].pitch ||
+	    h > ps2_ui_buffer_shapes[slot].height)
 		return;
 
 	tex = &d->textures[slot];
@@ -304,7 +316,8 @@ static void ps2_ui_draw_clearTexture(void *data, int slot, int w, int h, int pit
 
 	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
 	    w <= 0 || h <= 0 || pitch < w ||
-	    w > 512 || h > 512 || pitch > 512)
+	    pitch > ps2_ui_buffer_shapes[slot].pitch ||
+	    h > ps2_ui_buffer_shapes[slot].height)
 		return;
 
 	tex = &d->textures[slot];
