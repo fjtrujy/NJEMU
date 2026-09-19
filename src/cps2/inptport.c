@@ -208,6 +208,11 @@ static void update_inputport_multi(uint32_t controller_count)
 		buttons = adjust_input(buttons);
 		buttons = update_autofire(buttons, (int)controller);
 		set_input_flags(buttons);
+		/* P2_START is a legacy single-pad compatibility binding that lets one
+		 * physical controller start the opposite emulated player. In true
+		 * multi-controller mode each physical pad already owns its player, so
+		 * keeping this flag would allow cross-player start input. */
+		input_flag[P2_START] = 0;
 		if (controller != 0)
 			clear_secondary_system_flags();
 		if (serv_switch && controller == 0)
