@@ -168,6 +168,12 @@ static void set_input_flags(uint32_t buttons)
 		input_flag[i] = (buttons & input_map[i]) != 0;
 }
 
+static void clear_secondary_system_flags(void)
+{
+	input_flag[SERV_COIN] = 0;
+	input_flag[TEST_SWITCH] = 0;
+}
+
 static bool supports_physical_multiplayer(void)
 {
 	switch (neogeo_ngh)
@@ -239,6 +245,8 @@ static void update_inputport_multi(uint32_t controller_count)
 
 		buttons = update_autofire(buttons, (int)controller);
 		set_input_flags(buttons);
+		if (controller != 0)
+			clear_secondary_system_flags();
 
 		update_inputport0();
 		update_inputport1();
