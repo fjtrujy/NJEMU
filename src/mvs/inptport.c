@@ -51,11 +51,19 @@ static const uint8_t hotkey_mask[11] =
 static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
 static int ALIGN16_DATA af_map1[MVS_BUTTON_MAX];
 static int ALIGN16_DATA af_map2[MVS_BUTTON_MAX];
-static int ALIGN16_DATA af_counter[MVS_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[2][MVS_BUTTON_MAX];
 static int input_ui_wait;
 static int service_switch;
 
 static uint32_t (*poll_pad)(void);
+static uint32_t (*poll_pad_index)(uint32_t controller);
+
+static void update_inputport0(void);
+static void update_inputport1(void);
+static void update_inputport2(void);
+static void update_inputport4(void);
+static void update_inputport5(void);
+static void popbounc_update_analog_port(uint16_t value);
 
 
 /******************************************************************************
@@ -121,9 +129,10 @@ void check_input_mode(void)
 	Update Autofire Flag
 ------------------------------------------------------*/
 
-static uint32_t update_autofire(uint32_t buttons)
+static uint32_t update_autofire(uint32_t buttons, int controller)
 {
 	int i;
+	int *counter = af_counter[controller & 1];
 
 	for (i = 0; i < MVS_BUTTON_MAX; i++)
 	{
@@ -133,22 +142,141 @@ static uint32_t update_autofire(uint32_t buttons)
 			{
 				buttons &= ~af_map1[i];
 
-				if (af_counter[i] == 0)
+				if (counter[i] == 0)
 					buttons |= af_map2[i];
 				else
 					buttons &= ~af_map2[i];
 
-				if (++af_counter[i] > af_interval)
-					af_counter[i] = 0;
+				if (++counter[i] > af_interval)
+					counter[i] = 0;
 			}
 			else
 			{
-				af_counter[i] = 0;
+				counter[i] = 0;
 			}
 		}
 	}
 
 	return buttons;
+}
+
+static void set_input_flags(uint32_t buttons)
+{
+	int i;
+
+	for (i = 0; i < MAX_INPUTS; i++)
+		input_flag[i] = (buttons & input_map[i]) != 0;
+}
+
+static bool supports_physical_multiplayer(void)
+{
+	switch (neogeo_ngh)
+	{
+	case NGH_irrmaze:
+	case NGH_vliner:
+	case NGH_jockeygp:
+		return false;
+	default:
+		return true;
+	}
+}
+
+static void update_inputport_multi(uint32_t controller_count)
+{
+	uint8_t combined_port0 = 0xff;
+	uint8_t combined_port1 = 0xff;
+	uint8_t combined_port2 = 0xff;
+	uint8_t combined_port4 = 0xff;
+	uint8_t combined_port5 = 0xff;
+	uint32_t primary_buttons;
+	uint32_t primary_processed = 0;
+	int saved_controller = option_controller;
+	uint32_t controller;
+
+	if (controller_count > 2)
+		controller_count = 2;
+
+	service_switch = 0;
+	primary_buttons = (*poll_pad_index)(0);
+
+	if (systembuttons_available ? readHomeButton() :
+	    (primary_buttons & PLATFORM_PAD_START) &&
+	    (primary_buttons & PLATFORM_PAD_SELECT))
+	{
+		showmenu();
+		setup_autofire();
+
+		if (neogeo_input_mode)
+			neogeo_port_value[3] = neogeo_dipswitch & 0xff;
+		else
+			neogeo_port_value[3] = 0xff;
+
+		primary_buttons = (*poll_pad_index)(0);
+	}
+	else if ((primary_buttons & PLATFORM_PAD_L) &&
+	         (primary_buttons & PLATFORM_PAD_R) &&
+	         (primary_buttons & PLATFORM_PAD_SELECT))
+	{
+		primary_buttons &= ~(PLATFORM_PAD_SELECT |
+			PLATFORM_PAD_L | PLATFORM_PAD_R);
+		service_switch = 1;
+	}
+
+	for (controller = 0; controller < controller_count; controller++)
+	{
+		uint32_t buttons = controller == 0 ? primary_buttons :
+			(*poll_pad_index)(controller);
+
+		option_controller = (int)controller;
+
+		if (neogeo_ngh == NGH_popbounc)
+		{
+			popbounc_update_analog_port(buttons >> 16);
+			buttons &= 0xffff;
+		}
+
+		buttons = update_autofire(buttons, (int)controller);
+		set_input_flags(buttons);
+
+		update_inputport0();
+		update_inputport1();
+		update_inputport2();
+		update_inputport4();
+		update_inputport5();
+
+		combined_port0 &= neogeo_port_value[0];
+		combined_port1 &= neogeo_port_value[1];
+		combined_port2 &= neogeo_port_value[2];
+		combined_port4 &= neogeo_port_value[4];
+		combined_port5 &= neogeo_port_value[5];
+
+		if (controller == 0)
+		{
+			primary_processed = buttons;
+
+			if (input_flag[SNAPSHOT])
+				save_snapshot();
+
+#ifdef COMMAND_LIST
+			if (input_flag[COMMANDLIST])
+				commandlist(1);
+#endif
+		}
+	}
+
+	neogeo_port_value[0] = combined_port0;
+	neogeo_port_value[1] = combined_port1;
+	neogeo_port_value[2] = combined_port2;
+	neogeo_port_value[4] = combined_port4;
+	neogeo_port_value[5] = combined_port5;
+
+	option_controller = saved_controller;
+	set_input_flags(primary_processed);
+
+	/* Switch Player is a single-pad compatibility feature. With multiple
+	 * physical pads attached, pad N already owns emulated player N. */
+	if (input_ui_wait > 0)
+		input_ui_wait--;
 }
 
 
@@ -604,18 +732,26 @@ int input_init(void)
 	{
 #ifdef ADHOC
 		if (adhoc_enable)
+		{
 			poll_pad = poll_gamepad;
+			poll_pad_index = poll_gamepad_index;
+		}
 		else
 #endif
+		{
 			poll_pad = poll_gamepad_analog;
+			poll_pad_index = poll_gamepad_analog_index;
+		}
 	}
 	else if (!strcmp(game_name, "fatfursp"))
 	{
 		poll_pad = poll_gamepad_fatfursp;
+		poll_pad_index = poll_gamepad_fatfursp_index;
 	}
 	else
 	{
 		poll_pad = poll_gamepad;
+		poll_pad_index = poll_gamepad_index;
 	}
 
 #ifdef ADHOC
@@ -741,7 +877,7 @@ void update_inputport(void)
 				}
 			}
 
-			buttons = update_autofire(buttons);
+			buttons = update_autofire(buttons, 0);
 
 			for (i = 0; i < MAX_INPUTS; i++)
 				input_flag[i] = (buttons & input_map[i]) != 0;
@@ -765,6 +901,14 @@ void update_inputport(void)
 	else
 #endif
 	{
+		uint32_t controller_count = gamepad_count();
+
+		if (controller_count > 1 && supports_physical_multiplayer())
+		{
+			update_inputport_multi(controller_count);
+			return;
+		}
+
 		service_switch = 0;
 
 		buttons = (*poll_pad)();
@@ -801,7 +945,7 @@ void update_inputport(void)
 			buttons &= 0xffff;
 		}
 
-		buttons = update_autofire(buttons);
+		buttons = update_autofire(buttons, 0);
 
 		for (i = 0; i < MAX_INPUTS; i++)
 			input_flag[i] = (buttons & input_map[i]) != 0;
