@@ -45,13 +45,17 @@ string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
 
 # Add platform to compiler definitions
 add_definitions(-D${PLATFORM})
+add_definitions(-DPLATFORM_STR="${PLATFORM}")
 
 # Different options availables
-option(LARGE_MEMORY "Large Memory" OFF)
+# (LARGE_MEMORY removed: was never wired through to the C preprocessor in
+# CMake builds, so the #ifdef LARGE_MEMORY paths were always inactive here.
+# Memory tier selection is now runtime via memory_profile_t. The legacy
+# Makefile still wires -DLARGE_MEMORY=1 for Makefile-based PSP Slim builds.)
 option(KERNEL_MODE "Kernel Mode" OFF)
 option(COMMAND_LIST "Command List" OFF)
 option(ADHOC "Ad Hoc" OFF)
-option(NO_GUI "No GUI" ON)
+option(GUI "GUI" OFF)
 option(SAVE_STATE "Save State" OFF)
 option(RELEASE "Release" OFF)
 option(SYSTEM_BUTTONS "System Buttons" OFF)
@@ -59,8 +63,32 @@ option(USE_ASAN "Use ASAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 
 # Add options to compiler definitions
-if (NO_GUI)
-    add_definitions(-DNO_GUI)
+if (GUI)
+    add_definitions(-DGUI)
+endif()
+
+if (KERNEL_MODE AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DKERNEL_MODE)
+endif()
+
+if (COMMAND_LIST)
+    add_definitions(-DCOMMAND_LIST)
+endif()
+
+if (ADHOC AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DADHOC)
+endif()
+
+if (SAVE_STATE)
+    add_definitions(-DSAVE_STATE)
+endif()
+
+if (RELEASE)
+    add_definitions(-DRELEASE=1)
+endif()
+
+if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DSYSTEM_BUTTONS=1)
 endif()
 
 # Version
@@ -90,7 +118,7 @@ if (USE_PG)
 endif()
 
 # Enable interprocedural optimization LTO
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 # Common Flags options
 set(COMMON_FLAGS
@@ -181,10 +209,15 @@ set(COMMON_SRC
     common/input_driver.c
     common/video_driver.h
     common/video_driver.c
+    common/ui_draw_driver.h
+    common/ui_draw_driver.c
     common/ui_text_driver.h
     common/ui_text_driver.c
+    common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
+    common/memory_profile.h
+    common/memory_profile.c
     common/sound.h
     common/sound.c
 )
@@ -211,12 +244,55 @@ if (SAVE_STATE)
     )
 endif()
 
-if (NO_GUI)
+if (NOT GUI)
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
     )
 else()
-    # Add source files related to GUI if needed
+    # Font data files (shared across all platforms)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/font/graphic.c
+        common/font/ascii_14p.c
+        common/font/font_s.c
+        common/font/bshadow.c
+        common/font/command.c
+        common/font/ascii_14.c
+        common/font/latin1_14.c
+        common/font/gbk_s14.c
+        common/font/gbk_tbl.c
+    )
+
+    # UI drawing primitives (portable core)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/ui_draw.c
+    )
+
+    # GUI source files (portable code now in common/)
+    set(COMMON_SRC ${COMMON_SRC}
+        common/ui.c
+        common/ui_menu.c
+        common/config.c
+    )
+
+    # GUI source files (platform-specific UI drawing driver)
+    set(OS_SRC ${OS_SRC}
+        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
+        ${PLATFORM_LOWER}/png.c
+    )
+
+    # Icon files (target-specific, shared across platforms)
+    if (${TARGET} STREQUAL "CPS1" OR ${TARGET} STREQUAL "CPS2")
+        set(ICON_PREFIX "cps")
+    elseif (${TARGET} STREQUAL "MVS")
+        set(ICON_PREFIX "mvs")
+    elseif (${TARGET} STREQUAL "NCDZ")
+        set(ICON_PREFIX "ncdz")
+    endif()
+
+    set(COMMON_SRC ${COMMON_SRC}
+        common/icon/${ICON_PREFIX}_s.c
+        common/icon/${ICON_PREFIX}_l.c
+    )
 endif()
 
 
@@ -326,6 +402,41 @@ if (${TARGET} STREQUAL "CPS1")
 endif()
 
 # Add specific target source files
+if (${TARGET} STREQUAL "CPS2")
+
+    include_directories(
+        src/cps2
+    )
+
+    set(TARGET_SRC ${TARGET_SRC}
+        common/coin.h
+        common/coin.c
+        cps2/cps2.h
+        cps2/cps2.c
+        cps2/cps2crpt.c
+        cps2/driver.h
+        cps2/driver.c
+        cps2/memintrf.h
+        cps2/memintrf.c
+        cps2/inptport.h
+        cps2/inptport.c
+        cps2/timer.h
+        cps2/timer.c
+        cps2/vidhrdw.h
+        cps2/vidhrdw.c
+        cps2/sprite.h
+        cps2/sprite_common.h
+        cps2/sprite_common.c
+        cps2/${PLATFORM_LOWER}_sprite.c
+        cps2/eeprom.h
+        cps2/eeprom.c
+    )
+
+    # Set SOUND_QSOUND flag for CPS2
+    set(SOUND_QSOUND ON)
+endif()
+
+# Add specific target source files
 if (${TARGET} STREQUAL "NCDZ")
     include_directories(
         src/ncdz
@@ -423,10 +534,65 @@ set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 
-# Copy the resources during the configure stage
-file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
+# By default we don't want to duplicate a potentially large resource tree
+# in every build directory. Read-only assets are therefore linked back to the
+# source tree, while files/directories that the emulator writes at runtime are
+# copied once into the build so running a build never modifies resources/.
+# COPY_RESOURCES keeps the fully self-contained/copy-only behaviour available
+# for platforms where symlinks are problematic.
+option(COPY_RESOURCES "Copy resources into the build directory instead of linking" OFF)
 
-message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
+if(COPY_RESOURCES)
+    message(STATUS "Copying resources (COPY_RESOURCES=ON)")
+    file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
+    message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
+else()
+    # The application resolves resources directly below launchDir (for example
+    # launchDir/roms and launchDir/zipname.cps1), so mirror the contents of the
+    # target resource directory into the build root.  Linking the directory as
+    # build/cps1 is not only the wrong runtime layout, it also collides with the
+    # CPS1 executable on case-insensitive filesystems such as default macOS.
+    # These entries may be edited by the user or written by the emulator.
+    # Compare lower-cased names so legacy files such as MVSPSP.INI are also
+    # recognized on case-sensitive hosts.
+    set(MUTABLE_RESOURCE_ENTRIES
+        "config"
+        "memcard"
+        "nvram"
+        "state"
+        "picture"
+        "game_name.ini"
+        "cps1psp.ini"
+        "cps2psp.ini"
+        "mvspsp.ini"
+        "ncdzpsp.ini"
+        "command.dat"
+        "backup.bin"
+    )
+
+    file(GLOB RESOURCE_ENTRIES RELATIVE "${RESOURCE_DIR}" "${RESOURCE_DIR}*")
+    foreach(RESOURCE_ENTRY IN LISTS RESOURCE_ENTRIES)
+        set(RESOURCE_SOURCE "${RESOURCE_DIR}${RESOURCE_ENTRY}")
+        set(RESOURCE_LINK "${DESTINATION_DIR}/${RESOURCE_ENTRY}")
+        string(TOLOWER "${RESOURCE_ENTRY}" RESOURCE_ENTRY_LOWER)
+        list(FIND MUTABLE_RESOURCE_ENTRIES "${RESOURCE_ENTRY_LOWER}" MUTABLE_RESOURCE_INDEX)
+
+        if(NOT MUTABLE_RESOURCE_INDEX EQUAL -1)
+            # Migrate a build produced by the old layout without touching the
+            # linked source. Existing real files/directories are intentionally
+            # left alone so re-configuring never overwrites runtime saves.
+            if(IS_SYMLINK "${RESOURCE_LINK}")
+                file(REMOVE "${RESOURCE_LINK}")
+            endif()
+            if(NOT EXISTS "${RESOURCE_LINK}")
+                file(COPY "${RESOURCE_SOURCE}" DESTINATION "${DESTINATION_DIR}")
+            endif()
+        elseif(NOT EXISTS "${RESOURCE_LINK}" AND NOT IS_SYMLINK "${RESOURCE_LINK}")
+            file(CREATE_LINK "${RESOURCE_SOURCE}" "${RESOURCE_LINK}" SYMBOLIC)
+        endif()
+    endforeach()
+    message(STATUS "Resources staged from ${RESOURCE_DIR} into: ${DESTINATION_DIR}")
+endif()
 
 target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASAN_OPTIONS})
 target_link_options(${TARGET} PUBLIC ${ASAN_OPTIONS})
@@ -437,15 +603,21 @@ if (PLATFORM STREQUAL "DESKTOP")
     target_include_directories(${TARGET} PUBLIC 
         ${SDL2_INCLUDE_DIRS}
     )
-    target_link_libraries(${TARGET} PUBLIC
-        SDL2::SDL2-static
-    )
+    if(TARGET SDL2::SDL2-static)
+        set(NJEMU_SDL2_TARGET SDL2::SDL2-static)
+    elseif(TARGET SDL2::SDL2)
+        set(NJEMU_SDL2_TARGET SDL2::SDL2)
+    else()
+        set(NJEMU_SDL2_TARGET ${SDL2_LIBRARIES})
+    endif()
+    target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
     target_link_libraries(${TARGET} PUBLIC
         patches
         gskit
         dmakit
         ps2_drivers
+        "-ldebug"
     )
 elseif(PLATFORM STREQUAL "PSP")
     target_link_libraries(${TARGET} PUBLIC
@@ -455,6 +627,8 @@ elseif(PLATFORM STREQUAL "PSP")
         pspaudio
         pspgu
         psppower
+        pspwlan
+        pspdebug
     )
 endif()
 
@@ -485,7 +659,7 @@ target_link_libraries(${TARGET} PUBLIC
        
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
-    set(BUILD_PRX OFF)
+    set(BUILD_PRX ON)
     create_pbp_file(
         TARGET ${TARGET}
         ICON_PATH NULL

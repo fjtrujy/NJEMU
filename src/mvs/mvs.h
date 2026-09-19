@@ -28,6 +28,14 @@ extern int neogeo_bios;
 extern int neogeo_region;
 extern int neogeo_save_sound_flag;
 
+enum TEXTURE_LAYER_INDEX {
+	TEXTURE_LAYER_SPR0,
+	TEXTURE_LAYER_SPR1,
+	TEXTURE_LAYER_SPR2,
+	TEXTURE_LAYER_FIX,
+	TEXTURE_LAYER_COUNT
+};
+
 void neogeo_main(void);
 
 #endif /* MVS_H */

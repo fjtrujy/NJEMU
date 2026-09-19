@@ -630,24 +630,26 @@ static struct EEPROM_interface pang3_eeprom_interface =
 static void cps1_nvram_read_write(int read_or_write)
 {
 	char path[PATH_MAX];
-	FILE *fp;
+	int fd;
 
 	sprintf(path, "%snvram/%s.nv", launchDir, game_name);
 
 	if (read_or_write)
 	{
-		if ((fp = fopen(path, "wb")) != NULL)
+		fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (fd >= 0)
 		{
-			EEPROM_save(fp);
-			fclose(fp);
+			EEPROM_save(fd);
+			close(fd);
 		}
 	}
 	else
 	{
-		if ((fp = fopen(path, "rb")) != NULL)
+		fd = open(path, O_RDONLY);
+		if (fd >= 0)
 		{
-			EEPROM_load(fp);
-			fclose(fp);
+			EEPROM_load(fd);
+			close(fd);
 		}
 	}
 }

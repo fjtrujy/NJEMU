@@ -27,43 +27,43 @@
 ******************************************************************************/
 
 /* Palette */
-uint8_t ALIGN_DATA palette_dirty_marks[256];
+uint8_t ALIGN16_DATA palette_dirty_marks[256];
 
 /* OBJECT */
-SPRITE ALIGN_DATA *object_head[OBJECT_HASH_SIZE];
-SPRITE ALIGN_DATA object_data[OBJECT_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *object_head[OBJECT_HASH_SIZE];
+SPRITE ALIGN16_DATA object_data[OBJECT_TEXTURE_SIZE];
 SPRITE *object_free_head;
 uint8_t *gfx_object;
 uint8_t *tex_object;
 uint16_t object_texture_num;
 
 /* SCROLL1 */
-SPRITE ALIGN_DATA *scroll1_head[SCROLL1_HASH_SIZE];
-SPRITE ALIGN_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *scroll1_head[SCROLL1_HASH_SIZE];
+SPRITE ALIGN16_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
 SPRITE *scroll1_free_head;
 uint8_t *gfx_scroll1;
 uint8_t *tex_scroll1;
 uint16_t scroll1_texture_num;
 
 /* SCROLL2 */
-SPRITE ALIGN_DATA *scroll2_head[SCROLL2_HASH_SIZE];
-SPRITE ALIGN_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *scroll2_head[SCROLL2_HASH_SIZE];
+SPRITE ALIGN16_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
 SPRITE *scroll2_free_head;
 uint8_t *gfx_scroll2;
 uint8_t *tex_scroll2;
 uint16_t scroll2_texture_num;
 
 /* SCROLL3 */
-SPRITE ALIGN_DATA *scroll3_head[SCROLL3_HASH_SIZE];
-SPRITE ALIGN_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *scroll3_head[SCROLL3_HASH_SIZE];
+SPRITE ALIGN16_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
 SPRITE *scroll3_free_head;
 uint8_t *gfx_scroll3;
 uint8_t *tex_scroll3;
 uint16_t scroll3_texture_num;
 
 /* SCROLLH */
-SPRITE ALIGN_DATA *scrollh_head[SCROLLH_HASH_SIZE];
-SPRITE ALIGN_DATA scrollh_data[SCROLLH_TEXTURE_SIZE];
+SPRITE ALIGN16_DATA *scrollh_head[SCROLLH_HASH_SIZE];
+SPRITE ALIGN16_DATA scrollh_data[SCROLLH_TEXTURE_SIZE];
 SPRITE *scrollh_free_head;
 uint16_t *tex_scrollh;
 uint16_t scrollh_num;
@@ -83,487 +83,15 @@ int16_t scroll2_ey;
 /* Pen usage */
 uint8_t *pen_usage;
 
-/* Screen bitmap */
-uint16_t *scrbitmap;
-
-/* CLUT */
-uint16_t *clut;
-uint16_t clut0_num;
-uint16_t clut1_num;
-
 /* Color table for palette index encoding
    Used to encode 4-bit palette indices into 8-bit texture format */
-const uint32_t ALIGN_DATA color_table[16] =
+const uint32_t ALIGN16_DATA color_table[16] =
 {
 	0x00000000, 0x10101010, 0x20202020, 0x30303030,
 	0x40404040, 0x50505050, 0x60606060, 0x70707070,
 	0x80808080, 0x90909090, 0xa0a0a0a0, 0xb0b0b0b0,
 	0xc0c0c0c0, 0xd0d0d0d0, 0xe0e0e0e0, 0xf0f0f0f0
 };
-
-/* Function pointer arrays for software rendering */
-void ALIGN_DATA (*drawgfx16[8])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines) =
-{
-	drawgfx16_16x16,
-	drawgfx16_16x16_opaque,
-	drawgfx16_16x16_flipx,
-	drawgfx16_16x16_flipx_opaque,
-	drawgfx16_16x16_flipy,
-	drawgfx16_16x16_flipy_opaque,
-	drawgfx16_16x16_flipxy,
-	drawgfx16_16x16_flipxy_opaque
-};
-
-void ALIGN_DATA (*drawgfx16h[4])(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens) =
-{
-	drawgfx16h_16x16,
-	drawgfx16h_16x16_flipx,
-	drawgfx16h_16x16_flipy,
-	drawgfx16h_16x16_flipxy
-};
-
-
-/******************************************************************************
-	SCROLL2 Software Rendering
-
-	Used when SCROLL2 clip region is too small for hardware rendering
-	(less than 16 scanlines). This enables per-line parallax scrolling
-	effects as seen in Street Fighter II stages.
-
-	Note: The interleaved pixel pattern (0,4,1,5,2,6,3,7) is inherent to
-	CPS1's graphics ROM format, NOT a platform optimization.
-******************************************************************************/
-
-/*------------------------------------------------------------------------
-	16bpp 16x16 - Transparent pixels (color 0) are skipped
-------------------------------------------------------------------------*/
-
-void drawgfx16_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 0] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 4] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 1] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 5] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 2] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 6] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 3] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 7] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 8] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[12] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 9] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[13] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[10] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[14] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[11] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[15] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[15] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[11] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[14] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[10] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[13] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 9] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[12] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 8] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 7] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 3] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 6] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 2] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 5] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 1] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 4] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 0] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 0] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 4] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 1] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 5] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 2] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 6] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 3] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 7] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 8] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[12] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 9] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[13] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[10] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[14] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[11] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[15] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile, mask;
-
-	while (lines--)
-	{
-		tile = src[0];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[15] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[11] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[14] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[10] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[13] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 9] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[12] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 8] = pal[(tile >> 28) & 0x0f];
-		}
-		tile = src[1];
-		mask = ~tile;
-		if (mask)
-		{
-			if (mask & 0x000f) dst[ 7] = pal[(tile >>  0) & 0x0f];
-			if (mask & 0x00f0) dst[ 3] = pal[(tile >>  4) & 0x0f];
-			if (mask & 0x0f00) dst[ 6] = pal[(tile >>  8) & 0x0f];
-			if (mask & 0xf000) dst[ 2] = pal[(tile >> 12) & 0x0f];
-			mask >>= 16;
-			if (mask & 0x000f) dst[ 5] = pal[(tile >> 16) & 0x0f];
-			if (mask & 0x00f0) dst[ 1] = pal[(tile >> 20) & 0x0f];
-			if (mask & 0x0f00) dst[ 4] = pal[(tile >> 24) & 0x0f];
-			if (mask & 0xf000) dst[ 0] = pal[(tile >> 28) & 0x0f];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	16bpp 16x16 (opaque)
-------------------------------------------------------------------------*/
-
-void drawgfx16_16x16_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[ 0] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 7] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 8] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[15] = pal[tile & 0x0f];
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipx_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[15] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 8] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 7] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 0] = pal[tile & 0x0f];
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[ 0] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 7] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 8] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[15] = pal[tile & 0x0f];
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-void drawgfx16_16x16_flipxy_opaque(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines)
-{
-	uint32_t tile;
-
-	while (lines--)
-	{
-		tile = src[0];
-		dst[15] = pal[tile & 0x0f]; tile >>= 4;
-		dst[11] = pal[tile & 0x0f]; tile >>= 4;
-		dst[14] = pal[tile & 0x0f]; tile >>= 4;
-		dst[10] = pal[tile & 0x0f]; tile >>= 4;
-		dst[13] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 9] = pal[tile & 0x0f]; tile >>= 4;
-		dst[12] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 8] = pal[tile & 0x0f];
-		tile = src[1];
-		dst[ 7] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 3] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 6] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 2] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 5] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 1] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 4] = pal[tile & 0x0f]; tile >>= 4;
-		dst[ 0] = pal[tile & 0x0f];
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-
-/*------------------------------------------------------------------------
-	16bpp 16x16 (high layer)
-------------------------------------------------------------------------*/
-
-void drawgfx16h_16x16(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16h_16x16_flipx(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-		}
-		src += 2;
-		dst += BUF_WIDTH;
-	}
-}
-
-void drawgfx16h_16x16_flipy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
-void drawgfx16h_16x16_flipxy(uint32_t *src, uint16_t *dst, uint16_t *pal, int lines, uint16_t tpens)
-{
-	uint32_t tile;
-	uint16_t col;
-
-	while (lines--)
-	{
-		tile = src[0];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[15] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[11] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[14] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[10] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[13] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 9] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[12] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 8] = pal[col];
-		}
-		tile = src[1];
-		if (~tile)
-		{
-			col = (tile >>  0) & 0x0f; if (tpens & (1 << col)) dst[ 7] = pal[col];
-			col = (tile >>  4) & 0x0f; if (tpens & (1 << col)) dst[ 3] = pal[col];
-			col = (tile >>  8) & 0x0f; if (tpens & (1 << col)) dst[ 6] = pal[col];
-			col = (tile >> 12) & 0x0f; if (tpens & (1 << col)) dst[ 2] = pal[col];
-			col = (tile >> 16) & 0x0f; if (tpens & (1 << col)) dst[ 5] = pal[col];
-			col = (tile >> 20) & 0x0f; if (tpens & (1 << col)) dst[ 1] = pal[col];
-			col = (tile >> 24) & 0x0f; if (tpens & (1 << col)) dst[ 4] = pal[col];
-			col = (tile >> 28) & 0x0f; if (tpens & (1 << col)) dst[ 0] = pal[col];
-		}
-		src += 2;
-		dst -= BUF_WIDTH;
-	}
-}
-
 
 /******************************************************************************
 	OBJECT Sprite Management
@@ -1220,5 +748,231 @@ void scrollh_delete_dirty_palette(void)
 			}
 		}
 	}
+}
+
+
+/******************************************************************************
+	Platform-agnostic blit functions
+******************************************************************************/
+
+/*------------------------------------------------------------------------
+	Clear all sprites immediately
+------------------------------------------------------------------------*/
+
+void blit_clear_all_sprite(void)
+{
+	int i;
+
+	for (i = 0; i < OBJECT_TEXTURE_SIZE - 1; i++)
+		object_data[i].next = &object_data[i + 1];
+
+	object_data[i].next = NULL;
+	object_free_head = &object_data[0];
+
+	for (i = 0; i < SCROLL1_TEXTURE_SIZE - 1; i++)
+		scroll1_data[i].next = &scroll1_data[i + 1];
+
+	scroll1_data[i].next = NULL;
+	scroll1_free_head = &scroll1_data[0];
+
+	for (i = 0; i < SCROLL2_TEXTURE_SIZE - 1; i++)
+		scroll2_data[i].next = &scroll2_data[i + 1];
+
+	scroll2_data[i].next = NULL;
+	scroll2_free_head = &scroll2_data[0];
+
+	for (i = 0; i < SCROLL3_TEXTURE_SIZE - 1; i++)
+		scroll3_data[i].next = &scroll3_data[i + 1];
+
+	scroll3_data[i].next = NULL;
+	scroll3_free_head = &scroll3_data[0];
+
+	memset(object_head, 0, sizeof(SPRITE *) * OBJECT_HASH_SIZE);
+	memset(scroll1_head, 0, sizeof(SPRITE *) * SCROLL1_HASH_SIZE);
+	memset(scroll2_head, 0, sizeof(SPRITE *) * SCROLL2_HASH_SIZE);
+	memset(scroll3_head, 0, sizeof(SPRITE *) * SCROLL3_HASH_SIZE);
+
+	object_texture_num = 0;
+	scroll1_texture_num = 0;
+	scroll2_texture_num = 0;
+	scroll3_texture_num = 0;
+
+	scrollh_reset_sprite();
+	memset(palette_dirty_marks, 0, sizeof(palette_dirty_marks));
+}
+
+
+/*------------------------------------------------------------------------
+	Clear high layer
+------------------------------------------------------------------------*/
+
+void blit_scrollh_clear_sprite(uint16_t tpens)
+{
+	scrollh_delete_sprite_tpens(tpens);
+}
+
+
+/*------------------------------------------------------------------------
+	Set palette dirty flag
+------------------------------------------------------------------------*/
+
+void blit_palette_mark_dirty(int palno)
+{
+	if (palno < 64) scroll1_palette_is_dirty = 1;
+	else if (palno < 96) scroll2_palette_is_dirty = 1;
+	else if (palno < 128) scroll3_palette_is_dirty = 1;
+
+	palette_dirty_marks[palno] = 1;
+}
+
+
+/*------------------------------------------------------------------------
+	Update OBJECT texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if ((x > 47 && x < 448) && (y > 0 && y < 239))
+	{
+		uint32_t key = MAKE_KEY(code, attr);
+		SPRITE *p = object_head[key & OBJECT_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+		 	}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL1 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_KEY(code, attr);
+	SPRITE *p = scroll1_head[key & SCROLL1_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL2 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if (y + 16 > 0 && y < 239)
+	{
+		uint32_t key = MAKE_KEY(code, attr);
+		SPRITE *p = scroll2_head[key & SCROLL2_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+			}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL3 texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_KEY(code, attr);
+	SPRITE *p = scroll3_head[key & SCROLL3_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL2 (high layer) texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	if (y + 16 > 0 && y < 239)
+	{
+		uint32_t key = MAKE_HIGH_KEY(code, attr);
+		SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
+
+		while (p)
+		{
+			if (p->key == key)
+			{
+				p->used = frames_displayed;
+				return;
+			}
+			p = p->next;
+		}
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Update SCROLL1,3 (high layer) texture (mark as used without drawing)
+------------------------------------------------------------------------*/
+
+void blit_update_scrollh(int16_t x, int16_t y, uint32_t code, uint16_t attr)
+{
+	uint32_t key = MAKE_HIGH_KEY(code, attr);
+	SPRITE *p = scrollh_head[key & SCROLLH_HASH_MASK];
+
+	while (p)
+	{
+		if (p->key == key)
+		{
+			p->used = frames_displayed;
+			return;
+		}
+		p = p->next;
+	}
+}
+
+
+/*------------------------------------------------------------------------
+	Check SCROLL2 draw range
+------------------------------------------------------------------------*/
+
+int blit_check_clip_scroll2(int16_t sy)
+{
+	scroll2_sy = sy;
+	scroll2_ey = sy + 16;
+
+	if (scroll2_min_y > scroll2_sy) scroll2_sy = scroll2_min_y;
+	if (scroll2_max_y < scroll2_ey) scroll2_ey = scroll2_max_y;
+
+	return (scroll2_sy < scroll2_ey);
 }
 

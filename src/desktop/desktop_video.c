@@ -10,43 +10,21 @@
 
 #include <stdlib.h>
 #include <SDL.h>
+#include "desktop/desktop.h"
 
 #define OUTPUT_WIDTH 640
 #define OUTPUT_HEIGHT 480
-
-typedef struct desktop_video {
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-	bool draw_extra_info;
-	SDL_BlendMode blendMode;
-    
-    // Base clut starting address
-    uint16_t *clut_base;
-
-	// Original buffers containing clut indexes
-	uint8_t *scrbitmap;
-	uint8_t *tex_spr;
-	uint8_t *tex_spr0;
-	uint8_t *tex_spr1;
-	uint8_t *tex_spr2;
-	uint8_t *tex_fix;
-
-	SDL_Texture *sdl_texture_scrbitmap;
-	SDL_Texture *sdl_texture_tex_spr0;
-	SDL_Texture *sdl_texture_tex_spr1;
-	SDL_Texture *sdl_texture_tex_spr2;
-	SDL_Texture *sdl_texture_tex_fix;
-} desktop_video_t;
 
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
 
-static void *desktop_init(void)
+static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {
 	uint32_t windows_width, windows_height;
 	desktop_video_t *desktop = (desktop_video_t*)calloc(1, sizeof(desktop_video_t));
 	desktop->draw_extra_info = false;
+	desktop->clut_base = clut_info->base;
 
 	// Create a window (width, height, window title)
 	char title[256];
@@ -91,52 +69,47 @@ static void *desktop_init(void)
 	);
 
 	// Original buffers containing clut indexes
-	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT;
-	size_t textureSize = BUF_WIDTH * TEXTURE_HEIGHT;
+	size_t scrbitmapSize = BUF_WIDTH * SCR_HEIGHT * sizeof(uint16_t);
 	desktop->scrbitmap = (uint8_t*)malloc(scrbitmapSize);
-	uint8_t *tex_spr = (uint8_t*)malloc(textureSize * 3);
-	desktop->tex_spr = tex_spr;
-	desktop->tex_spr0 = tex_spr;
-	desktop->tex_spr1 = tex_spr + textureSize;
-	desktop->tex_spr2 = tex_spr + textureSize * 2;
-	desktop->tex_fix = (uint8_t*)malloc(textureSize);
+	if (desktop->scrbitmap == NULL) {
+		printf("Could not allocate scrbitmap buffer\n");
+		SDL_DestroyRenderer(desktop->renderer);
+		SDL_DestroyWindow(desktop->window);
+		free(desktop);
+		return NULL;
+	}
+	memset(desktop->scrbitmap, 0, scrbitmapSize);
+
+	size_t totalTextureSize = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		totalTextureSize += layer_textures[i].width * layer_textures[i].height * layer_textures[i].bytes_per_pixel;
+	}
+	uint8_t *textures = (uint8_t*)malloc(totalTextureSize);
+	desktop->texturesMem = textures;
+
+	desktop->tex_layers = (texture_layer_t *)calloc(layer_textures_count, sizeof(texture_layer_t));
+	desktop->tex_layers_count = layer_textures_count;
 
 	// Create SDL textures
 	desktop->sdl_texture_scrbitmap = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_TARGET, BUF_WIDTH, SCR_HEIGHT);
 	if (desktop->sdl_texture_scrbitmap == NULL) {
 		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
 		exit(1);
-	}	
-	desktop->sdl_texture_tex_spr0 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr0 == NULL) {
-		printf("Could not create sdl_texture_tex_spr0: %s\n", SDL_GetError());
-		exit(1);
 	}
-	desktop->sdl_texture_tex_spr1 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr1 == NULL) {
-		printf("Could not create sdl_texture_tex_spr1: %s\n", SDL_GetError());
-		exit(1);
-	}
-
-	desktop->sdl_texture_tex_spr2 = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_spr2 == NULL) {
-		printf("Could not create sdl_texture_tex_spr2: %s\n", SDL_GetError());
-		exit(1);
-	}
-
-	desktop->sdl_texture_tex_fix = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, TEXTURE_HEIGHT);
-	if (desktop->sdl_texture_tex_fix == NULL) {
-		printf("Could not create sdl_texture_tex_fix: %s\n", SDL_GetError());
-		exit(1);
-	}
-
 	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr0, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr1, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_spr2, desktop->blendMode);
-	SDL_SetTextureBlendMode(desktop->sdl_texture_tex_fix, desktop->blendMode);
-
-	ui_init();
+	
+	size_t texOffset = 0;
+	for (int i = 0; i < layer_textures_count; i++) {
+		desktop->tex_layers[i].buffer = textures + texOffset;
+		desktop->tex_layers[i].bytes_per_pixel = layer_textures[i].bytes_per_pixel;
+		desktop->tex_layers[i].texture = SDL_CreateTexture(desktop->renderer, SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, layer_textures[i].width, layer_textures[i].height);
+		if (desktop->tex_layers[i].texture == NULL) {
+			printf("Could not create texture layer %d: %s\n", i, SDL_GetError());
+			exit(1);
+		}
+		SDL_SetTextureBlendMode(desktop->tex_layers[i].texture, desktop->blendMode);
+		texOffset += layer_textures[i].width * layer_textures[i].height * layer_textures[i].bytes_per_pixel;
+	}
 
 	return desktop;
 }
@@ -152,42 +125,22 @@ static void desktop_exit(desktop_video_t *desktop) {
 		desktop->sdl_texture_scrbitmap = NULL;
 	}
 
-	if (desktop->sdl_texture_tex_spr0) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr0);
-		desktop->sdl_texture_tex_spr0 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_spr1) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr1);
-		desktop->sdl_texture_tex_spr1 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_spr2) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_spr2);
-		desktop->sdl_texture_tex_spr2 = NULL;
-	}
-
-	if (desktop->sdl_texture_tex_fix) {
-		SDL_DestroyTexture(desktop->sdl_texture_tex_fix);
-		desktop->sdl_texture_tex_fix = NULL;
-	}
-
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
 	}
 
-	if (desktop->tex_spr) {
-		free(desktop->tex_spr);
-		desktop->tex_spr = NULL;
-		desktop->tex_spr0 = NULL;
-		desktop->tex_spr1 = NULL;
-		desktop->tex_spr2 = NULL;
+	if (desktop->texturesMem) {
+		free(desktop->texturesMem);
+		desktop->texturesMem = NULL;
 	}
 
-	if (desktop->tex_fix) {
-		free(desktop->tex_fix);
-		desktop->tex_fix = NULL;
+	for (int i = 0; i < desktop->tex_layers_count; i++) {
+		desktop->tex_layers[i].buffer = NULL;
+		if (desktop->tex_layers[i].texture) {
+			SDL_DestroyTexture(desktop->tex_layers[i].texture);
+			desktop->tex_layers[i].texture = NULL;
+		}
 	}
 }
 
@@ -200,12 +153,6 @@ static void desktop_free(void *data)
 	
 	desktop_exit(desktop);
 	free(desktop);
-}
-
-static void desktop_setClutBaseAddr(void *data, uint16_t *clut_base)
-{
-	desktop_video_t *desktop = (desktop_video_t*)data;
-	desktop->clut_base = clut_base;
 }
 
 /*--------------------------------------------------------
@@ -227,35 +174,44 @@ static void desktop_flipScreen(void *data, bool vsync)
 	SDL_RenderPresent(desktop->renderer);
 }
 
+static void desktop_beginFrame(void *data)
+{
+	/* No-op: SDL2 doesn't use command lists */
+}
+
+static void desktop_endFrame(void *data)
+{
+	/* No-op: SDL2 doesn't use command lists */
+}
+
 
 /*--------------------------------------------------------
-	Get VRAM Address
+		Get VRAM Address
 --------------------------------------------------------*/
 
-static void *desktop_frameAddr(void *data, void *frame, int x, int y)
+static void *desktop_frameAddr(void *data, int frameIndex, int x, int y)
 {
 	return NULL;
 }
 
-static void *desktop_workFrame(void *data, enum WorkBuffer buffer)
+static void *desktop_textureLayer(void *data, uint8_t layerIndex)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-	switch (buffer) {
-		case SCRBITMAP:
-			return desktop->scrbitmap;
-		case TEX_SPR0:
-			return desktop->tex_spr0;
-		case TEX_SPR1:
-			return desktop->tex_spr1;
-		case TEX_SPR2:
-			return desktop->tex_spr2;
-		case TEX_FIX:
-			return desktop->tex_fix;
-		default:
-			return NULL;
-	}
+	return desktop->tex_layers[layerIndex].buffer;
 }
 
+static void desktop_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
+{
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	
+	SDL_Rect sdl_rect;
+	sdl_rect.x = left;
+	sdl_rect.y = top;
+	sdl_rect.w = right - left;
+	sdl_rect.h = bottom - top;
+	
+	SDL_RenderSetClipRect(desktop->renderer, &sdl_rect);
+}
 
 /*--------------------------------------------------------
 	Clear Draw/Display Frame
@@ -272,8 +228,20 @@ static void desktop_clearScreen(void *data) {
 	Clear Specified Frame
 --------------------------------------------------------*/
 
-static void desktop_clearFrame(void *data, void *frame)
+static void desktop_clearFrame(void *data, int index)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		/* Clear the work frame (scrbitmap render target) to transparent black */
+		SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+		SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 0);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	default:
+		break;
+	}
 }
 
 
@@ -281,8 +249,28 @@ static void desktop_clearFrame(void *data, void *frame)
 	Fill Specified Frame
 --------------------------------------------------------*/
 
-static void desktop_fillFrame(void *data, void *frame, uint32_t color)
+static void desktop_fillFrame(void *data, int frameIndex, uint32_t color)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	uint8_t r = (color >> 0)  & 0xFF;
+	uint8_t g = (color >> 8)  & 0xFF;
+	uint8_t b = (color >> 16) & 0xFF;
+	uint8_t a = (color >> 24) & 0xFF;
+
+	switch (frameIndex) {
+	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
+		SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		SDL_RenderClear(desktop->renderer);
+		break;
+	default:
+		break;
+	}
 }
 
 
@@ -302,6 +290,7 @@ static void desktop_startWorkFrame(void *data, uint32_t color) {
     uint8_t green = color >> 8;
     uint8_t red = color >> 0;
     SDL_SetRenderDrawColor(desktop->renderer, red, green, blue, alpha);
+    SDL_RenderClear(desktop->renderer);
 }
 
 static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
@@ -323,40 +312,65 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
     SDL_SetRenderTarget(desktop->renderer, NULL);
     SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
 
-	if (!desktop->draw_extra_info) {
-		return;
-	}
+	// if (!desktop->draw_extra_info) {
+	// 	return;
+	// }
 
-	// Let's print the SPR0, SPR1 SPR2 and FIX in the empty space of the screen (right size 0.5 scale)
-	SDL_Rect dst_rect_spr0 = { BUF_WIDTH, 0, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr0_border = { dst_rect_spr0.x - 1, dst_rect_spr0.y - 1, dst_rect_spr0.w + 2, dst_rect_spr0.h + 2 };
-	SDL_Rect dst_rect_spr1 = { BUF_WIDTH, dst_rect_spr0.y + dst_rect_spr0.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr1_border = { dst_rect_spr1.x - 1, dst_rect_spr1.y - 1, dst_rect_spr1.w + 2, dst_rect_spr1.h + 2 };
-	SDL_Rect dst_rect_spr2 = { BUF_WIDTH, dst_rect_spr1.y + dst_rect_spr1.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
-	SDL_Rect dst_rect_spr2_border = { dst_rect_spr2.x - 1, dst_rect_spr2.y - 1, dst_rect_spr2.w + 2, dst_rect_spr2.h + 2 };
-	SDL_Rect dst_rect_fix = { BUF_WIDTH, dst_rect_spr2.y + dst_rect_spr2.h + 20, BUF_WIDTH / 2, SCR_HEIGHT / 2 };
-	SDL_Rect dst_rect_fix_border = { dst_rect_fix.x - 1, dst_rect_fix.y - 1, dst_rect_fix.w + 2, dst_rect_fix.h + 2 };
+	// // Let's print the SPR0, SPR1 SPR2 and FIX in the empty space of the screen (right size 0.5 scale)
+	// SDL_Rect dst_rect_spr0 = { BUF_WIDTH, 0, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr0_border = { dst_rect_spr0.x - 1, dst_rect_spr0.y - 1, dst_rect_spr0.w + 2, dst_rect_spr0.h + 2 };
+	// SDL_Rect dst_rect_spr1 = { BUF_WIDTH, dst_rect_spr0.y + dst_rect_spr0.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr1_border = { dst_rect_spr1.x - 1, dst_rect_spr1.y - 1, dst_rect_spr1.w + 2, dst_rect_spr1.h + 2 };
+	// SDL_Rect dst_rect_spr2 = { BUF_WIDTH, dst_rect_spr1.y + dst_rect_spr1.h + 20, BUF_WIDTH / 2, TEXTURE_HEIGHT / 2 };
+	// SDL_Rect dst_rect_spr2_border = { dst_rect_spr2.x - 1, dst_rect_spr2.y - 1, dst_rect_spr2.w + 2, dst_rect_spr2.h + 2 };
+	// SDL_Rect dst_rect_fix = { BUF_WIDTH, dst_rect_spr2.y + dst_rect_spr2.h + 20, BUF_WIDTH / 2, SCR_HEIGHT / 2 };
+	// SDL_Rect dst_rect_fix_border = { dst_rect_fix.x - 1, dst_rect_fix.y - 1, dst_rect_fix.w + 2, dst_rect_fix.h + 2 };
 
-	SDL_SetRenderDrawColor(desktop->renderer, 255, 0, 0, 255);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2_border);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_fix_border);
-	SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 255);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2);
-	SDL_RenderFillRect(desktop->renderer, &dst_rect_fix);
+	// SDL_SetRenderDrawColor(desktop->renderer, 255, 0, 0, 255);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2_border);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_fix_border);
+	// SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 255);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr0);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr1);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_spr2);
+	// SDL_RenderFillRect(desktop->renderer, &dst_rect_fix);
 
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr0, NULL, &dst_rect_spr0);
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr1, NULL, &dst_rect_spr1);
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr2, NULL, &dst_rect_spr2);	
-	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_fix, NULL, &dst_rect_fix);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr0, NULL, &dst_rect_spr0);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr1, NULL, &dst_rect_spr1);
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_spr2, NULL, &dst_rect_spr2);	
+	// SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_tex_fix, NULL, &dst_rect_fix);
 
 }
 
-static void desktop_copyRect(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	SDL_Rect src = { src_rect->left, src_rect->top,
+	                 src_rect->right - src_rect->left,
+	                 src_rect->bottom - src_rect->top };
+	SDL_Rect dst = { dst_rect->left, dst_rect->top,
+	                 dst_rect->right - dst_rect->left,
+	                 dst_rect->bottom - dst_rect->top };
+
+	/* The only meaningful copies in the UI flow are
+	 * DRAW_FRAME_BUFFER -> SCREEN_BITMAP (load_background) and similar
+	 * scrbitmap -> screen movements. Both treat scrbitmap as the source
+	 * offscreen canvas; the screen is the renderer's default target. */
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
+	    dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
+	{
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
+	}
+	else if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
+	         dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER)
+	{
+		/* Copying screen back to work frame: rare; leave a no-op for
+		 * now since we cannot read back from the SDL window framebuffer
+		 * without SDL_RenderReadPixels. */
+	}
 }
 
 
@@ -364,7 +378,7 @@ static void desktop_copyRect(void *data, void *src, void *dst, RECT *src_rect, R
 	Copy Rectangular Area with Horizontal Flip
 --------------------------------------------------------*/
 
-static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -373,7 +387,7 @@ static void desktop_copyRectFlip(void *data, void *src, void *dst, RECT *src_rec
 	Copy Rectangular Area with 270-degree Rotation
 --------------------------------------------------------*/
 
-static void desktop_copyRectRotate(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
@@ -382,42 +396,30 @@ static void desktop_copyRectRotate(void *data, void *src, void *dst, RECT *src_r
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect)
+static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 
 static void *desktop_getNativeObjects(void *data, int index) {
-	return NULL;
-}
-
-static SDL_Texture *desktop_getTexture(void *data, enum WorkBuffer buffer) {
-	desktop_video_t *desktop = (desktop_video_t*)data;
-	switch (buffer) {
-		case SCRBITMAP:
-			return desktop->sdl_texture_scrbitmap;
-		case TEX_SPR0:
-			return desktop->sdl_texture_tex_spr0;
-		case TEX_SPR1:
-			return desktop->sdl_texture_tex_spr1;
-		case TEX_SPR2:
-			return desktop->sdl_texture_tex_spr2;
-		case TEX_FIX:
-			return desktop->sdl_texture_tex_fix;
-		default:
-			return NULL;
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	switch (index) {
+	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
+		return desktop->renderer;
+	default:
+		return NULL;
 	}
 }
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
+static void desktop_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
 	// We need to transform the texutres saved that uses clut into a SDL texture compatible format
 	SDL_Point size;
 	desktop_video_t *desktop = (desktop_video_t *)data;
 	struct Vertex *vertexs = (struct Vertex *)vertices;
 	uint16_t *clut_texture = (uint16_t *)clut;
-	uint8_t *tex_fix = desktop_workFrame(data, buffer);
-	SDL_Texture *texture = desktop_getTexture(data, buffer);
+	uint8_t *tex = desktop->tex_layers[textureIndex].buffer;
+	SDL_Texture *texture = desktop->tex_layers[textureIndex].texture;
 	SDL_QueryTexture(texture, NULL, NULL, &size.x, &size.y);
 
 	// Lock texture
@@ -425,16 +427,21 @@ static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, 
 	int pitch;
 	SDL_LockTexture(texture, NULL, &pixels, &pitch);
 
-	// Obtain the color from the clut using the index and copy it to the pixels array
-	for (int i = 0; i < size.y; ++i) {
-		for (int j = 0; j < size.x; ++j) {
-			int index = i * size.x + j;
-			uint8_t pixelValue = tex_fix[index];
-			uint16_t color = clut_texture[pixelValue];
+	if (desktop->tex_layers[textureIndex].bytes_per_pixel == 1) {
+		// Obtain the color from the clut using the index and copy it to the pixels array
+		for (int i = 0; i < size.y; ++i) {
+			for (int j = 0; j < size.x; ++j) {
+				int index = i * size.x + j;
+				uint8_t pixelValue = tex[index];
+				uint16_t color = clut_texture[pixelValue];
 
-			uint16_t *pixel = (uint16_t*)pixels + index;
-			*pixel = color;
+				uint16_t *pixel = (uint16_t*)pixels + index;
+				*pixel = color;
+			}
 		}
+	} else {
+		// Direct copy for 2 bytes per pixel (memcpy)
+		memcpy(pixels, tex, size.x * size.y * 2);
 	}
 
 	// Unlock texture
@@ -467,22 +474,56 @@ static void desktop_blitTexture(void *data, enum WorkBuffer buffer, void *clut, 
 	}
 }
 
-static void desktop_uploadMem(void *data, enum WorkBuffer buffer) {
+static void desktop_uploadMem(void *data, uint8_t textureIndex) {
 }
 
-static void desktop_uploadClut(void *data, uint16_t *bank, uint8_t bank_index) {
+static void desktop_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 }
 
+static void desktop_blitPoints(void *data, uint32_t points_count, void *vertices) {
+	desktop_video_t *desktop = (desktop_video_t*)data;
+	struct PointVertex *pts = (struct PointVertex *)vertices;
+	uint32_t i;
+
+	for (i = 0; i < points_count; i++)
+	{
+		uint16_t c = pts[i].color;
+		SDL_SetRenderDrawColor(desktop->renderer, GETR15(c), GETG15(c), GETB15(c), 255);
+		SDL_RenderDrawPoint(desktop->renderer, pts[i].x, pts[i].y);
+	}
+}
+
+static void desktop_flushCache(void *data, void *addr, size_t size) {
+	// No cache to flush on desktop
+}
+
+static void desktop_enableDepthTest(void *data) {
+	// No-op: depth test not needed on desktop yet
+}
+
+static void desktop_disableDepthTest(void *data) {
+	// No-op: depth test not needed on desktop yet
+}
+
+static void desktop_clearDepthBuffer(void *data) {
+	// No-op: depth buffer not used on desktop yet
+}
+
+static void desktop_clearColorBuffer(void *data) {
+	// No-op: color buffer clear within scissor not needed on desktop yet
+}
 
 video_driver_t video_desktop = {
 	"desktop",
 	desktop_init,
 	desktop_free,
-	desktop_setClutBaseAddr,
 	desktop_waitVsync,
 	desktop_flipScreen,
+	desktop_beginFrame,
+	desktop_endFrame,
 	desktop_frameAddr,
-	desktop_workFrame,
+	desktop_textureLayer,
+	desktop_scissor,
 	desktop_clearScreen,
 	desktop_clearFrame,
 	desktop_fillFrame,
@@ -496,4 +537,16 @@ video_driver_t video_desktop = {
 	desktop_uploadMem,
 	desktop_uploadClut,
 	desktop_blitTexture,
+	desktop_blitPoints,
+	desktop_flushCache,
+	desktop_enableDepthTest,
+	desktop_disableDepthTest,
+	desktop_clearDepthBuffer,
+	desktop_clearColorBuffer,
+	NULL, // drawUISprite
+	NULL, // drawUILine
+	NULL, // drawUILineGradient
+	NULL, // drawUIRect
+	NULL, // fillUIRect
+	NULL, // fillUIRectGradient
 };

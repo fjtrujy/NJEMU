@@ -26,7 +26,7 @@ void blit_finish_scroll1(void);
 void blit_set_clip_scroll2(int16_t min_y, int16_t max_y);
 int blit_check_clip_scroll2(int16_t sy);
 void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr);
-extern void (*blit_draw_scroll2)(int16_t x, int16_t y, uint32_t code, uint16_t attr);
+void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr);
 void blit_finish_scroll2(void);
 
 void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr);

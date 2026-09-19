@@ -26,9 +26,9 @@
 	Local Variables
 ******************************************************************************/
 
-static int32_t ALIGN_DATA stream_buffer_left[SOUND_BUFFER_SIZE + SAFETY];
-static int32_t ALIGN_DATA stream_buffer_right[SOUND_BUFFER_SIZE + SAFETY];
-static int32_t ALIGN_DATA *stream_buffer[2];
+static int32_t ALIGN16_DATA stream_buffer_left[SOUND_BUFFER_SIZE + SAFETY];
+static int32_t ALIGN16_DATA stream_buffer_right[SOUND_BUFFER_SIZE + SAFETY];
+static int32_t ALIGN16_DATA *stream_buffer[2];
 
 #if (EMU_SYSTEM != CPS2)
 static float samples_per_update;

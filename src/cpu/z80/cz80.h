@@ -267,7 +267,7 @@ void Cz80_Set_Reg(cz80_struc *CPU, int32_t regnum, uint32_t value);
 
 void Cz80_Set_Fetch(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintptr_t fetch_adr);
 #if CZ80_ENCRYPTED_ROM
-void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uint32_t decrypted_rom);
+void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintptr_t decrypted_rom);
 #endif
 
 void Cz80_Set_ReadB(cz80_struc *CPU, uint8_t (*Func)(uint32_t address));

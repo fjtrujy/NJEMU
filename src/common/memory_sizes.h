@@ -121,7 +121,7 @@
 #define FILE_TEMP_BUFFER_SIZE	0x80000		/* 512 KB - Temporary file buffer */
 
 /******************************************************************************
-	Cache system sizes (defined in cache.c, duplicated here for reference)
+	Cache system sizes
 ******************************************************************************/
 
 #define CACHE_BLOCK_SIZE		0x10000		/* 64 KB - Single cache block */

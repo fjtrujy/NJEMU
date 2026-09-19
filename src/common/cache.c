@@ -9,6 +9,7 @@
 #include <limits.h>
 #include <sys/param.h>
 #include "emumain.h"
+#include "common/memory_sizes.h"
 
 #if USE_CACHE
 #ifdef LARGE_MEMORY
@@ -26,7 +27,6 @@
 #define MAX_CACHE_SIZE		0x140		// Upper limit 20MB 0x140
 #endif
 #define CACHE_SAFETY		0x20000		// Free memory size after cache allocation 128KB
-#define BLOCK_SIZE			0x10000		// Size of 1 block = 64KB 0x10000 (related to images)
 #define BLOCK_MASK			0xffff
 #define BLOCK_SHIFT			16			// 16
 #define BLOCK_NOT_CACHED	0xffff
@@ -64,28 +64,30 @@ typedef struct cache_s
 } cache_t;
 
 
-static cache_t ALIGN_DATA cache_data[MAX_CACHE_SIZE];
+static cache_t ALIGN16_DATA cache_data[MAX_CACHE_SIZE];
 static cache_t *head;
 static cache_t *tail;
 
 static int num_cache;
-static uint16_t ALIGN_DATA blocks[MAX_CACHE_BLOCKS];
+static uint16_t ALIGN16_DATA blocks[MAX_CACHE_BLOCKS];
 static int64_t cache_fd;
 
 int cache_type;
 static char spr_cache_name[PATH_MAX];
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
+/* Phase 2b.1: PCM cache infrastructure is always compiled. pcm_cache_enable
+ * is the runtime gate; LARGE_MEMORY (or large tier with preload_sound) keeps
+ * it at 0 so the streaming paths are inert.
+ */
 int pcm_cache_enable;
 
-static cache_t ALIGN_DATA pcm_data[MAX_PCM_SIZE];
+static cache_t ALIGN16_DATA pcm_data[MAX_PCM_SIZE];
 static cache_t *pcm_head;
 static cache_t *pcm_tail;
 
-static uint16_t ALIGN_DATA pcm_blocks[MAX_PCM_BLOCKS];
+static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
-#endif
 #endif
 
 
@@ -94,7 +96,6 @@ static int32_t pcm_fd;
 ******************************************************************************/
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 
 /*------------------------------------------------------
 	Read PCM Cache
@@ -114,7 +115,7 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 		pcm_blocks[new_block] = p->idx;
 
 		lseek(pcm_fd, new_block << BLOCK_SHIFT, SEEK_SET);
-		read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+		read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 	}
 	else p = &pcm_data[idx];
 
@@ -147,7 +148,6 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 }
 
 #endif
-#endif
 
 /*------------------------------------------------------
 	Open Data File in ZIP Cache File
@@ -177,9 +177,9 @@ static int zip_cache_open(int number)
 	Read Data File from ZIP Cache File
 ------------------------------------------------------*/
 
-#define zip_cache_load(offs)							\
-	zread(cache_fd, &GFX_MEMORY[offs << 16], 0x10000);	\
-	zclose(cache_fd);									\
+#define zip_cache_load(offs)									\
+	zread(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
+	zclose(cache_fd);											\
 	cache_fd = -1;
 
 
@@ -211,9 +211,9 @@ static int folder_cache_open(int number)
 	Read Data File from Folder Cache
 ------------------------------------------------------*/
 
-#define folder_cache_load(offs)							\
-	read(cache_fd, &GFX_MEMORY[offs << 16], 0x10000);	\
-	close(cache_fd);									\
+#define folder_cache_load(offs)									\
+	read(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
+	close(cache_fd);											\
 	cache_fd = -1;
 
 /*------------------------------------------------------
@@ -242,7 +242,7 @@ static int fill_cache(void)
 			blocks[block] = p->idx;
 
 			lseek((int32_t)cache_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 			head = p->next;
 			head->prev = NULL;
@@ -299,7 +299,6 @@ static int fill_cache(void)
 				break;
 		}
 	}
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		i = 0;
@@ -312,7 +311,7 @@ static int fill_cache(void)
 			pcm_blocks[block] = p->idx;
 
 			lseek(pcm_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+			read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 			pcm_head = p->next;
 			pcm_head->prev = NULL;
@@ -325,7 +324,6 @@ static int fill_cache(void)
 			i++;
 		}
 	}
-#endif
 #else
 	if (cache_type == CACHE_RAWFILE)
 	{
@@ -338,7 +336,7 @@ static int fill_cache(void)
 				blocks[block] = p->idx;
 
 				lseek(cache_fd, block_offset[block], SEEK_SET);
-				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 				head = p->next;
 				head->prev = NULL;
@@ -445,7 +443,7 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 #else
 		lseek((int32_t)cache_fd, block_offset[new_block], SEEK_SET);
 #endif
-		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], BLOCK_SIZE);
+		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 	}
 	else p = &cache_data[idx];
 
@@ -642,13 +640,11 @@ void cache_init(void)
 		blocks[i] = BLOCK_NOT_CACHED;
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
 
 	for (i = 0; i < MAX_PCM_BLOCKS; i++)
 		pcm_blocks[i] = BLOCK_NOT_CACHED;
-#endif
 #endif
 }
 
@@ -661,7 +657,7 @@ int cache_start(void)
 {
 	int i, found;
 	uint32_t size = 0;
-	char version_str[8];
+	char version_str[8] = {0};
 #if (EMU_SYSTEM == MVS)
 	int32_t fd;
 #endif
@@ -756,14 +752,13 @@ int cache_start(void)
 		return 0;
 	}
 
-#ifndef LARGE_MEMORY
 	if (cache_type == CACHE_RAWFILE)
 	{
 		if (option_sound_enable && disable_sound)
 		{
 			if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
 			{
-				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * BLOCK_SIZE)) != NULL)
+				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * CACHE_BLOCK_SIZE)) != NULL)
 				{
 					pcm_cache_enable = 1;
 					disable_sound = 0;
@@ -781,7 +776,6 @@ int cache_start(void)
 			}
 		}
 	}
-#endif
 
 	/* Open crom for block access (folder format only) */
 	if (cache_type == CACHE_RAWFILE)
@@ -950,38 +944,54 @@ int cache_start(void)
 
 		// Check allocatable size
 
+		{
+			/* Translate profile MB bounds to cache blocks, clamped to the
+			 * compile-time MIN/MAX (which size the static cache_data[] array
+			 * and the malloc-probe envelope).
+			 */
+			const memory_profile_t *profile = memory_profile_current();
+			int profile_max_blocks = MAX_CACHE_SIZE;
+			int profile_min_blocks = MIN_CACHE_SIZE;
+			if (profile != NULL) {
+				int p_max = (int)((profile->cache_max_mb << 20) >> BLOCK_SHIFT);
+				int p_min = (int)((profile->cache_min_mb << 20) >> BLOCK_SHIFT);
+				if (p_max > 0 && p_max < profile_max_blocks) profile_max_blocks = p_max;
+				if (p_min > profile_min_blocks)              profile_min_blocks = p_min;
+			}
+
 #ifdef LARGE_MEMORY
-		if (psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
-		{
-			GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
-			i = MAX_CACHE_SIZE;
-			size = i << BLOCK_SHIFT;
-		}
-		else
+			if ((profile == NULL || profile->use_psp2k_region)
+			    && psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
+			{
+				GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
+				i = profile_max_blocks;
+				size = i << BLOCK_SHIFT;
+			}
+			else
 #endif
-
-		{
-			for (i = MIN(GFX_SIZE >> BLOCK_SHIFT, MAX_CACHE_SIZE); i >= MIN_CACHE_SIZE; i--)
 			{
-				if ((GFX_MEMORY = (uint8_t *)malloc((i << BLOCK_SHIFT) + CACHE_SAFETY)) != NULL)
+				for (i = MIN(GFX_SIZE >> BLOCK_SHIFT, profile_max_blocks); i >= profile_min_blocks; i--)
 				{
-					size = i << BLOCK_SHIFT;
-					free(GFX_MEMORY);
-					GFX_MEMORY = NULL;
-					break;
+					if ((GFX_MEMORY = (uint8_t *)malloc((i << BLOCK_SHIFT) + CACHE_SAFETY)) != NULL)
+					{
+						size = i << BLOCK_SHIFT;
+						free(GFX_MEMORY);
+						GFX_MEMORY = NULL;
+						break;
+					}
 				}
-			}
 
-			if (i < MIN_CACHE_SIZE)
-			{
-				msg_printf(TEXT(MEMORY_NOT_ENOUGH));
-				return 0;
-			}
+				if (i < profile_min_blocks)
+				{
+					msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+					return 0;
+				}
 
-			if ((GFX_MEMORY = (uint8_t *)malloc(size)) == NULL)
-			{
-				msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
-				return 0;
+				if ((GFX_MEMORY = (uint8_t *)malloc(size)) == NULL)
+				{
+					msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
+					return 0;
+				}
 			}
 		}
 
@@ -1008,7 +1018,6 @@ int cache_start(void)
 	tail = &cache_data[num_cache - 1];
 
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	for (i = 0; i < MAX_PCM_SIZE; i++)
 		pcm_data[i].idx = i;
 
@@ -1023,7 +1032,6 @@ int cache_start(void)
 
 	pcm_head = &pcm_data[0];
 	pcm_tail = &pcm_data[MAX_PCM_SIZE - 1];
-#endif
 #endif
 
 	if (!fill_cache())
@@ -1047,7 +1055,6 @@ int cache_start(void)
 void cache_shutdown(void)
 {
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		if (pcm_fd != -1)
@@ -1056,7 +1063,6 @@ void cache_shutdown(void)
 		}
 		pcm_cache_enable = 0;
 	}
-#endif
 #endif
 	if (cache_type == CACHE_RAWFILE)
 	{
@@ -1095,9 +1101,7 @@ void cache_sleep(int flag)
 				zip_close();
 			}
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 			if (pcm_cache_enable) close(pcm_fd);
-#endif
 #endif
 		}
 		else
@@ -1116,10 +1120,8 @@ void cache_sleep(int flag)
 			}
 			/* CACHE_FOLDER: nothing to reopen */
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 			if (pcm_cache_enable)
 				pcm_fd = cachefile_open(CACHE_VROM);
-#endif
 #endif
 		}
 	}
@@ -1132,27 +1134,30 @@ void cache_sleep(int flag)
 	Temporarily Allocate State Save Area
 ------------------------------------------------------*/
 
-#ifdef LARGE_MEMORY
+/* Phase 2b.6: cache_alloc_type is always declared. 1 = state-save was
+ * staged into the PSP2K kernel region; 0 = staged into a file. The
+ * !LARGE_MEMORY path always uses the file (use_psp2k=false keeps it 0).
+ */
 static int cache_alloc_type = 0;
-#endif
 
 uint8_t *cache_alloc_state_buffer(int32_t size)
 {
+	cache_alloc_type = 0;
+
 #ifdef LARGE_MEMORY
-	if (size < psp2k_mem_left)
 	{
-		cache_alloc_type = 1;
-		return (uint8_t *)psp2k_mem_offset;
+		const memory_profile_t *profile = memory_profile_current();
+		if ((profile == NULL || profile->use_psp2k_region) &&
+		    size < psp2k_mem_left)
+		{
+			cache_alloc_type = 1;
+			return (uint8_t *)psp2k_mem_offset;
+		}
 	}
-	else
 #endif
 	{
 		int32_t fd;
 		char path[PATH_MAX];
-
-#ifdef LARGE_MEMORY
-		cache_alloc_type = 0;
-#endif
 
 		sprintf(path, "%sstate/cache.tmp", launchDir);
 
@@ -1172,9 +1177,7 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 
 void cache_free_state_buffer(int32_t size)
 {
-#ifdef LARGE_MEMORY
 	if (!cache_alloc_type)
-#endif
 	{
 		uint32_t fd;
 		char path[PATH_MAX];
@@ -1189,9 +1192,7 @@ void cache_free_state_buffer(int32_t size)
 		remove(path);
 	}
 
-#ifdef LARGE_MEMORY
 	cache_alloc_type = 0;
-#endif
 }
 
 #endif /* STATE_SAVE */

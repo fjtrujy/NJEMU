@@ -102,9 +102,9 @@ uint32_t memory_length_user2;
 #endif
 uint32_t memory_length_user3;
 
-uint8_t ALIGN_DATA neogeo_memcard[NEOGEO_MEMCARD_SIZE];
-uint8_t ALIGN_DATA neogeo_ram[NEOGEO_RAM_SIZE];
-uint16_t ALIGN_DATA neogeo_sram16[NEOGEO_SRAM_SIZE];
+uint8_t ALIGN16_DATA neogeo_memcard[NEOGEO_MEMCARD_SIZE];
+uint8_t ALIGN16_DATA neogeo_ram[NEOGEO_RAM_SIZE];
+uint16_t ALIGN16_DATA neogeo_sram16[NEOGEO_SRAM_SIZE];
 
 int neogeo_machine_mode;
 
@@ -860,9 +860,17 @@ static int load_rom_gfx3(void)
 {
 	if (!encrypt_gfx3)
 	{
+		memory_region_gfx3 = NULL;
 #ifdef LARGE_MEMORY
-		if ((memory_region_gfx3 = psp2k_mem_alloc(memory_length_gfx3)) == NULL)
+		{
+			const memory_profile_t *profile = memory_profile_current();
+			if (profile != NULL && profile->use_psp2k_region)
+			{
+				memory_region_gfx3 = psp2k_mem_alloc(memory_length_gfx3);
+			}
+		}
 #endif
+		if (memory_region_gfx3 == NULL)
 		{
 			memory_region_gfx3 = malloc(memory_length_gfx3);
 		}
@@ -964,21 +972,22 @@ static int load_rom_sound1(void)
 		memory_length_sound1 = 0;
 		return 1;
 	}
-#ifndef LARGE_MEMORY
-	if (disable_sound)
+
+	const memory_profile_t *profile = memory_profile_current();
+	bool use_psp2k = (profile != NULL && profile->use_psp2k_region);
+
+	/* Without a PSP2K backup region, an earlier disable_sound decision
+	 * means we let the PCM-cache path (in cache_start) handle sound1
+	 * instead of preloading. */
+	if (!use_psp2k && disable_sound)
 	{
 		return 1;
 	}
 
 	if ((memory_region_sound1 = malloc(memory_length_sound1)) == NULL)
 	{
-		error_memory("REGION_SOUND1");
-		return 0;
-	}
-#else
-	if ((memory_region_sound1 = malloc(memory_length_sound1)) == NULL)
-	{
-		if (disable_sound)
+#ifdef LARGE_MEMORY
+		if (use_psp2k && disable_sound)
 		{
 			if ((memory_region_sound1 = psp2k_mem_alloc(memory_length_sound1)) == NULL)
 			{
@@ -986,14 +995,17 @@ static int load_rom_sound1(void)
 			}
 		}
 		else
+#endif
 		{
 			error_memory("REGION_SOUND1");
 			return 0;
 		}
 	}
 
-	disable_sound = 0;
-#endif
+	if (use_psp2k)
+	{
+		disable_sound = 0;
+	}
 
 	memset(memory_region_sound1, 0, memory_length_sound1);
 
@@ -1798,7 +1810,10 @@ int memory_init(void)
 	if (load_rom_sound1() == 0) return 0;
 
 #ifdef LARGE_MEMORY
-	if (psp2k_mem_left != PSP2K_MEM_SIZE)
+	{
+		const memory_profile_t *profile = memory_profile_current();
+		if ((profile == NULL || profile->use_psp2k_region) &&
+		    psp2k_mem_left != PSP2K_MEM_SIZE)
 	{
 		// If sound1 was allocated in extended memory
 
@@ -1817,6 +1832,7 @@ int memory_init(void)
 		gfx_pen_usage[2] = psp2k_mem_move(gfx_pen_usage[2], memory_length_gfx3 / 128);
 		gfx_pen_usage[1] = psp2k_mem_move(gfx_pen_usage[1], memory_length_gfx2 / 32);
 		gfx_pen_usage[0] = psp2k_mem_move(gfx_pen_usage[0], memory_length_gfx1 / 32);
+	}
 	}
 #endif
 

@@ -31,8 +31,8 @@ int EEPROM_read_bit(void);
 void EEPROM_set_cs_line(int state);
 void EEPROM_set_clock_line(int state);
 
-void EEPROM_load(FILE *file);
-void EEPROM_save(FILE *file);
+void EEPROM_load(int fd);
+void EEPROM_save(int fd);
 
 uint8_t EEPROM_read_data(uint32_t address);
 void EEPROM_write_data(uint32_t address, uint8_t data);

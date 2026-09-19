@@ -1,0 +1,592 @@
+/******************************************************************************
+
+	config.c
+
+	Application Settings File Management
+
+******************************************************************************/
+
+#include <limits.h>
+#include <stdarg.h>
+#include "emumain.h"
+#include "common/config.h"
+
+#define LINEBUF_SIZE	256
+
+/* Write formatted string to a file descriptor */
+static void fd_printf(int fd, const char *fmt, ...)
+{
+	char buf[512];
+	va_list args;
+	int n;
+	va_start(args, fmt);
+	n = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+	if (n > 0) write(fd, buf, n);
+}
+
+/* Read one line from fd into buf (up to size-1 chars); returns bytes read or 0 on EOF */
+static ssize_t fd_readline(int fd, char *buf, size_t size)
+{
+	size_t i = 0;
+	char c;
+	while (i < size - 1) {
+		if (read(fd, &c, 1) <= 0) break;
+		buf[i++] = c;
+		if (c == '\n') break;
+	}
+	buf[i] = '\0';
+	return (ssize_t)i;
+}
+
+
+enum
+{
+	CFG_NONE = 0,
+	CFG_INT,
+	CFG_BOOL,
+	CFG_PAD,
+	CFG_STR
+};
+
+/* PSP clock constants (fallback for non-PSP platforms) */
+#ifndef PSPCLOCK_333
+#define PSPCLOCK_333		333
+#endif
+
+enum
+{
+	PAD_NONE = 0,
+	PAD_UP,
+	PAD_DOWN,
+	PAD_LEFT,
+	PAD_RIGHT,
+	PAD_CIRCLE,
+	PAD_CROSS,
+	PAD_SQUARE,
+	PAD_TRIANGLE,
+	PAD_LTRIGGER,
+	PAD_RTRIGGER,
+	PAD_START,
+	PAD_SELECT,
+	PAD_MAX
+};
+
+typedef struct cfg_t
+{
+	int type;
+	const char *name;
+	int *value;
+	int def;
+	int max;
+} cfg_type;
+
+typedef struct cfg2_t
+{
+	int type;
+	const char *name;
+	char *value;
+	int max_len;
+} cfg2_type;
+
+
+/******************************************************************************
+	ローカル構造体/変数
+******************************************************************************/
+
+#define INIVERSION	23
+
+static int ini_version;
+
+#define INCLUDE_INIFILENAME
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/config/cps.c"
+#elif (EMU_SYSTEM == MVS)
+#include "common/config/mvs.c"
+#elif (EMU_SYSTEM == NCDZ)
+#include "common/config/ncdz.c"
+#endif
+
+#undef INCLUDE_INIFILENAME
+
+static cfg_type default_options[] =
+{
+	{ CFG_NONE,	"[System Settings]", },
+	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   },
+#if (EMU_SYSTEM == MVS)
+	{ CFG_NONE,	"[Emulation Settings]", },
+	{ CFG_INT,	"NeogeoBIOS",		&neogeo_bios,	-1,	BIOS_MAX-1 },
+#elif (EMU_SYSTEM == NCDZ)
+	{ CFG_NONE,	"[Emulation Settings]", },
+	{ CFG_INT,	"NeogeoRegion",		&neogeo_region,	1,	2	},
+#endif
+	{ CFG_NONE, NULL, }
+};
+
+static cfg2_type default_options2[] =
+{
+	{ CFG_NONE,	"[Directory Settings]", 				},
+	{ CFG_STR,	"StartupDir", startupDir,	PATH_MAX	},
+	{ CFG_NONE, NULL, }
+};
+
+#define INCLUDE_CONFIG_STRUCT
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/config/cps.c"
+#elif (EMU_SYSTEM == MVS)
+#include "common/config/mvs.c"
+#elif (EMU_SYSTEM == NCDZ)
+#include "common/config/ncdz.c"
+#endif
+
+#undef INCLUDE_CONFIG_STRUCT
+
+typedef struct padname_t
+{
+	int code;
+	const char name[16];
+} PADNAME;
+
+static const PADNAME pad_name[13] =
+{
+	{ 0,					"PAD_NONE"		},
+	{ PLATFORM_PAD_UP,			"PAD_UP"		},
+	{ PLATFORM_PAD_DOWN,		"PAD_DOWN"		},
+	{ PLATFORM_PAD_LEFT,		"PAD_LEFT"		},
+	{ PLATFORM_PAD_RIGHT,		"PAD_RIGHT"		},
+	{ PLATFORM_PAD_B2,		"PAD_CROSS"		},
+	{ PLATFORM_PAD_B1,		"PAD_CIRCLE"	},
+	{ PLATFORM_PAD_B3,		"PAD_SQUARE"	},
+	{ PLATFORM_PAD_B4,	"PAD_TRIANGLE"	},
+	{ PLATFORM_PAD_START,		"PAD_START"		},
+	{ PLATFORM_PAD_SELECT,		"PAD_SELECT"	},
+	{ PLATFORM_PAD_L,	"PAD_LTRIGGER"	},
+	{ PLATFORM_PAD_R,	"PAD_RTRIGGER"	}
+};
+
+
+/******************************************************************************
+	ローカル関数
+******************************************************************************/
+
+/*------------------------------------------------------
+	CFG_BOOLの値を読み込む
+------------------------------------------------------*/
+
+static int get_config_bool(char *str)
+{
+	if (!strcasecmp(str, "yes"))
+		return 1;
+	else
+		return 0;
+}
+
+
+/*------------------------------------------------------
+	CFG_INTの値を読み込む
+------------------------------------------------------*/
+
+static int get_config_int(char *str, int maxval)
+{
+	int value = atoi(str);
+
+	if (value < 0) value = 0;
+	if (value > maxval) value = maxval;
+	return value;
+}
+
+
+/*------------------------------------------------------
+	CFG_PADの値を読み込む
+------------------------------------------------------*/
+
+static int get_config_pad(char *str)
+{
+	int i;
+
+	for (i = 0; i < PAD_MAX; i++)
+	{
+		if (strcmp(str, pad_name[i].name) == 0)
+			return pad_name[i].code;
+	}
+
+	return pad_name[PAD_NONE].code;
+}
+
+
+/*------------------------------------------------------
+	CFG_BOOLの値を保存する
+------------------------------------------------------*/
+
+static const char *set_config_bool(int value)
+{
+	if (value)
+		return "yes";
+	else
+		return "no";
+}
+
+
+/*------------------------------------------------------
+	CFG_INTの値を保存する
+------------------------------------------------------*/
+
+static char *set_config_int(int value, int maxval)
+{
+	static char buf[16];
+
+	if (value < 0) value = 0;
+	if (value > maxval) value = maxval;
+
+	sprintf(buf, "%d", value);
+
+	return buf;
+}
+
+
+/*------------------------------------------------------
+	CFG_PADの値を保存する
+------------------------------------------------------*/
+
+static const char *set_config_pad(int value)
+{
+	int i;
+
+	for (i = 0; i < PAD_MAX; i++)
+	{
+		if (value == pad_name[i].code)
+			return pad_name[i].name;
+	}
+
+	return pad_name[PAD_NONE].name;
+}
+
+
+/*------------------------------------------------------
+	.iniファイルから設定を読み込む
+------------------------------------------------------*/
+
+static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
+{
+	int fd;
+
+	fd = open(path, O_RDONLY);
+	if (fd >= 0)
+	{
+		int i;
+		char linebuf[LINEBUF_SIZE];
+
+		while (1)
+		{
+			char *name, *value;
+
+			memset(linebuf, 0, LINEBUF_SIZE);
+			if (fd_readline(fd, linebuf, LINEBUF_SIZE) == 0)
+				break;
+
+			if (linebuf[0] == ';' || linebuf[0] == '[')
+				continue;
+
+			name = strtok(linebuf, " =\r\n");
+			if (name == NULL)
+				continue;
+
+			value = strtok(NULL, " =\r\n");
+			if (value == NULL)
+				continue;
+
+			/* check name and value */
+			for (i = 0; cfg[i].name; i++)
+			{
+				if (!strcmp(name, cfg[i].name))
+				{
+					switch (cfg[i].type)
+					{
+					case CFG_INT:  *cfg[i].value = get_config_int(value, cfg[i].max); break;
+					case CFG_BOOL: *cfg[i].value = get_config_bool(value); break;
+					case CFG_PAD:  *cfg[i].value = get_config_pad(value); break;
+					}
+				}
+			}
+		}
+
+		if (cfg2)
+		{
+			lseek(fd, 0, SEEK_SET);
+
+			while (1)
+			{
+				char *name, *value;
+				char *p1, *p2, temp[LINEBUF_SIZE];
+
+				memset(linebuf, 0, LINEBUF_SIZE);
+				if (fd_readline(fd, linebuf, LINEBUF_SIZE) == 0)
+					break;
+
+				strcpy(temp, linebuf);
+
+				if (linebuf[0] == ';' || linebuf[0] == '[')
+					continue;
+
+				name = strtok(linebuf, " =\r\n");
+				if (name == NULL)
+					continue;
+
+				value = strtok(NULL, " =\r\n");
+				if (value == NULL)
+					continue;
+
+				p1 = strchr(temp, '\"');
+				if (p1)
+				{
+					p2 = strchr(p1 + 1, '\"');
+					if (p2)
+					{
+						value = p1 + 1;
+						*p2 = '\0';
+					}
+				}
+
+				/* check name and value */
+				for (i = 0; cfg2[i].name; i++)
+				{
+					if (!strcmp(name, cfg2[i].name))
+					{
+						if (cfg2[i].type == CFG_STR)
+						{
+							memset(cfg2[i].value, 0, cfg2[i].max_len);
+							strncpy(cfg2[i].value, value, cfg2[i].max_len - 1);
+						}
+					}
+				}
+			}
+		}
+
+		close(fd);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+
+/*------------------------------------------------------
+	.iniファイルに設定を保存
+------------------------------------------------------*/
+
+static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
+{
+	int fd;
+
+	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd >= 0)
+	{
+		int i;
+
+		fd_printf(fd, ";-------------------------------------------\r\n");
+		fd_printf(fd, "; " APPNAME_STR " " VERSION_STR "\r\n");
+		fd_printf(fd, ";-------------------------------------------\r\n");
+
+		for (i = 0; cfg[i].name; i++)
+		{
+			switch (cfg[i].type)
+			{
+			case CFG_NONE: if (cfg[i].name) fd_printf(fd, "\r\n%s\r\n", cfg[i].name); break;
+			case CFG_INT:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_int(*cfg[i].value, cfg[i].max)); break;
+			case CFG_BOOL: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_bool(*cfg[i].value)); break;
+			case CFG_PAD:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_pad(*cfg[i].value)); break;
+			}
+		}
+
+		if (cfg2)
+		{
+			for (i = 0; cfg2[i].name; i++)
+			{
+				switch (cfg2[i].type)
+				{
+				case CFG_NONE: if (cfg2[i].name) fd_printf(fd, "\r\n%s\r\n", cfg2[i].name); break;
+				case CFG_STR:  fd_printf(fd, "%s = \"%s\"\r\n", cfg2[i].name, cfg2[i].value); break;
+				}
+			}
+		}
+
+		close(fd);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+
+/******************************************************************************
+	グローバル関数
+******************************************************************************/
+
+/*------------------------------------------------------
+	Load Application Settings
+------------------------------------------------------*/
+
+void load_settings(void)
+{
+	int i;
+	char path[PATH_MAX];
+
+	for (i = 0; default_options[i].name; i++)
+	{
+		if (default_options[i].value)
+			*default_options[i].value = default_options[i].def;
+	}
+#if (EMU_SYSTEM == NCDZ)
+	if (ui_text_driver->getLanguage(ui_text_data) == LANG_JAPANESE)
+	{
+		for (i = 0; default_options[i].name; i++)
+		{
+			if (strcmp(default_options[i].name, "NeogeoRegion") == 0)
+			{
+				*default_options[i].value = 0;
+				break;
+			}
+		}
+	}
+#endif
+
+	sprintf(path, "%s%s", launchDir, inifile_name);
+
+	if (load_inifile(path, default_options, default_options2) == 0)
+	{
+		save_settings();
+	}
+	else if (ini_version != INIVERSION)
+	{
+		char inipath[PATH_MAX];
+
+		for (i = 0; default_options[i].name; i++)
+		{
+			if (default_options[i].value)
+				*default_options[i].value = default_options[i].def;
+		}
+#if (EMU_SYSTEM == NCDZ)
+		if (ui_text_driver->getLanguage(ui_text_data) == LANG_JAPANESE)
+		{
+			for (i = 0; default_options[i].name; i++)
+			{
+				if (strcmp(default_options[i].name, "NeogeoRegion") == 0)
+				{
+					*default_options[i].value = 0;
+					break;
+				}
+			}
+		}
+#endif
+
+		sprintf(startupDir, "%sroms", launchDir);
+
+		sprintf(inipath, "%s%s", launchDir, inifile_name);
+		remove(inipath);
+		delete_files("nvram", "nv");
+		delete_files("config", "ini");
+
+		save_settings();
+	}
+}
+
+
+/*------------------------------------------------------
+	Save Application Settings
+------------------------------------------------------*/
+
+void save_settings(void)
+{
+	char path[PATH_MAX];
+
+	sprintf(path, "%s%s", launchDir, inifile_name);
+
+	save_inifile(path, default_options, default_options2);
+}
+
+
+/*------------------------------------------------------
+	ゲームの設定を読み込む
+------------------------------------------------------*/
+
+void load_gamecfg(const char *name)
+{
+	int i;
+	char path[PATH_MAX];
+	cfg_type *gamecfg;
+
+	sprintf(path, "%sconfig/%s.ini", launchDir, name);
+
+	memset(input_map, 0, sizeof(input_map));
+
+#define INCLUDE_SETUP_CONFIG_STRUCT
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/config/cps.c"
+#elif (EMU_SYSTEM == MVS)
+#include "common/config/mvs.c"
+#elif (EMU_SYSTEM == NCDZ)
+#include "common/config/ncdz.c"
+#endif
+
+#undef INCLUDE_SETUP_CONFIG_STRUCT
+
+	for (i = 0; gamecfg[i].name; i++)
+	{
+		if (gamecfg[i].value)
+			*gamecfg[i].value = gamecfg[i].def;
+	}
+
+#define INCLUDE_SETUP_DIPSWITCH
+
+#if (EMU_SYSTEM == CPS1)
+#include "common/config/cps.c"
+#elif (EMU_SYSTEM == MVS)
+#include "common/config/mvs.c"
+#endif
+
+#undef INCLUDE_SETUP_DIPSWITCH
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (!machine_screen_type) cps_rotate_screen = 0;
+#endif
+
+	if (load_inifile(path, gamecfg, NULL) == 0)
+	{
+#ifdef ADHOC
+		if (adhoc_enable)
+#endif
+			save_gamecfg(name);
+	}
+}
+
+
+/*------------------------------------------------------
+	ゲームの設定を保存する
+------------------------------------------------------*/
+
+void save_gamecfg(const char *name)
+{
+	char path[PATH_MAX];
+	cfg_type *gamecfg;
+
+	sprintf(path, "%sconfig/%s.ini", launchDir, name);
+
+#define INCLUDE_SETUP_CONFIG_STRUCT
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/config/cps.c"
+#elif (EMU_SYSTEM == MVS)
+#include "common/config/mvs.c"
+#elif (EMU_SYSTEM == NCDZ)
+#include "common/config/ncdz.c"
+#endif
+
+#undef INCLUDE_SETUP_CONFIG_STRUCT
+
+	save_inifile(path, gamecfg, NULL);
+}

@@ -43,7 +43,7 @@ static uint16_t *cps_scroll2;
 static uint16_t *cps_scroll3;
 static uint16_t *cps_other;
 static uint16_t *cps2_palette;
-static uint16_t ALIGN_DATA cps2_old_palette[cps2_palette_size >> 1];
+static uint16_t ALIGN16_DATA cps2_old_palette[cps2_palette_size >> 1];
 
 static uint8_t  cps_layer_enabled[4];		/* Layer enabled [Y/N] */
 static int16_t cps_scroll1x, cps_scroll1y;
@@ -53,7 +53,7 @@ static uint8_t  *cps_pen_usage[3];			/* sprites pen usage */
 
 #define cps2_obj_size			0x2000
 #define cps2_max_obj			(cps2_obj_size >> 3)
-static uint16_t ALIGN_DATA cps2_buffered_palette[1*32*16];
+static uint16_t ALIGN16_DATA cps2_buffered_palette[1*32*16];
 
 struct cps2_object_t
 {
@@ -65,7 +65,7 @@ struct cps2_object_t
 	uint16_t attr;
 };
 
-static struct cps2_object_t ALIGN_DATA cps2_object[cps2_max_obj];
+static struct cps2_object_t ALIGN16_DATA cps2_object[cps2_max_obj];
 static struct cps2_object_t *cps2_last_object;
 
 static uint16_t cps2_object_xoffs;
@@ -78,7 +78,7 @@ struct cps_scroll2_t
 	int16_t end;
 };
 
-static struct cps_scroll2_t ALIGN_DATA scroll2[224];
+static struct cps_scroll2_t ALIGN16_DATA scroll2[224];
 static uint16_t cps_scroll2_blocks;
 
 static int16_t cps2_scanline_start;
@@ -86,7 +86,7 @@ static int16_t cps2_scanline_end;
 static uint32_t cps2_scroll3_base;
 static uint32_t cps2_kludge;
 
-static uint16_t ALIGN_DATA video_clut16[65536];
+static uint16_t ALIGN16_DATA video_clut16[65536];
 uint16_t ALIGN16_DATA video_palette[cps2_palette_size >> 1];
 
 

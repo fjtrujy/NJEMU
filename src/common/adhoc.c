@@ -219,7 +219,7 @@ void adhoc_pause(void)
 
 	sound_thread_enable(0);
 
-	video_driver->copyRect(video_data, show_frame, work_frame, &rect, &rect);
+	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &rect, &rect);
 
 	do
 	{
@@ -261,7 +261,9 @@ void adhoc_pause(void)
 				if (sel == 1) Loop = LOOP_BROWSER;
 			}
 
+			video_driver->beginFrame(video_data);
 			video_driver->transferWorkFrame(video_data, &rect, &rect);
+			video_driver->endFrame(video_data);
 
 			draw_dialog(140, 96, 340, 176);
 
@@ -280,7 +282,7 @@ void adhoc_pause(void)
 			}
 
 			video_driver->waitVsync(video_data);
-			video_driver->copyRect(video_data, draw_frame, show_frame, &rect, &rect);
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, &rect, &rect);
 
 			buttons = poll_gamepad();
 

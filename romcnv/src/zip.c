@@ -5,7 +5,8 @@
 */
 
 
-#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -103,7 +104,7 @@ typedef struct
 
 typedef struct
 {
-	FILE * filezip;
+	int filezip;
 	linkedlist_data central_dir;/* datablock with central dir in construction*/
 	int  in_opened_file_inzip;  /* 1 if a file in the zip is currently writ.*/
 	curfile_info ci;			/* info on the file curretly writing */
@@ -203,7 +204,7 @@ static int add_data_in_datablock(linkedlist_data *ll, const void *buf, uLong len
 
 
 #if 0
-static int write_datablock(FILE *fout, linkedlist_data *ll)
+static int write_datablock(int fout, linkedlist_data *ll)
 {
 	linkedlist_datablock_internal *ldi;
 
@@ -211,7 +212,7 @@ static int write_datablock(FILE *fout, linkedlist_data *ll)
 	while (!ldi)
 	{
 		if (ldi->filled_in_this_block > 0)
-			if (fwrite(ldi->data,(uInt)ldi->filled_in_this_block, 1, fout) != 1)
+			if ((uLong)write(fout, ldi->data, (uInt)ldi->filled_in_this_block) != ldi->filled_in_this_block)
 				return ZIP_ERRNO;
 
 		ldi = ldi->next_datablock;
@@ -228,7 +229,7 @@ static int write_datablock(FILE *fout, linkedlist_data *ll)
    nbByte == 1, 2 or 4 (byte, short or long)
 */
 
-static int zipstatic_putValue(FILE *file, uLong x, int nbByte)
+static int zipstatic_putValue(int file, uLong x, int nbByte)
 {
 	unsigned char buf[4];
 	int n;
@@ -236,7 +237,7 @@ static int zipstatic_putValue(FILE *file, uLong x, int nbByte)
 		buf[n] = (unsigned char)(x & 0xff);
 		x >>= 8;
 	}
-	if (fwrite(buf,nbByte,1,file)!=1)
+	if (write(file, buf, nbByte) != nbByte)
 		return ZIP_ERRNO;
 	else
 		return ZIP_OK;
@@ -276,10 +277,10 @@ zipFile zipOpen(const char *pathname, int append)
 	zip_internal ziinit;
 	zip_internal *zi;
 
-	ziinit.filezip = fopen(pathname, (append == 0) ? "wb" : "ab");
-	if (!ziinit.filezip) return NULL;
+	ziinit.filezip = open(pathname, (append == 0) ? (O_WRONLY|O_CREAT|O_TRUNC) : (O_WRONLY|O_CREAT|O_APPEND), 0644);
+	if (ziinit.filezip < 0) return NULL;
 
-	ziinit.begin_pos = ftell(ziinit.filezip);
+	ziinit.begin_pos = lseek(ziinit.filezip, 0, SEEK_CUR);
 	ziinit.in_opened_file_inzip = 0;
 	ziinit.ci.stream_initialised = 0;
 	ziinit.number_entry = 0;
@@ -288,7 +289,7 @@ zipFile zipOpen(const char *pathname, int append)
 	zi = (zip_internal*)ALLOC(sizeof(zip_internal));
 	if (!zi)
 	{
-		fclose(ziinit.filezip);
+		close(ziinit.filezip);
 		return NULL;
 	}
 
@@ -362,7 +363,7 @@ int zipOpenNewFileInZip(
 	zi->ci.method = method;
 	zi->ci.stream_initialised = 0;
 	zi->ci.pos_in_buffered_data = 0;
-	zi->ci.pos_static_header = ftell(zi->filezip);
+	zi->ci.pos_static_header = lseek(zi->filezip, 0, SEEK_CUR);
 	zi->ci.size_centralheader = SIZECENTRALHEADER + size_filename + size_extrafield_global + size_comment;
 	zi->ci.central_header = (char *)ALLOC((uInt)zi->ci.size_centralheader);
 
@@ -432,11 +433,11 @@ int zipOpenNewFileInZip(
 		err = zipstatic_putValue(zi->filezip, (uLong)size_extrafield_static, 2);
 
 	if ((err == ZIP_OK) && (size_filename > 0))
-		if (fwrite(filename,(uInt)size_filename, 1, zi->filezip) != 1)
+		if ((uInt)write(zi->filezip, filename, (uInt)size_filename) != size_filename)
 			err = ZIP_ERRNO;
 
 	if ((err == ZIP_OK) && (size_extrafield_static > 0))
-		if (fwrite(extrafield_static, (uInt)size_extrafield_static, 1, zi->filezip) != 1)
+		if ((uInt)write(zi->filezip, extrafield_static, (uInt)size_extrafield_static) != size_extrafield_static)
 			err = ZIP_ERRNO;
 
 	zi->ci.stream.avail_in = (uInt)0;
@@ -480,7 +481,7 @@ int zipWriteInFileInZip(zipFile file, const void *buf, unsigned len)
 	{
 		if (zi->ci.stream.avail_out == 0)
 		{
-			if (fwrite(zi->ci.buffered_data, (uInt)zi->ci.pos_in_buffered_data, 1, zi->filezip) != 1)
+			if ((uInt)write(zi->filezip, zi->ci.buffered_data, (uInt)zi->ci.pos_in_buffered_data) != zi->ci.pos_in_buffered_data)
 				err = ZIP_ERRNO;
 
 			zi->ci.pos_in_buffered_data = 0;
@@ -541,7 +542,7 @@ int zipCloseFileInZip(zipFile file)
 
 			if (!zi->ci.stream.avail_out)
 			{
-				if (fwrite(zi->ci.buffered_data,(uInt)zi->ci.pos_in_buffered_data,1,zi->filezip) != 1)
+				if ((uInt)write(zi->filezip, zi->ci.buffered_data, (uInt)zi->ci.pos_in_buffered_data) != zi->ci.pos_in_buffered_data)
 					err = ZIP_ERRNO;
 
 				zi->ci.pos_in_buffered_data = 0;
@@ -558,7 +559,7 @@ int zipCloseFileInZip(zipFile file)
 		err = ZIP_OK; /* this is normal */
 
 	if ((zi->ci.pos_in_buffered_data>0) && (err == ZIP_OK))
-		if (fwrite(zi->ci.buffered_data,(uInt)zi->ci.pos_in_buffered_data,1,zi->filezip) != 1)
+		if ((uInt)write(zi->filezip, zi->ci.buffered_data, (uInt)zi->ci.pos_in_buffered_data) != zi->ci.pos_in_buffered_data)
 			err = ZIP_ERRNO;
 
 	if ((zi->ci.method == Z_DEFLATED) && (err == ZIP_OK))
@@ -577,9 +578,9 @@ int zipCloseFileInZip(zipFile file)
 
 	if (err == ZIP_OK)
 	{
-		long cur_pos_inzip = ftell(zi->filezip);
+		long cur_pos_inzip = lseek(zi->filezip, 0, SEEK_CUR);
 
-		if (fseek(zi->filezip, zi->ci.pos_static_header + 14, SEEK_SET) != 0)
+		if (lseek(zi->filezip, zi->ci.pos_static_header + 14, SEEK_SET) == -1)
 			err = ZIP_ERRNO;
 
 		if (err == ZIP_OK)
@@ -591,7 +592,7 @@ int zipCloseFileInZip(zipFile file)
 		if (err == ZIP_OK) /* uncompressed size, unknown */
 			err = zipstatic_putValue(zi->filezip, (uLong)zi->ci.stream.total_in, 4);
 
-		if (fseek(zi->filezip, cur_pos_inzip,SEEK_SET) != 0)
+		if (lseek(zi->filezip, cur_pos_inzip, SEEK_SET) == -1)
 			err = ZIP_ERRNO;
 	}
 
@@ -623,7 +624,7 @@ int zipClose(zipFile file, const char *global_comment)
 	else
 		size_global_comment = strlen(global_comment);
 
-	centraldir_pos_inzip = ftell(zi->filezip);
+	centraldir_pos_inzip = lseek(zi->filezip, 0, SEEK_CUR);
 	if (err == ZIP_OK)
 	{
 		linkedlist_datablock_internal *ldi = zi->central_dir.first_block;
@@ -631,7 +632,7 @@ int zipClose(zipFile file, const char *global_comment)
 		while (ldi)
 		{
 			if ((err == ZIP_OK) && (ldi->filled_in_this_block > 0))
-				if (fwrite(ldi->data, (uInt)ldi->filled_in_this_block, 1, zi->filezip) != 1)
+				if ((uLong)write(zi->filezip, ldi->data, (uInt)ldi->filled_in_this_block) != ldi->filled_in_this_block)
 					err = ZIP_ERRNO;
 
 			size_centraldir += ldi->filled_in_this_block;
@@ -665,9 +666,9 @@ int zipClose(zipFile file, const char *global_comment)
 		err = zipstatic_putValue(zi->filezip, (uLong)size_global_comment, 2);
 
 	if ((err == ZIP_OK) && (size_global_comment > 0))
-		if (fwrite(global_comment, (uInt)size_global_comment, 1, zi->filezip) != 1)
+		if ((uInt)write(zi->filezip, global_comment, (uInt)size_global_comment) != size_global_comment)
 				err = ZIP_ERRNO;
-	fclose(zi->filezip);
+	close(zi->filezip);
 	TRYFREE(zi);
 
 	return err;

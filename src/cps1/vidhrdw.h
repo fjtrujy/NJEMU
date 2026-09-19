@@ -12,6 +12,9 @@
 #define FIRST_VISIBLE_LINE	16
 #define LAST_VISIBLE_LINE	239
 
+/* CPS1 palette: 192 palettes × 16 colors = 3072 entries */
+#define CPS1_PALETTE_ENTRIES	(6 * 32 * 16)
+
 #define SPRITE_BLANK		0x00
 #define SPRITE_OPAQUE		0x01
 #define SPRITE_TRANSPARENT	0x02
@@ -38,7 +41,7 @@ extern int cps_flip_screen;
 #if ENABLE_RASTER_OPTION
 extern int cps_raster_enable;
 #endif
-extern uint16_t video_palette[3072];
+extern uint16_t video_palette[CPS1_PALETTE_ENTRIES];
 
 void cps1_scan_object(void);
 void cps1_scan_scroll1(void);

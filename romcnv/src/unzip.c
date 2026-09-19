@@ -4,7 +4,8 @@
    Read unzip.h for more info
 */
 
-#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <zlib.h>
 #include <string.h>
 #include "unzip.h"
@@ -48,7 +49,7 @@ typedef struct
 	uLong crc32_wait;           /* crc32 we must obtain after decompress all */
 	uLong rest_read_compressed; /* number of byte to be decompressed */
 	uLong rest_read_uncompressed;/*number of byte to be obtained after decomp*/
-	FILE* file;                 /* io structore of the zipfile */
+	int file;                   /* file descriptor of the zipfile */
 	uLong compression_method;   /* compression method (0==store) */
 	uLong byte_before_the_zipfile;/* byte before the zipfile, (>0 for sfx)*/
 } zip_read_info_s;
@@ -58,7 +59,7 @@ typedef struct
 */
 typedef struct
 {
-	FILE *file;                 /* io structore of the zipfile */
+	int file;                   /* file descriptor of the zipfile */
 	unz_global_info gi;       /* public global information */
 	uLong byte_before_the_zipfile;/* byte before the zipfile, (>0 for sfx)*/
 	uLong num_file;             /* number of the current file in the zipfile*/
@@ -87,22 +88,23 @@ static unz_s unz;
 */
 
 
-static int unzstatic_getByte(FILE *fin, int *pi)
+static int unzstatic_getByte(int fin, int *pi)
 {
 	unsigned char c;
-	size_t err = fread(&c, 1, 1, fin);
+	ssize_t err = read(fin, &c, 1);
 
 	if (err == 1)
 	{
 		*pi = (int)c;
 		return UNZ_OK;
 	}
+	else if (err == 0)
+	{
+		return UNZ_EOF;
+	}
 	else
 	{
-		if (ferror(fin))
-			return UNZ_ERRNO;
-		else
-			return UNZ_EOF;
+		return UNZ_ERRNO;
 	}
 }
 
@@ -110,7 +112,7 @@ static int unzstatic_getByte(FILE *fin, int *pi)
 /* ===========================================================================
    Reads a long in LSB order from the given gz_stream. Sets
 */
-static int unzstatic_getShort(FILE *fin, uLong *pX)
+static int unzstatic_getShort(int fin, uLong *pX)
 {
 	uLong x;
 	int i = 0;
@@ -128,7 +130,7 @@ static int unzstatic_getShort(FILE *fin, uLong *pX)
 	return err;
 }
 
-static int unzstatic_getLong(FILE *fin, uLong *pX)
+static int unzstatic_getLong(int fin, uLong *pX)
 {
 	uLong x;
 	int i = 0;
@@ -161,18 +163,20 @@ static int unzstatic_getLong(FILE *fin, uLong *pX)
   Locate the Central directory of a zipfile (at the end, just before
   the global comment)
 */
-static uLong unzstatic_SearchCentralDir(FILE *fin)
+static uLong unzstatic_SearchCentralDir(int fin)
 {
 	unsigned char buf[BUFREADCOMMENT + 4];
 	uLong uSizeFile;
 	uLong uBackRead;
 	uLong uMaxBack = 0xffff; /* maximum size of global comment */
 	uLong uPosFound = 0;
+	off_t end_pos;
 
-	if (fseek(fin, 0, SEEK_END) != 0)
+	end_pos = lseek(fin, 0, SEEK_END);
+	if (end_pos == -1)
 		return 0;
 
-	uSizeFile = ftell(fin);
+	uSizeFile = (uLong)end_pos;
 
 	if (uMaxBack > uSizeFile)
 		uMaxBack = uSizeFile;
@@ -190,10 +194,10 @@ static uLong unzstatic_SearchCentralDir(FILE *fin)
 		uReadPos = uSizeFile - uBackRead;
 
 		uReadSize = ((BUFREADCOMMENT + 4) < (uSizeFile - uReadPos)) ?  (BUFREADCOMMENT + 4) : (uSizeFile - uReadPos);
-		if (fseek(fin, uReadPos, SEEK_SET) != 0)
+		if (lseek(fin, uReadPos, SEEK_SET) == -1)
 			break;
 
-		if (fread(buf, (uInt)uReadSize, 1, fin) != 1)
+		if ((uLong)read(fin, buf, (uInt)uReadSize) != uReadSize)
 			break;
 
 		for (i = (int)uReadSize - 3; (i--) > 0;)
@@ -227,7 +231,7 @@ unzFile unzOpen(const char *path)
 	unz_s us;
 	unz_s *s;
 	uLong central_pos,uL;
-	FILE *fin;
+	int fin;
 
 	uLong number_disk;		  /* number of the current dist, used for
 								   spaning ZIP, unsupported, always 0*/
@@ -242,15 +246,15 @@ unzFile unzOpen(const char *path)
 	if (unz_copyright[0] != ' ')
 		return NULL;
 
-	fin = fopen(path, "rb");
-	if (fin == NULL)
+	fin = open(path, O_RDONLY);
+	if (fin < 0)
 		return NULL;
 
 	central_pos = unzstatic_SearchCentralDir(fin);
 	if (central_pos == 0)
 		err = UNZ_ERRNO;
 
-	if (fseek(fin, central_pos, SEEK_SET) != 0)
+	if (lseek(fin, central_pos, SEEK_SET) == -1)
 		err = UNZ_ERRNO;
 
 	/* the signature, already checked */
@@ -294,7 +298,7 @@ unzFile unzOpen(const char *path)
 
 	if (err != UNZ_OK)
 	{
-		fclose(fin);
+		close(fin);
 		return NULL;
 	}
 
@@ -328,7 +332,7 @@ int unzClose(unzFile file)
 	if (s->pzip_read_info != NULL)
 		unzCloseCurrentFile(file);
 
-	fclose(s->file);
+	close(s->file);
 
 	return UNZ_OK;
 }
@@ -355,7 +359,7 @@ static int unzstatic_GetCurrentFileInfoInternal(
 		return UNZ_PARAMERROR;
 
 	s = (unz_s *)file;
-	if (fseek(s->file, s->pos_in_central_dir + s->byte_before_the_zipfile, SEEK_SET) != 0)
+	if (lseek(s->file, s->pos_in_central_dir + s->byte_before_the_zipfile, SEEK_SET) == -1)
 		err = UNZ_ERRNO;
 
 	/* we check the magic */
@@ -425,7 +429,7 @@ static int unzstatic_GetCurrentFileInfoInternal(
 			uSizeRead = fileNameBufferSize;
 
 		if ((file_info.size_filename > 0) && (fileNameBufferSize > 0))
-			if (fread(szFileName, (uInt)uSizeRead, 1, s->file) != 1)
+			if ((uLong)read(s->file, szFileName, (uInt)uSizeRead) != uSizeRead)
 				err = UNZ_ERRNO;
 	}
 
@@ -572,7 +576,7 @@ static int unzstatic_CheckCurrentFileCoherencyHeader(
 	*poffset_static_extrafield = 0;
 	*psize_static_extrafield = 0;
 
-	if (fseek(s->file, s->cur_file_info_internal.offset_curfile + s->byte_before_the_zipfile, SEEK_SET) != 0)
+	if (lseek(s->file, s->cur_file_info_internal.offset_curfile + s->byte_before_the_zipfile, SEEK_SET) == -1)
 		return UNZ_ERRNO;
 
 	if (err == UNZ_OK)
@@ -759,12 +763,12 @@ size_t unzReadCurrentFile(unzFile file, void *buf, size_t len)
 			if (uReadThis == 0)
 				return UNZ_EOF;
 
-			if (fseek(pzip_read_info->file,
+			if (lseek(pzip_read_info->file,
 					pzip_read_info->pos_in_zipfile +
-					pzip_read_info->byte_before_the_zipfile, SEEK_SET) != 0)
+					pzip_read_info->byte_before_the_zipfile, SEEK_SET) == -1)
 				return UNZ_ERRNO;
 
-			if (fread(pzip_read_info->read_buffer, uReadThis, 1, pzip_read_info->file) != 1)
+			if ((uLong)read(pzip_read_info->file, pzip_read_info->read_buffer, uReadThis) != uReadThis)
 				return UNZ_ERRNO;
 
 			pzip_read_info->pos_in_zipfile += uReadThis;

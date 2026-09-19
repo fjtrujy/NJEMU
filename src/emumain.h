@@ -184,6 +184,7 @@ extern UI_PALETTE ui_palette[UI_PAL_MAX];
 #include "common/power_driver.h"
 #include "common/ticker_driver.h"
 #include "common/platform_driver.h"
+#include "common/memory_profile.h"
 #include "common/video_driver.h"
 #include "common/ui_text_driver.h"
 #include "common/input_driver.h"
@@ -224,10 +225,12 @@ extern char game_name[16];
 extern char parent_name[16];
 extern char game_dir[PATH_MAX];
 
-#if USE_CACHE
 extern char cache_parent_name[16];
 extern char cache_dir[PATH_MAX];
-#endif
+
+extern layer_texture_info_t emu_layer_textures[];
+extern uint8_t emu_layer_textures_count;
+extern clut_info_t emu_clut_info;
 
 extern int option_showfps;
 extern int option_autoframeskip;

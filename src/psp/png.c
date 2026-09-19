@@ -182,7 +182,7 @@ static void png_zcfree(voidpf opaque, voidpf ptr)
 
 
 #if (EMU_SYSTEM == NCDZ)
-#define png_read(buf, size, fp)	fread(buf, 1, size, fp)
+#define png_read(buf, size, fd)	read(fd, buf, size)
 #endif
 
 
@@ -200,11 +200,11 @@ static uint32_t convert_from_network_order(uint8_t *v)
 	return (v[0] << 24) | (v[1] << 16) | (v[2] << 8) | (v[3]);
 }
 
-static int png_verify_signature(FILE *fp)
+static int png_verify_signature(int fd)
 {
 	int8_t signature[8];
 
-	if (png_read(signature, 8, fp) == 8)
+	if (png_read(signature, 8, fd) == 8)
 	{
 		if (memcmp(signature, PNG_Signature, 8) == 0)
 			return 1;
@@ -350,7 +350,7 @@ static int png_inflate_image(struct png_info *p)
 	return res;
 }
 
-static int png_read_file(FILE *fp, struct png_info *p)
+static int png_read_file(int fd, struct png_info *p)
 {
 	/* translates color_type to bytes per pixel */
 	const int samples[] = {1, 0, 3, 1, 2, 0, 4};
@@ -371,15 +371,15 @@ static int png_read_file(FILE *fp, struct png_info *p)
 
 	pidat = ihead;
 
-	if (png_verify_signature(fp) == 0)
+	if (png_verify_signature(fd) == 0)
 		return 0;
 
 	while (chunk_type != PNG_CN_IEND)
 	{
-		if (png_read(v, 4, fp) != 4) errormsg(2);
+		if (png_read(v, 4, fd) != 4) errormsg(2);
 		chunk_length = convert_from_network_order(v);
 
-		if (png_read(str_chunk_type, 4, fp) != 4) errormsg(1);
+		if (png_read(str_chunk_type, 4, fd) != 4) errormsg(1);
 
 		str_chunk_type[4] = 0; /* terminate string */
 
@@ -393,7 +393,7 @@ static int png_read_file(FILE *fp, struct png_info *p)
 				errormsg(0);
 				return 0;
 			}
-			if (png_read(chunk_data, chunk_length, fp) != chunk_length)
+			if (png_read(chunk_data, chunk_length, fd) != chunk_length)
 			{
 				errormsg(2);
 				free(chunk_data);
@@ -405,7 +405,7 @@ static int png_read_file(FILE *fp, struct png_info *p)
 		else
 			chunk_data = NULL;
 
-		if (png_read(v, 4, fp) != 4) errormsg(2);
+		if (png_read(v, 4, fd) != 4) errormsg(2);
 		chunk_crc = convert_from_network_order(v);
 
 		if (crc != chunk_crc)
@@ -521,19 +521,20 @@ static int png_read_file(FILE *fp, struct png_info *p)
 int load_png(const char *name, int number)
 {
 	struct png_info p;
-	FILE *fp;
+	int fd;
 	uint32_t res = 0;
 
 	memset(&p, 0, sizeof(struct png_info));
 
-	video_driver->clearFrame(video_data, draw_frame);
+	video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
-	if ((fp = fopen(name, "rb")) == NULL)
+	fd = open(name, O_RDONLY);
+	if (fd < 0)
 		return 0;
 
 	png_mem_init(1);
 
-	if ((res = png_read_file(fp, &p)))
+	if ((res = png_read_file(fd, &p)))
 	{
 		uint32_t x, y, sx, sy;
 		uint8_t *src = p.image;
@@ -542,7 +543,7 @@ int load_png(const char *name, int number)
 		sy = (SCR_HEIGHT - p.height) >> 1;
 		uint16_t *vptr, *dst;
 
-		vptr = (uint16_t *)video_driver->frameAddr(video_data, draw_frame, sx, sy);
+		vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, sx, sy);
 
 		switch (p.bpp * p.bit_depth)
 		{
@@ -590,7 +591,7 @@ int load_png(const char *name, int number)
 	if (p.palette) free(p.palette);
 	if (p.image) png_free(p.image);
 
-	fclose(fp);
+	close(fd);
 
 	png_mem_exit();
 
@@ -642,7 +643,7 @@ static int png_add_text(const char *keyword, const char *text)
 	return 1;
 }
 
-static int write_chunk(SceUID fd, uint32_t chunk_type, uint8_t *chunk_data, uint32_t chunk_length)
+static int write_chunk(int fd, uint32_t chunk_type, uint8_t *chunk_data, uint32_t chunk_length)
 {
 	uint32_t crc;
 	uint8_t v[4];
@@ -677,7 +678,7 @@ static int write_chunk(SceUID fd, uint32_t chunk_type, uint8_t *chunk_data, uint
 	return 1;
 }
 
-static int png_write_sig(SceUID fd)
+static int png_write_sig(int fd)
 {
 	/* PNG Signature */
 	if (write(fd, PNG_Signature, 8) != 8)
@@ -688,7 +689,7 @@ static int png_write_sig(SceUID fd)
 	return 1;
 }
 
-static int png_write_datastream(SceUID fd, struct png_info *p)
+static int png_write_datastream(int fd, struct png_info *p)
 {
 	uint8_t ihdr[13];
 	struct png_text *pt;
@@ -764,7 +765,7 @@ static int png_deflate_image(struct png_info *p)
 	return 0;
 }
 
-static int png_create_datastream(SceUID fd)
+static int png_create_datastream(int fd)
 {
 	uint32_t x, y;
 	uint8_t *dst;
@@ -784,7 +785,7 @@ static int png_create_datastream(SceUID fd)
 	dst = p.image;
 	uint16_t *vptr, *src;
 
-	vptr = (uint16_t *)video_driver->frameAddr(video_data, show_frame, 0, 0);
+	vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0, 0);
 
 	for (y = 0; y < p.height; y++)
 	{
@@ -819,7 +820,7 @@ static int png_create_datastream(SceUID fd)
 
 int save_png(const char *path)
 {
-	SceUID fd;
+	int fd;
 	int res = 0;
 
 	png_mem_init(0);

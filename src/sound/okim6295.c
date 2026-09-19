@@ -54,11 +54,11 @@ typedef struct
 
 } okim6295_t;
 
-static uint32_t ALIGN_DATA volume_tables[16];
-static int32_t ALIGN_DATA diff_lookup[49 * 16];
-static const int32_t ALIGN_DATA index_shift[8] = {-1, -1, -1, -1, 2, 4, 6, 8};
+static uint32_t ALIGN16_DATA volume_tables[16];
+static int32_t ALIGN16_DATA diff_lookup[49 * 16];
+static const int32_t ALIGN16_DATA index_shift[8] = {-1, -1, -1, -1, 2, 4, 6, 8};
 
-static okim6295_t ALIGN_DATA OKIM6295;
+static okim6295_t ALIGN16_DATA OKIM6295;
 static okim6295_t *okim6295 = &OKIM6295;
 
 

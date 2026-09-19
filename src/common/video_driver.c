@@ -7,22 +7,19 @@
 #include <stddef.h>
 #include "video_driver.h"
 
-void *show_frame;
-void *draw_frame;
-void *work_frame;
-void *tex_frame;
-
 void *video_data;
 
 video_driver_t video_null = {
 	"null", // ident
 	NULL, // init
 	NULL, // free
-	NULL, // setClutBaseAddr
 	NULL, // waitVsync
 	NULL, // flipScreen
+	NULL, // beginFrame
+	NULL, // endFrame
 	NULL, // frameAddr
-	NULL, // workFrame
+	NULL, // textureLayer
+	NULL, // scissor
 	NULL, // clearScreen
 	NULL, // clearFrame
 	NULL, // fillFrame
@@ -36,6 +33,18 @@ video_driver_t video_null = {
 	NULL, // uploadMem
 	NULL, // uploadClut
 	NULL, // blitTexture
+	NULL, // blitPoints
+	NULL, // flushCache
+	NULL, // enableDepthTest
+	NULL, // disableDepthTest
+	NULL, // clearDepthBuffer
+	NULL, // clearColorBuffer
+	NULL, // drawUISprite
+	NULL, // drawUILine
+	NULL, // drawUILineGradient
+	NULL, // drawUIRect
+	NULL, // fillUIRect
+	NULL, // fillUIRectGradient
 };
 
 video_driver_t *video_drivers[] = {

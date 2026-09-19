@@ -6,15 +6,10 @@
 
 #include <stddef.h>
 #include <time.h>
-#include <stddef.h>
 
-#include "input_driver.h"
 #include "input_driver.h"
 #include "ticker_driver.h"
 #include "video_driver.h"
-
-// TODO: Use video driver function instead
-void video_wait_vsync(void);
 
 /******************************************************************************
 	Local Variables
@@ -38,13 +33,14 @@ void *input_info;
 	Initialize Pad
 --------------------------------------------------------*/
 
-void pad_init(void)
+bool pad_init(void)
 {
 	pad = 0;
 	pressed_check = 0;
 	pressed_count = 0;
 	pressed_delay = 0;
 	input_info = input_driver->init();
+	return input_info != NULL;
 }
 
 void pad_exit(void)
@@ -54,12 +50,33 @@ void pad_exit(void)
 }
 
 /*--------------------------------------------------------
+	Get Number of Physical Controllers
+--------------------------------------------------------*/
+
+uint32_t gamepad_count(void)
+{
+	if (!input_info || !input_driver->controllerCount)
+		return 0;
+
+	return input_driver->controllerCount(input_info);
+}
+
+
+/*--------------------------------------------------------
 	Get Pad Press State
 --------------------------------------------------------*/
 
 uint32_t poll_gamepad(void)
 {
-	return input_driver->poll(input_info);
+	return poll_gamepad_index(0);
+}
+
+uint32_t poll_gamepad_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->poll)
+		return 0;
+
+	return input_driver->poll(input_info, controller);
 }
 
 
@@ -70,7 +87,15 @@ uint32_t poll_gamepad(void)
 #if (EMU_SYSTEM == MVS)
 uint32_t poll_gamepad_fatfursp(void)
 {
-	return input_driver->pollFatfursp(input_info);
+	return poll_gamepad_fatfursp_index(0);
+}
+
+uint32_t poll_gamepad_fatfursp_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->pollFatfursp)
+		return 0;
+
+	return input_driver->pollFatfursp(input_info, controller);
 }
 #endif
 
@@ -82,7 +107,15 @@ uint32_t poll_gamepad_fatfursp(void)
 #if (EMU_SYSTEM == MVS)
 uint32_t poll_gamepad_analog(void)
 {
-	return input_driver->pollAnalog(input_info);
+	return poll_gamepad_analog_index(0);
+}
+
+uint32_t poll_gamepad_analog_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->pollAnalog)
+		return 0;
+
+	return input_driver->pollAnalog(input_info, controller);
 }
 #endif
 
@@ -167,11 +200,13 @@ bool pad_pressed_any(void)
 
 void pad_wait_clear(void)
 {
-	// while (poll_gamepad())
-	// {
-	// 	video_driver->waitVsync(video_data);
-	// 	if (!Loop) break;
-	// }
+#if defined(PS2)
+	while (poll_gamepad())
+	{
+		video_driver->waitVsync(video_data);
+		if (!Loop) break;
+	}
+#endif
 
 	pad = 0;
 	pressed_check = 0;
@@ -211,6 +246,7 @@ void pad_wait_press(int msec)
 
 input_driver_t input_null = {
 	"null",
+	NULL,
 	NULL,
 	NULL,
 	NULL,

@@ -35,19 +35,19 @@
 #define state_load_double(v, n)	{ memcpy(v, state_buffer, 8 * n); state_buffer += 8 * n; }
 #define state_load_skip(n)		state_buffer += n;
 #else
-#define state_load_byte(v, n)	fread(v, 1, 1*n, fp);
-#define state_load_word(v, n)	fread(v, 1, 2*n, fp);
-#define state_load_long(v, n)	fread(v, 1, 4*n, fp);
-#define state_load_float(v, n)	fread(v, 1, 4*n, fp);
-#define state_load_double(v, n)	fread(v, 1, 8*n, fp);
-#define state_load_skip(n)		fseek(fp, n, SEEK_CUR);
+#define state_load_byte(v, n)	read(fd, v, 1*n);
+#define state_load_word(v, n)	read(fd, v, 2*n);
+#define state_load_long(v, n)	read(fd, v, 4*n);
+#define state_load_float(v, n)	read(fd, v, 4*n);
+#define state_load_double(v, n)	read(fd, v, 8*n);
+#define state_load_skip(n)		lseek(fd, n, SEEK_CUR);
 #endif
 
 #define STATE_SAVE(name)	void state_save_##name(void)
 #if defined(ADHOC) || (EMU_SYSTEM == NCDZ)
 #define STATE_LOAD(name)	void state_load_##name(void)
 #else
-#define STATE_LOAD(name)	void state_load_##name(FILE *fp)
+#define STATE_LOAD(name)	void state_load_##name(int fd)
 #endif
 
 extern char date_str[16];

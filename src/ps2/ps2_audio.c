@@ -50,13 +50,17 @@ static volatile uint32_t g_mp3_last_read_pos = 0;
 
 static void *ps2_init(void) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)calloc(1, sizeof(ps2_audio_t));
+	if (ps2 == NULL)
+		return NULL;
 	ps2->is_mp3_channel = false;
 	return ps2;
 }
 
 static void ps2_free(void *data) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
-	
+	if (ps2 == NULL)
+		return;
+
 	if (ps2->is_mp3_channel) {
 		/* Clean up MP3 resources */
 		g_mp3_active = false;
@@ -86,11 +90,23 @@ static bool ps2_chSRCReserve(void *data, uint16_t samples, int32_t frequency, ui
 	format.freq = frequency;
 	format.channels = channels;
 
+	printf("PS2 Audio: Reserving SRC channel - samples=%d, freq=%d, channels=%d\n", 
+	       samples, frequency, channels);
+
 	ps2->channel = audsrv_set_format(&format);
 	ps2->samples = samples;
 	ps2->is_mp3_channel = false;
-	audsrv_set_volume(MAX_VOLUME);
-	return ps2->channel >= 0;
+	
+	printf("PS2 Audio: audsrv_set_format returned channel=%d\n", ps2->channel);
+	
+	if (ps2->channel >= 0) {
+		audsrv_set_volume(MAX_VOLUME);
+		printf("PS2 Audio: Audio initialized successfully\n");
+		return true;
+	} else {
+		printf("PS2 Audio: ERROR - Failed to initialize audio channel\n");
+		return false;
+	}
 }
 
 static bool ps2_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
@@ -171,6 +187,7 @@ static void mix_mp3_audio(int16_t *buffer, uint32_t num_samples) {
 	uint32_t available;
 	uint32_t read_pos;
 	uint32_t consumed;
+	uint32_t freed_since_signal;
 	int32_t mixed;
 	
 	if (!g_mp3_active || !g_mp3_ring_buffer) {
@@ -203,16 +220,38 @@ static void mix_mp3_audio(int16_t *buffer, uint32_t num_samples) {
 	
 	g_mp3_read_pos = read_pos;
 	
-	/* Signal MP3 thread if we've freed up enough space */
-	if (g_mp3_sema_id >= 0 && consumed >= MP3_SIGNAL_THRESHOLD) {
+	/* A normal game-audio callback consumes roughly half an MP3 frame, so
+	 * accumulate freed space across callbacks before waking the producer. */
+	freed_since_signal =
+		(read_pos - g_mp3_last_read_pos) & MP3_RING_BUFFER_MASK;
+	if (g_mp3_sema_id >= 0 && freed_since_signal >= MP3_SIGNAL_THRESHOLD) {
+		g_mp3_last_read_pos = read_pos;
 		SignalSema(g_mp3_sema_id);
 	}
 }
 
+static void apply_game_volume(int16_t *buffer, uint32_t sample_count, int32_t volume)
+{
+	uint32_t i;
+
+	if (volume >= MAX_VOLUME)
+		return;
+	if (volume < 0)
+		volume = 0;
+
+	for (i = 0; i < sample_count; i++)
+		buffer[i] = (int16_t)(((int32_t)buffer[i] * volume) / MAX_VOLUME);
+}
+
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
+	uint32_t sample_count = size / sizeof(int16_t);
 	uint32_t num_samples = size / sizeof(int16_t) / 2; /* Stereo samples */
-	
-	/* Mix MP3 audio into the buffer before output */
+
+	/* audsrv exposes one global stream/volume. Scale game audio in software so
+	 * NCDZ CDDA can keep its independent volume before both streams are mixed. */
+	apply_game_volume((int16_t*)buffer, sample_count, volume);
+
+	/* Mix MP3 audio into the output buffer before output. */
 	mix_mp3_audio((int16_t*)buffer, num_samples);
 	
 	audsrv_wait_audio(size);
@@ -231,6 +270,30 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 		/* No buffer available, nothing to do */
 		return;
 	}
+
+	/* The common NCDZ pause path submits one zero-volume block to silence
+	 * CDDA immediately.  On PSP this changes the channel volume at once; in
+	 * the PS2 software mixer, merely enqueueing zeroes would leave already
+	 * buffered MP3 audio audible for a short tail.  Drop the queued CDDA
+	 * samples instead and wake a producer that may be blocked on free space. */
+	if (leftvol <= 0 && rightvol <= 0) {
+		g_mp3_left_vol = 0;
+		g_mp3_right_vol = 0;
+		g_mp3_read_pos = 0;
+		g_mp3_write_pos = 0;
+		g_mp3_last_read_pos = 0;
+		memset(g_mp3_ring_buffer, 0,
+			MP3_RING_BUFFER_SIZE * sizeof(int16_t));
+		if (g_mp3_sema_id >= 0)
+			SignalSema(g_mp3_sema_id);
+		return;
+	}
+
+	/* Stereo samples are written in pairs. Reject malformed or impossible
+	 * blocks rather than reading past src or waiting forever for ring space
+	 * that can never become large enough. */
+	if ((num_samples & 1) != 0 || num_samples >= MP3_RING_BUFFER_SIZE)
+		return;
 	
 	/* Store volume levels */
 	g_mp3_left_vol = leftvol;

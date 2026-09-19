@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <time.h>
 
-#include <timer.h>
 #include "common/ticker_driver.h"
 
 typedef struct ps2_ticker {

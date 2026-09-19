@@ -90,9 +90,9 @@ void set_wallpaper(void)
 
 void load_wallpaper(void)
 {
-	int i, size;
+	int i, fd;
+	off_t size;
 	char path[PATH_MAX];
-	FILE *fp;
 	const char *wp_name[NUM_WALLPAPERS] =
 	{
 		"logo",
@@ -112,19 +112,19 @@ void load_wallpaper(void)
 		wp_user[i] = NULL;
 		wp_user_size[i] = 0;
 
-		if ((fp = fopen(path, "rb")) != NULL)
+		fd = open(path, O_RDONLY);
+		if (fd >= 0)
 		{
-			fseek(fp, 0, SEEK_END);
-			size = ftell(fp);
-			fseek(fp, 0, SEEK_SET);
+			size = lseek(fd, 0, SEEK_END);
+			lseek(fd, 0, SEEK_SET);
 
-			if ((wp_user[i] = (uint8_t *)malloc(size)) != NULL)
+			if (size > 0 && (wp_user[i] = (uint8_t *)malloc((size_t)size)) != NULL)
 			{
-				wp_user_size[i] = size;
-				fread(wp_user[i], 1, size, fp);
+				wp_user_size[i] = (uint32_t)size;
+				read(fd, wp_user[i], (size_t)size);
 			}
 
-			fclose(fp);
+			close(fd);
 		}
 	}
 	set_wallpaper();

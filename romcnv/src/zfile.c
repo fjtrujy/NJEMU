@@ -1,7 +1,7 @@
 #include <fcntl.h>
 #include <limits.h>
-#include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include <zfile.h>
 #include <zlib.h>
@@ -115,12 +115,13 @@ int64_t zopen(const char *filename)
 	{
 		if (!zipfile)
 		{
-			FILE *fp;
+			int fd_plain;
 
 			strcpy(basedirend, filename);
-			if ((fp = fopen(basedir, "rb")) != NULL)
+			fd_plain = open(basedir, O_RDONLY);
+			if (fd_plain >= 0)
 			{
-				zip_fd = (int64_t) fp;
+				zip_fd = (int64_t) fd_plain;
 				return zip_fd;
 			}
 			return -1;
@@ -163,7 +164,7 @@ int zclose(int64_t fd)
 	{
 		if (!zipfile)
 		{
-			if (fd != -1) fclose((FILE *)fd);
+			if (fd != -1) close((int)fd);
 			zip_fd = -1;
 			return 0;
 		}
@@ -181,7 +182,7 @@ size_t zread(int64_t fd, void *buf, unsigned size)
 	if (zip_mode == ZIP_READOPEN)
 	{
 		if (!zipfile)
-			return fread(buf, 1, size, (FILE *)fd);
+			return read((int)fd, buf, size);
 		else
 			return unzReadCurrentFile(zipfile, buf, size);
 	}
@@ -203,18 +204,23 @@ int zgetc(int64_t fd)
 {
 	if (zip_mode == ZIP_READOPEN)
 	{
-		if (!zipfile) return fgetc((FILE *)fd);
+		if (!zipfile)
+		{
+			unsigned char c;
+			if (read((int)fd, &c, 1) == 1) return (int)c;
+			return -1;
+		}
 
 		if (zip_cached_len == 0)
 		{
 			zip_cached_len = unzReadCurrentFile(zipfile, zip_cache, 4096);
-			if (zip_cached_len == 0) return EOF;
+			if (zip_cached_len == 0) return -1;
 			zip_filepos = 0;
 		}
 		zip_cached_len--;
 		return zip_cache[zip_filepos++] & 0xff;
 	}
-	return EOF;
+	return -1;
 }
 
 
@@ -226,14 +232,13 @@ size_t zsize(int64_t fd)
 
 		if (zipfile == NULL)
 		{
-			FILE *fp = (FILE *)fd;
-			int len, pos = ftell(fp);
+			int fd_plain = (int)fd;
+			off_t pos = lseek(fd_plain, 0, SEEK_CUR);
+			off_t len = lseek(fd_plain, 0, SEEK_END);
 
-			fseek(fp, 0, SEEK_END);
-			len = ftell(fp);
-			fseek(fp, pos, SEEK_SET);
+			lseek(fd_plain, pos, SEEK_SET);
 
-			return len;
+			return (size_t)len;
 		}
 
 		unzGetCurrentFileInfo(zipfile, &info, NULL, 0);

@@ -7,7 +7,34 @@
 ******************************************************************************/
 
 #include <limits.h>
+#include <stdarg.h>
 #include "emumain.h"
+#include "common/ui.h"
+#include "common/ui_draw.h"
+
+static void fd_printf(int fd, const char *fmt, ...)
+{
+	char buf[512];
+	va_list args;
+	int n;
+	va_start(args, fmt);
+	n = vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+	if (n > 0) write(fd, buf, n);
+}
+
+static ssize_t fd_readline(int fd, char *buf, size_t size)
+{
+	size_t i = 0;
+	char c;
+	while (i < size - 1) {
+		if (read(fd, &c, 1) <= 0) break;
+		buf[i++] = c;
+		if (c == '\n') break;
+	}
+	buf[i] = '\0';
+	return (ssize_t)i;
+}
 
 
 /******************************************************************************
@@ -173,7 +200,8 @@ static int check_text_encode(char *buf, int size)
 
 void load_commandlist(const char *game_name, const char *parent_name)
 {
-	FILE *fp;
+	int fd;
+	off_t file_size;
 	char path[PATH_MAX];
 	char lf, *p, *buf, linebuf[512];//256
 	const char *name = game_name;
@@ -189,21 +217,22 @@ void load_commandlist(const char *game_name, const char *parent_name)
 
 	sprintf(path, "%scommand.dat", launchDir);
 
-	if ((fp = fopen(path, "rb")) == NULL)
+	fd = open(path, O_RDONLY);
+	if (fd < 0)
 		return;
 
-	fseek(fp, 0, SEEK_END);
-	size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
+	file_size = lseek(fd, 0, SEEK_END);
+	lseek(fd, 0, SEEK_SET);
 
-	if (size == 0 || (buf = (char *)malloc(size)) == NULL)
+	if (file_size <= 0 || (buf = (char *)malloc((size_t)file_size)) == NULL)
 	{
-		fclose(fp);
+		close(fd);
 		return;
 	}
+	size = (int)file_size;
 
-	fread(buf, 1, size, fp);
-	fclose(fp);
+	read(fd, buf, (size_t)size);
+	close(fd);
 
 	// Line feed code check
 	lf_code = check_linefeed_code(linebuf);
@@ -330,10 +359,10 @@ retry:
 	if ((cmdbuf = calloc(1, size)) == NULL)
 		return;
 
-	fp = fopen(path, "rb");
-	fseek(fp, start, SEEK_SET);
-	fread(cmdbuf, 1, size, fp);
-	fclose(fp);
+	fd = open(path, O_RDONLY);
+	lseek(fd, start, SEEK_SET);
+	read(fd, cmdbuf, size);
+	close(fd);
 
 	// Character code check
 	if (charset == CHARSET_DEFAULT)
@@ -801,7 +830,7 @@ void commandlist(int flag)
 
 int commandlist_size_reduction(void)
 {
-	FILE *fp;
+	int fd_zip, fd_cmd, fd_out;
 	char path[PATH_MAX], path2[PATH_MAX];
 	char *p, linebuf[512], rom_name[512][16];//256
 	int i, j, l, found = 0, total_roms = 0;
@@ -819,25 +848,28 @@ int commandlist_size_reduction(void)
 	total_roms = 97;
 #else
 	sprintf(path, "%szipname." EXT, launchDir);
-	if ((fp = fopen(path, "r")) == NULL)
+	fd_zip = open(path, O_RDONLY);
+	if (fd_zip < 0)
 	{
 		sprintf(path, "%szipnamej." EXT, launchDir);
-		if ((fp = fopen(path, "r")) == NULL)
+		fd_zip = open(path, O_RDONLY);
+		if (fd_zip < 0)
 		{
 			return 0;
 		}
 	}
 
-	while (fgets(linebuf, 511, fp))//255
+	while (fd_readline(fd_zip, linebuf, 512) > 0)
 	{
 		char *name = strtok(linebuf, ",");
 		strcpy(rom_name[total_roms++], name);
 	}
-	fclose(fp);
+	close(fd_zip);
 #endif
 
 	sprintf(path, "%scommand.dat", launchDir);
-	if ((fp = fopen(path, "rb")) == NULL)
+	fd_cmd = open(path, O_RDONLY);
+	if (fd_cmd < 0)
 		return 0;
 
 	pad_wait_clear();
@@ -875,19 +907,18 @@ int commandlist_size_reduction(void)
 
 	if (!i)
 	{
-		fclose(fp);
+		close(fd_cmd);
 		goto cancel;
 	}
 
-	fseek(fp, 0, SEEK_END);
-	org_size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
+	org_size = (int)lseek(fd_cmd, 0, SEEK_END);
+	lseek(fd_cmd, 0, SEEK_SET);
 
 	msg_printf("\n");
 	msg_printf(TEXT(CHECKING_COMMAND_DAT_FORMAT));
 
 	// Check number of registered games
-	while (fgets(linebuf, 511, fp) != NULL)//255
+	while (fd_readline(fd_cmd, linebuf, 512) > 0)
 	{
 		if (strrchr(linebuf, '\r') == NULL)
 		{
@@ -957,13 +988,13 @@ int commandlist_size_reduction(void)
 	if (!found)
 	{
 		msg_printf(TEXT(UNKNOWN_FORMAT));
-		fclose(fp);
+		close(fd_cmd);
 		goto error;
 	}
 	if (line == 0)
 	{
 		msg_printf(TEXT(EMPTY_FILE));
-		fclose(fp);
+		close(fd_cmd);
 		goto error;
 	}
 
@@ -979,9 +1010,9 @@ int commandlist_size_reduction(void)
 	}
 	memset(textbuf, 0, org_size + 1);
 
-	fseek(fp, 0, SEEK_SET);
-	fread(textbuf, 1, org_size, fp);
-	fclose(fp);
+	lseek(fd_cmd, 0, SEEK_SET);
+	read(fd_cmd, textbuf, org_size);
+	close(fd_cmd);
 
 	if (charset == CHARSET_DEFAULT)
 	{
@@ -1019,7 +1050,8 @@ int commandlist_size_reduction(void)
 	//------------------------------------------------------------------
 	// Start reduction process
 	//------------------------------------------------------------------
-	if ((fp = fopen(path, "w")) == NULL)
+	fd_out = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (fd_out < 0)
 	{
 		msg_printf(TEXT(COULD_NOT_CREATE_OUTPUT_FILE));
 		goto error;
@@ -1035,11 +1067,11 @@ int commandlist_size_reduction(void)
 	if (charset != CHARSET_DEFAULT)
 	{
 		if (charset == CHARSET_GBK)
-			fprintf(fp, "$charset=gbk\r\n");
+			fd_printf(fd_out, "$charset=gbk\r\n");
 		else if (charset == CHARSET_SHIFTJIS)
-			fprintf(fp, "$charset=shift_jis\r\n");
+			fd_printf(fd_out, "$charset=shift_jis\r\n");
 		else
-			fprintf(fp, "$charset=latin1\r\n");
+			fd_printf(fd_out, "$charset=latin1\r\n");
 
 		line2++;
 	}
@@ -1053,7 +1085,7 @@ int commandlist_size_reduction(void)
 
 			if (strncasecmp(linebuf, "$charset", 8) != 0)
 			{
-				fprintf(fp, "%s\r\n", linebuf);
+				fd_printf(fd_out, "%s\r\n", linebuf);
 				line2++;
 			}
 		}
@@ -1130,13 +1162,13 @@ int commandlist_size_reduction(void)
 
 								while (j < l)
 								{
-									fprintf(fp, "%s\r\n", line_ptr[j]);
+									fd_printf(fd_out, "%s\r\n", line_ptr[j]);
 									j++;
 								}
 							}
 
 							msg_printf(TEXT(COPYING_x), rom_name[i]);
-							fprintf(fp, "$info=%s\r\n", name);
+							fd_printf(fd_out, "$info=%s\r\n", name);
 							progress = CMD_SEEK;
 							num_cmd++;
 							line2++;
@@ -1151,13 +1183,13 @@ int commandlist_size_reduction(void)
 			{
 				// Command start
 				progress = END_SEEK;
-				fprintf(fp, "$cmd\r\n");
+				fd_printf(fd_out, "$cmd\r\n");
 				line2++;
 			}
 			else if (!strncasecmp(linebuf, "$info", 5))
 			{
 				// Next command - go back 1 line
-				fprintf(fp, "\r\n");
+				fd_printf(fd_out, "\r\n");
 				progress = INFO_SEEK;
 				l--;
 			}
@@ -1168,13 +1200,13 @@ int commandlist_size_reduction(void)
 			{
 				// Command end
 				progress = CMD_SEEK;
-				fprintf(fp, "$end\r\n");
+				fd_printf(fd_out, "$end\r\n");
 				line2++;
 			}
 			else
 			{
 				// Command list contents - output as-is
-				fprintf(fp, "%s\r\n", linebuf);
+				fd_printf(fd_out, "%s\r\n", linebuf);
 				line2++;
 			}
 			break;
@@ -1189,17 +1221,18 @@ int commandlist_size_reduction(void)
 		for (; l < line; l++)
 		{
 			strcpy(linebuf, line_ptr[l]);
-			fprintf(fp, "%s\r\n", linebuf);
+			fd_printf(fd_out, "%s\r\n", linebuf);
 			line2++;
 		}
 	}
 
-	fclose(fp);
+	close(fd_out);
 
-	fp = fopen(path, "rb");
-	fseek(fp, 0, SEEK_END);
-	new_size = ftell(fp);
-	fclose(fp);
+	{
+		int tmp_fd = open(path, O_RDONLY);
+		new_size = (int)lseek(tmp_fd, 0, SEEK_END);
+		close(tmp_fd);
+	}
 
 	msg_printf("\n");
 	msg_printf(TEXT(REDUCTION_RESULT), org_size, new_size, 100.0 - ((float)new_size / (float)org_size) * 100.0);

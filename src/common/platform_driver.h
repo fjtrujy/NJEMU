@@ -24,6 +24,14 @@ typedef struct platform_driver
 	void (*main)(void *data, int argc, char *argv[]);
 	bool (*startSystemButtons)(void *data);
 	int32_t (*getDevkitVersion)(void *data);
+	bool (*getWlanSwitchState)(void *data);
+	int (*getHardwareModel)(void *data);
+	/* Returns the amount of free RAM in bytes that the emulator can plausibly
+	 * allocate at startup. Used by the memory profile selector to pick a tier
+	 * (cache size, preload strategy). Implementations may cap or reserve a
+	 * baseline; return 0 if unknown. Called once after init().
+	 */
+	uint32_t (*availableRam)(void *data);
 
 } platform_driver_t;
 

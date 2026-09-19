@@ -17,7 +17,7 @@ LARGE_MEMORY = 0
 KERNEL_MODE = 0
 COMMAND_LIST = 0
 ADHOC = 0
-NO_GUI = 0
+GUI = 1
 SAVE_STATE = 0
 RELEASE = 0
 SYSTEM_BUTTONS = 0
@@ -137,7 +137,7 @@ ifeq ($(SAVE_STATE), 1)
 MAINOBJS += common/state.o
 endif
 
-ifeq ($(NO_GUI), 1)
+ifeq ($(GUI), 0)
 OSOBJS += $(OS)/psp_no_gui.o
 else
 FONTOBJS = \

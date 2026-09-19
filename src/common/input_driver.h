@@ -27,12 +27,16 @@
 
 #define PAD_WAIT_INFINITY	-1
 
-void pad_init(void);
+bool pad_init(void);
 void pad_exit(void);
+uint32_t gamepad_count(void);
 uint32_t poll_gamepad(void);
+uint32_t poll_gamepad_index(uint32_t controller);
 #if (EMU_SYSTEM == MVS)
 uint32_t poll_gamepad_fatfursp(void);
 uint32_t poll_gamepad_analog(void);
+uint32_t poll_gamepad_fatfursp_index(uint32_t controller);
+uint32_t poll_gamepad_analog_index(uint32_t controller);
 #endif
 void pad_update(void);
 bool pad_pressed(uint32_t code);
@@ -54,10 +58,13 @@ typedef struct input_driver
 	void *(*init)(void);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
-	uint32_t (*poll)(void *data);
+	/* Number of currently usable physical controllers. */
+	uint32_t (*controllerCount)(void *data);
+	/* Poll a physical controller by logical index. */
+	uint32_t (*poll)(void *data, uint32_t controller);
 	#if (EMU_SYSTEM == MVS)
-	uint32_t (*pollFatfursp)(void *data);
-	uint32_t (*pollAnalog)(void *data);
+	uint32_t (*pollFatfursp)(void *data, uint32_t controller);
+	uint32_t (*pollAnalog)(void *data, uint32_t controller);
 	#endif
 } input_driver_t;
 

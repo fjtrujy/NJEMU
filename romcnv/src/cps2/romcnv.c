@@ -7,7 +7,9 @@
 ******************************************************************************/
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -728,9 +730,22 @@ static int load_rom_gfx1(void)
 }
 
 
+static ssize_t fd_readline(int fd, char *buf, size_t size)
+{
+	size_t i = 0;
+	char c;
+	while (i < size - 1) {
+		if (read(fd, &c, 1) <= 0) break;
+		buf[i++] = c;
+		if (c == '\n') break;
+	}
+	buf[i] = '\0';
+	return (ssize_t)i;
+}
+
 static int load_rom_info(const char *game_name)
 {
-	FILE *fp;
+	int fp;
 	char path[PATH_MAX];
 	char buf[256];
 	int rom_start = 0;
@@ -740,9 +755,10 @@ static int load_rom_info(const char *game_name)
 
 	sprintf(path, "%srominfo.cps2", launchDir);
 
-	if ((fp = fopen(path, "r")) != NULL)
+	fp = open(path, O_RDONLY);
+	if (fp >= 0)
 	{
-		while (fgets(buf, 255, fp))
+		while (fd_readline(fp, buf, 255) > 0)
 		{
 			if (buf[0] == '/' && buf[1] == '/')
 				continue;
@@ -773,7 +789,7 @@ static int load_rom_info(const char *game_name)
 				}
 				else if (rom_start && str_cmp(buf, "END") == 0)
 				{
-					fclose(fp);
+					close(fp);
 					return 0;
 				}
 			}
@@ -858,7 +874,7 @@ static int load_rom_info(const char *game_name)
 				}
 			}
 		}
-		fclose(fp);
+		close(fp);
 		return 2;
 	}
 	return 3;
@@ -975,7 +991,7 @@ static int convert_rom(char *game_name)
 
 static int create_raw_cache(char *game_name)
 {
-	FILE *fp;
+	int fp;
 	int i, offset;
 	char version[8];
 	uint32_t header_size, aligned_size, block[0x200];
@@ -1018,7 +1034,8 @@ static int create_raw_cache(char *game_name)
 	}
 
 	sprintf(fname, "%s.cache", game_name);
-	if ((fp = fopen(fname, "wb")) == NULL)
+	fp = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (fp < 0)
 	{
 		chdir("..");
 #ifdef CHINESE
@@ -1037,23 +1054,26 @@ static int create_raw_cache(char *game_name)
 	printf("Create cache file...\n");
 #endif
 
-	fwrite(version, 1, sizeof(version), fp);
-	fwrite(gfx_pen_usage[TILE08], 1, gfx_total_elements[TILE08], fp);
-	fwrite(gfx_pen_usage[TILE16], 1, gfx_total_elements[TILE16], fp);
-	fwrite(gfx_pen_usage[TILE32], 1, gfx_total_elements[TILE32], fp);
-	fwrite(block, 1, 0x200 * sizeof(uint32_t), fp);
+	write(fp, version, sizeof(version));
+	write(fp, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
+	write(fp, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
+	write(fp, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
+	write(fp, block, 0x200 * sizeof(uint32_t));
 
-	for (i = header_size; i < aligned_size; i++)
-		fputc(0, fp);
+	{
+		static const char zero = 0;
+		for (i = header_size; i < (int)aligned_size; i++)
+			write(fp, &zero, 1);
+	}
 
 	for (i = 0; i < 0x200; i++)
 	{
 		if (block_empty[i]) continue;
 
-		fwrite(&memory_region_gfx1[i << 16], 1, 0x10000, fp);
+		write(fp, &memory_region_gfx1[i << 16], 0x10000);
 	}
 
-	fclose(fp);
+	close(fp);
 
 	chdir("..");
 
@@ -1155,7 +1175,7 @@ error:
 
 static int create_folder_cache(char *game_name)
 {
-	FILE *fp;
+	int fp;
 	uint32_t block, total = 0, count = 0;
 	char version[8], fname[PATH_MAX];
 
@@ -1200,20 +1220,22 @@ static int create_folder_cache(char *game_name)
 		if (block_empty[block]) continue;
 
 		sprintf(fname, "%03x", block);
-		if ((fp = fopen(fname, "wb")) == NULL) goto error;
-		fwrite(&memory_region_gfx1[block << 16], 1, 0x10000, fp);
-		fclose(fp);
+		fp = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+		if (fp < 0) goto error;
+		write(fp, &memory_region_gfx1[block << 16], 0x10000);
+		close(fp);
 		print_progress(++count, total);
 	}
 
 	/* Write cache_info */
-	if ((fp = fopen("cache_info", "wb")) == NULL) goto error;
-	fwrite(version, 1, 8, fp);
-	fwrite(gfx_pen_usage[TILE08], 1, gfx_total_elements[TILE08], fp);
-	fwrite(gfx_pen_usage[TILE16], 1, gfx_total_elements[TILE16], fp);
-	fwrite(gfx_pen_usage[TILE32], 1, gfx_total_elements[TILE32], fp);
-	fwrite(block_empty, 1, 0x200, fp);
-	fclose(fp);
+	fp = open("cache_info", O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (fp < 0) goto error;
+	write(fp, version, 8);
+	write(fp, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
+	write(fp, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
+	write(fp, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
+	write(fp, block_empty, 0x200);
+	close(fp);
 
 	print_progress(++count, total);
 	printf("\n");

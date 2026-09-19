@@ -29,6 +29,4 @@ void blit_finish_fix(void);
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint32_t attr);
 void blit_finish_spr(void);
 
-void blit_draw_spr_line(int x, int y, int zoom_x, int sprite_y, uint32_t code, uint16_t attr, uint8_t opaque);
-
 #endif /* NCDZ_SPRITE_H */

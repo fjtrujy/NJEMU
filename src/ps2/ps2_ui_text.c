@@ -2691,6 +2691,9 @@ static void *ps2_init(void)
 	ps2_ui_text_t *ps2 = (ps2_ui_text_t*)calloc(1, sizeof(ps2_ui_text_t));
 	int i;
 
+	if (ps2 == NULL)
+		return NULL;
+
     switch (configGetLanguage())
 	{
 	case LANGUAGE_SIMPL_CHINESE:

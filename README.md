@@ -59,10 +59,10 @@
 This repository contains the ongoing effort to bring NJEMU to multiple platforms:
 
 - **PSP** - Original platform, fully supported
-- **PS2** - Primary porting target, actively developed
-- **DESKTOP** - Development platform for easier debugging and testing
+- **PS2** - All four emulator cores ported and running
+- **DESKTOP** - All four emulator cores ported (SDL2-based, useful for development and debugging)
 
-The PC port using SDL serves primarily as a development and debugging tool, making it easier to test changes before deploying to the target console platforms (PSP and PS2).
+All four emulator cores (MVS, CPS1, CPS2, NCDZ) are now running on all three platforms. The PC port using SDL serves primarily as a development and debugging tool. The next milestone is porting the GUI/menu system — currently only available on PSP; other platforms use a stub UI for direct game loading.
 
 ### Architecture
 
@@ -79,11 +79,11 @@ The porting effort involved encapsulating platform-agnostic code and creating sp
 | Emulator | PSP | PS2 | PC |
 |----------|-----|-----|-----|
 | **MVS** | ✅ Full | ✅ Core | ✅ Core |
-| **CPS1** | ✅ Full | ❌ | ❌ |
-| **CPS2** | ✅ Full | ❌ | ❌ |
+| **CPS1** | ✅ Full | ✅ Core | ✅ Core |
+| **CPS2** | ✅ Full | ✅ Core | ✅ Core |
 | **NCDZ** | ✅ Full | ✅ Core | ✅ Core |
 
-> **Note:** Currently MVS and NCDZ cores have been ported to PS2 and PC. The menu/GUI system has not been ported yet - only the emulation core runs on the new platforms.
+> **Note:** All four emulator cores (MVS, CPS1, CPS2, NCDZ) have been ported to PS2 and PC. The menu/GUI system has not been ported yet — only the emulation core runs on the new platforms.
 
 📋 See [PORTING_PLAN.md](PORTING_PLAN.md) for detailed roadmap and remaining work.
 
@@ -108,8 +108,8 @@ Each target has specific setup requirements. See the linked README files for:
 | Platform | Description | Status |
 |----------|-------------|--------|
 | **PSP** | Sony PlayStation Portable | ✅ Original platform |
-| **PS2** | Sony PlayStation 2 | 🔄 Active development |
-| **DESKTOP** | PC/Desktop (SDL2) | 🛠️ Debug/Development |
+| **PS2** | Sony PlayStation 2 | ✅ Core complete |
+| **DESKTOP** | PC/Desktop (SDL2) | ✅ Core complete |
 
 ### PSP Firmware Compatibility
 
@@ -384,7 +384,7 @@ cmake --build build_psp_cps1
 | `KERNEL_MODE` | Enable kernel mode (PSP) | OFF |
 | `COMMAND_LIST` | Enable command list display | OFF |
 | `ADHOC` | Enable Ad Hoc multiplayer | OFF |
-| `NO_GUI` | Disable GUI (headless mode) | ON |
+| `GUI` | Enable GUI menu system | OFF |
 | `SAVE_STATE` | Enable save state support | OFF |
 | `RELEASE` | Release build | OFF |
 
@@ -532,11 +532,11 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `EBOOT.PBP` - The main executable for PSP
-- Resource files copied from `{TARGET}_RESOURCE/`
+- Resource entries are staged directly in the build root. Large/read-only assets are **linked** back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Set `-DCOPY_RESOURCES=ON` to force a full copy.
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "sf2" > game_name.ini
@@ -609,7 +609,7 @@ cmake -DCMAKE_TOOLCHAIN_FILE=${PS2SDK}/ps2dev.cmake \
       ..
 ```
 
-Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on PS2).
+Replace `{TARGET}` with one of: `MVS`, `NCDZ`, `CPS1`, or `CPS2`.
 
 3. Build the project:
 
@@ -636,13 +636,13 @@ make
 
 #### Output
 
-After a successful build, you'll find the following files in the build directory:
-- `{TARGET}.elf` - The main executable for PS2
-- Resource files copied from `{TARGET}_RESOURCE/`
+After a successful build, you'll find the following in the build directory:
+- `{TARGET}` - The main executable for PS2
+- Resource entries are staged directly in the build root. Large/read-only assets such as `roms/`, `data/`, `cache/`, `rominfo.*`, and `zipname.*` are **linked** from `resources/{target}/`; writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. This matches the runtime `launchDir` layout and PCSX2's `host:` root without letting runtime writes modify `resources/`. Use `-DCOPY_RESOURCES=ON` to force a full copy.
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "mslug" > game_name.ini
@@ -663,7 +663,7 @@ From the build directory, run:
 /Applications/PCSX2.app/Contents/MacOS/PCSX2 -elf $(pwd)/{TARGET}
 ```
 
-Replace `{TARGET}` with the target name (e.g., `MVS`, `NCDZ`).
+Replace `{TARGET}` with the target name (e.g., `MVS`, `NCDZ`, `CPS1`, `CPS2`). PCSX2 exposes the executable's directory as the PS2 `host:` root, so the resource links/copies must remain beside the executable.
 
 #### Debugging
 
@@ -716,7 +716,7 @@ cmake -DPLATFORM="Desktop" \
       ..
 ```
 
-Replace `{TARGET}` with one of: `MVS` or `NCDZ` (currently supported on Desktop).
+Replace `{TARGET}` with one of: `MVS`, `NCDZ`, or `CPS1` (currently supported on Desktop).
 
 3. Build the project:
 
@@ -740,11 +740,11 @@ make
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}` - The main executable
-- Resource files copied from `{TARGET}_RESOURCE/`
+- Resource entries are staged directly in the build root. Large/read-only assets are linked back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Use `-DCOPY_RESOURCES=ON` to force a full copy.
 
-#### Configuring the Game (NO_GUI builds)
+#### Configuring the Game (without GUI)
 
-For builds with `NO_GUI=ON` (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
+For builds without GUI (default), the emulator reads the game to boot from the `game_name.ini` file in the build directory. Edit this file and set it to the ROM name (without extension):
 
 ```bash
 echo "mslug" > game_name.ini
@@ -1207,6 +1207,36 @@ Each platform implements the same driver interfaces:
 | `*_ticker.c` | Timing and frame pacing |
 | `*_power.c` | Power management |
 
+### Target Configuration
+
+Each emulator target (MVS, NCDZ, CPS1, CPS2) defines configuration globals in its core file (e.g., `src/mvs/mvs.c`):
+
+| Global | Type | Purpose |
+|--------|------|---------|
+| `emu_layer_textures` | `layer_texture_info_t[]` | Texture atlas dimensions per layer |
+| `emu_layer_textures_count` | `uint8_t` | Number of texture layers |
+| `emu_clut_info` | `clut_info_t` | CLUT configuration (base, entries, banks) |
+
+**CLUT Configuration Example (MVS):**
+```c
+clut_info_t emu_clut_info = {
+    .base = (uint16_t *)video_palettebank,
+    .entries_per_bank = PALETTE_BANK_SIZE,  // 4096
+    .bank_count = PALETTE_BANKS             // 2
+};
+```
+
+**CLUT Configuration Example (CPS1):**
+```c
+clut_info_t emu_clut_info = {
+    .base = (uint16_t *)video_palette,
+    .entries_per_bank = CPS1_PALETTE_ENTRIES,  // 3072
+    .bank_count = 1
+};
+```
+
+These are passed to the video driver during initialization in `src/emumain.c`.
+
 ---
 
 ## Technical Architecture - Emulator Targets
@@ -1521,7 +1551,7 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 
 ### CPS1 (Capcom Play System 1) Target
 
-**Files:** `src/cps1/psp_sprite.c`, `src/cps1/sprite_common.c`
+**Files:** `src/cps1/psp_sprite.c`, `src/cps1/ps2_sprite.c`, `src/cps1/sprite_common.c`
 
 **Hardware Reference:**
 - [Fabien Sanglard's CPS-1 Graphics Study](https://fabiensanglard.net/cps1_gfx/index.html)
@@ -1549,7 +1579,7 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 | `sprite_common.h` | Shared declarations, constants, macros, extern variables |
 | `sprite_common.c` | Hash table management, software rendering, shared data |
 | `psp_sprite.c` | PSP-specific: swizzled textures, sceGu* API |
-| `ps2_sprite.c` | PS2-specific: GSKit rendering (TODO) |
+| `ps2_sprite.c` | PS2-specific: GSKit rendering, linear textures |
 | `desktop_sprite.c` | Desktop-specific: SDL2 rendering (TODO) |
 
 #### Graphics Layers

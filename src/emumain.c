@@ -22,10 +22,11 @@ char game_name[16];
 char parent_name[16];
 
 char game_dir[PATH_MAX];
-#if USE_CACHE
+/* Phase 2b.5-prep: always declared so CPS2 doesn't need a duplicate
+ * declaration in cps2/memintrf.c. Unused on CPS1/NCDZ where USE_CACHE=0
+ * (small bytes-of-bss cost). */
 char cache_dir[PATH_MAX];
 char cache_parent_name[16];
-#endif
 
 int option_showfps;
 int option_speedlimit;
@@ -47,8 +48,8 @@ int machine_sound_type;
 uint32_t frames_displayed;
 int fatal_error;
 
-char launchDir[PATH_MAX];
-char screenshotDir[PATH_MAX];
+char launchDir[PATH_MAX] = {0};
+char screenshotDir[PATH_MAX] = {0};
 bool systembuttons_available;
 void *platform_data = NULL;
 void *power_data = NULL;
@@ -422,15 +423,15 @@ void save_snapshot(void)
 
 	if (snap_no == -1)
 	{
-		FILE *fp;
-
 		snap_no = 1;
 
 		while (1)
 		{
+			int fd;
 			sprintf(path, "%s/%s_%02d.png", screenshotDir, game_name, snap_no);
-			if ((fp = fopen(path, "rb")) == NULL) break;
-			fclose(fp);
+			fd = open(path, O_RDONLY);
+			if (fd < 0) break;
+			close(fd);
 			snap_no++;
 		}
 	}
@@ -451,7 +452,7 @@ void save_snapshot(void)
 
 int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-#if defined(NO_GUI)
+#if !defined(GUI)
 	// Some default values
 	option_speedlimit = 1;
 	option_vsync = 0;
@@ -496,15 +497,43 @@ int main(int argc, char *argv[]) {
 #endif
 #endif
 
-    // Init process
-	platform_data = platform_driver->init();
-	ticker_data = ticker_driver->init();
-	power_data = power_driver->init();
+	    // Init process
+		platform_data = platform_driver->init();
+		if (platform_data == NULL) {
+			printf("Failed to initialize platform driver\n");
+			return 1;
+		}
+		if (platform_driver->availableRam != NULL) {
+			memory_profile_select(platform_driver->availableRam(platform_data));
+		}
+		ticker_data = ticker_driver->init();
+		if (ticker_data == NULL) {
+			printf("Failed to initialize ticker driver\n");
+			goto cleanup_platform;
+		}
+		power_data = power_driver->init();
+		if (power_data == NULL) {
+			printf("Failed to initialize power driver\n");
+			goto cleanup_ticker;
+		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
-	getcwd(launchDir, PATH_MAX - 1);
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	strcat(launchDir, "/");
+		if (getcwd(launchDir, sizeof(launchDir)) == NULL) {
+			printf("Failed to determine launch directory\n");
+			goto cleanup_power;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		{
+			size_t launch_len = strlen(launchDir);
+			if (launch_len == 0 || launchDir[launch_len - 1] != '/') {
+				if (launch_len + 1 >= sizeof(launchDir)) {
+					printf("Launch directory path is too long\n");
+					goto cleanup_power;
+				}
+				launchDir[launch_len++] = '/';
+				launchDir[launch_len] = '\0';
+			}
+		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	memset(screenshotDir, 0x00, sizeof(screenshotDir));
@@ -516,23 +545,53 @@ int main(int argc, char *argv[]) {
 	mkdir(screenshotDir,0777); // Create screenshot folder
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	power_driver->setLowestCpuClock(power_data);
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	ui_text_data = ui_text_driver->init();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	pad_init();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		power_driver->setLowestCpuClock(power_data);
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		ui_text_data = ui_text_driver->init();
+		if (ui_text_data == NULL) {
+			printf("Failed to initialize UI text driver\n");
+			goto cleanup_power;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		if (!pad_init()) {
+			printf("Failed to initialize input driver\n");
+			goto cleanup_ui_text;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+	
+		video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
+		if (video_data == NULL) {
+			printf("Failed to initialize video driver\n");
+			goto cleanup_input;
+		}
 
-	video_data = video_driver->init();
+// #if defined(GUI) && defined(PS2)
+// 	while(1) {
+// 		printf("==> emumain: before beginFrame\n");
+// 		video_driver->beginFrame(video_data);
+// 		video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0x00FF0000);
+// 		printf("==> emumain: before endFrame\n");
+// 		video_driver->endFrame(video_data);
+// 		printf("==> emumain: before flipScreen\n");
+// 		video_driver->flipScreen(video_data, 1);
+// 		printf("==> emumain: after flipScreen, sleeping\n");
+// 	}
+// #endif
+
+		if (!ui_init()) {
+			printf("Failed to initialize UI draw driver\n");
+			goto cleanup_video;
+		}
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	// Platform system buttom
 	systembuttons_available = platform_driver->startSystemButtons(platform_data);
 
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	file_browser();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	video_driver->free(video_data);
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		file_browser();
+		ui_exit();
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		video_driver->free(video_data);
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	ui_text_driver->free(ui_text_data);
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
@@ -542,7 +601,21 @@ int main(int argc, char *argv[]) {
 	// Platform exit
 	power_driver->free(power_data);
 	ticker_driver->free(ticker_data);
-	platform_driver->free(platform_data);
+		platform_driver->free(platform_data);
+	
+		return 0;
 
-	return 0;
+cleanup_video:
+		video_driver->free(video_data);
+cleanup_input:
+		pad_exit();
+cleanup_ui_text:
+		ui_text_driver->free(ui_text_data);
+cleanup_power:
+		power_driver->free(power_data);
+cleanup_ticker:
+		ticker_driver->free(ticker_data);
+cleanup_platform:
+		platform_driver->free(platform_data);
+		return 1;
 }

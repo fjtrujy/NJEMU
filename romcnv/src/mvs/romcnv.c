@@ -7,7 +7,9 @@
 ******************************************************************************/
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -425,18 +427,32 @@ static int load_rom_sound1(void)
 }
 
 
+static ssize_t fd_readline(int fd, char *buf, size_t size)
+{
+	size_t i = 0;
+	char c;
+	while (i < size - 1) {
+		if (read(fd, &c, 1) <= 0) break;
+		buf[i++] = c;
+		if (c == '\n') break;
+	}
+	buf[i] = '\0';
+	return (ssize_t)i;
+}
+
 static int build_game_list(void)
 {
-	FILE *fp;
+	int fp;
 	char path[PATH_MAX];
 	char buf[256];
 	int num_games = 0;
 
 	sprintf(path, "%srominfo.mvs", launchDir);
 
-	if ((fp = fopen(path, "r")) != NULL)
+	fp = open(path, O_RDONLY);
+	if (fp >= 0)
 	{
-		while (fgets(buf, 255, fp))
+		while (fd_readline(fp, buf, 255) > 0)
 		{
 			if (buf[0] == '/' && buf[1] == '/')
 				continue;
@@ -453,7 +469,7 @@ static int build_game_list(void)
 				}
 			}
 		}
-		fclose(fp);
+		close(fp);
 		return num_games;
 	}
 	return 0;
@@ -462,7 +478,7 @@ static int build_game_list(void)
 
 static int load_rom_info(const char *game_name)
 {
-	FILE *fp;
+	int fp;
 	char path[PATH_MAX];
 	char buf[256];
 	int rom_start = 0;
@@ -486,9 +502,10 @@ static int load_rom_info(const char *game_name)
 
 	sprintf(path, "%srominfo.mvs", launchDir);
 
-	if ((fp = fopen(path, "r")) != NULL)
+	fp = open(path, O_RDONLY);
+	if (fp >= 0)
 	{
-		while (fgets(buf, 255, fp))
+		while (fd_readline(fp, buf, 255) > 0)
 		{
 			if (buf[0] == '/' && buf[1] == '/')
 				continue;
@@ -538,7 +555,7 @@ static int load_rom_info(const char *game_name)
 /*
 				else if (rom_start && str_cmp(buf, "END") == 0)
 				{
-					fclose(fp);
+					close(fp);
 					if (total_size >= 16*1024*1024)
 						return 0;
 					else
@@ -547,7 +564,7 @@ static int load_rom_info(const char *game_name)
 */
 				else if (rom_start && str_cmp(buf, "END") == 0)
 				{
-					fclose(fp);
+					close(fp);
 					if (psp2k)
 						{
 						if ((total_size > 0x2b50000) || (encrypt_gfx3))
@@ -700,7 +717,7 @@ static int load_rom_info(const char *game_name)
 				}
 			}
 		}
-		fclose(fp);
+		close(fp);
 		return 2;
 	}
 	return 3;
@@ -1006,7 +1023,7 @@ error:
 
 static int create_raw_cache(char *game_name)
 {
-	FILE *fp;
+	int fp;
 	char version[8];
 	char fname[PATH_MAX];
 
@@ -1034,28 +1051,32 @@ static int create_raw_cache(char *game_name)
 		chdir(fname);
 	}
 
-	if ((fp = fopen("cache_info", "wb")) == NULL) goto error;
-	fwrite(version, 1, 8, fp);
-	fwrite(gfx_pen_usage[TILE_SPR], 1, gfx_total_elements[TILE_SPR], fp);
-	fclose(fp);
+	fp = open("cache_info", O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if (fp < 0) goto error;
+	write(fp, version, 8);
+	write(fp, gfx_pen_usage[TILE_SPR], gfx_total_elements[TILE_SPR]);
+	close(fp);
 
 	if (convert_crom)
 	{
-		if ((fp = fopen("crom", "wb")) == NULL) goto error;
-		fwrite(memory_region_gfx3, 1, memory_length_gfx3, fp);
-		fclose(fp);
+		fp = open("crom", O_WRONLY|O_CREAT|O_TRUNC, 0644);
+		if (fp < 0) goto error;
+		write(fp, memory_region_gfx3, memory_length_gfx3);
+		close(fp);
 	}
 	if (convert_srom && encrypt_gfx2)
 	{
-		if ((fp = fopen("srom", "wb")) == NULL) goto error;
-		fwrite(memory_region_gfx2, 1, memory_length_gfx2, fp);
-		fclose(fp);
+		fp = open("srom", O_WRONLY|O_CREAT|O_TRUNC, 0644);
+		if (fp < 0) goto error;
+		write(fp, memory_region_gfx2, memory_length_gfx2);
+		close(fp);
 	}
 	if (convert_vrom && (encrypt_snd1 || disable_sound))
 	{
-		if ((fp = fopen("vrom", "wb")) == NULL) goto error;
-		fwrite(memory_region_sound1, 1, memory_length_sound1, fp);
-		fclose(fp);
+		fp = open("vrom", O_WRONLY|O_CREAT|O_TRUNC, 0644);
+		if (fp < 0) goto error;
+		write(fp, memory_region_sound1, memory_length_sound1);
+		close(fp);
 	}
 
 	chdir("..");

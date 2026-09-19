@@ -97,7 +97,7 @@ static void raster_interrupt_aof2(int line);
 
 int neogeo_check_game(void)
 {
-	FILE *fp;
+	int posix_fd;
 	char fname[16], path[PATH_MAX], linebuf[128];
 	int i, found = 0, NGH_number;
 	int64_t fd;
@@ -130,26 +130,40 @@ int neogeo_check_game(void)
 		zclose(fd);
 		zip_close();
 
-		if ((fp = fopen(path, "w")) == NULL)
+		posix_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (posix_fd < 0)
 		{
 			return 0;
 		}
-		fwrite(memory_region_cpu1, 1, i, fp);
-		fclose(fp);
+		write(posix_fd, memory_region_cpu1, i);
+		close(posix_fd);
 
-		if ((fp = fopen(path, "r")) == NULL)
+		posix_fd = open(path, O_RDONLY);
+		if (posix_fd < 0)
 		{
 			remove(path);
 			return 0;
 		}
 
-		while (fgets(linebuf, 127, fp))
+		while (1)
 		{
-			char *strfname = strtok(linebuf, ",\r\n");
-			char *strbank  = strtok(NULL, ",\r\n");
-			char *stroffs  = strtok(NULL, ",\r\n");
-			char *ext;
+			ssize_t n;
+			char c, *strfname, *strbank, *stroffs, *ext;
 			int bank, offs;
+
+			/* read one line manually */
+			n = 0;
+			while (n < 127) {
+				if (read(posix_fd, &c, 1) <= 0) break;
+				linebuf[n++] = c;
+				if (c == '\n') break;
+			}
+			if (n == 0) break;
+			linebuf[n] = '\0';
+
+			strfname = strtok(linebuf, ",\r\n");
+			strbank  = strtok(NULL, ",\r\n");
+			stroffs  = strtok(NULL, ",\r\n");
 
 			if (strfname == NULL || strbank == NULL || stroffs == NULL)
 				break;
@@ -168,7 +182,7 @@ int neogeo_check_game(void)
 				}
 			}
 		}
-		fclose(fp);
+		close(posix_fd);
 
 		remove(path);
 

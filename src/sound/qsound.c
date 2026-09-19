@@ -38,14 +38,14 @@ typedef struct
 	int offset;			/* current offset counter */
 } QSOUND_CHANNEL;
 
-static QSOUND_CHANNEL ALIGN_DATA qsound_channel[QSOUND_CHANNELS];
+static QSOUND_CHANNEL ALIGN16_DATA qsound_channel[QSOUND_CHANNELS];
 
 static QSOUND_SRC_SAMPLE *qsound_sample_rom;
 
 static int qsound_data;
 static int qsound_volume_shift;
 
-static const int ALIGN_DATA qsound_pan_table[33] =
+static const int ALIGN16_DATA qsound_pan_table[33] =
 {
 	  0, 45, 64, 78, 90,101,110,119,
 	128,135,143,150,156,163,169,175,

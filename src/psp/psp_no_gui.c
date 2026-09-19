@@ -83,10 +83,19 @@ void file_browser(void) {
 	sprintf(cache_dir, "cache");
 #endif
 	// Get the game name from a file called game_name.ini
-	FILE *fp = fopen("game_name.ini", "r");
-	if (fp) {
-		fgets(game_name, 255, fp);
-		fclose(fp);
+	{
+		int fd = open("game_name.ini", O_RDONLY);
+		if (fd >= 0) {
+			ssize_t n = read(fd, game_name, sizeof(game_name) - 1);
+			if (n > 0) {
+				game_name[n] = '\0';
+				char *nl = strchr(game_name, '\n');
+				if (nl) *nl = '\0';
+				char *cr = strchr(game_name, '\r');
+				if (cr) *cr = '\0';
+			}
+			close(fd);
+		}
 	}
 #if (EMU_SYSTEM == NCDZ)
 	strcat(game_dir, "/");
@@ -169,15 +178,14 @@ void save_gamecfg(const char *name) {
 
 }
 
-void ui_init(void) {
+int ui_init(void) {
+	return 1;
+}
 
+void ui_exit(void) {
 }
 
 void load_gamecfg(const char *name) {
-
-}
-
-void delete_files(const char *dirname, const char *pattern) {
 
 }
 

@@ -4,8 +4,64 @@ http://mamedev.org/source/src/mame/machine/neocrypt.c.html
 Mod Update by phoe-nix
                                                 2013.12.07
 ***************************************************************************/
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include "mvs.h"
 #include "common/memory_sizes.h"
+
+/* ---------------------------------------------------------------------------
+ * Phase 3: scratch buffer helpers.
+ *
+ * Each decrypt routine needs a temporary scratch buffer the size of the
+ * region being decrypted. Historically this was an inline #ifdef
+ * LARGE_MEMORY ... #else ... #endif: PSP-Slim builds use the PSP2K kernel
+ * region without touching psp2k_mem_offset (treating it as a non-advancing
+ * scratchpad), other builds malloc a temporary and free it at the end.
+ *
+ * The decrypt logic itself is identical between modes, so we abstract just
+ * the allocation strategy. neocrypt_scratch_free() inspects the returned
+ * address: PSP2K-region pointers are ignored (no free), heap pointers go
+ * through free().
+ *
+ * Note: the PSP2K path does NOT advance psp2k_mem_offset, so two scratch
+ * buffers cannot co-exist. This matches the long-standing pre-Phase-3
+ * behaviour (the old #ifdef code had the same property).
+ * --------------------------------------------------------------------------- */
+
+static void *neocrypt_scratch_alloc(uint32_t size)
+{
+#ifdef LARGE_MEMORY
+	const memory_profile_t *profile = memory_profile_current();
+	if (profile != NULL && profile->preload_crypto)
+	{
+		return (void *)psp2k_mem_offset;
+	}
+#endif
+	return malloc(size);
+}
+
+static void neocrypt_scratch_free(void *buf)
+{
+	if (buf == NULL) return;
+#ifdef LARGE_MEMORY
+	if ((uintptr_t)buf >= (uintptr_t)PSP2K_MEM_TOP &&
+	    (uintptr_t)buf <  (uintptr_t)PSP2K_MEM_TOP + PSP2K_MEM_SIZE)
+	{
+		return;  /* PSP2K-region scratch: not heap-allocated */
+	}
+#endif
+	free(buf);
+}
+
+#ifdef LARGE_MEMORY
+static int neocrypt_scratch_is_psp2k(const void *buf)
+{
+	return ((uintptr_t)buf >= (uintptr_t)PSP2K_MEM_TOP &&
+	        (uintptr_t)buf <  (uintptr_t)PSP2K_MEM_TOP + PSP2K_MEM_SIZE);
+}
+#endif
+
 /***************************************************************************
 
 NeoGeo 'M' ROM encryption
@@ -106,11 +162,7 @@ static uint32_t m1_address_scramble(uint32_t address, uint16_t key)
 int neogeo_cmc50_m1_decrypt(void)
 {
 	uint8_t *rom = memory_region_cpu2 + 0x10000;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(memory_length_cpu2);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu2);
 	uint32_t i;
 	uint16_t key=generate_cs16(rom,0x10000);
 	int romsize = memory_length_cpu2;
@@ -165,9 +217,7 @@ if (buf)
 		}
 		memcpy(rom, buf, romsize);//
 
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -203,11 +253,7 @@ NeoGeo 'P' ROM encryption
 int kof98_decrypt_68k(void)
 {
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_2MB);
 	uint32_t i, j, k;
 	const uint32_t sec[]={0x000000,0x100000,0x000004,0x100004,0x10000a,0x00000a,0x10000e,0x00000e};
 	const uint32_t pos[]={0x000,0x004,0x00a,0x00e};
@@ -248,9 +294,7 @@ int kof98_decrypt_68k(void)
 		}
 		memcpy(&src[0x100000], &src[0x200000], 0x400000);
 
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -436,11 +480,7 @@ int kof2002_decrypt_68k(void)
 	const uint32_t sec[]={0x100000,0x280000,0x300000,0x180000,0x000000,0x380000,0x200000,0x080000};
 
 	uint8_t *src = memory_region_cpu1 + 0x100000;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_4MB);
 	if (dst)
 	{
 		memcpy( dst, src, 0x400000 );
@@ -448,9 +488,7 @@ int kof2002_decrypt_68k(void)
 		{
 			memcpy( src+i*0x80000, dst+sec[i], 0x80000 );
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -462,11 +500,7 @@ int matrim_decrypt_68k(void)
 	uint32_t i;
 	const uint32_t sec[]={0x100000,0x280000,0x300000,0x180000,0x000000,0x380000,0x200000,0x080000};
 	uint8_t *src = memory_region_cpu1 +0x100000;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_4MB);
 	if (dst)
 	{
 		memcpy( dst, src, 0x400000);
@@ -474,9 +508,7 @@ int matrim_decrypt_68k(void)
 		{
 			memcpy( src+i*0x80000, dst+sec[i], 0x80000 );
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -488,11 +520,7 @@ int samsho5_decrypt_68k(void)
 	uint32_t i;
 	const uint32_t sec[]={0x000000,0x080000,0x700000,0x680000,0x500000,0x180000,0x200000,0x480000,0x300000,0x780000,0x600000,0x280000,0x100000,0x580000,0x400000,0x380000};
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 	if (dst)
 	{
 		memcpy( dst, src, 0x800000 );
@@ -500,9 +528,7 @@ int samsho5_decrypt_68k(void)
 		{
 			memcpy( src+i*0x80000, dst+sec[i], 0x80000 );
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -513,11 +539,7 @@ int samsh5sp_decrypt_68k(void)
 	uint32_t i;
 	const uint32_t sec[]={0x000000,0x080000,0x500000,0x480000,0x600000,0x580000,0x700000,0x280000,0x100000,0x680000,0x400000,0x780000,0x200000,0x380000,0x300000,0x180000};
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 	if (dst)
 	{
 		memcpy( dst, src, 0x800000 );
@@ -525,9 +547,7 @@ int samsh5sp_decrypt_68k(void)
 		{
 			memcpy( src+i*0x80000, dst+sec[i], 0x80000 );
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -558,11 +578,7 @@ int mslug5_decrypt_68k(void)
 	};
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -601,9 +617,7 @@ int mslug5_decrypt_68k(void)
 		memcpy(&rom[0x100000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x200000], &buf[0x100000], 0x600000);
 
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -627,11 +641,7 @@ int svc_px_decrypt(void)
 	};
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -669,9 +679,7 @@ int svc_px_decrypt(void)
 		memcpy(buf, rom, 0x800000);
 		memcpy(&rom[0x100000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x200000], &buf[0x100000], 0x600000);
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -688,11 +696,7 @@ int kf2k3pcb_decrypt_68k(void)
 	};
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -730,9 +734,7 @@ int kf2k3pcb_decrypt_68k(void)
 
 		memcpy(&rom[0x100000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x200000], &buf[0x000000], 0x700000);
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -756,11 +758,7 @@ int kof2003_decrypt_68k(void)
 	};
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -801,9 +799,7 @@ int kof2003_decrypt_68k(void)
 		}
 		memcpy(&rom[0x100000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x200000], &buf[0x000000], 0x700000);
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -829,11 +825,7 @@ int kof2003h_decrypt_68k(void)
 
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -874,9 +866,7 @@ int kof2003h_decrypt_68k(void)
 		}
 		memcpy(&rom[0x100000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x200000], &buf[0x000000], 0x700000);
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -897,11 +887,7 @@ int kf2k3pcb_sp1_decrypt(void)
 		0x04,0x00,0x04,0x00,0x0e,0x0a,0x0e,0x0a
 	};
 	uint16_t *rom = (uint16_t *)memory_region_user1;
-#ifdef LARGE_MEMORY
-	uint16_t *buf = (uint16_t *)psp2k_mem_offset;
-#else
-	uint16_t *buf = (uint16_t *)malloc(DECRYPT_BUFFER_1MB/2);
-#endif
+	uint16_t *buf = (uint16_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_1MB/2);
 	uint32_t i, addr;
 
 	if (buf)
@@ -925,15 +911,16 @@ int kf2k3pcb_sp1_decrypt(void)
 		if (buf[i] & 0x0010) buf[i] ^= 0x0002;
 		if (buf[i] & 0x0020) buf[i] ^= 0x0008;
 		}
+		/* Preserved historical quirk: the PSP2K-region path copies
+		 * twice as many bytes as the malloc path. Detect by address. */
 #ifdef LARGE_MEMORY
-		memcpy(rom, buf, 0x80000);
-#else
-		memcpy(rom, buf, 0x80000/2);
+		if (neocrypt_scratch_is_psp2k(buf))
+			memcpy(rom, buf, 0x80000);
+		else
 #endif
+			memcpy(rom, buf, 0x80000/2);
 
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 
 		return 1;
 	}
@@ -960,11 +947,7 @@ int kf2k3pcb_sp1_decrypt(void)
 int kog_px_decrypt(void)
 {
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_6MB);
 	uint16_t *rom = (uint16_t *)memory_region_cpu1;
 	uint32_t i;
 	const uint8_t sec[] = { 0x3, 0x8, 0x7, 0xC, 0x1, 0xA, 0x6, 0xD };
@@ -983,9 +966,7 @@ int kog_px_decrypt(void)
 		memcpy(dst + 0x100000, src + 0x200000, 0x400000);
 		memcpy(src, dst, 0x600000);
 
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		for (i = 0x90000/2; i < 0x94000/2; i++)
 		{
@@ -1038,11 +1019,7 @@ int kof97oro_px_decode(void)
 {
 	uint32_t i;
 	uint16_t *src = (uint16_t*)memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint16_t *dst = (uint16_t *)psp2k_mem_offset;
-#else
-	uint16_t *dst = (uint16_t *)malloc(DECRYPT_BUFFER_5MB);
-#endif
+	uint16_t *dst = (uint16_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_5MB);
 	if (dst)
 	{
 		for (i = 0; i < 0x500000/2; i++)
@@ -1052,9 +1029,7 @@ int kof97oro_px_decode(void)
 
 	memcpy (src, dst, 0x500000);
 
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1064,11 +1039,7 @@ int kof97oro_px_decode(void)
 int kof10th_px_decrypt(void)
 {
 	uint32_t i, j;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_9MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_9MB);
 	uint8_t *src = memory_region_cpu1;
 	uint16_t *mem16 = (uint16_t *)memory_region_cpu1;
 
@@ -1083,9 +1054,7 @@ int kof10th_px_decrypt(void)
 			src[j] = dst[i];
 		}
 
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		mem16[0x0124/2] = 0x000d;
 		mem16[0x0126/2] = 0xf7a8;
@@ -1109,11 +1078,7 @@ int kf10thep_px_decrypt(void)
 	uint16_t *rom = (uint16_t*)memory_region_cpu1;
 	uint8_t  *src = memory_region_cpu1;
 	uint16_t *buf = (uint16_t*)memory_region_user2;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_2MB);
 
 	if (dst)
 	{
@@ -1141,9 +1106,7 @@ int kf10thep_px_decrypt(void)
 		rom[0x00022c/2] = 0x4e71;
 		rom[0x000234/2] = 0x4e71; // bne
 		rom[0x000236/2] = 0x4e71; // bne
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1153,11 +1116,7 @@ int kf2k5uni_px_decrypt(void)
 {
 	uint32_t i, j, offset;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_128B);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_128B);
 	uint16_t *mem16 = (uint16_t *)memory_region_cpu1;
 
 	if (dst)
@@ -1171,9 +1130,7 @@ int kf2k5uni_px_decrypt(void)
 			}
 			memcpy(src + i, dst, 0x80);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		memcpy(src, src + 0x600000, 0x100000);
 
@@ -1191,11 +1148,7 @@ int kf2k2mp_px_decrypt(void)
 {
 	uint32_t i, j, offset;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_128B);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_128B);
 
 	if (dst)
 	{
@@ -1210,9 +1163,7 @@ int kf2k2mp_px_decrypt(void)
 			}
 			memcpy(src + i, dst, 0x80);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1221,11 +1172,7 @@ int kf2k2mp_px_decrypt(void)
 int kf2k2mp2_px_decrypt(void)
 {
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_6MB);
 
 	if (dst)
 	{
@@ -1234,9 +1181,7 @@ int kf2k2mp2_px_decrypt(void)
 		memcpy(dst + 0x0C0000, src + 0x100000, 0x040000);
 		memcpy(dst + 0x100000, src + 0x200000, 0x400000);
 		memcpy(src + 0x000000, dst + 0x000000, 0x600000);
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1245,11 +1190,7 @@ int kf2k2mp2_px_decrypt(void)
 int kof2k4se_px_decrypt(void)
 {
 	uint8_t *src = memory_region_cpu1 + 0x100000;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_4MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_4MB);
 	uint32_t i;
 	const uint32_t sec[] = { 0x300000, 0x200000, 0x100000, 0x000000 };
 
@@ -1261,9 +1202,7 @@ int kof2k4se_px_decrypt(void)
 		{
 			memcpy(src + i * 0x100000, dst + sec[i], 0x100000);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1274,11 +1213,7 @@ int lans2004_px_decrypt(void)
 	const uint8_t sec[] = { 0x3, 0x8, 0x7, 0xc, 0x1, 0xa, 0x6, 0xd };
 	uint32_t i;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_6MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_6MB);
 	uint16_t *rom = (uint16_t*)memory_region_cpu1;
 
 	if (dst)
@@ -1290,9 +1225,7 @@ int lans2004_px_decrypt(void)
 		memcpy(dst + 0x02fff0, src + 0x1a92be, 0x000010);
 		memcpy(dst + 0x100000, src + 0x200000, 0x400000);
 		memcpy(src, dst, 0x600000);
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		for (i = 0xbbb00/2; i < 0xbe000/2; i++)
 		{
@@ -1320,11 +1253,7 @@ int svcboot_px_decrypt(void)
 	const uint8_t sec[] = { 0x06, 0x07, 0x01, 0x02, 0x03, 0x04, 0x05, 0x00 };
 	uint32_t i, offset;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(memory_length_cpu1);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu1);
 
 	if (dst)
 	{
@@ -1338,9 +1267,7 @@ int svcboot_px_decrypt(void)
 			offset += (i & 0xffff00);
 			memcpy(&src[i << 1], &dst[offset << 1], 2);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1351,11 +1278,7 @@ int svcplus_px_decrypt(void)
 	const uint8_t sec[] = { 0x00, 0x03, 0x02, 0x05, 0x04, 0x01 };
 	uint32_t i, offset;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(memory_length_cpu1);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu1);
 
 	if (dst)
 	{
@@ -1373,9 +1296,7 @@ int svcplus_px_decrypt(void)
 		{
 			memcpy(&src[i << 20], &dst[sec[i] << 20], 0x100000);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		src[0x0f8010] = 0x40;
 		src[0x0f8011] = 0x04;
@@ -1396,11 +1317,7 @@ int svcplusa_px_decrypt(void)
 	const uint8_t sec[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x00 };
 	uint32_t i;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(memory_length_cpu1);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu1);
 
 	if (dst)
 	{
@@ -1409,9 +1326,7 @@ int svcplusa_px_decrypt(void)
 		{
 			memcpy(&src[i << 20], &dst[sec[i] << 20], 0x100000);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		src[0x0f8010] = 0x40;
 		src[0x0f8011] = 0x04;
@@ -1432,11 +1347,7 @@ int svcsplus_px_decrypt(void)
 	const uint8_t sec[] = { 0x06, 0x07, 0x01, 0x02, 0x03, 0x04, 0x05, 0x00 };
 	uint32_t i, offset;
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(memory_length_cpu1);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu1);
 	uint16_t *mem16 = (uint16_t *)memory_region_cpu1;
 
 	if (dst)
@@ -1451,9 +1362,7 @@ int svcsplus_px_decrypt(void)
 			offset += sec[(i & 0xf80000) >> 19] << 19;
 			memcpy(&src[i << 1], &dst[offset << 1], 2);
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 
 		mem16[0x9e90/2] = 0x000f;
 		mem16[0x9e92/2] = 0xc9c0;
@@ -1471,11 +1380,7 @@ int kf2k3bl_px_decrypt(void)
 	const uint8_t sec[] = { 0x07, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
 	uint32_t i;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(DECRYPT_BUFFER_8MB);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_8MB);
 
 	if (buf)
 	{
@@ -1485,9 +1390,7 @@ int kf2k3bl_px_decrypt(void)
 		{
 			memcpy(&rom[i * 0x100000], &buf[sec[i] * 0x100000], 0x100000);
 		}
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -1496,11 +1399,7 @@ int kf2k3bl_px_decrypt(void)
 int kf2k3pl_px_decrypt(void)
 {
 	uint32_t i, j;
-#ifdef LARGE_MEMORY
-	uint16_t *buf = (uint16_t *)psp2k_mem_offset;
-#else
-	uint16_t *buf = (uint16_t *)malloc(DECRYPT_BUFFER_1MB);
-#endif
+	uint16_t *buf = (uint16_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_1MB);
 	uint16_t *rom = (uint16_t*)memory_region_cpu1;
 
 	if (buf)
@@ -1511,9 +1410,7 @@ int kf2k3pl_px_decrypt(void)
 			for (j = 0; j < 0x100000/2; j++)
 				rom[i + j] = buf[BITSWAP24(j,23,22,21,20,19,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18)];
 		}
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 
 		rom[0xf38ac/2] = 0x4e75;
 		return 1;
@@ -1544,11 +1441,7 @@ int samsho5b_px_decrypt(void)
 {
 	uint32_t i, offset;
 	uint8_t *rom = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *buf = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *buf = (uint8_t *)malloc(memory_length_cpu1);
-#endif
+	uint8_t *buf = (uint8_t *)neocrypt_scratch_alloc(memory_length_cpu1);
 
 	if (buf)
 	{
@@ -1568,9 +1461,7 @@ int samsho5b_px_decrypt(void)
 		memcpy(&rom[0x000000], &buf[0x700000], 0x100000);
 		memcpy(&rom[0x100000], &buf[0x000000], 0x700000);
 
-#ifndef LARGE_MEMORY
-		free(buf);
-#endif
+		neocrypt_scratch_free(buf);
 		return 1;
 	}
 	return 0;
@@ -1602,11 +1493,7 @@ int cthd2k3a_px_decrypt(void)
 		0x09, 0x20, 0x18, 0x1f, 0x1e, 0x12, 0x0d, 0x11
 	};
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_5MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_5MB);
 
 	if (dst)
 	{
@@ -1615,9 +1502,7 @@ int cthd2k3a_px_decrypt(void)
 			memcpy(dst + i * 0x20000, src + bank[i] * 0x20000, 0x20000);
 		}
 		memcpy(src, dst, 0x500000);
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1626,11 +1511,7 @@ int cthd2k3a_px_decrypt(void)
 int kf2k4pls_px_decrypt(void)
 {
 	uint8_t *src = memory_region_cpu1;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = (uint8_t *)malloc(DECRYPT_BUFFER_2MB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_2MB);
 
 	if (dst)
 	{
@@ -1644,9 +1525,7 @@ int kf2k4pls_px_decrypt(void)
 		memcpy(src + 0x0a0000, dst + 0x0a0000, 0x020000);
 		memcpy(src + 0x0c0000, dst + 0x100000, 0x020000);
 		memcpy(src + 0x0e0000, dst + 0x040000, 0x020000);
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 		return 1;
 	}
 	return 0;
@@ -1726,11 +1605,7 @@ void kf2k1pa_sx_decrypt(void)
 void matrimbl_mx_decrypt(void)
 {
 	uint8_t *src = memory_region_cpu2 + 0x10000;
-#ifdef LARGE_MEMORY
-	uint8_t *dst = (uint8_t *)psp2k_mem_offset;
-#else
-	uint8_t *dst = malloc(DECRYPT_BUFFER_128KB);
-#endif
+	uint8_t *dst = (uint8_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_128KB);
 	uint32_t i, j = 0;
 
 	if (dst)
@@ -1765,9 +1640,7 @@ void matrimbl_mx_decrypt(void)
 			}
 			src[j] = dst[i];
 		}
-#ifndef LARGE_MEMORY
-		free(dst);
-#endif
+		neocrypt_scratch_free(dst);
 	}
 }
 

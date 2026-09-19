@@ -9,6 +9,29 @@
 #include "cps2.h"
 
 
+/* Per-target texture atlas descriptions required by the video driver.
+ * Each entry describes a texture atlas width/height (pixels).
+ * The core passes these to the video driver during init.
+ */
+layer_texture_info_t emu_layer_textures[] = {
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_OBJECT */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL1 */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL2 */
+	{ 512, 512, 1 }, /* TEXTURE_LAYER_SCROLL3 */
+};
+uint8_t emu_layer_textures_count = TEXTURE_LAYER_COUNT;
+
+/* CLUT configuration for CPS2:
+ * - 2048 palette entries
+ * - Single bank (no palette bank switching)
+ */
+clut_info_t emu_clut_info = {
+	.base = (uint16_t *)video_palette,
+	.entries_per_bank = 2048,
+	.bank_count = 1
+};
+
+
 /******************************************************************************
 	Local Functions
 ******************************************************************************/

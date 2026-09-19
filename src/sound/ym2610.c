@@ -161,12 +161,12 @@
 *   TL_RES_LEN - sinus resolution (X axis)
 */
 #define TL_TAB_LEN (13*2*TL_RES_LEN)
-static signed int ALIGN_DATA tl_tab[TL_TAB_LEN];
+static signed int ALIGN16_DATA tl_tab[TL_TAB_LEN];
 
 #define ENV_QUIET		(TL_TAB_LEN>>3)
 
 /* sin waveform table in 'decibel' scale */
-static uint32_t ALIGN_DATA sin_tab[SIN_LEN];
+static uint32_t ALIGN16_DATA sin_tab[SIN_LEN];
 
 /* sustain level table (3dB per step) */
 /* bit0, bit1, bit2, bit3, bit4, bit5, bit6 */
@@ -175,7 +175,7 @@ static uint32_t ALIGN_DATA sin_tab[SIN_LEN];
 
 /* 0 - 15: 0, 3, 6, 9,12,15,18,21,24,27,30,33,36,39,42,93 (dB)*/
 #define SC(db) (uint32_t) ( db * (4.0/ENV_STEP) )
-static const uint32_t ALIGN_DATA sl_table[16]={
+static const uint32_t ALIGN16_DATA sl_table[16]={
  SC( 0),SC( 1),SC( 2),SC(3 ),SC(4 ),SC(5 ),SC(6 ),SC( 7),
  SC( 8),SC( 9),SC(10),SC(11),SC(12),SC(13),SC(14),SC(31)
 };
@@ -183,7 +183,7 @@ static const uint32_t ALIGN_DATA sl_table[16]={
 
 
 #define RATE_STEPS (8)
-static const uint8_t ALIGN_DATA eg_inc[19*RATE_STEPS]={
+static const uint8_t ALIGN16_DATA eg_inc[19*RATE_STEPS]={
 
 /*cycle:0 1  2 3  4 5  6 7*/
 
@@ -216,7 +216,7 @@ static const uint8_t ALIGN_DATA eg_inc[19*RATE_STEPS]={
 #define O(a) (a*RATE_STEPS)
 
 /*note that there is no O(17) in this table - it's directly in the code */
-static const uint8_t ALIGN_DATA eg_rate_select[32+64+32]={	/* Envelope Generator rates (32 + 64 rates + 32 RKS) */
+static const uint8_t ALIGN16_DATA eg_rate_select[32+64+32]={	/* Envelope Generator rates (32 + 64 rates + 32 RKS) */
 /* 32 infinite time rates */
 O(18),O(18),O(18),O(18),O(18),O(18),O(18),O(18),
 O(18),O(18),O(18),O(18),O(18),O(18),O(18),O(18),
@@ -263,7 +263,7 @@ O(16),O(16),O(16),O(16),O(16),O(16),O(16),O(16)
 /*mask  2047, 1023, 511, 255, 127, 63, 31, 15, 7,  3, 1,  0,  0,  0,  0,  0 */
 
 #define O(a) (a*1)
-static const uint8_t ALIGN_DATA eg_rate_shift[32+64+32]={	/* Envelope Generator counter shifts (32 + 64 rates + 32 RKS) */
+static const uint8_t ALIGN16_DATA eg_rate_shift[32+64+32]={	/* Envelope Generator counter shifts (32 + 64 rates + 32 RKS) */
 /* 32 infinite time rates */
 O(0),O(0),O(0),O(0),O(0),O(0),O(0),O(0),
 O(0),O(0),O(0),O(0),O(0),O(0),O(0),O(0),
@@ -305,7 +305,7 @@ O( 0),O( 0),O( 0),O( 0),O( 0),O( 0),O( 0),O( 0)
 };
 #undef O
 
-static const uint8_t ALIGN_DATA dt_tab[4 * 32]={
+static const uint8_t ALIGN16_DATA dt_tab[4 * 32]={
 /* this is YM2151 and YM2612 phase increment data (in 10.10 fixed point format)*/
 /* FD=0 */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -324,12 +324,12 @@ static const uint8_t ALIGN_DATA dt_tab[4 * 32]={
 
 /* OPN key frequency number -> key code follow table */
 /* fnum higher 4bit -> keycode lower 2bit */
-static const uint8_t ALIGN_DATA opn_fktable[16] = {0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3};
+static const uint8_t ALIGN16_DATA opn_fktable[16] = {0,0,0,0,0,0,0,1,2,3,3,3,3,3,3,3};
 
 
 /* 8 LFO speed parameters */
 /* each value represents number of samples that one LFO level will last for */
-static const uint32_t ALIGN_DATA lfo_samples_per_step[8] = {108, 77, 71, 67, 62, 44, 8, 5};
+static const uint32_t ALIGN16_DATA lfo_samples_per_step[8] = {108, 77, 71, 67, 62, 44, 8, 5};
 
 
 
@@ -374,7 +374,7 @@ static const uint8_t lfo_ams_depth_shift[4] = {8, 3, 1, 0};
    samples (32*432=13824; 32 because we store only a quarter of whole
             waveform in the table below)
 */
-static const uint8_t ALIGN_DATA lfo_pm_output[7*8][8]={ /* 7 bits meaningful (of F-NUMBER), 8 LFO output levels per one depth (out of 32), 8 LFO depths */
+static const uint8_t ALIGN16_DATA lfo_pm_output[7*8][8]={ /* 7 bits meaningful (of F-NUMBER), 8 LFO output levels per one depth (out of 32), 8 LFO depths */
 /* FNUM BIT 4: 000 0001xxxx */
 /* DEPTH 0 */ {0,   0,   0,   0,   0,   0,   0,   0},
 /* DEPTH 1 */ {0,   0,   0,   0,   0,   0,   0,   0},
@@ -448,7 +448,7 @@ static const uint8_t ALIGN_DATA lfo_pm_output[7*8][8]={ /* 7 bits meaningful (of
 };
 
 /* all 128 LFO PM waveforms */
-static int32_t ALIGN_DATA lfo_pm_table[128*8*32]; /* 128 combinations of 7 bits meaningful (of F-NUMBER), 8 LFO depths, 32 LFO output levels per one depth */
+static int32_t ALIGN16_DATA lfo_pm_table[128*8*32]; /* 128 combinations of 7 bits meaningful (of F-NUMBER), 8 LFO depths, 32 LFO output levels per one depth */
 
 
 /*----------------------------------
@@ -669,7 +669,9 @@ typedef struct
 	uint8_t		vol_shift;		/* volume in "-6dB" steps	*/
 	int32_t		*pan;			/* &out_adpcma[OPN_xxxx] 	*/
 
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
+	/* Phase 2b.2: present unconditionally for MVS. Used in dynamic
+	 * (PCM-cache streaming) mode; ignored in static (preload) mode. */
 	uint16_t		block;
 	uint8_t		*buf;
 #endif
@@ -700,10 +702,10 @@ typedef struct adpcmb_state
 	uint8_t		CPU_data;		/* current data from reg 08 */
 	uint8_t		portstate;		/* port status          */
 
-#ifndef LARGE_MEMORY
+	/* Phase 2b.2: present unconditionally inside the MVS guard.
+	 * Used in dynamic (PCM-cache streaming) mode; ignored in static. */
 	uint16_t		block;
 	uint8_t		*buf;
-#endif
 
 	/* note that different chips have these flags on different
     ** bits of the status register
@@ -736,18 +738,18 @@ static struct ym2610_t
 	ADPCMB	adpcmb;				/* Delta-T ADPCM unit   */
 #endif
 
-} ALIGN_DATA YM2610;
+} ALIGN16_DATA YM2610;
 
 
 /* current chip state */
 static int32_t	m2,c1,c2;		/* Phase Modulation input for operators 2,3,4 */
 static int32_t	mem;			/* one sample delay memory */
 
-static int32_t	ALIGN_DATA out_fm[8];		/* outputs of working channels */
+static int32_t	ALIGN16_DATA out_fm[8];		/* outputs of working channels */
 static int32_t	out_ssg;					/* channel output CHENTER only for SSG */
-static int32_t	ALIGN_DATA out_adpcma[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 ADPCM */
+static int32_t	ALIGN16_DATA out_adpcma[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 ADPCM */
 #if (EMU_SYSTEM == MVS)
-static int32_t	ALIGN_DATA out_delta[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 DELTAT*/
+static int32_t	ALIGN16_DATA out_delta[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 DELTAT*/
 #endif
 
 static uint32_t	LFO_AM;			/* runtime LFO calculations helper */
@@ -2166,7 +2168,9 @@ static void SSG_reset(void)
 
 /*********************************************************************************************/
 
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
+/* Phase 2b.2: function pointers always present for MVS. Set at init
+ * to either _static (preload) or _dynamic (PCM cache streaming). */
 static void (*OPNB_ADPCMA_calc_chan)(int c, ADPCMA *ch);
 static void (*OPNB_ADPCMB_calc)(ADPCMB *adpcmb);
 #endif
@@ -2218,7 +2222,7 @@ static void OPNB_ADPCMA_init_table(void)
 }
 
 /* ADPCM A (Non control type) : calculate one channel output */
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
 static void OPNB_ADPCMA_calc_chan_static(int c, ADPCMA *ch)
 #else
 static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
@@ -2277,7 +2281,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 	*ch->pan += ch->adpcma_out;
 }
 
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
 static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 {
 	uint32_t step;
@@ -2372,7 +2376,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 					adpcma[c].adpcma_step = 0;
 					adpcma[c].adpcma_out  = 0;
 					adpcma[c].flag        = 1;
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
 					adpcma[c].block       = 0xffff;
 
 					if ((!pcm_cache_enable && pcmbufA == NULL) || adpcma[c].start >= pcmsizeA)
@@ -2507,11 +2511,7 @@ static const int32_t adpcmb_decode_table2[16] =
 };
 
 
-#ifndef LARGE_MEMORY
 static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
-#else
-static void OPNB_ADPCMB_calc(ADPCMB *adpcmb)
-#endif
 {
 	uint32_t step;
 	int data;
@@ -2594,7 +2594,6 @@ static void OPNB_ADPCMB_calc(ADPCMB *adpcmb)
 }
 
 
-#ifndef LARGE_MEMORY
 static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 {
 	uint32_t step;
@@ -2685,7 +2684,6 @@ static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 	/* output for work of output channels (outd[OPNxxxx])*/
 	*adpcmb->pan += adpcmb->adpcml;
 }
-#endif
 
 
 /* DELTA-T-ADPCM write register */
@@ -2712,19 +2710,14 @@ static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 			adpcmb->adpcml    = 0;
 			adpcmb->adpcmd    = ADPCMB_DELTA_DEF;
 			adpcmb->now_data  = 0;
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
 			adpcmb->block     = 0xffff;
-#endif
 		}
 
 		adpcmb->now_addr = adpcmb->start << 1;
 
-		/* if yes, then let's check if ADPCM memory is mapped and big enough */
-#ifndef LARGE_MEMORY
+		/* if yes, then let's check if ADPCM memory is mapped and big enough.
+		 * pcm_cache_enable=0 reduces this to the old !pcmbufB check. */
 		if (!pcm_cache_enable && !pcmbufB)
-#else
-		if (!pcmbufB)
-#endif
 		{
 			adpcmb->portstate = 0x00;
 			adpcmb->PCM_BSY = 0;
@@ -2946,7 +2939,6 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 	/* SSG */
 //	SSG.step = ((float)SSG_STEP * YM2610.OPN.ST.rate * 8) / clock;
 #if (EMU_SYSTEM == MVS)
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_dynamic;
@@ -2960,12 +2952,9 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 		pcmsizeB = pcmsizeb;
 	}
 	else
-#endif
 	{
-#ifndef LARGE_MEMORY
 		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_static;
 		OPNB_ADPCMB_calc = OPNB_ADPCMB_calc_static;
-#endif
 
 		/* ADPCM-A */
 		pcmbufA = (uint8_t *)pcmroma;
@@ -3035,7 +3024,7 @@ void YM2610Reset(void)
 		YM2610.adpcma[i].adpcma_acc  = 0;
 		YM2610.adpcma[i].adpcma_step = 0;
 		YM2610.adpcma[i].adpcma_out  = 0;
-#if (EMU_SYSTEM == MVS) && !defined(LARGE_MEMORY)
+#if (EMU_SYSTEM == MVS)
 		if (pcm_cache_enable)
 		{
 			YM2610.adpcma[i].buf   = NULL;
@@ -3065,13 +3054,11 @@ void YM2610Reset(void)
 	YM2610.adpcmb.adpcmd       = 127;
 	YM2610.adpcmb.adpcml       = 0;
 	YM2610.adpcmb.portstate    = 0x20;
-#ifndef LARGE_MEMORY
 	if (pcm_cache_enable)
 	{
 		YM2610.adpcmb.buf   = NULL;
 		YM2610.adpcmb.block = 0xffff;
 	}
-#endif
 
 	/* The flag mask register disables the BRDY after the reset, however
     ** as soon as the mask is enabled the flag needs to be set. */
@@ -3427,7 +3414,6 @@ STATE_LOAD( ym2610 )
 	for (r = 1; r < 16; r++)
 		OPNB_ADPCMB_write(&YM2610.adpcmb, r + 0x10, YM2610.regs[r + 0x10]);
 
-#ifndef LARGE_MEMORY
 	for (ch = 0; ch < 6; ch++)
 	{
 		YM2610.adpcma[ch].buf = NULL;
@@ -3436,6 +3422,10 @@ STATE_LOAD( ym2610 )
 			YM2610.adpcma[ch].now_data = 0;
 	}
 
+	/* When pcm_cache_enable=0 (preload mode) the ADPCMB block field is
+	 * left at its memset-zero default by YM2610Reset, so this branch
+	 * always runs and refreshes now_data from the preloaded buffer —
+	 * matching the old LARGE_MEMORY behaviour. */
 	if (YM2610.adpcmb.block != 0xffff)
 	{
 		YM2610.adpcmb.buf = NULL;
@@ -3445,9 +3435,6 @@ STATE_LOAD( ym2610 )
 		else
 			YM2610.adpcmb.now_data = *(pcmbufB + (YM2610.adpcmb.now_addr >> 1));
 	}
-#else
-	YM2610.adpcmb.now_data = *(pcmbufB + (YM2610.adpcmb.now_addr >> 1));
-#endif
 #endif
 }
 

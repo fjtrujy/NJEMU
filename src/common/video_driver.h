@@ -62,6 +62,12 @@ struct Vertex
 	int16_t x, y, z;
 };
 
+struct PointVertex
+{
+	uint16_t color;
+	int16_t x, y, z;
+};
+
 struct rectangle
 {
 	int min_x;
@@ -78,43 +84,90 @@ typedef struct rect_t
 	int16_t bottom;
 } RECT;
 
-enum WorkBuffer {
-	SCRBITMAP,
-	TEX_SPR0,
-	TEX_SPR1,
-	TEX_SPR2,
-	TEX_FIX,
+enum CommonGraphicObjects {
+	COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT,
+	COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
+	COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+	COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+	COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
 };
+
+typedef struct layer_texture_info {
+	size_t width;
+	size_t height;
+	uint8_t bytes_per_pixel;
+} layer_texture_info_t;
+
+/* CLUT (Color Look-Up Table) configuration for indexed textures.
+ * Each target defines its own emu_clut_info based on palette requirements:
+ *   - MVS/NCDZ: 2 banks × 4096 colors (video_palettebank[2][4096])
+ *   - CPS1:     1 bank × 3072 colors (video_palette[3072])
+ */
+typedef struct clut_info {
+	uint16_t *base;              /* Pointer to palette memory */
+	uint16_t entries_per_bank;   /* Colors per bank (e.g., 4096 for Neo Geo, 3072 for CPS1) */
+	uint8_t bank_count;          /* Number of banks (2 for Neo Geo, 1 for CPS) */
+} clut_info_t;
 
 typedef struct video_driver
 {
 	/* Human-readable identifier. */
 	const char *ident;
 	/* Creates and initializes handle to video driver.
-	*
-	* Returns: video driver handle on success, otherwise NULL.
-	**/
-	void *(*init)(void);
+	 *
+	 * Parameters:
+	 *   layer_textures: Array of texture layer configurations
+	 *   layer_textures_count: Number of texture layers
+	 *   clut_info: CLUT configuration (base address, entries per bank, bank count)
+	 *
+	 * Returns: video driver handle on success, otherwise NULL.
+	 **/
+	void *(*init)(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
-	void (*setClutBaseAddr)(void *data, uint16_t *clut_base);
 	void (*waitVsync)(void *data);
 	void (*flipScreen)(void *data, bool vsync);
-	void *(*frameAddr)(void *data, void *frame, int x, int y);
-	void *(*workFrame)(void *data, enum WorkBuffer buffer);
+	/* Begin a new rendering frame (e.g. start GPU command list).
+	 * All draw calls between beginFrame/endFrame just enqueue commands. */
+	void (*beginFrame)(void *data);
+	/* End the current rendering frame (e.g. finish and sync GPU command list). */
+	void (*endFrame)(void *data);
+	void *(*frameAddr)(void *data, int frameIndex, int x, int y);
+	void *(*textureLayer)(void *data, uint8_t layerIndex);
+	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
-	void (*clearFrame)(void *data, void *frame);
-	void (*fillFrame)(void *data, void *frame, uint32_t color);
+	void (*clearFrame)(void *data, int index);
+	void (*fillFrame)(void *data, int frameIndex, uint32_t color);
 	void (*startWorkFrame)(void *data, uint32_t color);
 	void (*transferWorkFrame)(void *data, RECT *src_rect, RECT *dst_rect);
-	void (*copyRect)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
-	void (*copyRectFlip)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
-	void (*copyRectRotate)(void *data, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
-	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, void *src, void *dst, RECT *src_rect, RECT *dst_rect);
+	void (*copyRect)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	void (*drawTexture)(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void *(*getNativeObjects)(void *data, int index);
-	void (*uploadMem)(void *data, enum WorkBuffer buffer);
+	void (*uploadMem)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);
-	void (*blitTexture)(void *data, enum WorkBuffer buffer, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
+	void (*blitTexture)(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
+	void (*blitPoints)(void *data, uint32_t points_count, void *vertices);
+	void (*flushCache)(void *data, void *addr, size_t size);
+
+	/* Depth-test support (used by CPS2 priority masking) */
+	void (*enableDepthTest)(void *data);
+	void (*disableDepthTest)(void *data);
+	void (*clearDepthBuffer)(void *data);
+	void (*clearColorBuffer)(void *data);
+
+	/* 2D UI drawing primitives (used by ui_draw_driver backends) */
+	void (*drawUISprite)(void *data, void *tex, int tex_format, int tex_swizzled,
+	                    int su, int sv, int sw, int sh,
+	                    int dx, int dy, int dw, int dh, int blend);
+	void (*drawUILine)(void *data, int x1, int y1, int x2, int y2, uint32_t color);
+	void (*drawUILineGradient)(void *data, int x1, int y1, int x2, int y2,
+	                          uint32_t color1, uint32_t color2);
+	void (*drawUIRect)(void *data, int x, int y, int w, int h, uint32_t color);
+	void (*fillUIRect)(void *data, int x, int y, int w, int h, uint32_t color);
+	void (*fillUIRectGradient)(void *data, int x, int y, int w, int h,
+	                          uint32_t color1, uint32_t color2, int direction);
 
 } video_driver_t;
 
@@ -129,11 +182,6 @@ extern video_driver_t *video_drivers[];
 
 #define video_driver video_drivers[0]
 
-extern int video_mode;
-extern void *show_frame;
-extern void *draw_frame;
-extern void *work_frame;
-extern void *tex_frame;
 extern RECT full_rect;
 
 extern void *video_data;
