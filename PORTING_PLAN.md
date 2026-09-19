@@ -6,7 +6,22 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 ## Current Status Summary
 
-> **Milestone: All emulator cores are fully ported to all platforms (PSP, PS2, Desktop). Video driver abstraction is complete.** The next phase is GUI/menu system porting.
+> **Milestone: All emulator cores are fully ported to all platforms (PSP, PS2, Desktop), and the PS2 GUI/menu port is operational.** The PS2 frontend now uses the common GUI plus native gsKit rendering, PNG load/save support, save states, and command-list support.
+
+### PS2 GUI Validation (2026-09-19)
+
+- ✅ Baseline PS2 builds pass for CPS1, CPS2, MVS, and NCDZ.
+- ✅ GUI-enabled PS2 builds pass for CPS1, CPS2, MVS, and NCDZ.
+- ✅ GUI + SAVE_STATE + COMMAND_LIST builds pass for all four cores.
+- ✅ GS VRAM → RAM readback is implemented and used by screenshots/save-state thumbnails.
+- ✅ save_png() was validated in PCSX2.
+- ✅ CPS1 save/load was runtime-tested with 1941 (thumbnail → save → load).
+- ✅ PSP-only battery/CPU-clock controls are hidden from the PS2 GUI.
+- ✅ PS2 controller polling has a DualShock dead zone, correct axis orientation, and release-wait handling.
+- ⚠️ The common input API still exposes one logical physical controller. The PS2 backend discovers multiple ports/multitap slots, but using multiple physical controllers simultaneously needs an input-abstraction extension rather than another PS2-local stub.
+- ⚠️ A final pass on real PS2 hardware is still desirable after the latest GUI/input changes.
+
+> The detailed GUI tables and phase checklists below document the original migration plan and contain historical unchecked items. For current PS2 status, use the validation block above.
 
 ### Emulator Core Porting
 
@@ -45,43 +60,40 @@ This document outlines the remaining work needed to complete the cross-platform 
 
 | Component | PSP | PS2 | PC | Location | Notes |
 |-----------|-----|-----|-----|----------|-------|
-| Drawing primitives (`ui_draw.c`) | ✅ 1824 lines | ❌ | ❌ | `src/common/` | Portable — uses `ui_draw_driver`. PSP backend in `psp_ui_draw.c`. |
-| Menu system (`ui_menu.c`) | ✅ 2667 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (uses `video_driver->`, `pad_pressed()`) |
-| File browser (`filer.c`) | ✅ 1396 lines | ❌ | ❌ | `src/psp/` only | Uses `sceIoDread` for dirs |
-| UI framework (`ui.c`) | ✅ 1105 lines | ❌ | ❌ | `src/psp/` only | Mostly portable (dialogs, progress, popups) |
-| Configuration (`config.c`) | ✅ 555 lines | ❌ | ❌ | `src/psp/` only | Portable logic, PSP paths |
-| PNG handling (`png.c`) | ✅ | ❌ | ❌ | `src/psp/` only | PSP-specific texture upload |
+| Drawing primitives (`ui_draw.c`) | ✅ | ✅ | ⚠️ | `src/common/` + platform backend | PS2 backend uses native gsKit/GS rendering. Desktop was not revalidated in this pass. |
+| Menu system (`ui_menu.c`) | ✅ | ✅ | ⚠️ | `src/common/` | Shared menu logic is active on PS2. |
+| File browser (`filer.c`) | ✅ | ✅ | ⚠️ | `src/common/` | Shared file browser is active on PS2. |
+| UI framework (`ui.c`) | ✅ | ✅ | ⚠️ | `src/common/` | Dialogs, progress, popups, help, and state UI are shared. |
+| Configuration (`config.c`) | ✅ | ✅ | ⚠️ | `src/common/` | Shared configuration logic is active on PS2. |
+| PNG handling (`png.c`) | ✅ | ✅ | ⚠️ | Per-platform | PS2 load uses the video driver; save uses GS VRAM readback. |
 | Font data (`font/*.c`) | ✅ | ✅ | ✅ | `src/common/font/` | C arrays, platform-independent — **moved to common** |
 | Icon data (`icon/*.c`) | ✅ | ✅ | ✅ | `src/common/icon/` | C arrays, per-target — **moved to common** |
 | Per-system menus (`menu/*.c`) | ✅ | ✅ | ✅ | `src/common/menu/` | Pure data/logic — **moved to common** |
 | Per-system config (`config/*.c`) | ✅ | ✅ | ✅ | `src/common/config/` | Pure data/logic — **moved to common** |
 | Localization (`*_ui_text.c`) | ✅ | ✅ | ✅ | Per-platform | `ui_text_driver` already abstracted |
 | UI draw driver interface | ✅ | ✅ | ✅ | `src/common/ui_draw_driver.h/c` | 12 function pointers + null driver |
-| Cross-platform GUI API | ✅ | — | — | `src/common/main_ui_draw.h` | Declares all ~34 GUI functions |
+| Cross-platform GUI API | ✅ | ✅ | ✅ | `src/common/main_ui_draw.h` | Declares the shared GUI functions. |
 
 **Total PSP GUI code: ~11,000 lines** (core files) + font data + per-system menu/config data.
 
 ### What's Done vs What Remains
 
 ```
-✅ DONE                              ❌ REMAINING
+✅ DONE                              ⚠️ REMAINING / FOLLOW-UP
 ─────────────────────────            ──────────────────────────────
-Emulator cores (all 4)               Desktop ui_draw_driver (SDL2)
-Platform drivers (all 9)             PS2 ui_draw_driver (gsKit)
-Video driver vtable                  Portable GUI logic → src/common/
-Frame buffer abstraction             CMake GUI for PS2/Desktop
-beginFrame/endFrame                  File browser POSIX porting
-frameAddr/scissor                    PNG loading cross-platform
-PSP GUI (fully working)
-main_ui_draw.h (API contract)
-showFrame removed (no callers)
-ui_draw_driver_t interface
-Font/icon data → common
-Menu/config data → common
-font_t.h extracted to common
-ui_draw.c refactored → common
-PSP ui_draw_driver backend
-CMake wired: common + psp backend
+Emulator cores (all 4)               Real-hardware PS2 validation
+Platform drivers                     Multi-physical-pad input API
+Video driver vtable                  Desktop GUI build revalidation
+Frame buffer abstraction
+beginFrame/endFrame
+frameAddr/scissor
+Portable GUI logic → common
+PS2 ui_draw backend (gsKit)
+PS2 file browser/config/menu
+PS2 PNG load + GS readback/save
+PS2 save-state UI/thumbnails
+PS2 command-list builds (all cores)
+PSP-only power UI hidden on PS2
 ```
 
 ---
