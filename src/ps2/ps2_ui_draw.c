@@ -167,6 +167,8 @@ static int ensure_vram(ps2_ui_texture_t *tex)
 		/* (Re)allocate the 32-bit upload staging buffer. */
 		if (tex->upload_buffer)
 			free(tex->upload_buffer);
+		tex->upload_buffer = NULL;
+		tex->texture.Mem = NULL;
 		tex->upload_buffer = (uint32_t *)memalign(64,
 			(size_t)want_w * (size_t)want_h * 4);
 		if (tex->upload_buffer)
@@ -366,7 +368,7 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 
 	tex = &d->textures[slot];
 	gst = &tex->texture;
-	if (!gst->Vram || !tex->buffer)
+	if (!gst->Vram || !tex->buffer || !tex->upload_buffer || !gst->Mem)
 		return;
 
 	/* Lazy upload: any path that mutates the CPU buffer (uploadTexture,
