@@ -190,7 +190,7 @@ static void update_inputport_multi(uint32_t controller_count)
 	uint8_t combined_port5 = 0xff;
 	uint32_t primary_buttons;
 	uint32_t primary_processed = 0;
-	int saved_controller = option_controller;
+	int saved_controller;
 	uint32_t controller;
 
 	if (controller_count > 2)
@@ -221,6 +221,8 @@ static void update_inputport_multi(uint32_t controller_count)
 			PLATFORM_PAD_L | PLATFORM_PAD_R);
 		service_switch = 1;
 	}
+
+	saved_controller = option_controller;
 
 	for (controller = 0; controller < controller_count; controller++)
 	{

@@ -101,7 +101,7 @@ static void update_inputport_multi(uint32_t controller_count)
 	uint16_t combined_ports[CPS1_PORT_MAX];
 	uint32_t primary_buttons;
 	uint32_t primary_processed = 0;
-	int saved_controller = option_controller;
+	int saved_controller;
 	uint32_t controller;
 	int port;
 	int serv_switch = 0;
@@ -143,6 +143,8 @@ static void update_inputport_multi(uint32_t controller_count)
 			p12_start_pressed = 1;
 		}
 	}
+
+	saved_controller = option_controller;
 
 	for (controller = 0; controller < controller_count; controller++)
 	{

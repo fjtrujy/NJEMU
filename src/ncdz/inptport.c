@@ -109,7 +109,7 @@ static void update_inputport_multi(uint32_t controller_count)
 	uint8_t combined_port2 = 0x0f;
 	uint32_t primary_buttons;
 	uint32_t primary_processed = 0;
-	int saved_controller = option_controller;
+	int saved_controller;
 	uint32_t controller;
 
 	if (controller_count > 2)
@@ -124,6 +124,8 @@ static void update_inputport_multi(uint32_t controller_count)
 		setup_autofire();
 		primary_buttons = poll_gamepad_index(0);
 	}
+
+	saved_controller = option_controller;
 
 	for (controller = 0; controller < controller_count; controller++)
 	{
