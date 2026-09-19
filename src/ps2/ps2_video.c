@@ -638,7 +638,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	uint32_t clut_vram_size = gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * ps2->clut_bank_height, GS_PSM_CT16);
 	uint32_t all_clut_vram_size = clut_vram_size * ps2->clut_bank_count;
 	void *vram_cluts = (void *)gsKit_vram_alloc(gsGlobal, all_clut_vram_size, GSKIT_ALLOC_USERBUFFER);
-	if (!vram_cluts) {
+	if ((uintptr_t)vram_cluts == (uintptr_t)GSKIT_ALLOC_ERROR) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}

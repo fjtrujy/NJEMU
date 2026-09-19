@@ -143,6 +143,14 @@ static int ensure_vram(ps2_ui_texture_t *tex)
 		tex->texture.Vram = gsKit_vram_alloc(ps2_ui.gsGlobal,
 			gsKit_texture_size(want_w, want_h, tex->texture.PSM),
 			GSKIT_ALLOC_USERBUFFER);
+		if (tex->texture.Vram == GSKIT_ALLOC_ERROR)
+		{
+			tex->texture.Vram = 0;
+			tex->texture.Width = 0;
+			tex->texture.Height = 0;
+			tex->vram_valid = 0;
+			return 0;
+		}
 		gsKit_setup_tbw(&tex->texture);
 
 		/* (Re)allocate the 32-bit upload staging buffer. */
