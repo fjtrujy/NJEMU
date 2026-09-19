@@ -50,12 +50,33 @@ void pad_exit(void)
 }
 
 /*--------------------------------------------------------
+	Get Number of Physical Controllers
+--------------------------------------------------------*/
+
+uint32_t gamepad_count(void)
+{
+	if (!input_info || !input_driver->controllerCount)
+		return 0;
+
+	return input_driver->controllerCount(input_info);
+}
+
+
+/*--------------------------------------------------------
 	Get Pad Press State
 --------------------------------------------------------*/
 
 uint32_t poll_gamepad(void)
 {
-	return input_driver->poll(input_info);
+	return poll_gamepad_index(0);
+}
+
+uint32_t poll_gamepad_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->poll)
+		return 0;
+
+	return input_driver->poll(input_info, controller);
 }
 
 
@@ -66,7 +87,15 @@ uint32_t poll_gamepad(void)
 #if (EMU_SYSTEM == MVS)
 uint32_t poll_gamepad_fatfursp(void)
 {
-	return input_driver->pollFatfursp(input_info);
+	return poll_gamepad_fatfursp_index(0);
+}
+
+uint32_t poll_gamepad_fatfursp_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->pollFatfursp)
+		return 0;
+
+	return input_driver->pollFatfursp(input_info, controller);
 }
 #endif
 
@@ -78,7 +107,15 @@ uint32_t poll_gamepad_fatfursp(void)
 #if (EMU_SYSTEM == MVS)
 uint32_t poll_gamepad_analog(void)
 {
-	return input_driver->pollAnalog(input_info);
+	return poll_gamepad_analog_index(0);
+}
+
+uint32_t poll_gamepad_analog_index(uint32_t controller)
+{
+	if (!input_info || !input_driver->pollAnalog)
+		return 0;
+
+	return input_driver->pollAnalog(input_info, controller);
 }
 #endif
 
@@ -209,6 +246,7 @@ void pad_wait_press(int msec)
 
 input_driver_t input_null = {
 	"null",
+	NULL,
 	NULL,
 	NULL,
 	NULL,

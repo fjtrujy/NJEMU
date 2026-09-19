@@ -21,6 +21,10 @@ static void psp_free(void *data) {
 	free(psp);
 }
 
+static uint32_t psp_controllerCount(void *data) {
+	return data ? 1 : 0;
+}
+
 static uint32_t basicPoll(SceCtrlData *paddata) {
 	uint32_t data = 0;
 
@@ -45,9 +49,13 @@ static uint32_t basicPoll(SceCtrlData *paddata) {
 	return data;
 }
 
-static uint32_t psp_poll(void *data) {
+static uint32_t psp_poll(void *data, uint32_t controller) {
 	SceCtrlData paddata;
 	uint32_t btnsData = 0;
+	(void)data;
+
+	if (controller != 0)
+		return 0;
 
 	btnsData = basicPoll(&paddata);
 
@@ -60,9 +68,13 @@ static uint32_t psp_poll(void *data) {
 }
 
 #if (EMU_SYSTEM == MVS)
-static uint32_t psp_pollFatfursp(void *data) {
+static uint32_t psp_pollFatfursp(void *data, uint32_t controller) {
 	SceCtrlData paddata;
 	uint32_t btnsData = 0;
+	(void)data;
+
+	if (controller != 0)
+		return 0;
 
 	btnsData = basicPoll(&paddata);
 
@@ -74,9 +86,13 @@ static uint32_t psp_pollFatfursp(void *data) {
 	return btnsData;
 }
 
-static uint32_t psp_pollAnalog(void *data) {
+static uint32_t psp_pollAnalog(void *data, uint32_t controller) {
 	uint32_t btnsData;
 	SceCtrlData paddata;
+	(void)data;
+
+	if (controller != 0)
+		return 0;
 
 	btnsData = basicPoll(&paddata);
 
@@ -98,6 +114,7 @@ input_driver_t input_psp = {
 	"psp",
 	psp_init,
 	psp_free,
+	psp_controllerCount,
 	psp_poll,
 #if (EMU_SYSTEM == MVS)
 	psp_pollFatfursp,

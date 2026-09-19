@@ -32,6 +32,7 @@ struct JoyInfo joyInfo[MAX_CONTROLLERS];
 
 typedef struct ps2_input {
 	uint8_t mtap_opened[PS2_MAX_PORT];
+	uint32_t refresh_counter;
 } ps2_input_t;
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
@@ -88,8 +89,27 @@ static bool joyInfoReady(const struct JoyInfo *info)
 	return state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1;
 }
 
-static struct JoyInfo *getFirstActiveJoyInfo(ps2_input_t *ps2)
+static uint32_t activeJoyInfoCount(void)
 {
+	uint32_t count = 0;
+	uint32_t slot;
+
+	for (slot = 0; slot < PS2_MAX_SLOT; slot++) {
+		uint32_t port;
+
+		for (port = 0; port < PS2_MAX_PORT; port++) {
+			struct JoyInfo *info = getJoyInfo(port, slot);
+			if (joyInfoReady(info))
+				count++;
+		}
+	}
+
+	return count;
+}
+
+static struct JoyInfo *getActiveJoyInfo(ps2_input_t *ps2, uint32_t controller)
+{
+	uint32_t active_index = 0;
 	uint32_t slot;
 
 	/* Preserve the physical connector order used by the old backend:
@@ -99,26 +119,52 @@ static struct JoyInfo *getFirstActiveJoyInfo(ps2_input_t *ps2)
 
 		for (port = 0; port < PS2_MAX_PORT; port++) {
 			struct JoyInfo *info = getJoyInfo(port, slot);
-			if (joyInfoReady(info))
-				return info;
+			if (joyInfoReady(info)) {
+				if (active_index == controller)
+					return info;
+				active_index++;
+			}
 		}
 	}
 
-	/* A multitap may have been attached after startup. Refresh only when no
-	 * usable controller is currently available, avoiding an RPC every frame. */
+	/* The requested pad may have appeared since the last refresh. */
 	refreshJoyInfo(ps2);
+	active_index = 0;
 
 	for (slot = 0; slot < PS2_MAX_SLOT; slot++) {
 		uint32_t port;
 
 		for (port = 0; port < PS2_MAX_PORT; port++) {
 			struct JoyInfo *info = getJoyInfo(port, slot);
-			if (joyInfoReady(info))
-				return info;
+			if (joyInfoReady(info)) {
+				if (active_index == controller)
+					return info;
+				active_index++;
+			}
 		}
 	}
 
 	return NULL;
+}
+
+static uint32_t ps2_controllerCount(void *data)
+{
+	ps2_input_t *ps2 = (ps2_input_t *)data;
+	uint32_t count;
+
+	if (!ps2)
+		return 0;
+
+	count = activeJoyInfoCount();
+	/* Periodically refresh slot availability so a multitap attached after
+	 * startup becomes visible without paying device-setup RPC cost every frame. */
+	if (count == 0 || ++ps2->refresh_counter >= 60) {
+		ps2->refresh_counter = 0;
+		refreshJoyInfo(ps2);
+		count = activeJoyInfoCount();
+	}
+
+	return count;
 }
 
 static void *ps2_init(void)
@@ -167,7 +213,8 @@ static void ps2_free(void *data)
 	free(ps2);
 }
 
-static uint32_t basicPoll(ps2_input_t *ps2, struct padButtonStatus *paddata) {
+static uint32_t basicPoll(ps2_input_t *ps2, uint32_t controller,
+		struct padButtonStatus *paddata) {
 	uint32_t data = 0;
 	int32_t pressed_buttons, ret;
 	struct JoyInfo *info = NULL;
@@ -175,7 +222,7 @@ static uint32_t basicPoll(ps2_input_t *ps2, struct padButtonStatus *paddata) {
 	if (ps2 == NULL)
 		return data;
 
-	info = getFirstActiveJoyInfo(ps2);
+	info = getActiveJoyInfo(ps2, controller);
 	if (info == NULL) {
 		return data;
 	}
@@ -229,35 +276,35 @@ static uint32_t addAnalogDirections(const struct padButtonStatus *paddata,
 	return data;
 }
 
-static uint32_t ps2_poll(void *data) {
+static uint32_t ps2_poll(void *data, uint32_t controller) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
 	struct padButtonStatus paddata = {0};
 	uint32_t btnsData = 0;
 
-	btnsData = basicPoll(ps2, &paddata);
+	btnsData = basicPoll(ps2, controller, &paddata);
 	btnsData = addAnalogDirections(&paddata, btnsData, false);
 
 	return btnsData;
 }
 
 #if (EMU_SYSTEM == MVS)
-static uint32_t ps2_pollFatfursp(void *data) {
+static uint32_t ps2_pollFatfursp(void *data, uint32_t controller) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
 	struct padButtonStatus paddata = {0};
 	uint32_t btnsData = 0;
 
-	btnsData = basicPoll(ps2, &paddata);
+	btnsData = basicPoll(ps2, controller, &paddata);
 	btnsData = addAnalogDirections(&paddata, btnsData, true);
 
 	return btnsData;
 }
 
-static uint32_t ps2_pollAnalog(void *data) {
+static uint32_t ps2_pollAnalog(void *data, uint32_t controller) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
 	uint32_t btnsData;
 	struct padButtonStatus paddata = {0};
 
-	btnsData = basicPoll(ps2, &paddata);
+	btnsData = basicPoll(ps2, controller, &paddata);
 
 	/* Keep the portable button mask returned by basicPoll() in the low
 	 * 16 bits. padButtonStatus::btns is a raw, active-low PS2 mask and is
@@ -275,6 +322,7 @@ input_driver_t input_ps2 = {
 	"ps2",
 	ps2_init,
 	ps2_free,
+	ps2_controllerCount,
 	ps2_poll,
 #if (EMU_SYSTEM == MVS)
 	ps2_pollFatfursp,

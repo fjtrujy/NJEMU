@@ -24,9 +24,17 @@ static void desktop_free(void *data) {
 	free(data);
 }
 
-static uint32_t desktop_poll(void *data) {
+static uint32_t desktop_controllerCount(void *data) {
+	return data ? 1 : 0;
+}
+
+static uint32_t desktop_poll(void *data, uint32_t controller) {
 	uint32_t btnsData = 0;
 	SDL_Event event;
+	(void)data;
+
+	if (controller != 0)
+		return 0;
 	
 	/* Process all pending events */
 	while (SDL_PollEvent(&event)) {
@@ -75,13 +83,17 @@ static uint32_t desktop_poll(void *data) {
 }
 
 #if (EMU_SYSTEM == MVS)
-static uint32_t desktop_pollFatfursp(void *data) {
+static uint32_t desktop_pollFatfursp(void *data, uint32_t controller) {
 	uint32_t btnsData = 0;
+	(void)data;
+	(void)controller;
 	return btnsData;
 }
 
-static uint32_t desktop_pollAnalog(void *data) {
+static uint32_t desktop_pollAnalog(void *data, uint32_t controller) {
 	uint32_t btnsData = 0;
+	(void)data;
+	(void)controller;
 	return btnsData;
 }
 #endif
@@ -91,6 +103,7 @@ input_driver_t input_desktop = {
 	"desktop",
 	desktop_init,
 	desktop_free,
+	desktop_controllerCount,
 	desktop_poll,
 #if (EMU_SYSTEM == MVS)
 	desktop_pollFatfursp,
