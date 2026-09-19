@@ -30,11 +30,18 @@ int af_interval = 1;
 static uint8_t ALIGN16_DATA input_flag[MAX_INPUTS];
 static int ALIGN16_DATA af_map1[CPS1_BUTTON_MAX];
 static int ALIGN16_DATA af_map2[CPS1_BUTTON_MAX];
-static int ALIGN16_DATA af_counter[CPS1_BUTTON_MAX];
+static int ALIGN16_DATA af_counter[4][CPS1_BUTTON_MAX];
 static int input_analog_value[2];
 static int input_ui_wait;
 static int service_switch;
 static int p12_start_pressed;
+
+static void update_inputport0(void);
+static void update_inputport1(void);
+static void update_inputport2(void);
+static void update_inputport3(void);
+static void forgottn_update_dial(void);
+static uint32_t adjust_input(uint32_t buttons);
 
 /******************************************************************************
 	Local Functions
@@ -44,9 +51,10 @@ static int p12_start_pressed;
 	Update Autofire Flag
 ------------------------------------------------------*/
 
-static uint32_t update_autofire(uint32_t buttons)
+static uint32_t update_autofire(uint32_t buttons, int controller)
 {
 	int i;
+	int *counter = af_counter[controller & 3];
 
 	for (i = 0; i < input_max_buttons; i++)
 	{
@@ -56,22 +64,133 @@ static uint32_t update_autofire(uint32_t buttons)
 			{
 				buttons &= ~af_map1[i];
 
-				if (af_counter[i] == 0)
+				if (counter[i] == 0)
 					buttons |= af_map2[i];
 				else
 					buttons &= ~af_map2[i];
 
-				if (++af_counter[i] > af_interval)
-					af_counter[i] = 0;
+				if (++counter[i] > af_interval)
+					counter[i] = 0;
 			}
 			else
 			{
-				af_counter[i] = 0;
+				counter[i] = 0;
 			}
 		}
 	}
 
 	return buttons;
+}
+
+static void set_input_flags(uint32_t buttons)
+{
+	int i;
+
+	for (i = 0; i < MAX_INPUTS; i++)
+		input_flag[i] = (buttons & input_map[i]) != 0;
+}
+
+static void clear_secondary_system_flags(void)
+{
+	input_flag[SERV_COIN] = 0;
+	input_flag[SERV_SWITCH] = 0;
+}
+
+static void update_inputport_multi(uint32_t controller_count)
+{
+	uint16_t combined_ports[CPS1_PORT_MAX];
+	uint32_t primary_buttons;
+	uint32_t primary_processed = 0;
+	int saved_controller = option_controller;
+	uint32_t controller;
+	int port;
+	int serv_switch = 0;
+
+	if (controller_count > (uint32_t)input_max_players)
+		controller_count = (uint32_t)input_max_players;
+	if (controller_count > 4)
+		controller_count = 4;
+
+	for (port = 0; port < CPS1_PORT_MAX; port++)
+		combined_ports[port] = 0xffff;
+
+	service_switch = 0;
+	p12_start_pressed = 0;
+	primary_buttons = poll_gamepad_index(0);
+
+	if (systembuttons_available ? readHomeButton() :
+	    (primary_buttons & PLATFORM_PAD_START) &&
+	    (primary_buttons & PLATFORM_PAD_SELECT))
+	{
+		showmenu();
+		setup_autofire();
+		primary_buttons = poll_gamepad_index(0);
+	}
+
+	if ((primary_buttons & PLATFORM_PAD_L) &&
+	    (primary_buttons & PLATFORM_PAD_R))
+	{
+		if (primary_buttons & PLATFORM_PAD_SELECT)
+		{
+			primary_buttons &= ~(PLATFORM_PAD_SELECT |
+				PLATFORM_PAD_L | PLATFORM_PAD_R);
+			serv_switch = 1;
+		}
+		else if (primary_buttons & PLATFORM_PAD_START)
+		{
+			primary_buttons &= ~(PLATFORM_PAD_START |
+				PLATFORM_PAD_L | PLATFORM_PAD_R);
+			p12_start_pressed = 1;
+		}
+	}
+
+	for (controller = 0; controller < controller_count; controller++)
+	{
+		uint32_t buttons = controller == 0 ? primary_buttons :
+			poll_gamepad_index(controller);
+
+		buttons = adjust_input(buttons);
+		buttons = update_autofire(buttons, (int)controller);
+		set_input_flags(buttons);
+		if (controller != 0)
+			clear_secondary_system_flags();
+		if (serv_switch && controller == 0)
+			input_flag[SERV_SWITCH] = 1;
+
+		option_controller = (int)controller;
+		update_inputport0();
+		update_inputport1();
+		update_inputport2();
+		update_inputport3();
+		if (machine_input_type == INPTYPE_forgottn)
+			forgottn_update_dial();
+
+		for (port = 0; port < CPS1_PORT_MAX; port++)
+			combined_ports[port] &= cps1_port_value[port];
+
+		if (controller == 0)
+		{
+			primary_processed = buttons;
+
+			if (input_flag[SNAPSHOT])
+				save_snapshot();
+
+#ifdef COMMAND_LIST
+			if (input_flag[COMMANDLIST])
+				commandlist(1);
+#endif
+		}
+	}
+
+	for (port = 0; port < CPS1_PORT_MAX; port++)
+		cps1_port_value[port] = combined_ports[port];
+
+	option_controller = saved_controller;
+	set_input_flags(primary_processed);
+
+	/* Switch Player remains a single-pad compatibility feature. */
+	if (input_ui_wait > 0)
+		input_ui_wait--;
 }
 
 
@@ -1013,7 +1132,7 @@ void update_inputport(void)
 			}
 
 			buttons = adjust_input(buttons);
-			buttons = update_autofire(buttons);
+			buttons = update_autofire(buttons, 0);
 
 			for (i = 0; i < MAX_INPUTS; i++)
 				input_flag[i] = (buttons & input_map[i]) != 0;
@@ -1039,6 +1158,14 @@ void update_inputport(void)
 	else
 #endif
 	{
+		uint32_t controller_count = gamepad_count();
+
+		if (controller_count > 1)
+		{
+			update_inputport_multi(controller_count);
+			return;
+		}
+
 		service_switch = 0;
 		p12_start_pressed = 0;
 		
@@ -1066,7 +1193,7 @@ void update_inputport(void)
 		}
 
 		buttons = adjust_input(buttons);
-		buttons = update_autofire(buttons);
+		buttons = update_autofire(buttons, 0);
 
 		for (i = 0; i < MAX_INPUTS; i++)
 			input_flag[i] = (buttons & input_map[i]) != 0;
