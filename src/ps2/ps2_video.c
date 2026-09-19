@@ -1275,6 +1275,9 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 
 static void *ps2_getNativeObjects(void *data, int index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+	if (!ps2)
+		return NULL;
+
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
 		return ps2->gsGlobal;
@@ -1284,14 +1287,24 @@ static void *ps2_getNativeObjects(void *data, int index) {
 		return (void *)ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		return ps2->scrbitmap;
-	default:
-		return ps2->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].texture;
+	default: {
+		int layer_index = index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER;
+		if (layer_index < 0 || layer_index >= ps2->tex_layers_count)
+			return NULL;
+		return ps2->tex_layers[layer_index].texture;
+	}
 	}
 }
 
 static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+	if (!ps2 || textureIndex >= ps2->tex_layers_count)
+		return;
+
 	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
+	if (!tex || !tex->Mem || tex->Vram == GSKIT_ALLOC_ERROR)
+		return;
+
 	size_t size = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
 	SyncDCache(tex->Mem, (uint8_t *)tex->Mem + size);
 	gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height,
@@ -1300,6 +1313,15 @@ static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 
 static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+	if (!ps2 || !clut || bank_index >= ps2->clut_bank_count)
+		return;
+
+	ptrdiff_t offset = clut - ps2->clut_base;
+	ptrdiff_t total_entries =
+		(ptrdiff_t)ps2->clut_entries_per_bank * ps2->clut_bank_count;
+	if (offset < 0 || offset >= total_entries)
+		return;
+
 	void *vram = ps2_vramClutForBankIndex(data, bank_index);
 	/* Upload CLUT using target-specific dimensions */
 	size_t size = (size_t)CLUT_WIDTH * ps2->clut_bank_height * sizeof(uint16_t);
@@ -1311,14 +1333,29 @@ static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 
 static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+	if (!ps2 || textureIndex >= ps2->tex_layers_count ||
+	    !vertices || vertices_count == 0)
+		return;
+
 	texture_layer_t *layer = &ps2->tex_layers[textureIndex];
 	GSTEXTURE *tex = layer->texture;
+	if (!tex || tex->Vram == GSKIT_ALLOC_ERROR)
+		return;
+
 	bool is_indexed = (tex->PSM == GS_PSM_T8);
 
 	/* Only set CLUT for indexed (8-bit) textures */
 	if (is_indexed && clut != NULL) {
+		uint16_t *clut16 = (uint16_t *)clut;
+		ptrdiff_t offset = clut16 - ps2->clut_base;
+		ptrdiff_t total_entries =
+			(ptrdiff_t)ps2->clut_entries_per_bank * ps2->clut_bank_count;
+		if (bank_index >= ps2->clut_bank_count ||
+		    offset < 0 || offset >= total_entries)
+			return;
+
 		tex->VramClut = (u32)ps2_vramClutForBankIndex(data, bank_index);
-		gs_texclut texclut = ps2_textclutForParameters(data, clut, bank_index);
+		gs_texclut texclut = ps2_textclutForParameters(data, clut16, bank_index);
 
 		if (ps2->currentTexclut.specification.cov != texclut.specification.cov) {
 			ps2->currentTexclut = texclut;
