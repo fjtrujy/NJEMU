@@ -534,7 +534,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	// Original buffers containing clut indexes
 	size_t totalTextureSize = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
-		totalTextureSize += layer_textures[i].width * layer_textures[i].height;
+		totalTextureSize += layer_textures[i].width * layer_textures[i].height *
+			layer_textures[i].bytes_per_pixel;
 	}
 	uint8_t *textures = (uint8_t*)malloc(totalTextureSize);
 	ps2->texturesMem = textures;
@@ -547,7 +548,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	size_t texOffset = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
 		ps2->tex_layers[i].texture = initializeTexture(gsGlobal, layer_textures[i].width, layer_textures[i].height, layer_textures[i].bytes_per_pixel, textures + texOffset);
-		texOffset += layer_textures[i].width * layer_textures[i].height;
+		texOffset += layer_textures[i].width * layer_textures[i].height *
+			layer_textures[i].bytes_per_pixel;
 	}
 
 	/* Store CLUT configuration from target.
