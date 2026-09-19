@@ -15,6 +15,7 @@
 #include <gsKit.h>
 #include <dmaKit.h>
 #include <gsToolkit.h>
+#include <screenshot.h>
 
 #include <gsInline.h>
 #include <gsCore.h>
@@ -391,6 +392,9 @@ static inline u32 lzw(u32 val)
 
 static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 {
+	if (gsGlobal->FirstFrame)
+		return;
+
 	if (!GS_CSR_FINISH)
     	WaitSema(finish_sema_id);
 
@@ -872,6 +876,82 @@ static GSTEXTURE ps2_resolveSourceTexture(ps2_video_t *ps2, int index) {
 		break;
 	}
 	return tex;
+}
+
+int ps2_video_read_frame(void *data, int frame_index,
+	int x, int y, int width, int height,
+	uint16_t *dst, int dst_pitch)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal;
+	GSTEXTURE source;
+	uint16_t *readback;
+	size_t readback_size;
+	int had_pending_queue;
+	int result;
+
+	if (!ps2 || !dst || width <= 0 || height <= 0 || dst_pitch < width)
+		return 0;
+	gsGlobal = ps2->gsGlobal;
+
+	source = ps2_resolveSourceTexture(ps2, frame_index);
+	/* VRAM address 0 is valid (it is commonly the first screen buffer). */
+	if (source.PSM != GS_PSM_CT16)
+		return 0;
+
+	if (x < 0 || y < 0 || x + width > source.Width || y + height > source.Height)
+		return 0;
+
+	/* ps2_screenshot derives BITBLTBUF.SBW from its Width argument, so the
+	 * transfer width must match the complete GS source pitch (640 for screen
+	 * buffers, 512 for our render textures).  Crop into the caller's buffer
+	 * afterwards rather than programming an incorrect source stride. */
+	if ((source.Width & 63) != 0)
+		return 0;
+
+	readback_size = (size_t)source.Width * height * sizeof(uint16_t);
+	readback = (uint16_t *)memalign(64, readback_size);
+	if (!readback)
+		return 0;
+
+	/* ps2_screenshot() temporarily masks Path3 and reverses GS BUSDIR.  A GIF
+	 * queue still in flight would deadlock that transition.  gsKit appends a
+	 * FINISH token to non-empty queues but queue_exec() returns as soon as the
+	 * DMA is launched for one-shot queues, so explicitly wait for both the DMA
+	 * and that FINISH before starting the local-to-host transfer. */
+	had_pending_queue = gsGlobal->Per_Queue->tag_size != 0 ||
+		gsGlobal->Os_Queue->tag_size != 0;
+	gsKit_queue_exec(gsGlobal);
+	if (had_pending_queue) {
+		dmaKit_wait_fast();
+		gsKit_finish();
+	}
+
+	/* BITBLTBUF.SBP is expressed in 256-byte units. */
+	result = ps2_screenshot(readback, source.Vram / 256, 0, y,
+		source.Width, height, source.PSM);
+
+	if (result) {
+		/* ps2_screenshot() synchronizes the GS and then acknowledges/clears the
+		 * FINISH bit.  Both our flip path and gsKit_queue_exec_real() normally
+		 * expect that bit to describe an asynchronous previous frame.  There is
+		 * no previous frame left after this synchronous readback, so reset the
+		 * queue state to the same one-shot state used before an initial submit.
+		 * The next queue execution automatically switches FirstFrame back off. */
+		while (PollSema(finish_sema_id) >= 0);
+		gsGlobal->FirstFrame = GS_SETTING_ON;
+	}
+
+	if (result) {
+		for (int row = 0; row < height; row++) {
+			memcpy(dst + ((size_t)row * dst_pitch),
+				readback + ((size_t)row * source.Width) + x,
+				(size_t)width * sizeof(uint16_t));
+		}
+	}
+
+	free(readback);
+	return result;
 }
 
 /* Set the GS render target to the buffer identified by index. */

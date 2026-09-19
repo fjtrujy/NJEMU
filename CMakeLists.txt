@@ -67,6 +67,30 @@ if (GUI)
     add_definitions(-DGUI)
 endif()
 
+if (KERNEL_MODE AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DKERNEL_MODE)
+endif()
+
+if (COMMAND_LIST)
+    add_definitions(-DCOMMAND_LIST)
+endif()
+
+if (ADHOC AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DADHOC)
+endif()
+
+if (SAVE_STATE)
+    add_definitions(-DSAVE_STATE)
+endif()
+
+if (RELEASE)
+    add_definitions(-DRELEASE=1)
+endif()
+
+if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
+    add_definitions(-DSYSTEM_BUTTONS=1)
+endif()
+
 # Version
 set(VERSION_MAJOR 2)
 set(VERSION_MINOR 4)
@@ -588,6 +612,7 @@ elseif(PLATFORM STREQUAL "PS2")
         gskit
         dmakit
         ps2_drivers
+        "-ldebug"
     )
 elseif(PLATFORM STREQUAL "PSP")
     target_link_libraries(${TARGET} PUBLIC

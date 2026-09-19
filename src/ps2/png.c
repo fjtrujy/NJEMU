@@ -8,6 +8,7 @@
 
 #include <fcntl.h>
 #include <math.h>
+#include <malloc.h>
 #include <zlib.h>
 #include "emumain.h"
 
@@ -808,11 +809,17 @@ static int png_create_datastream(int fd)
 	dst = p.image;
 	uint16_t *vptr, *src;
 
-	vptr = (uint16_t *)video_driver->frameAddr(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0, 0);
+	vptr = (uint16_t *)memalign(64,
+		(size_t)SCR_WIDTH * SCR_HEIGHT * sizeof(uint16_t));
 	if (!vptr) {
-		/* GS local memory is not directly CPU-readable.  Keep screenshot capture
-		 * fail-safe until the PS2 driver grows an explicit local-to-host readback
-		 * operation instead of dereferencing a fake framebuffer pointer. */
+		png_free(p.image);
+		return 0;
+	}
+
+	if (!ps2_video_read_frame(video_data,
+		COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
+		0, 0, SCR_WIDTH, SCR_HEIGHT, vptr, SCR_WIDTH)) {
+		free(vptr);
 		png_free(p.image);
 		return 0;
 	}
@@ -830,6 +837,8 @@ static int png_create_datastream(int fd)
 			*dst++ = (uint8_t)GETB15(color);
 		}
 	}
+
+	free(vptr);
 
 	if (png_deflate_image(&p) == 0)
 		return 0;

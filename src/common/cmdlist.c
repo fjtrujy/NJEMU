@@ -9,6 +9,8 @@
 #include <limits.h>
 #include <stdarg.h>
 #include "emumain.h"
+#include "common/ui.h"
+#include "common/ui_draw.h"
 
 static void fd_printf(int fd, const char *fmt, ...)
 {

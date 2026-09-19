@@ -13,6 +13,7 @@
 #include <time.h>
 #include <zlib.h>
 #include "emumain.h"
+#include "common/ui.h"
 
 typedef struct {
 	uint16_t year;
@@ -66,10 +67,23 @@ static const char *current_version_str = "NCDZSV23";
 	Save Thumbnail from Work Area to File
 ------------------------------------------------------*/
 
+static uint16_t *state_thumbnail_addr(int x)
+{
+#if defined(PS2)
+	return (uint16_t *)video_driver->frameAddr(video_data,
+		COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, x, 0);
+#else
+	return ((uint16_t *)UI_TEXTURE) + x;
+#endif
+}
+
 static void save_thumbnail(void)
 {
 	int x, y, w, h;
-	uint16_t *src = ((uint16_t *)UI_TEXTURE) + 152;
+	uint16_t *src;
+#if defined(PS2)
+	uint16_t *readback = NULL;
+#endif
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
@@ -84,14 +98,48 @@ static void save_thumbnail(void)
 		h = 112;
 	}
 
+#if defined(PS2)
+	/* state_make_thumbnail() renders the preview into the GS-backed scratch,
+	 * so its CPU staging copy is stale here.  Read back exactly the generated
+	 * rectangle before serializing it into the state file. */
+	readback = (uint16_t *)calloc((size_t)w * h, sizeof(uint16_t));
+	if (readback) {
+		/* A failed readback leaves the zero-filled thumbnail in place.  Keeping
+		 * the fixed thumbnail payload is more important than the preview itself:
+		 * the rest of the state file uses fixed offsets past this block. */
+		ps2_video_read_frame(video_data,
+			COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
+			152, 0, w, h, readback, w);
+	}
+	src = readback;
+#else
+	src = state_thumbnail_addr(152);
+	if (!src)
+		return;
+#endif
+
 	for (y = 0; y < h; y++)
 	{
 		for (x = 0; x < w; x++)
 		{
+	#if defined(PS2)
+			uint16_t empty = 0;
+			state_save_word(src ? &src[x] : &empty, 1);
+	#else
 			state_save_word(&src[x], 1);
+	#endif
 		}
+	#if defined(PS2)
+		if (src)
+			src += w;
+	#else
 		src += BUF_WIDTH;
+	#endif
 	}
+
+#if defined(PS2)
+	free(readback);
+#endif
 }
 
 
@@ -102,7 +150,9 @@ static void save_thumbnail(void)
 static void load_thumbnail(int fd)
 {
 	int x, y, w, h;
-	uint16_t *dst = (uint16_t *)UI_TEXTURE;
+	uint16_t *dst = state_thumbnail_addr(0);
+	if (!dst)
+		return;
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
@@ -135,7 +185,9 @@ static void load_thumbnail(int fd)
 static void clear_thumbnail(void)
 {
 	int x, y, w, h;
-	uint16_t *dst = (uint16_t *)UI_TEXTURE;
+	uint16_t *dst = state_thumbnail_addr(0);
+	if (!dst)
+		return;
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)

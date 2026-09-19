@@ -2024,20 +2024,31 @@ static int state_sel;
 
 static void state_draw_thumbnail(void)
 {
+#if defined(PSP)
+	const uint32_t state_src_fmt = GU_PSM_5551;
+	const uint32_t state_dst_fmt = VRAM_FMT;
+#else
+	/* Non-PSP backends resolve the actual source/destination formats from
+	 * their native texture objects; these legacy GU format arguments are not
+	 * meaningful outside the PSP renderer. */
+	const uint32_t state_src_fmt = 0;
+	const uint32_t state_dst_fmt = 0;
+#endif
+
 	video_driver->beginFrame(video_data);
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
 	{
 		RECT clip1 = { 0, 0, 112, 152 };
 		RECT clip2 = { 317, 34, 317+112, 34+152 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	else
 #endif
 	{
 		RECT clip1 = { 0, 0, 152, 112 };
 		RECT clip2 = { 298, 52, 298+152, 52+112 };
-		video_driver->drawTexture(video_data, GU_PSM_5551, VRAM_FMT, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	video_driver->endFrame(video_data);
 }

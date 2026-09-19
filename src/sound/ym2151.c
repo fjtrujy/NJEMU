@@ -1953,7 +1953,7 @@ STATE_LOAD( ym2151 )
 #ifdef ADHOC
 	state_load_okim6295();
 #else
-	state_load_okim6295(fp);
+	state_load_okim6295(fd);
 #endif
 }
 
