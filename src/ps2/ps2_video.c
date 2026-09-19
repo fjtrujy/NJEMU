@@ -141,7 +141,7 @@ typedef struct ps2_video {
 
 	void *vram_cluts;
 	uint32_t clut_vram_size;
-	uint32_t finish_callback_id;
+	int32_t finish_callback_id;
 } ps2_video_t;
 
 static int32_t finish_sema_id = -1;
@@ -170,6 +170,10 @@ void *ps2_video_get_gsGlobal(void *video_data)
 static GSTEXTURE *initializeTexture(GSGLOBAL *gsGlobal, int width, int height, uint8_t bytes_per_pixel, void *mem) {
 	GSTEXTURE *tex = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
 	uint32_t psm = bytes_per_pixel == 1 ? GS_PSM_T8 : GS_PSM_CT16;
+
+	if (!tex)
+		return NULL;
+
 	tex->Width = width;
 	tex->Height = height;
 	tex->PSM = psm;
@@ -180,6 +184,10 @@ static GSTEXTURE *initializeTexture(GSGLOBAL *gsGlobal, int width, int height, u
 	tex->Filter = GS_FILTER_NEAREST;
 	tex->Mem = mem;
 	tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(width, height, psm), GSKIT_ALLOC_USERBUFFER);
+	if (tex->Vram == GSKIT_ALLOC_ERROR) {
+		free(tex);
+		return NULL;
+	}
 
 	gsKit_setup_tbw(tex);
 	return tex;
@@ -187,12 +195,20 @@ static GSTEXTURE *initializeTexture(GSGLOBAL *gsGlobal, int width, int height, u
 
 static GSTEXTURE *initializeRenderTexture(GSGLOBAL *gsGlobal, int width, int height) {
 	GSTEXTURE *tex = (GSTEXTURE *)calloc(1, sizeof(GSTEXTURE));
+
+	if (!tex)
+		return NULL;
+
 	tex->Width = width;
 	tex->Height = height;
 	tex->PSM = GS_PSM_CT16;
 	tex->Filter = GS_FILTER_NEAREST;
 	tex->Mem = 0;
 	tex->Vram = gsKit_vram_alloc(gsGlobal, gsKit_texture_size(width, height, GS_PSM_CT16), GSKIT_ALLOC_USERBUFFER);
+	if (tex->Vram == GSKIT_ALLOC_ERROR) {
+		free(tex);
+		return NULL;
+	}
 
 	gsKit_setup_tbw(tex);
 	return tex;
@@ -210,8 +226,7 @@ static GSTEXTURE *initializeCpuTexture(GSGLOBAL *gsGlobal, int width, int height
 	memset(mem, 0, size);
 	GSTEXTURE *texture = initializeTexture(gsGlobal, width, height,
 		bytes_per_pixel, mem);
-	if (!texture || texture->Vram == GSKIT_ALLOC_ERROR) {
-		free(texture);
+	if (!texture) {
 		free(mem);
 		return NULL;
 	}
@@ -220,6 +235,43 @@ static GSTEXTURE *initializeCpuTexture(GSGLOBAL *gsGlobal, int width, int height
 	return texture;
 }
 #endif
+
+static void ps2_cleanup_failed_init(ps2_video_t *ps2)
+{
+	if (!ps2)
+		return;
+
+#if defined(GUI)
+	free(ps2->ui_scratch_mem);
+	ps2->ui_scratch_mem = NULL;
+	free(ps2->ui_scratch);
+	ps2->ui_scratch = NULL;
+#endif
+
+	if (ps2->tex_layers) {
+		for (int i = 0; i < ps2->tex_layers_count; i++)
+			free(ps2->tex_layers[i].texture);
+	}
+	free(ps2->tex_layers);
+	ps2->tex_layers = NULL;
+	free(ps2->texturesMem);
+	ps2->texturesMem = NULL;
+	free(ps2->scrbitmap);
+	ps2->scrbitmap = NULL;
+
+	if (ps2->gsGlobal) {
+		gsKit_vram_clear(ps2->gsGlobal);
+		gsKit_deinit_global(ps2->gsGlobal);
+		ps2->gsGlobal = NULL;
+	}
+
+	if (finish_sema_id >= 0) {
+		DeleteSema(finish_sema_id);
+		finish_sema_id = -1;
+	}
+
+	free(ps2);
+}
 
 static inline void *ps2_vramClutForBankIndex(void *data, uint8_t bank_index) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -477,6 +529,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
 	if (!ps2)
 		return NULL;
+	ps2->finish_callback_id = -1;
 
 	gsGlobal = gsKit_init_global();
 	if (!gsGlobal) {
@@ -538,16 +591,33 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 			layer_textures[i].bytes_per_pixel;
 	}
 	uint8_t *textures = (uint8_t*)malloc(totalTextureSize);
+	if (!textures) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
 	ps2->texturesMem = textures;
 
 	// Initialize textures
 	ps2->tex_layers = (texture_layer_t *)calloc(layer_textures_count, sizeof(texture_layer_t));
+	if (!ps2->tex_layers) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
 	ps2->tex_layers_count = layer_textures_count;
 
 	ps2->scrbitmap = initializeRenderTexture(gsGlobal, RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT);
+	if (!ps2->scrbitmap) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
+
 	size_t texOffset = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
 		ps2->tex_layers[i].texture = initializeTexture(gsGlobal, layer_textures[i].width, layer_textures[i].height, layer_textures[i].bytes_per_pixel, textures + texOffset);
+		if (!ps2->tex_layers[i].texture) {
+			ps2_cleanup_failed_init(ps2);
+			return NULL;
+		}
 		texOffset += layer_textures[i].width * layer_textures[i].height *
 			layer_textures[i].bytes_per_pixel;
 	}
@@ -563,6 +633,10 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	uint32_t clut_vram_size = gsKit_texture_size(CLUT_WIDTH, CLUT_HEIGHT * ps2->clut_bank_height, GS_PSM_CT16);
 	uint32_t all_clut_vram_size = clut_vram_size * ps2->clut_bank_count;
 	void *vram_cluts = (void *)gsKit_vram_alloc(gsGlobal, all_clut_vram_size, GSKIT_ALLOC_USERBUFFER);
+	if (!vram_cluts) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
 	printf("CLUT VRAM: %p (banks=%d, entries/bank=%d, height=%d, size/bank=%u)\n",
 		   vram_cluts, ps2->clut_bank_count, ps2->clut_entries_per_bank, ps2->clut_bank_height, clut_vram_size);
 	ps2->clut_vram_size = clut_vram_size;
@@ -573,18 +647,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->ui_scratch = initializeCpuTexture(gsGlobal, BUF_WIDTH, SCR_HEIGHT, 2,
 		(void **)&ps2->ui_scratch_mem);
 	if (!ps2->ui_scratch) {
-		for (int i = 0; i < ps2->tex_layers_count; i++)
-			free(ps2->tex_layers[i].texture);
-		free(ps2->texturesMem);
-		free(ps2->tex_layers);
-		free(ps2->scrbitmap);
-		gsKit_vram_clear(gsGlobal);
-		gsKit_deinit_global(gsGlobal);
-		if (finish_sema_id >= 0) {
-			DeleteSema(finish_sema_id);
-			finish_sema_id = -1;
-		}
-		free(ps2);
+		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}
 #endif
@@ -593,6 +656,10 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->clearScreenColor = color_to_RGBAQ(0x00, 0x00, 0x00, 0x80, 0);
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
+	if (ps2->finish_callback_id < 0) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
 
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER);
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
@@ -610,10 +677,18 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 static void ps2_free(void *data)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+
+	if (!ps2)
+		return;
+
+	if (ps2->finish_callback_id >= 0) {
+		gsKit_remove_finish_handler(ps2->finish_callback_id);
+		ps2->finish_callback_id = -1;
+	}
+
 	gsKit_clear(ps2->gsGlobal, GS_BLACK);
 	gsKit_vram_clear(ps2->gsGlobal);
 	gsKit_deinit_global(ps2->gsGlobal);
-	gsKit_remove_finish_handler(ps2->finish_callback_id);
 	if (finish_sema_id >= 0)
 	{
 		DeleteSema(finish_sema_id);
