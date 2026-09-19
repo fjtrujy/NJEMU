@@ -656,8 +656,10 @@ static int png_add_text(const char *keyword, const char *text)
 		return 0;
 
 	pt->length = strlen(keyword) + strlen(text) + 1;
-	if ((pt->data = malloc(pt->length + 1)) == NULL)
+	if ((pt->data = malloc(pt->length + 1)) == NULL) {
+		free(pt);
 		return 0;
+	}
 
 	strcpy(pt->data, keyword);
 	strcpy(pt->data + strlen(keyword) + 1, text);
@@ -826,7 +828,10 @@ static int png_create_datastream(int fd)
 
 	for (y = 0; y < p.height; y++)
 	{
-		src = &vptr[y * BUF_WIDTH];
+		/* ps2_video_read_frame() above writes a tightly packed SCR_WIDTH
+		 * destination.  BUF_WIDTH is the 512-pixel CPU scratch pitch used by
+		 * other GUI surfaces and must not be used for this readback buffer. */
+		src = &vptr[y * SCR_WIDTH];
 
 		*dst++ = 0;
 		for (x = 0; x < p.width; x++)
