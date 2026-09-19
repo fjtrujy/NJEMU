@@ -640,6 +640,17 @@ struct png_text
 
 static struct png_text *png_text_list = 0;
 
+static void png_free_text_list(void)
+{
+	while (png_text_list)
+	{
+		struct png_text *pt = png_text_list;
+		png_text_list = pt->next;
+		free(pt->data);
+		free(pt);
+	}
+}
+
 static void convert_to_network_order(uint32_t i, uint8_t *v)
 {
 	v[0] = (i >> 24) & 0xff;
@@ -796,6 +807,7 @@ static int png_create_datastream(int fd)
 	uint32_t x, y;
 	uint8_t *dst;
 	struct png_info p;
+	int result = 0;
 
 	memset(&p, 0, sizeof (struct png_info));
 	p.width    = SCR_WIDTH;
@@ -846,15 +858,18 @@ static int png_create_datastream(int fd)
 	free(vptr);
 
 	if (png_deflate_image(&p) == 0)
-		return 0;
+		goto cleanup;
 
 	if (png_write_datastream(fd, &p) == 0)
-		return 0;
+		goto cleanup;
 
+	result = 1;
+
+cleanup:
 	if (p.image)  png_free(p.image);
 	if (p.zimage) png_free(p.zimage);
 
-	return 1;
+	return result;
 }
 
 
@@ -869,7 +884,7 @@ int save_png(const char *path)
 
 	png_mem_init(0);
 
-	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
+	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0777)) >= 0)
 	{
 		if ((res = png_add_text("Software", APPNAME_STR " " VERSION_STR)))
 		{
@@ -887,6 +902,7 @@ int save_png(const char *path)
 			remove(path);
 	}
 
+	png_free_text_list();
 	png_mem_exit();
 
 	return res;
