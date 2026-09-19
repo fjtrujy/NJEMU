@@ -31,12 +31,16 @@ static void prepare_IOP()
     sbv_patch_fileio();
 }
 
-static void init_drivers()
+static bool init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
-	init_audio_driver();
+	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
+		deinit_only_boot_ps2_filesystem_driver();
+		return false;
+	}
 
 	fileXioSetRWBufferSize(CACHE_BLOCK_SIZE); // Match cache block size for better performance
+	return true;
 }
 
 static void deinit_drivers()
@@ -47,9 +51,14 @@ static void deinit_drivers()
 
 static void *ps2_init(void) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)calloc(1, sizeof(ps2_platform_t));
+	if (ps2 == NULL)
+		return NULL;
 
     prepare_IOP();
-    init_drivers();
+	if (!init_drivers()) {
+		free(ps2);
+		return NULL;
+	}
 
 	return ps2;
 }

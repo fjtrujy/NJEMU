@@ -123,7 +123,8 @@ static void ps2_waitThreadEnd(void *data)
 
 static void ps2_wakeupThread(void *data) {
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
-	WakeupThread(ps2->threadId);
+	if (ps2 != NULL && ps2->threadId >= 0)
+		WakeupThread(ps2->threadId);
 }
 
 static void ps2_deleteThread(void *data)
@@ -136,12 +137,14 @@ static void ps2_deleteThread(void *data)
 
 static void ps2_resumeThread(void *data) {
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
-	ResumeThread(ps2->threadId);
+	if (ps2 != NULL && ps2->threadId >= 0)
+		ResumeThread(ps2->threadId);
 }
 
 static void ps2_suspendThread(void *data) {
 	ps2_thread_t *ps2 = (ps2_thread_t*)data;
-	SuspendThread(ps2->threadId);
+	if (ps2 != NULL && ps2->threadId >= 0)
+		SuspendThread(ps2->threadId);
 }
 
 static void ps2_sleepThread(void *data) {

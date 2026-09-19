@@ -50,13 +50,17 @@ static volatile uint32_t g_mp3_last_read_pos = 0;
 
 static void *ps2_init(void) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)calloc(1, sizeof(ps2_audio_t));
+	if (ps2 == NULL)
+		return NULL;
 	ps2->is_mp3_channel = false;
 	return ps2;
 }
 
 static void ps2_free(void *data) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
-	
+	if (ps2 == NULL)
+		return;
+
 	if (ps2->is_mp3_channel) {
 		/* Clean up MP3 resources */
 		g_mp3_active = false;
