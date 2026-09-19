@@ -497,13 +497,25 @@ int main(int argc, char *argv[]) {
 #endif
 #endif
 
-    // Init process
-	platform_data = platform_driver->init();
-	if (platform_driver->availableRam != NULL) {
-		memory_profile_select(platform_driver->availableRam(platform_data));
-	}
-	ticker_data = ticker_driver->init();
-	power_data = power_driver->init();
+	    // Init process
+		platform_data = platform_driver->init();
+		if (platform_data == NULL) {
+			printf("Failed to initialize platform driver\n");
+			return 1;
+		}
+		if (platform_driver->availableRam != NULL) {
+			memory_profile_select(platform_driver->availableRam(platform_data));
+		}
+		ticker_data = ticker_driver->init();
+		if (ticker_data == NULL) {
+			printf("Failed to initialize ticker driver\n");
+			goto cleanup_platform;
+		}
+		power_data = power_driver->init();
+		if (power_data == NULL) {
+			printf("Failed to initialize power driver\n");
+			goto cleanup_ticker;
+		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	getcwd(launchDir, PATH_MAX - 1);
@@ -520,14 +532,25 @@ int main(int argc, char *argv[]) {
 	mkdir(screenshotDir,0777); // Create screenshot folder
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	power_driver->setLowestCpuClock(power_data);
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	ui_text_data = ui_text_driver->init();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	pad_init();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-
-	video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
+		power_driver->setLowestCpuClock(power_data);
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		ui_text_data = ui_text_driver->init();
+		if (ui_text_data == NULL) {
+			printf("Failed to initialize UI text driver\n");
+			goto cleanup_power;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		if (!pad_init()) {
+			printf("Failed to initialize input driver\n");
+			goto cleanup_ui_text;
+		}
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+	
+		video_data = video_driver->init(emu_layer_textures, emu_layer_textures_count, &emu_clut_info);
+		if (video_data == NULL) {
+			printf("Failed to initialize video driver\n");
+			goto cleanup_input;
+		}
 
 // #if defined(GUI) && defined(PS2)
 // 	while(1) {
@@ -542,16 +565,20 @@ int main(int argc, char *argv[]) {
 // 	}
 // #endif
 
-	ui_init();
+		if (!ui_init()) {
+			printf("Failed to initialize UI draw driver\n");
+			goto cleanup_video;
+		}
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	// Platform system buttom
 	systembuttons_available = platform_driver->startSystemButtons(platform_data);
 
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	file_browser();
-	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	video_driver->free(video_data);
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		file_browser();
+		ui_exit();
+		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+		video_driver->free(video_data);
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 	ui_text_driver->free(ui_text_data);
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
@@ -561,7 +588,21 @@ int main(int argc, char *argv[]) {
 	// Platform exit
 	power_driver->free(power_data);
 	ticker_driver->free(ticker_data);
-	platform_driver->free(platform_data);
+		platform_driver->free(platform_data);
+	
+		return 0;
 
-	return 0;
+cleanup_video:
+		video_driver->free(video_data);
+cleanup_input:
+		pad_exit();
+cleanup_ui_text:
+		ui_text_driver->free(ui_text_data);
+cleanup_power:
+		power_driver->free(power_data);
+cleanup_ticker:
+		ticker_driver->free(ticker_data);
+cleanup_platform:
+		platform_driver->free(platform_data);
+		return 1;
 }

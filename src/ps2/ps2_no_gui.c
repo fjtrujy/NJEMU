@@ -178,8 +178,11 @@ void save_gamecfg(const char *name) {
 
 }
 
-void ui_init(void) {
+int ui_init(void) {
+	return 1;
+}
 
+void ui_exit(void) {
 }
 
 void load_gamecfg(const char *name) {

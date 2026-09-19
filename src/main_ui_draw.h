@@ -1,7 +1,8 @@
 #ifndef MAIN_UI_DRAW_H
 #define MAIN_UI_DRAW_H
 
-void ui_init(void);
+int ui_init(void);
+void ui_exit(void);
 
 void small_font_print(int sx, int sy, const char *s, int bg);
 void small_font_printf(int x, int y, const char *text, ...);

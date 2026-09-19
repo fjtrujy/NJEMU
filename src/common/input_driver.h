@@ -27,7 +27,7 @@
 
 #define PAD_WAIT_INFINITY	-1
 
-void pad_init(void);
+bool pad_init(void);
 void pad_exit(void);
 uint32_t poll_gamepad(void);
 #if (EMU_SYSTEM == MVS)

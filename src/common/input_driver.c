@@ -33,13 +33,14 @@ void *input_info;
 	Initialize Pad
 --------------------------------------------------------*/
 
-void pad_init(void)
+bool pad_init(void)
 {
 	pad = 0;
 	pressed_check = 0;
 	pressed_count = 0;
 	pressed_delay = 0;
 	input_info = input_driver->init();
+	return input_info != NULL;
 }
 
 void pad_exit(void)

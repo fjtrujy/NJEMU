@@ -141,7 +141,7 @@ static const int gauss_fact[12][12] = {
 
 #include "common/font/volume_icon.c"
 
-void ui_init(void)
+int ui_init(void)
 {
 	int code, x, y, alpha;
 	uint16_t *dst;
@@ -158,9 +158,17 @@ void ui_init(void)
 
 	/* Initialize the driver — allocates platform-specific texture storage */
 	ui_draw_data = ui_draw_driver->init(video_data);
+	if (ui_draw_data == NULL)
+		return 0;
 
 	/* Get CPU-writable base pointer for the font scratch texture */
 	tex_font = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
+	if (tex_font == NULL)
+	{
+		ui_draw_driver->term(ui_draw_data);
+		ui_draw_data = NULL;
+		return 0;
+	}
 
 	/* Clear the font scratch area */
 	ui_draw_driver->clearTexture(ui_draw_data, UI_TEXTURE_FONT, BUF_WIDTH, 48, BUF_WIDTH);
@@ -328,6 +336,21 @@ void ui_init(void)
 
 	for (x = 0; x < 12; x++)
 		gauss_sum += gauss_fact[GAUSS_WIDTH][x];
+
+	return 1;
+}
+
+void ui_exit(void)
+{
+	if (ui_draw_data != NULL)
+	{
+		ui_draw_driver->term(ui_draw_data);
+		ui_draw_data = NULL;
+	}
+	tex_font = NULL;
+	tex_smallfont = NULL;
+	tex_volicon = NULL;
+	tex_boxshadow = NULL;
 }
 
 
@@ -651,6 +674,7 @@ static void make_font_texture(struct font_t *font, int r, int g, int b)
 		}
 		dst += BUF_WIDTH;
 	}
+
 }
 
 
