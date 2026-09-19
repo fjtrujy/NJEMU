@@ -13,13 +13,30 @@ This document outlines the remaining work needed to complete the cross-platform 
 - ✅ Baseline PS2 builds pass for CPS1, CPS2, MVS, and NCDZ.
 - ✅ GUI-enabled PS2 builds pass for CPS1, CPS2, MVS, and NCDZ.
 - ✅ GUI + SAVE_STATE + COMMAND_LIST builds pass for all four cores.
+- ✅ Final regression matrix passes 12/12 builds: all four cores in baseline,
+  GUI, and GUI + SAVE_STATE + COMMAND_LIST configurations.
 - ✅ GS VRAM → RAM readback is implemented and used by screenshots/save-state thumbnails.
 - ✅ save_png() was validated in PCSX2.
+- ✅ PS2 screenshot readback now uses the correct tightly-packed 480-pixel
+  pitch; PNG failure paths also clean up temporary allocations correctly.
 - ✅ CPS1 save/load was runtime-tested with 1941 (thumbnail → save → load).
 - ✅ PSP-only battery/CPU-clock controls are hidden from the PS2 GUI.
 - ✅ PS2 controller polling has a DualShock dead zone, correct axis orientation, and release-wait handling.
+- ✅ PS2 controller hotplug/fallback, thread lifecycle, audio lifecycle, UI
+  texture allocations, VRAM failures, and renderer layer/CLUT indices are
+  guarded instead of propagating invalid handles/pointers.
+- ✅ NCDZ CDDA pause drops queued PS2 mixer samples immediately instead of
+  playing a buffered audio tail.
+- ✅ Runtime launch/screenshot paths are bounded and derived from the validated
+  launch directory.
+- ✅ PS2 output deliberately remains NTSC/60 Hz on all console regions:
+  auto-selecting PAL would make VSync-backed limiting run at 50 Hz and slow
+  these ~60 Hz arcade systems.
+- ✅ A current CPS1 GUI + SAVE_STATE + COMMAND_LIST ELF remains running in
+  PCSX2 through initialization/file-browser idle without an abort.
 - ⚠️ The common input API still exposes one logical physical controller. The PS2 backend discovers multiple ports/multitap slots, but using multiple physical controllers simultaneously needs an input-abstraction extension rather than another PS2-local stub.
-- ⚠️ A final pass on real PS2 hardware is still desirable after the latest GUI/input changes.
+- ⚠️ A final pass on real PS2 hardware is still desirable after the latest
+  GUI/input/readback changes, especially screenshot output and NCDZ CDDA.
 
 > The detailed GUI tables and phase checklists below document the original migration plan and contain historical unchecked items. For current PS2 status, use the validation block above.
 
