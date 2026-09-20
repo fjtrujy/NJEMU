@@ -230,7 +230,10 @@ int ui_init(void)
 		return 0;
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
-	ui_layout_init(SCR_WIDTH, SCR_HEIGHT, output_width, output_height);
+	/* Use the physical output as the logical layout canvas. PSP naturally keeps
+	 * its historical 480x272 space, while PS2/Desktop can reflow into their
+	 * larger native presentation area without changing emulator render targets. */
+	ui_layout_init(output_width, output_height, output_width, output_height);
 
 	/* Get CPU-writable base pointer for the font scratch texture */
 	tex_font = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
@@ -1436,7 +1439,9 @@ int ui_light_update(void)
 	/* The legacy partial-refresh path copies rectangles between frame buffers
 	 * using logical PSP coordinates. Until those copies are viewport-aware,
 	 * scaled outputs redraw the complete UI instead of mixing coordinate spaces. */
-	return ui_layout_uses_output_transform() ? UI_FULL_REFRESH : UI_PARTIAL_REFRESH;
+	return (ui_layout_get()->logical_width != SCR_WIDTH ||
+		ui_layout_get()->logical_height != SCR_HEIGHT)
+		? UI_FULL_REFRESH : UI_PARTIAL_REFRESH;
 }
 
 

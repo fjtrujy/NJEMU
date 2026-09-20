@@ -24,24 +24,16 @@
 
 void load_background(int number)
 {
-	int transform_enabled = ui_layout_output_transform_enabled();
+	(void)number;
 
-	/* SCREEN_BITMAP remains the PSP-sized logical background cache for now.
-	 * Build that cache in logical coordinates, then scale it only when it is
-	 * presented to the physical output. */
-	ui_layout_set_output_transform(0);
+	/* SCREEN_BITMAP remains the compact PSP-sized background cache. The cached
+	 * content is intentionally flat; resolution-dependent chrome is rendered by
+	 * show_background() after the cache has been expanded to the output. */
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(UI_PAL_BG2);
 
-	draw_bar_shadow();
-
-	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
-	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
-	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
-
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 	video_driver->endFrame(video_data);
-	ui_layout_set_output_transform(transform_enabled);
 }
 
 
@@ -58,7 +50,7 @@ void show_background(void)
 	const uint32_t black = 0xff000000;
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
-	ui_layout_update_output(output_width, output_height);
+	ui_layout_init(output_width, output_height, output_width, output_height);
 	layout = ui_layout_get();
 	viewport.left = layout->viewport_x;
 	viewport.top = layout->viewport_y;
@@ -68,8 +60,8 @@ void show_background(void)
 	video_driver->transferWorkFrame(video_data, &full_rect, &viewport);
 
 	/* transferWorkFrame() leaves the physical presentation target active on all
-	 * GUI backends. Fill only the area outside the aspect-preserving viewport so
-	 * returning from gameplay cannot leave stale pixels in the bars. */
+	 * GUI backends. Native-layout platforms cover the full output; the fallback
+	 * bar fill remains useful if a future backend chooses an inset viewport. */
 	if (ui_layout_uses_output_transform()) {
 		if (viewport.top > 0)
 			ui_draw_driver->fillRect(ui_draw_data, 0, 0,
@@ -84,6 +76,11 @@ void show_background(void)
 			ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
 				layout->output_width - viewport.right, layout->viewport_height, black);
 	}
+
+	draw_bar_shadow();
+	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
+	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
 }
 
 
