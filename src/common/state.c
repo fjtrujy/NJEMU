@@ -14,6 +14,7 @@
 #include <zlib.h>
 #include "emumain.h"
 #include "common/ui.h"
+#include "common/ui_draw_driver.h"
 
 typedef struct {
 	uint16_t year;
@@ -73,7 +74,8 @@ static uint16_t *state_thumbnail_addr(int x)
 	return (uint16_t *)video_driver->frameAddr(video_data,
 		COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, x, 0);
 #else
-	return ((uint16_t *)UI_TEXTURE) + x;
+	uint16_t *base = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
+	return base ? base + x : NULL;
 #endif
 }
 
@@ -114,27 +116,23 @@ static void save_thumbnail(void)
 	src = readback;
 #else
 	src = state_thumbnail_addr(152);
-	if (!src)
-		return;
 #endif
 
 	for (y = 0; y < h; y++)
 	{
 		for (x = 0; x < w; x++)
 		{
-	#if defined(PS2)
 			uint16_t empty = 0;
 			state_save_word(src ? &src[x] : &empty, 1);
-	#else
-			state_save_word(&src[x], 1);
-	#endif
 		}
-	#if defined(PS2)
 		if (src)
+		{
+#if defined(PS2)
 			src += w;
-	#else
-		src += BUF_WIDTH;
-	#endif
+#else
+			src += BUF_WIDTH;
+#endif
+		}
 	}
 
 #if defined(PS2)
@@ -277,7 +275,7 @@ int state_save(int slot)
 		save_thumbnail();
 		update_progress();
 
-		write(fd, inbuf, (uint32_t)state_buffer - (uint32_t)inbuf);
+		write(fd, inbuf, (size_t)(state_buffer - inbuf));
 		update_progress();
 
 		memset(inbuf, 0, STATE_BUFFER_SIZE);
@@ -295,7 +293,7 @@ int state_save(int slot)
 		state_save_cdrom();
 		update_progress();
 
-		insize = (uint32_t)state_buffer - (uint32_t)inbuf;
+		insize = (unsigned long)(state_buffer - inbuf);
 		outsize = insize * 1.1 + 12;
 		if ((outbuf = malloc(outsize)) == NULL)
 		{
@@ -383,7 +381,7 @@ int state_save(int slot)
 #endif
 		update_progress();
 
-		size = (uint32_t)state_buffer - (uint32_t)state_buffer_base;
+		size = (uint32_t)(state_buffer - state_buffer_base);
 		write(fd, state_buffer_base, size);
 		close(fd);
 		update_progress();
