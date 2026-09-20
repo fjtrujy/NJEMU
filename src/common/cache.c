@@ -697,20 +697,21 @@ int cache_start(void)
 	{
 		cache_type = CACHE_ZIPFILE;
 
-		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
-		if (zip_open(spr_cache_name) == -1)
+		if (use_parent_crom && parent_name[0])
 		{
-			if (strlen(parent_name))
+			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
+			if (zip_open(spr_cache_name) != -1)
 			{
-				sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
-				if (zip_open(spr_cache_name) == -1)
-				{
-					zip_close();
-				}
-				else found = 1;
+				found = 1;
 			}
 		}
-		else found = 1;
+
+		if (!found)
+		{
+			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
+			if (zip_open(spr_cache_name) != -1)
+				found = 1;
+		}
 
 		if (found)
 		{
