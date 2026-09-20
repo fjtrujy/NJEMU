@@ -87,6 +87,8 @@ static uint8_t coin_chuter[COIN_MAX][4] =
 static void check_eeprom_settings(int popup)
 {
 	uint8_t eeprom_value = EEPROM_read_data(driver->inp_eeprom);
+	if (eeprom_value >= sizeof(driver->inp_eeprom_value))
+		return;
 	uint8_t coin_type = driver->inp_eeprom_value[eeprom_value];
 
 	if (input_coin_chuter != coin_type)
