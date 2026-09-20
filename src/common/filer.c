@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include "emumain.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui_layout.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/config.h"
@@ -913,8 +914,9 @@ void show_exit_screen(void)
 	{
 		video_driver->beginFrame(video_data);
 		video_driver->clearScreen(video_data);
-		boxfill(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_DARKGRAY);
-		uifont_print_shadow_center(129, COLOR_WHITE, TEXT(PLEASE_WAIT));
+		boxfill(0, 0, ui_layout_right(0), ui_layout_bottom(0), COLOR_DARKGRAY);
+		uifont_print_shadow_center(ui_layout_center_y() - FONTSIZE / 2,
+			COLOR_WHITE, TEXT(PLEASE_WAIT));
 		video_driver->endFrame(video_data);
 		video_driver->flipScreen(video_data, 1);
 	}
@@ -927,7 +929,7 @@ void show_exit_screen(void)
 
 void file_browser(void)
 {
-	int i, sel = 0, rows = 11, top = 0;
+	int i, sel = 0, rows = ui_layout_visible_rows(37, 20), top = 0;
 	int run_emulation = 0, update = 1, prev_sel = 0;
 	char *p;
 #if (EMU_SYSTEM == NCDZ)
@@ -959,11 +961,16 @@ void file_browser(void)
 	logo(32, 5, UI_COLOR(UI_PAL_TITLE));
 
 	i = uifont_get_string_width(APPNAME_STR " " VERSION_STR) / 2;
-	draw_dialog(240-(i+62), 136-48, 240+(i+62), 136+48);
-	uifont_print_shadow_center(136-30, 255,255,120, APPNAME_STR " " VERSION_STR);
-	uifont_print_shadow_center(136-07, 255,255,255, "for " PLATFORM_STR);
-	uifont_print_shadow_center(136+ 6, 200,200,200, "NJ (https://fjtrujy.github.io/NJEMU/)");
-	uifont_print_shadow_center(136+20, 200,200,200, "2011-2026 (https://github.com/fjtrujy/NJEMU)");
+	draw_dialog(ui_layout_center_x() - (i + 62), ui_layout_center_y() - 48,
+		ui_layout_center_x() + (i + 62), ui_layout_center_y() + 48);
+	uifont_print_shadow_center(ui_layout_center_y() - 30,
+		255,255,120, APPNAME_STR " " VERSION_STR);
+	uifont_print_shadow_center(ui_layout_center_y() - 7,
+		255,255,255, "for " PLATFORM_STR);
+	uifont_print_shadow_center(ui_layout_center_y() + 6,
+		200,200,200, "NJ (https://fjtrujy.github.io/NJEMU/)");
+	uifont_print_shadow_center(ui_layout_center_y() + 20,
+		200,200,200, "2011-2026 (https://github.com/fjtrujy/NJEMU)");
 	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
 
@@ -1086,7 +1093,8 @@ void file_browser(void)
 		{
 			char path[PATH_MAX];
 
-			modify_display_path(path, curr_dir, 368);
+			modify_display_path(path, curr_dir,
+				ui_layout_get()->logical_width - 112);
 
 			video_driver->beginFrame(video_data);
 			show_background();
@@ -1099,7 +1107,9 @@ void file_browser(void)
 
 				if (top + i == sel)
 				{
-					boxfill_gradation(4, 37 + i * 20, 464, 56 + i * 20, UI_COLOR(UI_PAL_FILESEL1), UI_COLOR(UI_PAL_FILESEL2), 8, 0);
+					boxfill_gradation(4, 37 + i * 20, ui_layout_right(15),
+						56 + i * 20, UI_COLOR(UI_PAL_FILESEL1),
+						UI_COLOR(UI_PAL_FILESEL2), 8, 0);
 					small_icon_light(6, 38 + i * 20, UI_COLOR(UI_PAL_SELECT), icon[files[sel]->type]);
 
 					if (files[sel]->flag & GAME_BADROM)
@@ -1183,7 +1193,8 @@ void file_browser(void)
 				}
 			}
 
-			draw_scrollbar(469, 26, 479, 270, rows, nfiles, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, nfiles, sel);
 
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
@@ -1202,7 +1213,9 @@ void file_browser(void)
 			for (i = 0; i < rows; i++)
 				if (top + i == sel) break;
 
-			boxfill_gradation(4, 37 + i * 20, 464, 56 + i * 20, UI_COLOR(UI_PAL_FILESEL1), UI_COLOR(UI_PAL_FILESEL2), 8, 0);
+			boxfill_gradation(4, 37 + i * 20, ui_layout_right(15),
+				56 + i * 20, UI_COLOR(UI_PAL_FILESEL1),
+				UI_COLOR(UI_PAL_FILESEL2), 8, 0);
 			small_icon_light(6, 38 + i * 20, UI_COLOR(UI_PAL_SELECT), icon[files[sel]->type]);
 
 			x = 4;

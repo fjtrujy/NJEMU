@@ -10,6 +10,7 @@
 #include "emumain.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
+#include "common/ui_layout.h"
 
 #define MENU_BLANK	{ LF, }
 #define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
@@ -182,7 +183,7 @@ typedef struct {
 
 static int menu_gamecfg(void)
 {
-	int sel = 0, rows = 13, top = 0;
+	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, arrowl, arrowr, prev_sel, update = 1;
 	gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
 	gamecfg2_t *gamecfg2;
@@ -251,7 +252,8 @@ static int menu_gamecfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, gamecfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, gamecfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -849,7 +851,8 @@ int get_free_memory()
 int menu_cheatcfg(void)
 {
 	static int sel = 0, prev_sel = 0;//keep sel
-	static int rows = 13, top = 0;
+	static int top = 0;
+	int rows = ui_layout_visible_rows(40, 17);
 	int i, arrowl, arrowr, update = 1;
 	cheatcfg_t cheatcfg[CHEATCFG_MAX_ITEMS];
 	int cheatcfg_num;
@@ -929,7 +932,8 @@ int menu_cheatcfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(CHEAT_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, cheatcfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, cheatcfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -1185,7 +1189,8 @@ int menu_cheatcfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, gamecfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, gamecfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -1402,7 +1407,7 @@ enum
 
 static int menu_keycfg(void)
 {
-	int sel = 0, prev_sel, rows = 13, top = 0;
+	int sel = 0, prev_sel, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, j, arrowl, arrowr, update = 1;
 	keycfg_t keycfg[KEYCFG_MAX_ITEMS];
 	keycfg2_t *keycfg2;
@@ -1515,7 +1520,8 @@ static int menu_keycfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_KEYCONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(KEY_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, keycfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, keycfg_num, sel);
 
 			arrowl = 0;
 			arrowr = 0;
@@ -1802,7 +1808,8 @@ static int menu_keycfg(void)
 
 static int menu_dipswitch(void)
 {
-	int sel = 0, rows = 13, top = 0, sx = 240;
+	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
+	int sx = ui_layout_center_x();
 	int i, arrowl, arrowr, prev_sel, update = 1;
 	dipswitch_t *dipswitch;
 	int dipswitch_num = 0;
@@ -1842,7 +1849,8 @@ static int menu_dipswitch(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(DIP_SWITCH_SETTINGS_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, dipswitch_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, dipswitch_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -2484,8 +2492,8 @@ static menu2_t mainmenu2[] =
 
 void showmenu(void)
 {
-	static int sel = 0, prev_sel = 0;
-	static int rows = 7, top = 0;
+	static int sel = 0, prev_sel = 0, top = 0;
+	int rows = ui_layout_visible_rows(40, 32);
 	int i, update = 1;
 	int mainmenu_num = 0;
 	char buf[128];
@@ -2540,7 +2548,8 @@ void showmenu(void)
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(MAIN_MENU));
 #endif
-			draw_scrollbar(469, 26, 479, 270, rows, mainmenu_num, sel);
+				draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+					ui_layout_bottom(1), rows, mainmenu_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -2555,8 +2564,10 @@ void showmenu(void)
 					uifont_print_shadow(54, 37 + i * 32, UI_COLOR(UI_PAL_SELECT), mainmenu[sel].label);
 					uifont_print_shadow(54, 56 + i * 32, UI_COLOR(UI_PAL_SELECT), mainmenu[sel].help);
 
-					hline_gradation(54, 460, 53 + i * 32, UI_COLOR(UI_PAL_NORMAL), UI_COLOR(UI_PAL_SELECT), 14);
-					hline_gradation(55, 461, 54 + i * 32, COLOR_BLACK, COLOR_BLACK, 8);
+					hline_gradation(54, ui_layout_right(19), 53 + i * 32,
+						UI_COLOR(UI_PAL_NORMAL), UI_COLOR(UI_PAL_SELECT), 14);
+					hline_gradation(55, ui_layout_right(18), 54 + i * 32,
+						COLOR_BLACK, COLOR_BLACK, 8);
 				}
 				else
 				{

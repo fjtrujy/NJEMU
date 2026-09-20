@@ -209,9 +209,11 @@ set(COMMON_SRC
     common/input_driver.c
     common/video_driver.h
     common/video_driver.c
-    common/ui_draw_driver.h
-    common/ui_draw_driver.c
-    common/ui_text_driver.h
+	    common/ui_draw_driver.h
+	    common/ui_draw_driver.c
+	    common/ui_layout.h
+	    common/ui_layout.c
+	    common/ui_text_driver.h
     common/ui_text_driver.c
     common/font_t.h
     common/platform_driver.h

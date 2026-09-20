@@ -64,6 +64,13 @@ static void psp_ui_draw_term(void *data)
 	(void)data;
 }
 
+static void psp_ui_draw_getOutputSize(void *data, int *width, int *height)
+{
+	(void)data;
+	if (width) *width = SCR_WIDTH;
+	if (height) *height = SCR_HEIGHT;
+}
+
 static void psp_ui_draw_uploadTexture(void *data, int slot,
 	const uint16_t *pixels, int w, int h, int pitch, int format, int swizzle)
 {
@@ -226,6 +233,7 @@ static void psp_ui_draw_setScissor(void *data, int x, int y, int w, int h)
 const ui_draw_driver_t psp_ui_draw_driver = {
 	psp_ui_draw_init,
 	psp_ui_draw_term,
+	psp_ui_draw_getOutputSize,
 	psp_ui_draw_uploadTexture,
 	psp_ui_draw_clearTexture,
 	psp_ui_draw_getTextureBasePtr,

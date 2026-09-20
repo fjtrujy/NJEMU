@@ -23,6 +23,13 @@ static void null_term(void *data)
 	(void)data;
 }
 
+static void null_getOutputSize(void *data, int *width, int *height)
+{
+	(void)data;
+	if (width) *width = 0;
+	if (height) *height = 0;
+}
+
 static void null_uploadTexture(void *data, int slot, const uint16_t *pixels,
                                int w, int h, int pitch, int format, int swizzle)
 {
@@ -111,6 +118,7 @@ static void null_setScissor(void *data, int x, int y, int w, int h)
 const ui_draw_driver_t null_ui_draw_driver = {
 	null_init,
 	null_term,
+	null_getOutputSize,
 	null_uploadTexture,
 	null_clearTexture,
 	null_getTextureBasePtr,
