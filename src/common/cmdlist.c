@@ -11,6 +11,7 @@
 #include "emumain.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
+#include "common/ui_layout.h"
 
 static void fd_printf(int fd, const char *fmt, ...)
 {
@@ -462,7 +463,10 @@ retry:
 	// Initialize display information
 	sel_line   = 0;
 	prev_line  = 0;
-	rows_line  = (charset & CHARSET_GBK) ? 16 : 14;
+	rows_line  = (ui_layout_get()->logical_height - 48) /
+		((charset & CHARSET_GBK) ? 14 : 16);
+	if (rows_line < 1)
+		rows_line = 1;
 	show_lines = rows_line;
 	num_lines  = cmd[0]->lines;
 	if (num_lines < show_lines) show_lines = num_lines;
@@ -470,17 +474,20 @@ retry:
 	top_item   = 0;
 	sel_item   = 0;
 	prev_item  = 0;
-	rows_item  = 13;
+	rows_item  = (ui_layout_get()->logical_height - 64) / 16;
+	if (rows_item < 1)
+		rows_item = 1;
 	show_items = rows_item;
 	if (num_items < show_items) show_items = num_items;
 
 	// Calculate item menu width
-	item_sx = 480;
+	item_sx = ui_layout_get()->logical_width;
 	for (item = 0; item < num_items; item++)
 	{
 		int x;
 
-		x = 480 - (strlen(cmd[item]->line[0]) * 7 + 16);
+		x = ui_layout_get()->logical_width -
+			(strlen(cmd[item]->line[0]) * 7 + 16);
 		if (item_sx > x) item_sx = x;
 	}
 
@@ -590,7 +597,7 @@ void commandlist(int flag)
 					textfont_print(6, 37 + 16 * y, UI_COLOR(UI_PAL_SELECT), cmd[sel_item]->line[y + sel_line], charset);
 			}
 
-			x = 480;
+			x = ui_layout_get()->logical_width;
 			if (menu_open)
 			{
 				alpha = 14;
@@ -599,11 +606,14 @@ void commandlist(int flag)
 			else if (menu_counter > 0)
 			{
 				alpha = 14 - ((4 - menu_counter) << 1);
-				x = item_sx + ((480 - item_sx) >> 2) * (4 - menu_counter);
+				x = item_sx +
+					((ui_layout_get()->logical_width - item_sx) >> 2) *
+					(4 - menu_counter);
 			}
-			if (x < 480)
+			if (x < ui_layout_get()->logical_width)
 			{
-				boxfill_alpha(x, 25, 479, 271, UI_COLOR(UI_PAL_BG1), alpha);
+				boxfill_alpha(x, 25, ui_layout_right(0), ui_layout_bottom(0),
+					UI_COLOR(UI_PAL_BG1), alpha);
 
 				for (y = 0; y < rows_item; y++)
 				{
@@ -620,12 +630,14 @@ void commandlist(int flag)
 
 				sprintf(temp, TEXT(COMMAND_LIST_ITEMS), sel_item + 1, num_items);
 				x = uifont_get_string_width(temp);
-				uifont_print(475 - x, 250, UI_COLOR(UI_PAL_SELECT), temp);
+				uifont_print(ui_layout_right(4) - x, ui_layout_bottom(21),
+					UI_COLOR(UI_PAL_SELECT), temp);
 			}
 			else
 			{
 				if (num_lines > rows_line)
-					draw_scrollbar(469, 26, 479, 270, 0, num_lines - rows_line + 1, sel_line);
+					draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+						ui_layout_bottom(1), 0, num_lines - rows_line + 1, sel_line);
 			}
 
 			update |= ui_show_popup(1);

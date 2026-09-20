@@ -2032,6 +2032,24 @@ static uint8_t slot[10];
 static int state_func;
 static int state_sel;
 
+static int state_thumbnail_x(void)
+{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (machine_screen_type)
+		return ui_layout_get()->logical_width - 163;
+#endif
+	return ui_layout_get()->logical_width - 182;
+}
+
+static int state_info_x(void)
+{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (machine_screen_type)
+		return state_thumbnail_x() - 17;
+#endif
+	return state_thumbnail_x() - 8;
+}
+
 static void state_draw_thumbnail(void)
 {
 #if defined(PSP)
@@ -2046,26 +2064,30 @@ static void state_draw_thumbnail(void)
 #endif
 
 	video_driver->beginFrame(video_data);
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-	if (machine_screen_type)
-	{
-		RECT clip1 = { 0, 0, 112, 152 };
-		RECT clip2 = { 317, 34, 317+112, 34+152 };
-		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
-	}
+	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+		if (machine_screen_type)
+		{
+			RECT clip1 = { 0, 0, 112, 152 };
+			const int x = state_thumbnail_x();
+			RECT clip2 = { x, 34, x + 112, 34 + 152 };
+			video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		}
 	else
 #endif
-	{
-		RECT clip1 = { 0, 0, 152, 112 };
-		RECT clip2 = { 298, 52, 298+152, 52+112 };
-		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
-	}
+		{
+			RECT clip1 = { 0, 0, 152, 112 };
+			const int x = state_thumbnail_x();
+			RECT clip2 = { x, 52, x + 152, 52 + 112 };
+			video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		}
 	video_driver->endFrame(video_data);
 }
 
 static void state_refresh_screen(int reload_thumbnail)
 {
 	int i, x;
+	const int preview_x = state_thumbnail_x();
+	const int info_x = state_info_x();
 	char name[16], state[32], buf[64];
 
 	if (reload_thumbnail)
@@ -2093,9 +2115,9 @@ static void state_refresh_screen(int reload_thumbnail)
 
 	show_background();
 	if (machine_screen_type)
-		draw_box_shadow(318, 33, 429, 184);
+		draw_box_shadow(preview_x + 1, 33, preview_x + 112, 184);
 	else
-		draw_box_shadow(298, 52, 449, 163);
+		draw_box_shadow(preview_x, 52, preview_x + 151, 163);
 	state_draw_thumbnail();
 
 	sprintf(buf, "%s %s", FONT_LTRIGGER, TEXT(MAIN_MENU));
@@ -2162,49 +2184,49 @@ static void state_refresh_screen(int reload_thumbnail)
 
 	if (state_version == current_state_version || !slot[state_sel])
 	{
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		if (machine_screen_type)
-		{
-			uifont_print(300, 198, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
-			uifont_print(378, 198, UI_COLOR(UI_PAL_NORMAL), date_str);
-			uifont_print(300, 218, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
-			uifont_print(378, 218, UI_COLOR(UI_PAL_NORMAL), time_str);
-			uifont_print(300, 238, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
-			uifont_print(378, 238, UI_COLOR(UI_PAL_NORMAL), stver_str);
-		}
-		else
-#endif
-		{
-			uifont_print(290, 190, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
-			uifont_print(368, 190, UI_COLOR(UI_PAL_NORMAL), date_str);
-			uifont_print(290, 210, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
-			uifont_print(368, 210, UI_COLOR(UI_PAL_NORMAL), time_str);
-			uifont_print(290, 230, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
-			uifont_print(368, 230, UI_COLOR(UI_PAL_NORMAL), stver_str);
-		}
+	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+			if (machine_screen_type)
+			{
+				uifont_print(info_x, 198, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 198, UI_COLOR(UI_PAL_NORMAL), date_str);
+				uifont_print(info_x, 218, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 218, UI_COLOR(UI_PAL_NORMAL), time_str);
+				uifont_print(info_x, 238, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 238, UI_COLOR(UI_PAL_NORMAL), stver_str);
+			}
+			else
+	#endif
+			{
+				uifont_print(info_x, 190, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 190, UI_COLOR(UI_PAL_NORMAL), date_str);
+				uifont_print(info_x, 210, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 210, UI_COLOR(UI_PAL_NORMAL), time_str);
+				uifont_print(info_x, 230, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 230, UI_COLOR(UI_PAL_NORMAL), stver_str);
+			}
 	}
 	else
 	{
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		if (machine_screen_type)
-		{
-			uifont_print(300, 198, COLOR_GRAY, TEXT(PLAY_DATE));
-			uifont_print(378, 198, COLOR_GRAY, date_str);
-			uifont_print(300, 218, COLOR_GRAY, TEXT(SAVE_TIME));
-			uifont_print(378, 218, COLOR_GRAY, time_str);
-			uifont_print(300, 238, COLOR_GRAY, TEXT(STATE_VERSION));
-			uifont_print(378, 238, COLOR_GRAY, stver_str);
-		}
-		else
-#endif
-		{
-			uifont_print(290, 190, COLOR_GRAY, TEXT(PLAY_DATE));
-			uifont_print(368, 190, COLOR_GRAY, date_str);
-			uifont_print(290, 210, COLOR_GRAY, TEXT(SAVE_TIME));
-			uifont_print(368, 210, COLOR_GRAY, time_str);
-			uifont_print(290, 230, COLOR_GRAY, TEXT(STATE_VERSION));
-			uifont_print(368, 230, COLOR_GRAY, stver_str);
-		}
+	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+			if (machine_screen_type)
+			{
+				uifont_print(info_x, 198, COLOR_GRAY, TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 198, COLOR_GRAY, date_str);
+				uifont_print(info_x, 218, COLOR_GRAY, TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 218, COLOR_GRAY, time_str);
+				uifont_print(info_x, 238, COLOR_GRAY, TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 238, COLOR_GRAY, stver_str);
+			}
+			else
+	#endif
+			{
+				uifont_print(info_x, 190, COLOR_GRAY, TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 190, COLOR_GRAY, date_str);
+				uifont_print(info_x, 210, COLOR_GRAY, TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 210, COLOR_GRAY, time_str);
+				uifont_print(info_x, 230, COLOR_GRAY, TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 230, COLOR_GRAY, stver_str);
+			}
 	}
 }
 

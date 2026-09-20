@@ -1140,6 +1140,7 @@ static UI_HELP *help_init(int number)
 int help(int number)
 {
 	int i;
+	int help_left;
 	char title[256];
 	const UI_HELP *help;
 
@@ -1151,7 +1152,15 @@ int help(int number)
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 
 	boxfill_alpha(0, 0, ui_layout_right(0), ui_layout_bottom(0), COLOR_BLACK, 8);
-	draw_dialog(59, 34, 419, 264);
+	{
+		const int dialog_width = 360;
+		const int dialog_height = ui_layout_get()->logical_height - 42;
+		const int sx = ui_layout_center_x() - dialog_width / 2;
+		const int sy = 34;
+
+		draw_dialog(sx, sy, sx + dialog_width, sy + dialog_height);
+		help_left = sx + 14;
+	}
 
 	sprintf(title, TEXT(HELP_TITLE), help->menu_name);
 	uifont_print_shadow_center(43, UI_COLOR(UI_PAL_INFO), title);
@@ -1162,11 +1171,12 @@ int help(int number)
 		int g = *help->mes[i].g;
 		int b = *help->mes[i].b;
 
-		uifont_print(73, 70 + (i << 4), r, g, b, help->mes[i].text1);
-		uifont_print(143, 70 + (i << 4), r, g, b, help->mes[i].text2);
+		uifont_print(help_left, 70 + (i << 4), r, g, b, help->mes[i].text1);
+		uifont_print(help_left + 70, 70 + (i << 4), r, g, b, help->mes[i].text2);
 	}
 
-	uifont_print_shadow_center(240, UI_COLOR(UI_PAL_SELECT), TEXT(PRESS_ANY_BUTTON_TO_RETURN_TO_MENU));
+	uifont_print_shadow_center(ui_layout_bottom(32), UI_COLOR(UI_PAL_SELECT),
+		TEXT(PRESS_ANY_BUTTON_TO_RETURN_TO_MENU));
 
 	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);
