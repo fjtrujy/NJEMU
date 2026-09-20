@@ -270,6 +270,60 @@ The goal is not to special-case a larger PS2 menu. The goal is to make the
 common GUI independent of the physical resolution while keeping the existing
 PSP appearance unchanged.
 
+### Implementation status
+
+The first responsive-GUI implementation pass is now in place:
+
+- `fd9fb36 Introduce resolution-independent UI viewport`
+- `66a7f19 Reflow GUI to native output size`
+- `9e283b0 Reflow secondary GUI screens`
+- `8e4d3ac Finish native-aware GUI chrome`
+- `f7df684 Simplify responsive UI layout state`
+
+Completed in that pass:
+
+- a common `ui_layout` layer owns logical/output dimensions and layout helpers;
+- PSP remains naturally 480x272 because its physical output is still 480x272;
+- PS2 now lays out GUI content against the real 640x448 NTSC framebuffer instead
+  of treating 480x272 as the screen;
+- Desktop lays out against its physical output dimensions;
+- game/render targets and save-state thumbnail payloads remain at their existing
+  sizes rather than being enlarged with the GUI;
+- common chrome, dialogs, popups, scrollbars, main menu, file selector, command
+  list, help and save-state panels have been migrated away from PSP screen-edge
+  and center constants;
+- NCDZ `title_x.sys` previews and save-state previews are anchored relative to
+  the current output;
+- the legacy 480x272 background cache is used only as a compact backing surface;
+  resolution-dependent chrome is drawn after presentation at native coordinates;
+- non-legacy output sizes use complete GUI redraws instead of the old partial
+  copy path, preventing logical/physical rectangle mixing.
+
+Validation completed so far:
+
+- Desktop GUI builds pass for CPS1, CPS2, MVS and NCDZ;
+- PS2 GUI builds pass for CPS1, CPS2, MVS and NCDZ;
+- PS2 `GUI+SAVE_STATE+COMMAND_LIST` builds pass;
+- Desktop and PS2 no-GUI smoke builds remain valid;
+- PCSX2 directly booted the PS2 ELF and visually confirmed the native 640x448
+  layout: full-width header and correctly centered native-coordinate dialog;
+- a temporary pre-refactor Desktop comparison confirmed that the existing
+  Desktop shadow-atlas artifacts predate this responsive-layout work.
+
+The local environment does not currently contain a PSP toolchain, so the PSP
+compile remains a CI/hardware validation item even though its layout transform
+is the identity 480x272 path.
+
+Still open in this phase:
+
+- explicit multi-resolution validation beyond the current Desktop and PS2 NTSC
+  outputs;
+- optional Desktop resize support as a convenient live layout test harness;
+- PS2 presentation-mode policy (for example 480p or widescreen/safe-area
+  profiles), which must remain separate from layout because it also changes GS
+  timing/interlace/framebuffer requirements;
+- final PSP CI/hardware confirmation.
+
 ### C0 - Inventory fixed layout assumptions
 
 Audit all GUI code for hard-coded screen geometry and classify each use as:
