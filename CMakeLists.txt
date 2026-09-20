@@ -709,6 +709,18 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ui_text_legacy_map_tests COMMAND ui_text_legacy_map_tests)
+
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME translation_source_validation
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
+        )
+        add_test(
+            NAME translation_pack_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
+        )
+    endif()
 endif()
 
 # ==============================================================================

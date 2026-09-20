@@ -533,6 +533,20 @@ token, and a `%s` -> `%d` format mismatch; all were rejected as expected.
 Generated runtime packs should be build/package artifacts, not hand-edited
 files.
 
+T3 status (2026-09-21): implemented `.lng` V1 and documented it in
+`docs/TRANSLATION_BINARY_FORMAT.md`. V1 uses a 20-byte little-endian header,
+377 direct `uint16_t` offsets, a reserved `0xffff` NULL offset, a <=65534-byte
+NUL-terminated string blob, and a 32-bit FNV-1a schema hash over the explicit
+ID/name manifest (`0x1ed49de8` for the current schema).
+`tools/build_translations.py --build` deterministically emits and immediately
+round-trips all five packs
+under `build/translations/lang/`. Current complete pack sizes are 7452 B (en),
+8446 B (ja), 8598 B (es), 5298 B (zh-Hans) and 5294 B (zh-Hant). Twelve pack
+tests cover all-language round trips plus bad magic/version/language/count,
+reserved bits, size/schema corruption, bad offsets, truncation and missing NUL
+termination. Source validation and pack tests are registered with Desktop
+CTest; all four feature-on cores pass 5/5 tests.
+
 ### T4 - Add the common runtime loader
 
 - implement one-allocation catalog loading;

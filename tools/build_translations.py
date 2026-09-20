@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import struct
 import sys
 from pathlib import Path
 
@@ -28,6 +29,19 @@ LANGUAGE_FILES = {
     "zh-Hant": "zh-Hant.lang",
 }
 NULL_MARKER = "<NULL>"
+
+PACK_MAGIC = b"NJTL"
+PACK_VERSION = 1
+PACK_NULL_OFFSET = 0xFFFF
+PACK_MAX_BLOB_SIZE = PACK_NULL_OFFSET - 1
+PACK_HEADER = struct.Struct("<4sHHHHII")
+LANGUAGE_IDS = {
+    "en": 0,
+    "ja": 1,
+    "es": 2,
+    "zh-Hans": 3,
+    "zh-Hant": 4,
+}
 
 GRAPHIC_TOKENS = {
     "<UPARROW>": b"\x10",
@@ -249,7 +263,8 @@ def printf_contract(value: bytes | None, context: str) -> tuple[str, ...] | None
             break
         match = PRINTF_RE.match(value, percent)
         if not match:
-            if percent == len(value) - 1:
+            next_byte = value[percent + 1] if percent + 1 < len(value) else None
+            if next_byte is None or not chr(next_byte).isalpha():
                 conversions.append("%literal")
                 index = percent + 1
                 continue
@@ -314,6 +329,159 @@ def verify_against_legacy(names: list[str], catalogs: dict[str, dict[str, bytes 
                 )
 
 
+def schema_hash(names: list[str]) -> int:
+    """32-bit FNV-1a over the canonical stable-ID schema."""
+    value = 0x811C9DC5
+    for message_id, name in enumerate(names):
+        canonical = f"{message_id}:{name}\n".encode("ascii")
+        for byte in canonical:
+            value ^= byte
+            value = (value * 0x01000193) & 0xFFFFFFFF
+    return value
+
+
+def build_pack(language: str, names: list[str], catalog: dict[str, bytes | None]) -> bytes:
+    try:
+        language_id = LANGUAGE_IDS[language]
+    except KeyError as exc:
+        raise TranslationError(f"unknown language {language!r}") from exc
+
+    offsets: list[int] = []
+    blob = bytearray()
+    for name in names:
+        value = catalog[name]
+        if value is None:
+            offsets.append(PACK_NULL_OFFSET)
+            continue
+        if b"\0" in value:
+            raise TranslationError(f"{language}:{name}: embedded NUL cannot be represented in .lng V1")
+        if len(blob) > PACK_MAX_BLOB_SIZE:
+            raise TranslationError(f"{language}: string blob exceeds .lng V1 16-bit offset limit")
+        offsets.append(len(blob))
+        blob.extend(value)
+        blob.append(0)
+
+    if len(blob) > PACK_MAX_BLOB_SIZE:
+        raise TranslationError(
+            f"{language}: string blob is {len(blob)} bytes; .lng V1 allows at most {PACK_MAX_BLOB_SIZE}"
+        )
+    if len(names) > 0xFFFF:
+        raise TranslationError(".lng V1 allows at most 65535 message IDs")
+
+    header = PACK_HEADER.pack(
+        PACK_MAGIC,
+        PACK_VERSION,
+        language_id,
+        len(names),
+        0,
+        len(blob),
+        schema_hash(names),
+    )
+    offset_table = struct.pack(f"<{len(offsets)}H", *offsets)
+    return header + offset_table + bytes(blob)
+
+
+def parse_pack(
+    data: bytes,
+    *,
+    expected_names: list[str] | None = None,
+    expected_language: str | None = None,
+) -> tuple[int, list[bytes | None]]:
+    if len(data) < PACK_HEADER.size:
+        raise TranslationError(".lng file is smaller than the V1 header")
+
+    magic, version, language_id, count, reserved, blob_size, pack_schema = PACK_HEADER.unpack_from(data)
+    if magic != PACK_MAGIC:
+        raise TranslationError(f"invalid .lng magic {magic!r}")
+    if version != PACK_VERSION:
+        raise TranslationError(f"unsupported .lng version {version}")
+    if language_id not in LANGUAGE_IDS.values():
+        raise TranslationError(f"invalid .lng language id {language_id}")
+    if reserved != 0:
+        raise TranslationError(".lng V1 reserved header field must be zero")
+    if blob_size > PACK_MAX_BLOB_SIZE:
+        raise TranslationError(f".lng string blob exceeds {PACK_MAX_BLOB_SIZE} bytes")
+
+    if expected_names is not None:
+        if count != len(expected_names):
+            raise TranslationError(
+                f".lng message count {count} does not match schema count {len(expected_names)}"
+            )
+        expected_schema = schema_hash(expected_names)
+        if pack_schema != expected_schema:
+            raise TranslationError(
+                f".lng schema hash 0x{pack_schema:08x} does not match 0x{expected_schema:08x}"
+            )
+    if expected_language is not None:
+        try:
+            expected_language_id = LANGUAGE_IDS[expected_language]
+        except KeyError as exc:
+            raise TranslationError(f"unknown expected language {expected_language!r}") from exc
+        if language_id != expected_language_id:
+            raise TranslationError(
+                f".lng language id {language_id} does not match {expected_language} ({expected_language_id})"
+            )
+
+    offset_table_size = count * 2
+    blob_start = PACK_HEADER.size + offset_table_size
+    expected_file_size = blob_start + blob_size
+    if len(data) != expected_file_size:
+        raise TranslationError(
+            f".lng size {len(data)} does not match header-derived size {expected_file_size}"
+        )
+
+    offsets = struct.unpack_from(f"<{count}H", data, PACK_HEADER.size) if count else ()
+    blob = data[blob_start:]
+    values: list[bytes | None] = []
+    for message_id, offset in enumerate(offsets):
+        if offset == PACK_NULL_OFFSET:
+            values.append(None)
+            continue
+        if offset >= blob_size:
+            raise TranslationError(
+                f".lng message {message_id} offset {offset} is outside {blob_size}-byte string blob"
+            )
+        terminator = blob.find(b"\0", offset)
+        if terminator < 0:
+            raise TranslationError(f".lng message {message_id} is not NUL-terminated")
+        values.append(blob[offset:terminator])
+    return language_id, values
+
+
+def verify_pack_round_trip(
+    language: str,
+    names: list[str],
+    catalog: dict[str, bytes | None],
+    data: bytes,
+) -> None:
+    _language_id, decoded = parse_pack(
+        data, expected_names=names, expected_language=language
+    )
+    for name, actual in zip(names, decoded):
+        expected = catalog[name]
+        if actual != expected:
+            raise TranslationError(
+                f"{language}:{name}: generated .lng round-trip differs: {actual!r} != {expected!r}"
+            )
+
+
+def write_packs(
+    output_dir: Path,
+    names: list[str],
+    catalogs: dict[str, dict[str, bytes | None]],
+) -> dict[str, int]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    sizes: dict[str, int] = {}
+    for language in LANGUAGE_FILES:
+        data = build_pack(language, names, catalogs[language])
+        verify_pack_round_trip(language, names, catalogs[language], data)
+        path = output_dir / f"{language}.lng"
+        if not path.exists() or path.read_bytes() != data:
+            path.write_bytes(data)
+        sizes[language] = len(data)
+    return sizes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -337,6 +505,17 @@ def main() -> int:
         default=TRANSLATIONS_DIR,
         help="directory containing messages.def and the editable .lang files",
     )
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        help="emit deterministic .lng V1 runtime packs after validation",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=ROOT / "build/translations/lang",
+        help="output directory for generated .lng files",
+    )
     args = parser.parse_args()
 
     try:
@@ -345,6 +524,7 @@ def main() -> int:
         names, catalogs = load_and_validate_sources(args.translations_dir)
         if not args.no_verify_legacy:
             verify_against_legacy(names, catalogs)
+        pack_sizes = write_packs(args.output_dir, names, catalogs) if args.build else None
     except (TranslationError, legacy.ContractError) as exc:
         print(f"translation validation failed: {exc}", file=sys.stderr)
         return 1
@@ -355,6 +535,11 @@ def main() -> int:
     }
     sizes = ", ".join(f"{language}={size} B" for language, size in total_bytes.items())
     print(f"validated {len(names)} keys in {len(catalogs)} languages; {sizes}")
+    if pack_sizes is not None:
+        rendered_pack_sizes = ", ".join(
+            f"{language}={size} B" for language, size in pack_sizes.items()
+        )
+        print(f"generated .lng V1 packs in {args.output_dir}: {rendered_pack_sizes}")
     return 0
 
 

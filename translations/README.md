@@ -53,3 +53,4 @@ python3 tools/build_translations.py --extract-legacy
 
 Re-extraction refuses to overwrite edited sources unless `--force` is supplied.
 Generated `.lng` runtime packs are introduced in T3 and must not be hand-edited.
+Their exact binary layout is documented in `docs/TRANSLATION_BINARY_FORMAT.md`.
