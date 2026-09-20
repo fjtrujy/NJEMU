@@ -509,6 +509,18 @@ included in the byte-level matrix and shares the same adapter source.
 
 No embedded tables are removed yet.
 
+T2 status (2026-09-21): implemented with five complete ASCII source catalogs
+(`en.lang`, `ja.lang`, `es.lang`, `zh-Hans.lang`, `zh-Hant.lang`) and
+`tools/build_translations.py`. The source format preserves runtime-visible
+legacy bytes using deterministic escapes, represents NJEMU graphic bytes with
+named tokens, and keeps the reserved `END_OF_TEXT` NULL value explicit. The
+validator rejects duplicate/unknown/missing/reordered keys, invalid escapes or
+graphic tokens, and `printf` conversion contracts that differ from English.
+All 377 entries in all five languages compare byte-for-byte with the embedded
+catalogs across the same exhaustive 192-table matrix. Negative validation was
+also exercised for duplicate, unknown and missing keys, an invalid graphic
+token, and a `%s` -> `%d` format mismatch; all were rejected as expected.
+
 ### T3 - Implement the pack generator
 
 - define and document `.lng` V1;
