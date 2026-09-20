@@ -457,6 +457,21 @@ MVS and NCDZ rather than treating one build as authoritative.
 
 Deliverable: a machine-readable stable key manifest plus a baseline report.
 
+T0 status (2026-09-21): implemented in `tools/capture_translation_contract.py`
+and `docs/TRANSLATION_T0_BASELINE.md`. The exhaustive source-level matrix covers
+all 16 combinations of `ADHOC`, `SAVE_STATE`, `COMMAND_LIST` and
+`LARGE_MEMORY` for each core and compares Desktop/PS2/PSP tables byte-for-byte.
+It found and fixed one pre-existing MVS positional-table bug in the four
+non-English catalogs (`e56539d`). The legacy union contains 362 symbolic names;
+14 of those were core-dependent, so `translations/messages.def` normalizes them
+before assigning IDs and exposes 377 unambiguous stable IDs. Feature-on Desktop
+and PS2 object/executable baselines plus the exact per-driver pointer-copy heap
+cost are recorded in the T0 report. A native PSP binary-size measurement is not
+available on the current workstation because no PSP toolchain is installed;
+the 32-bit PSP pointer-copy heap cost is exact, and commit `e56539d` plus the
+recorded source hashes preserve the pre-T1 input so that binary figure can be
+backfilled later from CI/toolchain without depending on migrated sources.
+
 ### T1 - Introduce stable IDs
 
 - create the explicit stable ID manifest/header;
