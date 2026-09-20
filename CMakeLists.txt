@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 project(NJEMU)
 
+include(CTest)
+
 # Configuration
 
 # Different target availables
@@ -669,6 +671,17 @@ if(PLATFORM STREQUAL "PSP")
         PREVIEW_PATH NULL
         TITLE "${TARGET}"
     )
+endif()
+
+if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_executable(ui_layout_tests
+        tests/ui_layout_tests.c
+        src/common/ui_layout.c
+    )
+    target_include_directories(ui_layout_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_layout_tests COMMAND ui_layout_tests)
 endif()
 
 # ==============================================================================
