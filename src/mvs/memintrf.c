@@ -1962,6 +1962,7 @@ int memory_init(void)
 	case INIT_svcsplus:
 #endif
 	case INIT_kof2003:
+	case INIT_kof2003h:
 		neogeo_protection_r = pvc_protection_r;
 		neogeo_protection_w = pvc_protection_w;
 		break;
