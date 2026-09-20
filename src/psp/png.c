@@ -8,6 +8,7 @@
 
 #include <fcntl.h>
 #include <math.h>
+#include <stdint.h>
 #include <zlib.h>
 #include "emumain.h"
 
@@ -113,7 +114,7 @@ static void png_mem_init(int flag)
 
 		mem = cache_alloc_state_buffer(alloc_size);
 
-		next_ptr = (uint8_t *)(((uint32_t)mem + 15) & ~15);
+		next_ptr = (uint8_t *)(((uintptr_t)mem + 15u) & ~(uintptr_t)15u);
 		left_mem = alloc_size - 16;
 	}
 #endif
