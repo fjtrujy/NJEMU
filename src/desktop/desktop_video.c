@@ -97,7 +97,11 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
 		exit(1);
 	}
-	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
+	/* scrbitmap is the complete work frame and is copied opaquely to the
+	 * presentation target.  Using the layer blend equation here makes an
+	 * opaque source keep the previous destination contents, which exposes
+	 * undefined back-buffer pixels as coloured noise in the GUI background. */
+	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, SDL_BLENDMODE_NONE);
 	
 	size_t texOffset = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
