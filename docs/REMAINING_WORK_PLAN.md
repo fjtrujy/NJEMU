@@ -1,6 +1,6 @@
 # NJEMU remaining work plan
 
-Status: 2026-09-20
+Status: 2026-09-21
 
 This document records the work that remains after completion of:
 
@@ -292,7 +292,7 @@ PSP appearance unchanged.
 
 ### Implementation status
 
-The first responsive-GUI implementation pass is now in place:
+The first responsive-GUI implementation pass introduced the common layout layer:
 
 - `fd9fb36 Introduce resolution-independent UI viewport`
 - `66a7f19 Reflow GUI to native output size`
@@ -305,20 +305,43 @@ The first responsive-GUI implementation pass is now in place:
 - `8109848 Fix PNG state buffer pointer alignment`
 - `ca78316 Add feature-on GUI CI coverage`
 
-Completed in that pass:
+That pass correctly removed screen-edge assumptions, but its final policy made
+the logical UI canvas equal to the physical output size. That meant edge-anchored
+chrome reflowed correctly while PSP-era coordinates in the middle of a screen
+(for example option/value columns around x=190..210) remained absolute physical
+pixels instead of becoming relative to the window.
+
+The follow-up pass fixes that remaining architectural issue. The settled model is:
+
+- 480x272 is the **minimum design canvas**, not the physical screen size;
+- a single uniform scale is chosen from the active output dimensions;
+- the base canvas is scaled until one output axis is filled;
+- spare space on the other axis becomes additional logical layout space, so
+  lists and edge-anchored content can reflow without distorting fonts/icons;
+- all common UI primitives transform logical coordinates through this mapping;
+- PSP remains an exact 480x272 identity transform;
+- the current PS2 640x448 output maps to a 480x336 logical canvas at 4/3 scale;
+- 4:3, 16:9, portrait and smaller/larger arbitrary outputs use the same code path.
+
+For example, on PS2 a legacy logical position `(210, 40)` now maps to physical
+`(280, 53)` instead of remaining at `(210, 40)`, while the logical center still
+maps to the physical 320x224 center. This keeps old central content proportional
+to the window while preserving semantic right/bottom/center anchors.
+
+Completed across both passes:
 
 - a common `ui_layout` layer owns logical/output dimensions and layout helpers;
 - PSP remains naturally 480x272 because its physical output is still 480x272;
-- PS2 now lays out GUI content against the real 640x448 NTSC framebuffer instead
-  of treating 480x272 as the screen;
-- Desktop lays out against its physical output dimensions;
+- PS2 and Desktop derive a responsive logical canvas from their real output
+  dimensions instead of using physical pixels as layout coordinates;
 - game/render targets and save-state thumbnail payloads remain at their existing
   sizes rather than being enlarged with the GUI;
 - common chrome, dialogs, popups, scrollbars, main menu, file selector, command
   list, help and save-state panels have been migrated away from PSP screen-edge
   and center constants;
-- NCDZ `title_x.sys` previews and save-state previews are anchored relative to
-  the current output;
+- NCDZ `title_x.sys` previews and save-state previews, which draw directly through
+  the video backend instead of the common UI primitive layer, explicitly transform
+  their destination rectangles through the same logical/output mapping;
 - the legacy 480x272 background cache is used only as a compact backing surface;
   resolution-dependent chrome is drawn after presentation at native coordinates;
 - non-legacy output sizes use complete GUI redraws instead of the old partial
@@ -341,9 +364,12 @@ Validation completed so far:
   scrollbar anchored to the current right edge;
 - Desktop, PS2 and PSP workflows now pass their `gui` matrix value to CMake, so
   `GUI=OFF` and `GUI=ON` are distinct builds instead of duplicate defaults;
-- `ui_layout_tests` is part of Desktop CTest and passes in both GUI and no-GUI
-  configurations for the 480x272, 640x448, 800x600 and 960x540 layout cases plus
-  the aspect-preserving logical/output transform;
+- `ui_layout_tests` is part of Desktop CTest and now covers 480x272, current PS2
+  640x448, PS2-like 640x480/720x480/720x576/512x448 modes, 800x600, 960x540,
+  1280x720, 1024x768, 1920x1080, 320x240 and a portrait 600x900 case, plus the
+  lower-level aspect-preserving transform;
+- the tests verify that logical center remains mapped to physical center and that
+  representative central PS2 content is uniformly scaled;
 - all four Desktop cores and all four PS2 cores compile with
   `GUI=ON + SAVE_STATE=ON + COMMAND_LIST=ON`; targeted feature-on jobs now cover
   the same combination in Desktop, PS2 and PSP CI without exploding the normal
@@ -356,11 +382,17 @@ PSP compile/runtime confirmation remains a CI/hardware validation item. The CI
 configuration now contains both normal GUI-on jobs and feature-on GUI jobs, and
 the PSP layout path itself remains the identity 480x272 case.
 
-Phase C implementation is complete and its policy is settled:
+The resolution-relative Phase C implementation is now complete and its policy is
+settled:
 
-- common GUI layout always derives from the active platform output dimensions;
-- PS2 continues to use its current autodetected GS mode and the GUI consumes the
-  resulting `gsGlobal->Width/Height`;
+- common GUI layout always derives its responsive logical canvas and uniform
+  transform from the active platform output dimensions;
+- PS2 continues to use the video backend's configured GS mode (currently the
+  forced 60-Hz NTSC path with 448 lines) and the GUI consumes the resulting
+  `gsGlobal->Width/Height`;
+- changing the PS2 presentation mode later does not require another common-GUI
+  coordinate rewrite; a backend that reports a different output size automatically
+  receives the same responsive layout treatment;
 - adding user-selectable PS2 480p/widescreen modes is deliberately **not** part
   of this phase because those modes also change GS timing, interlace/field mode,
   DW/DH and framebuffer requirements; that work should be treated as a separate
