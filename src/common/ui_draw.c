@@ -1418,6 +1418,10 @@ int ui_light_update(void)
 {
 	static int light_dir = 1;
 	int prev_level;
+	int output_update = ui_output_update();
+
+	if (output_update)
+		return output_update;
 
 	prev_level = light_level >> 1;
 
@@ -1436,12 +1440,33 @@ int ui_light_update(void)
 	if (prev_level == (light_level >> 1))
 		return 0;
 
-	/* The legacy partial-refresh path copies rectangles between frame buffers
-	 * using logical PSP coordinates. Until those copies are viewport-aware,
-	 * scaled outputs redraw the complete UI instead of mixing coordinate spaces. */
-	return (ui_layout_get()->logical_width != SCR_WIDTH ||
-		ui_layout_get()->logical_height != SCR_HEIGHT)
-		? UI_FULL_REFRESH : UI_PARTIAL_REFRESH;
+	/* The legacy partial-refresh path copies rectangles between PSP-sized frame
+	 * buffers. Keep it only on PSP, where those buffers and coordinates are the
+	 * native 480x272 UI. Desktop can now be resized down to that exact size too,
+	 * but its render-target copies are not the PSP partial-refresh contract. */
+#if defined(PSP)
+	return UI_PARTIAL_REFRESH;
+#else
+	return UI_FULL_REFRESH;
+#endif
+}
+
+int ui_output_update(void)
+{
+	int output_width = 0;
+	int output_height = 0;
+	const ui_layout_metrics_t *layout = ui_layout_get();
+
+	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	if (output_width <= 0 || output_height <= 0)
+		return 0;
+
+	if (layout->output_width == output_width &&
+		layout->output_height == output_height)
+		return 0;
+
+	ui_layout_init(output_width, output_height, output_width, output_height);
+	return UI_FULL_REFRESH;
 }
 
 

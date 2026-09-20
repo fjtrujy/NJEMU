@@ -33,7 +33,7 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	windows_height = desktop->draw_extra_info ? TEXTURE_HEIGHT * 2 : OUTPUT_HEIGHT;
 
 
-    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windows_width, windows_height, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windows_width, windows_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
 	// Check that the window was successfully created
 	if (window == NULL) {
@@ -44,6 +44,7 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	}
 
 	desktop->window = window;
+	SDL_SetWindowMinimumSize(window, SCR_WIDTH, SCR_HEIGHT);
 
 	// Create a renderer
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);

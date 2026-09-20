@@ -649,6 +649,8 @@ void commandlist(int flag)
 			video_driver->waitVsync(video_data);
 		}
 
+		update |= ui_output_update();
+
 		if (menu_counter)
 		{
 			update = 1;

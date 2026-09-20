@@ -91,6 +91,7 @@ void large_icon_shadow(int sx, int sy, int r, int g, int b, int no);
 void large_icon_light(int sx, int sy, int r, int g, int b, int no);
 
 int ui_light_update(void);
+int ui_output_update(void);
 
 
 /*------------------------------------------------------
