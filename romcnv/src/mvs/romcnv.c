@@ -218,6 +218,28 @@ struct cacheinfo_t MVS_cacheinfo[] =
 };
 
 
+static void set_cache_conversion_policy(const char *game_name)
+{
+	int i = 0;
+
+	convert_crom = parent_name[0] ? 0 : 1;
+	convert_srom = parent_name[0] ? 0 : 1;
+	convert_vrom = parent_name[0] ? 0 : 1;
+
+	while (MVS_cacheinfo[i].name)
+	{
+		if (strcmp(game_name, MVS_cacheinfo[i].name) == 0)
+		{
+			convert_crom = MVS_cacheinfo[i].crom;
+			convert_srom = MVS_cacheinfo[i].srom;
+			convert_vrom = MVS_cacheinfo[i].vrom;
+			break;
+		}
+		i++;
+	}
+}
+
+
 /******************************************************************************
 	MVS Functions
 ******************************************************************************/
@@ -780,9 +802,16 @@ static int convert_rom(char *game_name)
 #else
 		printf("Clone set (parent: %s)\n", parent_name);
 #endif
+	set_cache_conversion_policy(game_name);
+	if (!convert_crom && !convert_srom && !convert_vrom)
+	{
+		printf("INFO: Cache data inherited from parent; no conversion needed.\n");
+		return 2;
+	}
+
 	if (psp2k) disable_sound = 0;
 
-	if (encrypt_snd1 || disable_sound)
+	if (convert_vrom && (encrypt_snd1 || disable_sound))
 	{
 		if (load_rom_sound1())
 		{
@@ -945,10 +974,12 @@ static int convert_rom(char *game_name)
 
 			case INIT_kf2k3bl:
 			case INIT_kf2k3pl:
+				cmc50_neogeo_gfx_decrypt(0x9d);
 				neogeo_bootleg_sx_decrypt(1);
 				break;
 
 			case INIT_kf2k3upl:
+				cmc50_neogeo_gfx_decrypt(0x9d);
 				neogeo_bootleg_sx_decrypt(2);
 				break;
 
@@ -1303,29 +1334,11 @@ int main(int argc, char *argv[])
 
 		for (i = 0; i < total_games; i++)
 		{
-			int j = 0;
+			int convert_result;
 
 			res = 1;
 
 			strcpy(game_name, game_names[i]);
-
-			convert_crom = 1;
-			convert_srom = 1;
-			convert_vrom = 1;
-
-			while (MVS_cacheinfo[j].name)
-			{
-				if (strcmp(game_name, MVS_cacheinfo[j].name) == 0)
-				{
-					convert_crom = MVS_cacheinfo[j].crom;
-					convert_srom = MVS_cacheinfo[j].srom;
-					convert_vrom = MVS_cacheinfo[j].vrom;
-					break;
-				}
-				j++;
-			}
-			if (!convert_crom && !convert_srom && !convert_vrom)
-				continue;
 #ifdef CHINESE
 			printf("\n-------------------------------------------\n");
 			printf("  ROM set: %s\n", game_name);
@@ -1337,7 +1350,8 @@ int main(int argc, char *argv[])
 #endif
 
 			chdir(launchDir);
-			if (!convert_rom(game_name))
+			convert_result = convert_rom(game_name);
+			if (convert_result == 0)
 			{
 #ifdef CHINESE
 				printf("跳过.\n\n");
@@ -1345,7 +1359,7 @@ int main(int argc, char *argv[])
 				printf("Skip.\n\n");
 #endif
 			}
-			else
+			else if (convert_result == 1)
 			{
 				if (zip ? create_zip_cache(game_name) : create_raw_cache(game_name))
 				{
@@ -1411,34 +1425,39 @@ int main(int argc, char *argv[])
 		printf("cache folder name: cache%c%s_cache\n", delimiter, game_name);
 #endif
 
-		convert_crom = 1;
-		convert_srom = 1;
-		convert_vrom = 1;
-
 		chdir(launchDir);
-		if (!convert_rom(game_name))
 		{
-			res = 0;
-		}
-		else
-		{
-			res = zip ? create_zip_cache(game_name) : create_raw_cache(game_name);
-		}
-		if (res)
-		{
+			int convert_result = convert_rom(game_name);
+
+			if (convert_result == 0)
+			{
+				res = 0;
+			}
+			else if (convert_result == 1)
+			{
+				res = zip ? create_zip_cache(game_name) : create_raw_cache(game_name);
+			}
+			else
+			{
+				res = 1;
+			}
+
+			if (res && convert_result == 1)
+			{
 #ifdef CHINESE
-			printf("完成.\n");
-			if (zip)
-				printf("请将\"cache%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
-			else
-				printf("请将\"cache%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+				printf("完成.\n");
+				if (zip)
+					printf("请将\"cache%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+				else
+					printf("请将\"cache%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
 #else
-			printf("complete.\n");
-			if (zip)
-				printf("Please copy \"cache%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
-			else
-				printf("Please copy \"cache%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+				printf("complete.\n");
+				if (zip)
+					printf("Please copy \"cache%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+				else
+					printf("Please copy \"cache%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
 #endif
+			}
 		}
 		free_memory();
 	}
