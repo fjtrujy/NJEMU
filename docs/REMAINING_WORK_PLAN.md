@@ -558,6 +558,17 @@ Acceptance criteria for Phase C:
 
 These are not known emulator defects and must not block other work.
 
+2026-09-20 revalidation confirms that Phase D is still corpus-blocked:
+
+- none of the six missing `pbobblen` shared-ROM CRCs exists in any local MVS
+  ZIP, so there is no valid local source from which to assemble a temporary
+  complete set;
+- both `ms5pcb` P-ROM payloads remain 4 MiB and entirely zero-filled.
+
+The acceptance condition is therefore currently satisfied by explicit blocker
+documentation; no emulator workaround is appropriate. Revisit only when valid
+source data becomes available.
+
 ### D1 - `pbobblen`
 
 Current local set is incomplete. Shared ROM data is missing:

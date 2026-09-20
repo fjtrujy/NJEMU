@@ -175,6 +175,17 @@ Known corpus blockers:
 - `ms5pcb`: local P-ROMs are invalid/zero-filled, so init ID 31 cannot be
   dynamically validated from this corpus.
 
+Revalidated on 2026-09-20 without modifying `resources/`:
+
+- `pbobblen.zip` still lacks `068-v1`, `068-v2`, and `068-c1..c4`;
+  a CRC scan across every local MVS ZIP found no copy of any of those six ROMs,
+  so a temporary complete set cannot be assembled from the current corpus;
+- `ms5pcb.zip` still contains 4 MiB `268-p1r.bin` and `268-p2r.bin`
+  payloads with zero non-zero bytes in either file.
+
+These remain corpus blockers, not reasons to relax ROM validation or add source
+compatibility paths.
+
 All other locally represented special MVS init IDs reach successful
 initialization.
 
