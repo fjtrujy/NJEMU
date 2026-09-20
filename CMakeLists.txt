@@ -227,6 +227,8 @@ set(COMMON_SRC
 	    common/ui_layout.c
 	    common/ui_text_driver.h
     common/ui_text_driver.c
+	    common/ui_text_catalog.h
+	    common/ui_text_catalog.c
     common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
@@ -310,12 +312,18 @@ else()
 endif()
 
 
+if(PLATFORM STREQUAL "DESKTOP")
+    set(PLATFORM_UI_TEXT_SOURCE desktop/desktop_ui_text_catalog.c)
+else()
+    set(PLATFORM_UI_TEXT_SOURCE ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_text.c)
+endif()
+
 set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}.h
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_platform.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ticker.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_power.c
-    ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_text.c
+    ${PLATFORM_UI_TEXT_SOURCE}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_input.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_video.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_audio.c
@@ -532,6 +540,40 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
+if(PLATFORM STREQUAL "DESKTOP")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
+    set(TRANSLATION_PACKS
+        "${TRANSLATION_PACK_DIR}/en.lng"
+        "${TRANSLATION_PACK_DIR}/ja.lng"
+        "${TRANSLATION_PACK_DIR}/es.lng"
+        "${TRANSLATION_PACK_DIR}/zh-Hans.lng"
+        "${TRANSLATION_PACK_DIR}/zh-Hant.lng"
+    )
+    add_custom_command(
+        OUTPUT ${TRANSLATION_PACKS}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${TRANSLATION_PACK_DIR}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+            --no-verify-legacy
+            --build
+            --output-dir "${TRANSLATION_PACK_DIR}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+            "${CMAKE_SOURCE_DIR}/tools/capture_translation_contract.py"
+            "${CMAKE_SOURCE_DIR}/translations/messages.def"
+            "${CMAKE_SOURCE_DIR}/translations/en.lang"
+            "${CMAKE_SOURCE_DIR}/translations/ja.lang"
+            "${CMAKE_SOURCE_DIR}/translations/es.lang"
+            "${CMAKE_SOURCE_DIR}/translations/zh-Hans.lang"
+            "${CMAKE_SOURCE_DIR}/translations/zh-Hant.lang"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        VERBATIM
+    )
+    add_custom_target(translation_packs ALL DEPENDS ${TRANSLATION_PACKS})
+    add_dependencies(${TARGET} translation_packs)
+endif()
+
 # Add the warning flags
 if (USE_ASAN)
     set(ASAN_OPTIONS
@@ -710,7 +752,19 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME ui_text_legacy_map_tests COMMAND ui_text_legacy_map_tests)
 
-    find_package(Python3 COMPONENTS Interpreter QUIET)
+    add_executable(ui_text_catalog_tests
+        tests/ui_text_catalog_tests.c
+        src/common/ui_text_catalog.c
+    )
+    target_include_directories(ui_text_catalog_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_definitions(ui_text_catalog_tests PRIVATE
+        TEST_TRANSLATION_ROOT="${CMAKE_BINARY_DIR}"
+    )
+    add_dependencies(ui_text_catalog_tests translation_packs)
+    add_test(NAME ui_text_catalog_tests COMMAND ui_text_catalog_tests)
+
     if(Python3_Interpreter_FOUND)
         add_test(
             NAME translation_source_validation

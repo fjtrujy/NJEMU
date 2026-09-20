@@ -559,6 +559,23 @@ CTest; all four feature-on cores pass 5/5 tests.
 At this point Desktop should be the first interactive runtime validation
 platform.
 
+T4 status (2026-09-21): implemented the common `.lng` V1 loader in
+`ui_text_catalog.c/.h`. It validates header/schema/count/size/offsets and NUL
+termination before exposing strings, stores the offset table plus string blob
+in one resident allocation, performs requested-language -> English fallback,
+and preserves the existing `TEXT(KEY)` API through the text-driver interface.
+Desktop is the first migrated runtime: it now links
+`desktop_ui_text_catalog.c` instead of the embedded `desktop_ui_text.c` tables,
+and CMake generates the five packs under each Desktop build's `lang/` directory
+without writing to `resources/`. A C loader test covers a real valid pack,
+missing/corrupt requested-language fallback, missing English, bad magic/schema,
+out-of-range offsets and truncation; the Python pack tests cover the remaining
+malformed-header/NUL cases. All four Desktop feature-on cores pass 6/6 CTest,
+and all four PS2 feature-on cores compile the common loader successfully while
+continuing to use their embedded adapter until language selection is separated
+in T5. Link-command auditing confirms Desktop no longer links the legacy text
+object. PSP native compilation remains unavailable locally.
+
 ### T5 - Move language selection to platform drivers
 
 - add a unique `ui_language_t`;
