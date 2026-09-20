@@ -379,6 +379,19 @@ static int load_rom_info(const char *game_name)
 						sscanf(input, "%d", &machine_input_type);
 						sscanf(init, "%d", &machine_init_type);
 						sscanf(rotate, "%d", &machine_screen_type);
+#if !RELEASE
+						/*
+						 * Keep compatibility with the legacy CPS1 rominfo
+						 * names whose custom init ids were lost when the
+						 * database was regenerated.
+						 */
+						if (strcasecmp(game_name, "sf2m3") == 0
+						 && machine_init_type == INIT_cps1)
+							machine_init_type = INIT_sf2m3;
+						else if (strcasecmp(game_name, "wofb") == 0
+						      && machine_init_type == INIT_wof)
+							machine_init_type = INIT_wofb;
+#endif
 						rom_start = 1;
 					}
 				}
