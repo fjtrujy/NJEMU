@@ -126,6 +126,18 @@ static void desktop_exit(desktop_video_t *desktop) {
 		desktop->sdl_texture_scrbitmap = NULL;
 	}
 
+	for (int i = 0; i < desktop->tex_layers_count; i++) {
+		desktop->tex_layers[i].buffer = NULL;
+		if (desktop->tex_layers[i].texture) {
+			SDL_DestroyTexture(desktop->tex_layers[i].texture);
+			desktop->tex_layers[i].texture = NULL;
+		}
+	}
+
+	free(desktop->tex_layers);
+	desktop->tex_layers = NULL;
+	desktop->tex_layers_count = 0;
+
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
@@ -135,24 +147,27 @@ static void desktop_exit(desktop_video_t *desktop) {
 		free(desktop->texturesMem);
 		desktop->texturesMem = NULL;
 	}
-
-	for (int i = 0; i < desktop->tex_layers_count; i++) {
-		desktop->tex_layers[i].buffer = NULL;
-		if (desktop->tex_layers[i].texture) {
-			SDL_DestroyTexture(desktop->tex_layers[i].texture);
-			desktop->tex_layers[i].texture = NULL;
-		}
-	}
 }
 
 static void desktop_free(void *data)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
+	if (!desktop)
+		return;
 
-	SDL_DestroyRenderer(desktop->renderer);
-	SDL_DestroyWindow(desktop->window);
-	
+	/* Renderer-owned textures must be destroyed before the renderer itself. */
 	desktop_exit(desktop);
+
+	if (desktop->renderer) {
+		SDL_DestroyRenderer(desktop->renderer);
+		desktop->renderer = NULL;
+	}
+
+	if (desktop->window) {
+		SDL_DestroyWindow(desktop->window);
+		desktop->window = NULL;
+	}
+
 	free(desktop);
 }
 
