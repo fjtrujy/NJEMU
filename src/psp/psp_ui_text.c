@@ -8,6 +8,7 @@
 
 #include "psp.h"
 #include "common/ui_text_driver.h"
+#include "common/ui_text_legacy.h"
 #include <psputility_sysparam.h>
 
 typedef struct psp_ui_text {
@@ -15,7 +16,7 @@ typedef struct psp_ui_text {
 	const char *ui_text[UI_TEXT_MAX];
 } psp_ui_text_t;
 
-static const char *text_ENGLISH[UI_TEXT_MAX] =
+static const char *text_ENGLISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -548,7 +549,7 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_JAPANESE[UI_TEXT_MAX] =
+static const char *text_JAPANESE[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1080,7 +1081,7 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		"メモリ解放設定を変更します。",*/
 		NULL
 };
-static const char *text_SPANISH[UI_TEXT_MAX] =
+static const char *text_SPANISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1613,7 +1614,7 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
+static const char *text_CHINESE_SIMPLIFIED[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2146,7 +2147,7 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		"更改内存释放的设置",*/
 		NULL
 };
-static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
+static const char *text_CHINESE_TRADITIONAL[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2697,43 +2698,42 @@ static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
 static void *psp_init(void)
 {
 	psp_ui_text_t *psp = (psp_ui_text_t*)calloc(1, sizeof(psp_ui_text_t));
-	int i;
+	const char *const *legacy_catalog = text_ENGLISH;
 	int lang = 0;
 
+	if (psp == NULL)
+		return NULL;
+
 	sceUtilityGetSystemParamInt(PSP_SYSTEMPARAM_ID_INT_LANGUAGE, &lang);
-    switch (lang)
+
+	switch (lang)
 	{
 	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_SIMPLIFIED:
 		psp->lang = LANG_CHINESE_SIMPLIFIED;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			psp->ui_text[i] = text_CHINESE_SIMPLIFIED[i];
+		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
 
 	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_TRADITIONAL:
 		psp->lang = LANG_CHINESE_TRADITIONAL;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			psp->ui_text[i] = text_CHINESE_TRADITIONAL[i];
+		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
 
 	case PSP_SYSTEMPARAM_LANGUAGE_JAPANESE:
 		psp->lang = LANG_JAPANESE;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			psp->ui_text[i] = text_JAPANESE[i];
+		legacy_catalog = text_JAPANESE;
 		break;
 
 	case PSP_SYSTEMPARAM_LANGUAGE_SPANISH:
 		psp->lang = LANG_SPANISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			psp->ui_text[i] = text_SPANISH[i];
+		legacy_catalog = text_SPANISH;
 		break;
 
 	default:
 		psp->lang = LANG_ENGLISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			psp->ui_text[i] = text_ENGLISH[i];
 		break;
 	}
 
+	ui_text_copy_legacy_catalog(psp->ui_text, legacy_catalog);
 	return psp;
 }
 
@@ -2749,7 +2749,7 @@ static int32_t psp_getLanguage(void *data)
 	return psp->lang;
 }
 
-static const char *psp_getText(void *data, int32_t id)
+static const char *psp_getText(void *data, ui_text_id_t id)
 {
 	psp_ui_text_t *psp = (psp_ui_text_t*)data;
 	return psp->ui_text[id];

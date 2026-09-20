@@ -9,13 +9,14 @@
 #include <stdlib.h>
 #include <osd_config.h>
 #include "emumain.h"
+#include "common/ui_text_legacy.h"
 
 typedef struct ps2_ui_text {
 	uint32_t lang;
 	const char *ui_text[UI_TEXT_MAX];
 } ps2_ui_text_t;
 
-static const char *text_ENGLISH[UI_TEXT_MAX] =
+static const char *text_ENGLISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -549,7 +550,7 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_JAPANESE[UI_TEXT_MAX] =
+static const char *text_JAPANESE[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1082,7 +1083,7 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		"メモリ解放設定を変更します。",*/
 		NULL
 };
-static const char *text_SPANISH[UI_TEXT_MAX] =
+static const char *text_SPANISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1615,7 +1616,7 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
+static const char *text_CHINESE_SIMPLIFIED[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2148,7 +2149,7 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		"更改内存释放的设置",*/
 		NULL
 };
-static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
+static const char *text_CHINESE_TRADITIONAL[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2685,44 +2686,39 @@ static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
 static void *ps2_init(void)
 {
 	ps2_ui_text_t *ps2 = (ps2_ui_text_t*)calloc(1, sizeof(ps2_ui_text_t));
-	int i;
+	const char *const *legacy_catalog = text_ENGLISH;
 
 	if (ps2 == NULL)
 		return NULL;
 
-    switch (configGetLanguage())
+	switch (configGetLanguage())
 	{
 	case LANGUAGE_SIMPL_CHINESE:
 		ps2->lang = LANG_CHINESE_SIMPLIFIED;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			ps2->ui_text[i] = text_CHINESE_SIMPLIFIED[i];
+		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
 
 	case LANGUAGE_TRAD_CHINESE:
 		ps2->lang = LANG_CHINESE_TRADITIONAL;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			ps2->ui_text[i] = text_CHINESE_TRADITIONAL[i];
+		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
 
 	case LANGUAGE_JAPANESE:
 		ps2->lang = LANG_JAPANESE;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			ps2->ui_text[i] = text_JAPANESE[i];
+		legacy_catalog = text_JAPANESE;
 		break;
 
 	case LANGUAGE_SPANISH:
 		ps2->lang = LANG_SPANISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			ps2->ui_text[i] = text_SPANISH[i];
+		legacy_catalog = text_SPANISH;
 		break;
 
 	default:
 		ps2->lang = LANG_ENGLISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			ps2->ui_text[i] = text_ENGLISH[i];
 		break;
 	}
 
+	ui_text_copy_legacy_catalog(ps2->ui_text, legacy_catalog);
 	return ps2;
 }
 
@@ -2738,7 +2734,7 @@ static int32_t ps2_getLanguage(void *data)
 	return ps2->lang;
 }
 
-static const char *ps2_getText(void *data, int32_t id)
+static const char *ps2_getText(void *data, ui_text_id_t id)
 {
 	ps2_ui_text_t *ps2 = (ps2_ui_text_t*)data;
 	return ps2->ui_text[id];

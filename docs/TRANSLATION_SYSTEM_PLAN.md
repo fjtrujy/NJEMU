@@ -483,6 +483,22 @@ backfilled later from CI/toolchain without depending on migrated sources.
 
 This milestone changes identity but not storage.
 
+T1 status (2026-09-21): implemented with `src/common/ui_text_ids.h` generated
+from the explicit 377-entry `translations/messages.def` namespace. The old
+conditional public enum is gone. Embedded catalogs remain temporarily
+positional behind `translations/legacy_layout.def` and
+`ui_text_copy_legacy_catalog()`, which maps each active legacy slot into its
+stable ID while preserving the original bytes. Core-dependent legacy names for
+stretch modes, numbered-vs-lettered buttons/autofire, reset help and
+`ROMINFO_NOT_FOUND` have been replaced at call sites by unambiguous stable IDs.
+`ui_text_id_tests` locks representative numeric IDs and
+`ui_text_legacy_map_tests` checks the complete active mapping for duplicates,
+holes and wrong destinations. Validation covers all four Desktop feature-on
+builds (3/3 tests each), Desktop CPS2/MVS without `SAVE_STATE`, all four PS2
+feature-on builds, all four PS2 base builds, and the exhaustive 192-table
+source matrix. Native PSP compilation remains unavailable locally, but PSP is
+included in the byte-level matrix and shares the same adapter source.
+
 ### T2 - Extract language sources
 
 - generate initial `translations/*.lang` from the verified legacy tables;

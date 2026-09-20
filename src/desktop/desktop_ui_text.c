@@ -8,13 +8,14 @@
 
 #include <stdlib.h>
 #include "emumain.h"
+#include "common/ui_text_legacy.h"
 
 typedef struct desktop_ui_text {
 	uint32_t lang;
 	const char *ui_text[UI_TEXT_MAX];
 } desktop_ui_text_t;
 
-static const char *text_ENGLISH[UI_TEXT_MAX] =
+static const char *text_ENGLISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -548,7 +549,7 @@ static const char *text_ENGLISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_JAPANESE[UI_TEXT_MAX] =
+static const char *text_JAPANESE[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1081,7 +1082,7 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		"メモリ解放設定を変更します。",*/
 		NULL
 };
-static const char *text_SPANISH[UI_TEXT_MAX] =
+static const char *text_SPANISH[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -1614,7 +1615,7 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		"Mem free",*/
 		NULL
 };
-static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
+static const char *text_CHINESE_SIMPLIFIED[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2147,7 +2148,7 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		"更改内存释放的设置",*/
 		NULL
 };
-static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
+static const char *text_CHINESE_TRADITIONAL[LEGACY_UI_TEXT_MAX] =
 {
 		"\0",
 		"\n",
@@ -2694,41 +2695,37 @@ static int configGetLanguage() {
 static void *desktop_init(void)
 {
 	desktop_ui_text_t *desktop = (desktop_ui_text_t*)calloc(1, sizeof(desktop_ui_text_t));
-	int i;
 
-    switch (configGetLanguage())
+	const char *const *legacy_catalog = text_ENGLISH;
+
+	switch (configGetLanguage())
 	{
 	case LANGUAGE_SIMPL_CHINESE:
 		desktop->lang = LANG_CHINESE_SIMPLIFIED;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			desktop->ui_text[i] = text_CHINESE_SIMPLIFIED[i];
+		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
 
 	case LANGUAGE_TRAD_CHINESE:
 		desktop->lang = LANG_CHINESE_TRADITIONAL;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			desktop->ui_text[i] = text_CHINESE_TRADITIONAL[i];
+		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
 
 	case LANGUAGE_JAPANESE:
 		desktop->lang = LANG_JAPANESE;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			desktop->ui_text[i] = text_JAPANESE[i];
+		legacy_catalog = text_JAPANESE;
 		break;
 
 	case LANGUAGE_SPANISH:
 		desktop->lang = LANG_SPANISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			desktop->ui_text[i] = text_SPANISH[i];
+		legacy_catalog = text_SPANISH;
 		break;
 
 	default:
 		desktop->lang = LANG_ENGLISH;
-		for (i = 0; i < UI_TEXT_MAX; i++)
-			desktop->ui_text[i] = text_ENGLISH[i];
 		break;
 	}
 
+	ui_text_copy_legacy_catalog(desktop->ui_text, legacy_catalog);
 	return desktop;
 }
 
@@ -2744,7 +2741,7 @@ static int32_t desktop_getLanguage(void *data)
 	return desktop->lang;
 }
 
-static const char *desktop_getText(void *data, int32_t id)
+static const char *desktop_getText(void *data, ui_text_id_t id)
 {
 	desktop_ui_text_t *desktop = (desktop_ui_text_t*)data;
 	return desktop->ui_text[id];

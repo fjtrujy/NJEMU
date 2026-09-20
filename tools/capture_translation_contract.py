@@ -21,6 +21,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADER = ROOT / "src/common/ui_text_driver.h"
+LEGACY_LAYOUT = ROOT / "translations/legacy_layout.def"
+STABLE_MANIFEST = ROOT / "translations/messages.def"
 PLATFORM_SOURCES = {
     "desktop": ROOT / "src/desktop/desktop_ui_text.c",
     "ps2": ROOT / "src/ps2/ps2_ui_text.c",
@@ -525,7 +527,7 @@ def parse_arrays(
     arrays: dict[str, list[bytes | None]] = {}
     for language, array_name in LANGUAGES.items():
         match = re.search(
-            rf"static\s+const\s+char\s*\*\s*{re.escape(array_name)}\s*\[\s*UI_TEXT_MAX\s*\]\s*=\s*\{{(.*?)\}}\s*;",
+            rf"static\s+const\s+char\s*\*\s*{re.escape(array_name)}\s*\[\s*(?:UI_TEXT_MAX|LEGACY_UI_TEXT_MAX)\s*\]\s*=\s*\{{(.*?)\}}\s*;",
             source,
             re.S,
         )
@@ -535,6 +537,108 @@ def parse_arrays(
             parse_initializer(item, text_macros) for item in split_initializers(match.group(1))
         ]
     return arrays
+
+
+def parse_stable_manifest(text: str) -> list[str]:
+    entries: list[tuple[int, str]] = []
+    for line_no, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("/*") or stripped.startswith("*"):
+            continue
+        match = re.fullmatch(r"UI_TEXT_ID\(\s*([A-Za-z_]\w*)\s*,\s*(\d+)\s*\)", stripped)
+        if not match:
+            raise ContractError(f"messages.def:{line_no}: unsupported manifest line: {stripped!r}")
+        entries.append((int(match.group(2)), match.group(1)))
+
+    if not entries:
+        raise ContractError("stable manifest is empty")
+    entries.sort()
+    expected_ids = list(range(len(entries)))
+    actual_ids = [entry_id for entry_id, _name in entries]
+    if actual_ids != expected_ids:
+        raise ContractError("stable manifest IDs are not contiguous from zero")
+    names = [name for _entry_id, name in entries]
+    if len(names) != len(set(names)):
+        raise ContractError("stable manifest contains duplicate names")
+    return names
+
+
+def parse_legacy_layout(text: str) -> list[tuple[str, str]]:
+    text = strip_comments(text)
+    entries: list[tuple[str, str]] = []
+    for match in re.finditer(
+        r"LEGACY_UI_TEXT_ID\(\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s*\)", text
+    ):
+        entries.append((match.group(1), match.group(2)))
+    if not entries:
+        raise ContractError("legacy layout contains no entries")
+    return entries
+
+
+def capture_current() -> tuple[list[str], dict, list[str], list[str], dict[str, set[int]]]:
+    stable_names = parse_stable_manifest(STABLE_MANIFEST.read_text(encoding="utf-8"))
+    stable_set = set(stable_names)
+    raw_layout = LEGACY_LAYOUT.read_text(encoding="utf-8")
+    raw_platform = {name: read_legacy(path) for name, path in PLATFORM_SOURCES.items()}
+
+    values: dict[str, dict[str, dict[bytes | None, set[str]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(set))
+    )
+    platform_errors: list[str] = []
+    alignment_errors: list[str] = []
+    counts: dict[str, set[int]] = defaultdict(set)
+
+    for config in all_configs():
+        platform_contracts: dict[str, dict[str, dict[str, bytes | None]]] = {}
+        for platform, source in raw_platform.items():
+            macros = config.macros(platform)
+            layout_entries = parse_legacy_layout(preprocess(raw_layout, macros))
+            active_stable_names = [stable for _legacy, stable in layout_entries]
+            unknown = sorted(set(active_stable_names) - stable_set)
+            if unknown:
+                raise ContractError(
+                    f"{platform} {config.label}: legacy layout references unknown stable IDs: "
+                    + ", ".join(unknown)
+                )
+            if len(active_stable_names) != len(set(active_stable_names)):
+                raise ContractError(
+                    f"{platform} {config.label}: legacy layout maps multiple entries to one stable ID"
+                )
+
+            arrays = parse_arrays(preprocess(source, macros), CORE_TEXT_MACROS[config.core])
+            counts[config.core].add(len(layout_entries))
+
+            contract: dict[str, dict[str, bytes | None]] = {}
+            for language, entries in arrays.items():
+                if len(entries) != len(layout_entries):
+                    alignment_errors.append(
+                        f"{platform} {config.label} {language}: {len(entries)} strings for "
+                        f"{len(layout_entries)} layout entries"
+                    )
+                    continue
+                contract[language] = dict(zip(active_stable_names, entries))
+                for key, value in contract[language].items():
+                    values[key][language][value].add(config.label)
+            platform_contracts[platform] = contract
+
+        reference = platform_contracts["desktop"]
+        for platform in ("ps2", "psp"):
+            if platform_contracts[platform] != reference:
+                platform_errors.append(f"{config.label}: desktop != {platform}")
+
+    return stable_names, values, platform_errors, alignment_errors, counts
+
+
+def validate_current_contract(stable_names: list[str], values: dict) -> None:
+    for stable_name in stable_names:
+        for language in LANGUAGES:
+            candidates = set(values[stable_name][language])
+            if len(candidates) != 1:
+                rendered = ", ".join(sorted(escape_preview(value) for value in candidates))
+                raise ContractError(
+                    f"stable key {stable_name} ({language}) resolves to {len(candidates)} values: "
+                    f"{rendered}"
+                )
 
 
 def all_configs() -> list[Config]:
@@ -840,58 +944,40 @@ def write_if_changed(path: Path, content: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--write", action="store_true", help="write the T0 manifest and baseline report")
     parser.add_argument(
-        "--manifest",
-        type=Path,
-        default=ROOT / "translations/messages.def",
-        help="stable manifest output path",
-    )
-    parser.add_argument(
-        "--report",
-        type=Path,
-        default=ROOT / "docs/TRANSLATION_T0_BASELINE.md",
-        help="baseline report output path",
+        "--write",
+        action="store_true",
+        help="deprecated after T0; the committed T0 baseline is intentionally frozen",
     )
     args = parser.parse_args()
 
-    try:
-        legacy_names, stable_names, values, platform_errors, alignment_errors, counts = capture()
-        validate_stable_contract(stable_names, values)
-        manifest = manifest_text(stable_names)
-        report = report_text(
-            legacy_names, stable_names, values, platform_errors, alignment_errors, counts
+    if args.write:
+        print(
+            "T0 outputs are frozen after the stable-ID migration; verify the current contract without --write.",
+            file=sys.stderr,
         )
+        return 2
+
+    try:
+        stable_names, values, platform_errors, alignment_errors, _counts = capture_current()
+        validate_current_contract(stable_names, values)
     except ContractError as exc:
-        print(f"translation contract capture failed: {exc}", file=sys.stderr)
+        print(f"translation contract verification failed: {exc}", file=sys.stderr)
         return 1
 
     structural_errors = platform_errors + alignment_errors
     if structural_errors:
-        print("translation contract capture found structural mismatches:", file=sys.stderr)
+        print("translation contract verification found structural mismatches:", file=sys.stderr)
         for error in structural_errors:
             print(f"  {error}", file=sys.stderr)
-
-    if args.write:
-        write_if_changed(args.manifest, manifest)
-        write_if_changed(args.report, report)
-    else:
-        expected = [(args.manifest, manifest), (args.report, report)]
-        stale = [str(path.relative_to(ROOT)) for path, content in expected if not path.exists() or path.read_bytes() != content.encode("utf-8")]
-        if stale:
-            print("generated translation contract files are stale: " + ", ".join(stale), file=sys.stderr)
-            print("run tools/capture_translation_contract.py --write", file=sys.stderr)
-            return 1
 
     if structural_errors:
         return 1
 
-    conflicts = sum(
-        1 for langs in values.values() if any(len(variants) > 1 for variants in langs.values())
-    )
     print(
-        f"captured {len(stable_names)} stable keys across {len(all_configs()) * len(PLATFORM_SOURCES)} "
-        f"table instances; {conflicts} configuration-dependent key(s); platform tables match"
+        f"verified {len(stable_names)} stable keys across "
+        f"{len(all_configs()) * len(PLATFORM_SOURCES)} table instances; "
+        "every key resolves to one byte sequence per language and platform tables match"
     )
     return 0
 

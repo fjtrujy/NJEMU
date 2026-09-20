@@ -692,6 +692,23 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ui_layout_tests COMMAND ui_layout_tests)
+
+    add_executable(ui_text_id_tests
+        tests/ui_text_id_tests.c
+    )
+    target_include_directories(ui_text_id_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_text_id_tests COMMAND ui_text_id_tests)
+
+    add_executable(ui_text_legacy_map_tests
+        tests/ui_text_legacy_map_tests.c
+        src/common/ui_text_driver.c
+    )
+    target_include_directories(ui_text_legacy_map_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_text_legacy_map_tests COMMAND ui_text_legacy_map_tests)
 endif()
 
 # ==============================================================================

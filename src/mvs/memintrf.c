@@ -1748,7 +1748,7 @@ int memory_init(void)
 		{
 		case 1: msg_printf(TEXT(THIS_GAME_NOT_SUPPORTED)); break;
 		case 2: msg_printf(TEXT(ROM_NOT_FOUND)); break;
-		case 3: msg_printf(TEXT(ROMINFO_NOT_FOUND)); break;
+		case 3: msg_printf(TEXT(ROMINFO_NOT_FOUND_MVS)); break;
 		}
 		msg_printf(TEXT(PRESS_ANY_BUTTON2));
 		pad_wait_press(PAD_WAIT_INFINITY);
