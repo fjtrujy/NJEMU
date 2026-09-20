@@ -62,6 +62,7 @@ static int neogeo_init(void)
 	neogeo_driver_init();
 	neogeo_video_init();
 	input_reset();
+	timer_reset();
 
 	cpu_reset_flag = 0;
 
