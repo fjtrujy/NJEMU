@@ -540,8 +540,23 @@ static int load_rom_cpu1(void)
 
 	for (i = 0; i < num_cpu1rom; )
 	{
+		int irrmaze_legacy_program = 0;
+
 		strcpy(fname, cpu1rom[i].name);
-		if ((res = file_open(game_name, parent, cpu1rom[i].crc, fname)) < 0)
+		res = file_open(game_name, parent, cpu1rom[i].crc, fname);
+
+		/* Older Irritating Maze sets store the same 2 MiB program image with
+		 * its 1 MiB halves already in the order expected by the CPU. */
+		if (res < 0
+		&& strcmp(game_name, "irrmaze") == 0
+		&& cpu1rom[i].crc == 0x4c2ff660)
+		{
+			strcpy(fname, "236-p1.bin");
+			res = file_open(game_name, parent, 0x6d536c6e, fname);
+			irrmaze_legacy_program = (res >= 0);
+		}
+
+		if (res < 0)
 		{
 			if (res == -1)
 				error_file(fname);
@@ -552,7 +567,17 @@ static int load_rom_cpu1(void)
 
 		msg_printf(TEXT(LOADING), fname);
 
-		i = rom_load(cpu1rom, memory_region_cpu1, i, num_cpu1rom);
+		if (irrmaze_legacy_program)
+		{
+			file_read(memory_region_cpu1, memory_length_cpu1);
+			i++;
+			while (i < num_cpu1rom && cpu1rom[i].type == ROM_CONTINUE)
+				i++;
+		}
+		else
+		{
+			i = rom_load(cpu1rom, memory_region_cpu1, i, num_cpu1rom);
+		}
 
 		file_close();
 	}
@@ -1274,6 +1299,7 @@ static int load_rom_user2(void)
 static int load_rom_info(const char *game_name)
 {
 	int32_t fd;
+	const char *rominfo_name = game_name;
 	char path[PATH_MAX];
 	char *buf;
 	char linebuf[256];
@@ -1301,6 +1327,11 @@ static int load_rom_info(const char *game_name)
 	encrypt_usr1 = 0;
 
 	disable_sound = 0;
+
+	/* Keep the legacy public set name used by the game list/cache table while
+	 * accepting the newer rominfo name for Fatal Fury Special set 2. */
+	if (strcmp(game_name, "fatfursa") == 0)
+		rominfo_name = "fatfurspa";
 
 	sprintf(path, "%srominfo.mvs", launchDir);
 
@@ -1354,7 +1385,7 @@ static int load_rom_info(const char *game_name)
 					init    = strtok(NULL, " ,");
 					rotate  = strtok(NULL, " ");
 
-					if (strcasecmp(name, game_name) == 0)
+					if (strcasecmp(name, rominfo_name) == 0)
 					{
 						if (str_cmp(parent, "neogeo") == 0)
 						{
