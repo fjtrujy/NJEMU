@@ -510,6 +510,7 @@ static int fill_cache(void)
 			pcm_tail->next = p;
 			pcm_tail = p;
 			i++;
+			block++;
 		}
 	}
 #else
