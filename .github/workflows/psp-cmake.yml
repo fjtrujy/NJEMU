@@ -28,6 +28,31 @@ jobs:
             adhoc: ON
           - adhoc: ON
             save_state: FALSE
+        include:
+          - target: CPS1
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: MVS
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: NCDZ
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     container: pspdev/pspdev:latest

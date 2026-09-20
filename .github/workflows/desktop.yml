@@ -29,6 +29,35 @@ jobs:
             adhoc: ON
           - adhoc: ON
             save_state: FALSE
+        include:
+          - os: ubuntu-latest
+            target: CPS1
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: CPS2
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: MVS
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: NCDZ
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     steps:
