@@ -1456,17 +1456,18 @@ int ui_light_update(void)
 void draw_volume(int volume)
 {
 	int i, x;
+	const int y = ui_layout_bottom(41);
 
 	/* Speaker shadow */
 	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 		SPEEKER_SHADOW_X, 0, 32, 32,
-		3 + 24, 3 + 230, 32, 32,
+		3 + 24, 3 + y, 32, 32,
 		0xFFFFFFFF, 1);
 
 	/* Speaker icon */
 	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 		SPEEKER_X, 0, 32, 32,
-		24, 230, 32, 32,
+		24, y, 32, 32,
 		0xFFFFFFFF, 1);
 
 	x = 64;
@@ -1476,12 +1477,12 @@ void draw_volume(int volume)
 	{
 		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_BAR_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + 230, 12, 32,
+			3 + x, 3 + y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_BAR_X, 0, 12, 32,
-			x, 230, 12, 32,
+			x, y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		x += 12;
@@ -1492,12 +1493,12 @@ void draw_volume(int volume)
 	{
 		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_DOT_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + 230, 12, 32,
+			3 + x, 3 + y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_DOT_X, 0, 12, 32,
-			x, 230, 12, 32,
+			x, y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		x += 12;

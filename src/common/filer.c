@@ -1169,10 +1169,11 @@ void file_browser(void)
 					}
 					if (title_image != -1)
 					{
+						const int title_x = ui_layout_get()->logical_width - 165;
 						if (sel < top + rows / 2)
-							show_title(315, 169);
+							show_title(title_x, ui_layout_bottom(22) - 79);
 						else
-							show_title(315, 50);
+							show_title(title_x, 50);
 					}
 #endif
 				}

@@ -481,6 +481,8 @@ static int linefeed;
 static int text_r = 0xff;
 static int text_g = 0xff;
 static int text_b = 0xff;
+static int msg_icon;
+static char msg_title[128];
 static char msg_lines[MAX_LINES][128];
 static int msg_r[MAX_LINES];
 static int msg_g[MAX_LINES];
@@ -495,15 +497,12 @@ void msg_screen_init(int wallpaper, int icon, const char *title)
 {
 	cy = 0;
 	linefeed = 1;
+	msg_icon = icon;
+	strncpy(msg_title, title, sizeof(msg_title) - 1);
+	msg_title[sizeof(msg_title) - 1] = '\0';
 	memset(msg_lines, 0, sizeof(msg_lines));
 
 	load_background(wallpaper);
-	video_driver->beginFrame(video_data);
-	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), icon);
-	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), title);
-	draw_dialog(14, 37, 465, 259);
-	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
-	video_driver->endFrame(video_data);
 }
 
 
@@ -570,6 +569,9 @@ void msg_printf(const char *text, ...)
 
 	video_driver->beginFrame(video_data);
 	show_background();
+	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), msg_icon);
+	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), msg_title);
+	draw_dialog(14, 37, ui_layout_right(14), ui_layout_bottom(12));
 	draw_battery_status(1);
 	draw_volume_status(1);
 
