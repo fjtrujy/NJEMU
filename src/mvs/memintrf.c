@@ -600,6 +600,7 @@ static int load_rom_cpu1(void)
 		case INIT_svc:      res = svc_px_decrypt();       break;
 		case INIT_samsho5:  res = samsho5_decrypt_68k();  break;
 		case INIT_kof2003:  res = kof2003_decrypt_68k();  break;
+		case INIT_kof2003h: res = kof2003h_decrypt_68k(); break;
 		case INIT_samsh5sp: res = samsh5sp_decrypt_68k(); break;
 		case INIT_matrim:   res = matrim_decrypt_68k();   break;
 
