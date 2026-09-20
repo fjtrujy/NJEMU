@@ -53,6 +53,20 @@ The multi-controller pass additionally exercised distinct CPS1 input layouts:
 `captcomm` 4P, `mercs` 3P, `slammast` 4P, `forgottn` independent dial
 state, `1941` rotated routing, and `sf2` split six-button routing.
 
+The final structural pass found two non-release WOF conversion layouts that had
+only been listed in the recommended corpus, not explicitly executed:
+
+- `wofch`: the 2P conversion routing was selected in a controlled runtime
+  harness after loading real `wof` data; P1 direction/button/coin/start reached
+  the conversion-specific port layout;
+- `wofch3p`: the same harness selected the alternate 3P layout; P3
+  direction/button/coin/start reached its dedicated third-player ports.
+
+The actual `wofch` / `wofch3p` ROM sets are not available locally. The
+harness changed only the runtime input-type selection, so the distinct routing
+branches themselves are covered without treating unavailable hack clones as a
+blocker.
+
 The remaining game-specific runtime patches were also exercised directly:
 
 - `sf2rb`: bootleg runtime patch reached;
@@ -68,6 +82,10 @@ not a semantically distinct runtime branch for this phase.
 
 - `78305a8 Fix CPS1 quiz driver names`: fixes the `qadj` / `qtono2`
   identification mismatch found while selecting representative quiz branches.
+- `6774c83 Fix WOF conversion autofire button count`: both `wofch` layouts
+  expose six buttons and six autofire mappings, but `input_init()` previously
+  left them at the two-button default. The fix makes all six autofire slots
+  active while preserving the 2P/3P player counts.
 
 No remaining CPS1 runtime branch is known to block this phase. A future
 exhaustive pass can still enumerate every parent/clone loader and init
@@ -154,6 +172,13 @@ The game may subsequently write a valid EEPROM cabinet mode (for example,
 That is game configuration behavior and is separate from physical-controller
 routing.
 
+The final structural cross-check also reconfirmed that the runtime matrix
+contains representatives for the otherwise easy-to-miss input layouts:
+`cybots` selects its split fourth-button port and `qndream` selects the
+quiz-style four-button port. Together with `19xx`, `ssf2`, `avsp`,
+`ddtod`, `batcir`, and `pzloop2`, every distinct CPS2 input switch group
+has a runtime representative.
+
 ## MVS
 
 Runtime-validated representative cases:
@@ -209,6 +234,14 @@ Runtime-confirmed game-dependent paths:
 - `overtop`: special loading start and stop paths;
 - `ssideki3`: loading-time `timer_update_subcpu()` path.
 
+The structural pass additionally identified the generic `RASTER` path with
+`busy=0`, used by `tpgolf`, `rallych`, and `neodrift`. None of those CD
+sets is available locally. A controlled harness over real `Windjammers` game
+state forced only the equivalent NGH family selection and observed
+`neogeo_driver_type=RASTER`, raster enabled, `busy=0`, followed by execution
+of `raster_interrupt()`. This covers the semantic runtime branch without
+requiring every equivalent title.
+
 ### Later-load branches
 
 The `aof3`, `lastblad`, and `lastbld2` special loading branches depend on
@@ -248,8 +281,23 @@ Product changes were rebuilt after all temporary runtime hooks were removed.
 - CPS2 Desktop Release: pass.
 - CPS2 PS2 Release with `GUI=ON`, `SAVE_STATE=ON`, and
   `COMMAND_LIST=ON`: pass.
-- Source grep confirmed no `RUNTIME_AUDIT` / audit helper remained in the
-  affected NCDZ or CPS2 source before committing fixes.
+- After the final structural pass, CPS1 Desktop, NCDZ Desktop, and CPS1 PS2 with
+  `GUI=ON`, `SAVE_STATE=ON`, and `COMMAND_LIST=ON` all rebuilt
+  successfully.
+- Source grep confirmed no `RUNTIME_AUDIT`, `runtime_audit`, or
+  `runtime_paddle` helper remains anywhere under `src/`.
+
+## Runtime coverage closure
+
+The structural cross-check of game-name/NGH conditions, input-type switches,
+video kludges, runtime patches, special pollers, raster modes, and NCDZ loading
+branches found no remaining semantically distinct game-dependent runtime branch
+for CPS1, CPS2, MVS, or NCDZ.
+
+Therefore the runtime/game-dependent branch-coverage phase is considered
+complete. Equivalent clones, unavailable sets whose branch is already covered by
+an equivalent runtime selection, and `ms5pcb` with its invalid zero-filled
+P-ROMs do not change that conclusion.
 
 ## Future exhaustive loader/decrypt/init coverage
 
