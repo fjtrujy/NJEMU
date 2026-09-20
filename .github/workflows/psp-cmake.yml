@@ -50,6 +50,7 @@ jobs:
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
+          -DGUI=${{ matrix.gui }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
         cmake --install .
