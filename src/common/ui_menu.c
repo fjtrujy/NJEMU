@@ -2064,22 +2064,36 @@ static void state_draw_thumbnail(void)
 #endif
 
 	video_driver->beginFrame(video_data);
-	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		if (machine_screen_type)
-		{
-			RECT clip1 = { 0, 0, 112, 152 };
-			const int x = state_thumbnail_x();
-			RECT clip2 = { x, 34, x + 112, 34 + 152 };
-			video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
-		}
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (machine_screen_type)
+	{
+		int dx, dy, dw, dh;
+		RECT clip1 = { 0, 0, 112, 152 };
+		const int x = state_thumbnail_x();
+		RECT clip2;
+		ui_layout_transform_rect(x, 34, 112, 152,
+			&dx, &dy, &dw, &dh);
+		clip2.left = dx;
+		clip2.top = dy;
+		clip2.right = dx + dw;
+		clip2.bottom = dy + dh;
+		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+	}
 	else
 #endif
-		{
-			RECT clip1 = { 0, 0, 152, 112 };
-			const int x = state_thumbnail_x();
-			RECT clip2 = { x, 52, x + 152, 52 + 112 };
-			video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
-		}
+	{
+		int dx, dy, dw, dh;
+		RECT clip1 = { 0, 0, 152, 112 };
+		const int x = state_thumbnail_x();
+		RECT clip2;
+		ui_layout_transform_rect(x, 52, 152, 112,
+			&dx, &dy, &dw, &dh);
+		clip2.left = dx;
+		clip2.top = dy;
+		clip2.right = dx + dw;
+		clip2.bottom = dy + dh;
+		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+	}
 	video_driver->endFrame(video_data);
 }
 

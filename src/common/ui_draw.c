@@ -230,10 +230,7 @@ int ui_init(void)
 		return 0;
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
-	/* Use the physical output as the logical layout canvas. PSP naturally keeps
-	 * its historical 480x272 space, while PS2/Desktop can reflow into their
-	 * larger native presentation area without changing emulator render targets. */
-	ui_layout_init(output_width, output_height, output_width, output_height);
+	ui_layout_init_responsive(output_width, output_height);
 
 	/* Get CPU-writable base pointer for the font scratch texture */
 	tex_font = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
@@ -1465,7 +1462,7 @@ int ui_output_update(void)
 		layout->output_height == output_height)
 		return 0;
 
-	ui_layout_init(output_width, output_height, output_width, output_height);
+	ui_layout_init_responsive(output_width, output_height);
 	return UI_FULL_REFRESH;
 }
 

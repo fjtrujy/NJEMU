@@ -50,7 +50,7 @@ void show_background(void)
 	const uint32_t black = 0xff000000;
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
-	ui_layout_init(output_width, output_height, output_width, output_height);
+	ui_layout_init_responsive(output_width, output_height);
 	layout = ui_layout_get();
 	viewport.left = layout->viewport_x;
 	viewport.top = layout->viewport_y;

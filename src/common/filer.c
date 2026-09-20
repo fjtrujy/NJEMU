@@ -344,8 +344,15 @@ static int load_title(const char *path, int number)
 
 static void show_title(int sx, int sy)
 {
+	int dx, dy, dw, dh;
 	RECT clip1 = { 0, 0, 144, 80 };
-	RECT clip2 = { sx, sy, sx + 144, sy + 80 };
+	RECT clip2;
+
+	ui_layout_transform_rect(sx, sy, 144, 80, &dx, &dy, &dw, &dh);
+	clip2.left = dx;
+	clip2.top = dy;
+	clip2.right = dx + dw;
+	clip2.bottom = dy + dh;
 
 	draw_box_shadow(sx, sy, sx + 144, sy + 80);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);

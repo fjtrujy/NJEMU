@@ -9,6 +9,9 @@
 #ifndef COMMON_UI_LAYOUT_H
 #define COMMON_UI_LAYOUT_H
 
+#define UI_LAYOUT_BASE_WIDTH  480
+#define UI_LAYOUT_BASE_HEIGHT 272
+
 typedef struct ui_layout_metrics
 {
 	int logical_width;
@@ -24,6 +27,7 @@ typedef struct ui_layout_metrics
 
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height);
+void ui_layout_init_responsive(int output_width, int output_height);
 const ui_layout_metrics_t *ui_layout_get(void);
 int ui_layout_uses_output_transform(void);
 void ui_layout_transform_point(int x, int y, int *out_x, int *out_y);

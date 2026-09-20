@@ -9,10 +9,10 @@
 #include "common/ui_layout.h"
 
 static ui_layout_metrics_t metrics = {
-	480, 272,
-	480, 272,
+	UI_LAYOUT_BASE_WIDTH, UI_LAYOUT_BASE_HEIGHT,
+	UI_LAYOUT_BASE_WIDTH, UI_LAYOUT_BASE_HEIGHT,
 	0, 0,
-	480, 272,
+	UI_LAYOUT_BASE_WIDTH, UI_LAYOUT_BASE_HEIGHT,
 	1.0f
 };
 
@@ -23,9 +23,9 @@ void ui_layout_init(int logical_width, int logical_height,
 	float scale_y;
 
 	if (logical_width <= 0)
-		logical_width = 480;
+		logical_width = UI_LAYOUT_BASE_WIDTH;
 	if (logical_height <= 0)
-		logical_height = 272;
+		logical_height = UI_LAYOUT_BASE_HEIGHT;
 	if (output_width <= 0)
 		output_width = logical_width;
 	if (output_height <= 0)
@@ -46,6 +46,43 @@ void ui_layout_init(int logical_width, int logical_height,
 		(int)((float)logical_height * metrics.scale + 0.5f);
 	metrics.viewport_x = (output_width - metrics.viewport_width) / 2;
 	metrics.viewport_y = (output_height - metrics.viewport_height) / 2;
+}
+
+void ui_layout_init_responsive(int output_width, int output_height)
+{
+	float scale_x;
+	float scale_y;
+	float scale;
+	int logical_width;
+	int logical_height;
+
+	if (output_width <= 0)
+		output_width = UI_LAYOUT_BASE_WIDTH;
+	if (output_height <= 0)
+		output_height = UI_LAYOUT_BASE_HEIGHT;
+
+	/* 480x272 is the minimum design canvas, not a fixed screen size. Scale the
+	 * baseline uniformly until one output axis is filled, then expose any extra
+	 * space on the other axis as additional logical layout room. This keeps the
+	 * PSP layout pixel-identical while making legacy center coordinates scale
+	 * naturally on PS2/Desktop and still lets edge-anchored UI reflow. */
+	scale_x = (float)output_width / (float)UI_LAYOUT_BASE_WIDTH;
+	scale_y = (float)output_height / (float)UI_LAYOUT_BASE_HEIGHT;
+	scale = scale_x < scale_y ? scale_x : scale_y;
+	if (scale <= 0.0f)
+		scale = 1.0f;
+
+	logical_width = (int)((float)output_width / scale + 0.9999f);
+	logical_height = (int)((float)output_height / scale + 0.9999f);
+	if (logical_width < UI_LAYOUT_BASE_WIDTH)
+		logical_width = UI_LAYOUT_BASE_WIDTH;
+	if (logical_height < UI_LAYOUT_BASE_HEIGHT)
+		logical_height = UI_LAYOUT_BASE_HEIGHT;
+
+	/* Reuse the normal aspect-preserving transform so integer rounding can never
+	 * make the logical canvas overdraw the physical output. Arbitrary aspect
+	 * ratios may leave a single pixel of unused space on one axis. */
+	ui_layout_init(logical_width, logical_height, output_width, output_height);
 }
 
 const ui_layout_metrics_t *ui_layout_get(void)
