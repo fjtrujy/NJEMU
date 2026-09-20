@@ -943,9 +943,8 @@ static const char *text_JAPANESE[UI_TEXT_MAX] =
 		"サポートされていないバージョン\"V%c%c\"のキャッシュファイルです。\n",
 		"現在要求されるキャッシュファイルのバージョンは\"" CACHE_VERSION "\"です。\n",
 		"キャッシュファイルを作成しなおしてください。\n",
-#if (EMU_SYSTEM == CPS2)
 		"スプライトブロック%03xをオープンできません。\n",
-#elif (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS)
 		"PCMキャッシュを使用します。\n",
 #endif
 #endif
@@ -1477,9 +1476,8 @@ static const char *text_SPANISH[UI_TEXT_MAX] =
 		"Version de cache no soportada \"V%c%c\".\n",
 		"Version actual requerida \"" CACHE_VERSION "\".\n",
 		"Por favor, reconstruir la cache de los archivos.\n",
-#if (EMU_SYSTEM == CPS2)
 		"No se pudo abrir bloque de sprite %03x\n",
-#elif (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS)
 		"PCM cache habilitado.\n",
 #endif
 #endif
@@ -2011,9 +2009,8 @@ static const char *text_CHINESE_SIMPLIFIED[UI_TEXT_MAX] =
 		"不支持\"V%c%c\"版的缓存文件\n",
 		"目前需要\""CACHE_VERSION"\"版\n",
 		"请重新转换缓存文件\n",
-#if (EMU_SYSTEM == CPS2)
 		"无法打开图像块%03x\n",
-#elif (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS)
 		"PCM缓存已开启\n",
 #endif
 #endif
@@ -2545,9 +2542,8 @@ static const char *text_CHINESE_TRADITIONAL[UI_TEXT_MAX] =
 		"不支持\"V%c%c\"版的緩存文件\n",
 		"目前需要\""CACHE_VERSION"\"版\n",
 		"請重新轉換緩存文件\n",
-#if (EMU_SYSTEM == CPS2)
 		"無法打開圖像塊%03x\n",
-#elif (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS)
 		"PCM緩存已開啟\n",
 #endif
 #endif
