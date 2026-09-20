@@ -108,6 +108,26 @@ The detailed investigation and design already exist in:
 That document should remain the technical authority for this phase. The outline
 below is a project roadmap, not a replacement for its measurements and design.
 
+### Implementation status
+
+The first low-risk NJEMU optimization and its instrumentation are now implemented:
+
+- CACHE_IO_PROFILE provides disabled-by-default C-ROM/PCM counters;
+- CACHE_IO_FORCE_SEEK provides an A/B legacy baseline without maintaining a
+  second code path;
+- raw MVS C-ROM and PCM readers track the known file position;
+- redundant preload seeks and sequential runtime seeks are skipped safely;
+- close/reopen and sleep/resume invalidate/restablish the tracked position.
+
+Desktop A/B with mslug3 and a 20 MiB raw cache was repeated three times per
+variant. The legacy path performed 320 preload seeks for 320 reads and 2 runtime
+seeks for 2 misses. Seek-elision performed 0 preload seeks (320 skipped) and
+1 runtime seek (1 skipped) for the same reads/hits/misses/bytes.
+
+The optimized PS2 build boots mslug3 correctly in PCSX2 through the attract/title
+screen. Real-PS2 timing and IOP/SCSI counters are still required before making
+the performance decision or proceeding to a more complex extent-aware backend.
+
 ### B0 - Baseline and instrumentation
 
 Instrument MVS cache misses without changing behavior.

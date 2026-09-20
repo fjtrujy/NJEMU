@@ -63,6 +63,8 @@ option(RELEASE "Release" OFF)
 option(SYSTEM_BUTTONS "System Buttons" OFF)
 option(USE_ASAN "Use ASAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
+option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
+option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
 
 # Add options to compiler definitions
 if (GUI)
@@ -91,6 +93,14 @@ endif()
 
 if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
     add_definitions(-DSYSTEM_BUTTONS=1)
+endif()
+
+if (CACHE_IO_PROFILE)
+    add_definitions(-DCACHE_IO_PROFILE=1)
+endif()
+
+if (CACHE_IO_FORCE_SEEK)
+    add_definitions(-DCACHE_IO_FORCE_SEEK=1)
 endif()
 
 # Version

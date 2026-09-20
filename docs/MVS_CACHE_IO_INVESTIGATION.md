@@ -1416,6 +1416,56 @@ La ruta debe ser estrictamente read-only.
 
 ## 24. Plan de implementacion propuesto
 
+### Estado de implementacion 2026-09-20
+
+La fase de instrumentacion y la primera optimizacion NJEMU ya tienen una
+implementacion integrada y medible:
+
+- CACHE_IO_PROFILE=ON activa contadores de C-ROM/PCM sin cambiar la ruta
+  normal cuando esta desactivado;
+- CACHE_IO_FORCE_SEEK=ON restaura de forma diagnostica el comportamiento
+  legado de hacer lseek() antes de cada lectura, para comparaciones A/B con
+  exactamente el mismo binario/instrumentacion;
+- el lector raw MVS mantiene la posicion conocida del descriptor de C-ROM y PCM;
+- fill_cache() ya no hace seeks redundantes cuando el descriptor esta en el
+  offset esperado;
+- los misses runtime secuenciales reutilizan la posicion conocida y omiten el
+  lseek();
+- sleep/resume y reopen invalidan/restablecen explicitamente la posicion
+  conocida;
+- la instrumentacion separa preload de runtime y registra hits, misses, misses
+  secuenciales, seeks ejecutados/evitados, bytes y latencia de miss.
+
+Primer A/B reproducible en Desktop con mslug3, raw folder cache, 20 MiB de
+cache y tres repeticiones alternadas de seis segundos:
+
+    legacy forced-seek:
+      preload = 320 reads / 320 seeks / 0 skipped
+      runtime = 2 misses / 2 seeks / 0 skipped
+
+    seek-elision:
+      preload = 320 reads / 0 seeks / 320 skipped
+      runtime = 2 misses / 1 seek / 1 skipped
+
+En las seis ejecuciones los bytes, hits y misses fueron identicos. El preload
+Desktop de 20 MiB permanecio aproximadamente en el rango 2.8--3.5 ms, por lo que
+esa cifra no se usa como evidencia de beneficio: el page cache del host hace que
+Desktop no represente el coste FAT/fileXio de PS2.
+
+El build PS2 con profiling ON/OFF compila y mslug3 arranca correctamente en
+PCSX2 hasta la attract/title screen usando el raw cache optimizado. El logfile
+normal de PCSX2 no recoge el stdout del EE, asi que la captura de contadores PS2
+queda pendiente de ps2link/console o hardware real. No se anade logging a disco
+desde el guest porque contaminaria precisamente el I/O que se quiere medir.
+
+Por tanto:
+
+- Fase 0 esta parcialmente cerrada en Desktop/PCSX2, pero falta el baseline de
+  consola real y los contadores IOP/SCSI;
+- Fase 1 de seek-elision NJEMU esta implementada y validada funcionalmente;
+- la decision de rendimiento continua bloqueada correctamente en mediciones de
+  PS2 real, no en timings Desktop.
+
 ### Fase 0 - Baseline e instrumentacion
 
 Sin optimizaciones funcionales.
