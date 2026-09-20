@@ -24,11 +24,8 @@ typedef struct ui_layout_metrics
 
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height);
-void ui_layout_update_output(int output_width, int output_height);
 const ui_layout_metrics_t *ui_layout_get(void);
 int ui_layout_uses_output_transform(void);
-void ui_layout_set_output_transform(int enabled);
-int ui_layout_output_transform_enabled(void);
 void ui_layout_transform_point(int x, int y, int *out_x, int *out_y);
 void ui_layout_transform_rect(int x, int y, int w, int h,
 	int *out_x, int *out_y, int *out_w, int *out_h);

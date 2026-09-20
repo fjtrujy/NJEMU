@@ -15,7 +15,6 @@ static ui_layout_metrics_t metrics = {
 	480, 272,
 	1.0f
 };
-static int output_transform_enabled = 1;
 
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height)
@@ -49,12 +48,6 @@ void ui_layout_init(int logical_width, int logical_height,
 	metrics.viewport_y = (output_height - metrics.viewport_height) / 2;
 }
 
-void ui_layout_update_output(int output_width, int output_height)
-{
-	ui_layout_init(metrics.logical_width, metrics.logical_height,
-		output_width, output_height);
-}
-
 const ui_layout_metrics_t *ui_layout_get(void)
 {
 	return &metrics;
@@ -68,31 +61,14 @@ static int scaled_coord(int value)
 
 int ui_layout_uses_output_transform(void)
 {
-	return output_transform_enabled && (
-		metrics.viewport_x != 0 ||
+	return metrics.viewport_x != 0 ||
 		metrics.viewport_y != 0 ||
 		metrics.viewport_width != metrics.logical_width ||
-		metrics.viewport_height != metrics.logical_height);
-}
-
-void ui_layout_set_output_transform(int enabled)
-{
-	output_transform_enabled = enabled != 0;
-}
-
-int ui_layout_output_transform_enabled(void)
-{
-	return output_transform_enabled;
+		metrics.viewport_height != metrics.logical_height;
 }
 
 void ui_layout_transform_point(int x, int y, int *out_x, int *out_y)
 {
-	if (!output_transform_enabled) {
-		if (out_x) *out_x = x;
-		if (out_y) *out_y = y;
-		return;
-	}
-
 	if (out_x)
 		*out_x = metrics.viewport_x + scaled_coord(x);
 	if (out_y)
@@ -102,14 +78,6 @@ void ui_layout_transform_point(int x, int y, int *out_x, int *out_y)
 void ui_layout_transform_rect(int x, int y, int w, int h,
 	int *out_x, int *out_y, int *out_w, int *out_h)
 {
-	if (!output_transform_enabled) {
-		if (out_x) *out_x = x;
-		if (out_y) *out_y = y;
-		if (out_w) *out_w = w;
-		if (out_h) *out_h = h;
-		return;
-	}
-
 	int x0 = metrics.viewport_x + scaled_coord(x);
 	int y0 = metrics.viewport_y + scaled_coord(y);
 	int x1 = metrics.viewport_x + scaled_coord(x + w);
