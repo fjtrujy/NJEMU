@@ -281,6 +281,9 @@ The first responsive-GUI implementation pass is now in place:
 - `f7df684 Simplify responsive UI layout state`
 - `f9fdf29 Add live Desktop GUI resize validation`
 - `311d74c Wire PSP GUI matrix into CI`
+- `0301587 Add responsive UI layout regression coverage`
+- `8109848 Fix PNG state buffer pointer alignment`
+- `ca78316 Add feature-on GUI CI coverage`
 
 Completed in that pass:
 
@@ -316,14 +319,24 @@ Validation completed so far:
 - live Desktop validation passed at 480x272, 800x600 (4:3) and 960x540 (16:9);
   the file browser reflows to use the additional vertical space and keeps its
   scrollbar anchored to the current right edge;
-- the PSP CI workflow now actually passes its `gui` matrix value to CMake, so
-  `GUI=OFF` and `GUI=ON` are distinct builds instead of duplicate defaults.
+- Desktop, PS2 and PSP workflows now pass their `gui` matrix value to CMake, so
+  `GUI=OFF` and `GUI=ON` are distinct builds instead of duplicate defaults;
+- `ui_layout_tests` is part of Desktop CTest and passes in both GUI and no-GUI
+  configurations for the 480x272, 640x448, 800x600 and 960x540 layout cases plus
+  the aspect-preserving logical/output transform;
+- all four Desktop cores and all four PS2 cores compile with
+  `GUI=ON + SAVE_STATE=ON + COMMAND_LIST=ON`; targeted feature-on jobs now cover
+  the same combination in Desktop, PS2 and PSP CI without exploding the normal
+  Cartesian matrix;
+- enabling those feature combinations exposed a 64-bit PNG scratch-buffer pointer
+  truncation; it is fixed portably with `uintptr_t` in Desktop/PS2/PSP.
 
-The local environment does not currently contain a PSP toolchain, so the PSP
-compile remains a CI/hardware validation item even though its layout transform
-is the identity 480x272 path.
+The local environment does not currently contain a PSP toolchain, so the final
+PSP compile/runtime confirmation remains a CI/hardware validation item. The CI
+configuration now contains both normal GUI-on jobs and feature-on GUI jobs, and
+the PSP layout path itself remains the identity 480x272 case.
 
-Phase C implementation policy is now settled:
+Phase C implementation is complete and its policy is settled:
 
 - common GUI layout always derives from the active platform output dimensions;
 - PS2 continues to use its current autodetected GS mode and the GUI consumes the
