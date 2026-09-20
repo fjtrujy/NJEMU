@@ -299,19 +299,14 @@ complete. Equivalent clones, unavailable sets whose branch is already covered by
 an equivalent runtime selection, and `ms5pcb` with its invalid zero-filled
 P-ROMs do not change that conclusion.
 
-## Future exhaustive loader/decrypt/init coverage
+## Exhaustive loader/decrypt/init follow-up
 
-The following work is intentionally separate from this phase:
+The separate exhaustive phase described here has now been executed. Its matrix,
+fixes, dynamic coverage, corpus blockers, cache-format validation and stateful
+NCDZ later-load results are recorded in:
 
-- enumerate every CPS1 parent/clone loader and init combination;
-- enumerate every CPS2 decryption key / Phoenix/decrypted set / cache-loader
-  combination;
-- enumerate every MVS P/C/S/M/V ROM transform, protection/decrypt path, cache
-  format, parent/clone fallback, and PCB-special init path;
-- execute every NCDZ later-load handler from naturally reached game state rather
-  than branch-selection harnesses;
-- add any additional malformed-ROM corpus tests that validate rejection behavior
-  without weakening ROM validation.
+- `docs/EXHAUSTIVE_LOADER_AUDIT.md`
 
-Those tasks can be pursued as a dedicated exhaustive matrix. They should not
-retroactively turn already-covered runtime game branches into blockers.
+That follow-up remains conceptually separate from this runtime/game-dependent
+branch audit; neither phase retroactively changes the acceptance criteria of the
+other.
