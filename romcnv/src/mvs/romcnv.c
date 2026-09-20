@@ -313,7 +313,7 @@ static int load_rom_gfx2(void)
 
 		for (i = 0; i < num_gfx2rom; )
 		{
-			int res;
+			int64_t res;
 
 			strcpy(fname, gfx2rom[i].name);
 			if ((res = file_open(game_name, parent, gfx2rom[i].crc, fname)) < 0)
@@ -361,7 +361,7 @@ static int load_rom_gfx3(void)
 
 	for (i = 0; i < num_gfx3rom; )
 	{
-		int res;
+		int64_t res;
 
 		strcpy(fname, gfx3rom[i].name);
 		if ((res = file_open(game_name, parent, gfx3rom[i].crc, fname)) < 0)
@@ -401,7 +401,7 @@ static int load_rom_sound1(void)
 
 	for (i = 0; i < num_snd1rom; )
 	{
-		int res;
+		int64_t res;
 
 		strcpy(fname, snd1rom[i].name);
 		if ((res = file_open(game_name, parent, snd1rom[i].crc, fname)) < 0)
@@ -1114,7 +1114,7 @@ error:
 
 static int create_zip_cache(char *game_name)
 {
-	int fd;
+	int64_t fd;
 	uint32_t block, total = 0, count = 0, num_blocks;
 	char version[8], zipname[PATH_MAX];
 	int res = 0;
@@ -1169,9 +1169,21 @@ static int create_zip_cache(char *game_name)
 			fname[2] = cnv_table[ block       & 0x0f];
 			fname[3] = '\0';
 
-			if ((fd = zopen(fname)) < 0) goto error;
-			zwrite(fd, &memory_region_gfx3[block << 16], 0x10000);
-			zclose(fd);
+			if ((fd = zopen(fname)) < 0)
+			{
+				printf("ERROR: Could not open cache block %s for writing.\n", fname);
+				goto error;
+			}
+			if (zwrite(fd, &memory_region_gfx3[block << 16], 0x10000) != 0)
+			{
+				printf("ERROR: Could not write cache block %s.\n", fname);
+				goto error;
+			}
+			if (zclose(fd) != 0)
+			{
+				printf("ERROR: Could not close cache block %s.\n", fname);
+				goto error;
+			}
 		}
 	}
 

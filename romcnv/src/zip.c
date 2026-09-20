@@ -277,6 +277,8 @@ zipFile zipOpen(const char *pathname, int append)
 	zip_internal ziinit;
 	zip_internal *zi;
 
+	memset(&ziinit, 0, sizeof(ziinit));
+
 	ziinit.filezip = open(pathname, (append == 0) ? (O_WRONLY|O_CREAT|O_TRUNC) : (O_WRONLY|O_CREAT|O_APPEND), 0644);
 	if (ziinit.filezip < 0) return NULL;
 
@@ -519,7 +521,7 @@ int zipWriteInFileInZip(zipFile file, const void *buf, unsigned len)
 		}
 	}
 
-	return 0;
+	return err;
 }
 
 

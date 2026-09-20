@@ -693,7 +693,8 @@ static int calc_pen_usage(void)
 
 static int load_rom_gfx1(void)
 {
-	int i, res;
+	int i;
+	int64_t res;
 	char fname[32], *parent;
 
 	if ((memory_region_gfx1 = calloc(1, memory_length_gfx1)) == NULL)
@@ -1094,7 +1095,7 @@ static void print_progress(int count, int total)
 
 static int create_zip_cache(char *game_name)
 {
-	int fd;
+	int64_t fd;
 	uint32_t block, res = 0, total = 0, count = 0;
 	char version[8], fname[PATH_MAX], zipname[PATH_MAX];
 

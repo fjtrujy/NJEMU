@@ -27,7 +27,7 @@ struct rom_t
 
 
 extern int lsb_first;
-extern int rom_fd;
+extern int64_t rom_fd;
 extern char delimiter;
 
 extern char game_dir[PATH_MAX];
@@ -43,7 +43,7 @@ void error_file(const char *rom_name);
 void error_crc(const char *rom_name);
 void error_rom(const char *rom_name);
 
-int file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname);
+int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname);
 void file_close(void);
 int file_read(void *buf, size_t length);
 int file_getc(void);
