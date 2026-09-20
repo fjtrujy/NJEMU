@@ -128,6 +128,16 @@ single physical controller; PS2 exposes indexed pads/multitap slots.
   suppresses `P2_START`; a temporary `Start2=L` runtime test confirmed both pads
   receive L independently without cross-player Start leakage. Test logging and
   forced mappings were removed afterwards.
+- CPS2 `avsp` was exercised with three active PCSX2 pads. P3 movement, Start,
+  and Coin all reached only the P3 arcade inputs.
+- CPS2 `ddtod` and `batcir` were exercised with four active PCSX2 pads.
+  P3/P4 movement, Start, and Coin were independently routed through both
+  four-player layouts.
+- CPS2 `pzloop2` paddle routing was explicitly observed: P1 changed only
+  accumulator 0, then P2 changed only accumulator 1 while P1 retained its value.
+- A clean CPS2 EEPROM exposed a pre-existing out-of-bounds input-mode lookup
+  (`0xff` indexing a 16-entry table). `50485d9` now ignores invalid erased
+  values until the game writes a valid cabinet mode.
 - NCDZ `Windjammers`: direct P1/P2 runtime routing verified on independent NCDZ
   ports.
 - A fresh PS2 `GUI + SAVE_STATE + COMMAND_LIST` build matrix passes for all four
@@ -200,16 +210,13 @@ Remaining validation/fix order:
 1. One PS2 pad:
    - routing and Switch Player are runtime-validated; retain a final visual smoke
      test on real hardware if convenient.
-2. CPS2 3/4-player games through multitap when legal local ROMs are available:
-   - `avsp`, `ddtod`, `batcir`;
-   - verify P3/P4 coin/start routing in addition to the CPS1 `captcomm` validation
-     already completed.
-3. MVS special cases when legal local ROMs are available:
-   - `fatfursp` exclusive digital/analog poller;
-   - `popbounc` per-player analog routing;
-   - keep `irrmaze` on the legacy special-hardware path unless runtime evidence
-     shows an independent-player model is correct.
-4. While several pads are attached:
+2. CPS2 3/4-player and paddle routing is runtime-validated:
+   - `avsp` P3 movement/Start/Coin;
+   - `ddtod` and `batcir` P3/P4 movement/Start/Coin;
+   - `pzloop2` independent P1/P2 paddle accumulation.
+3. MVS special cases are runtime-validated for `fatfursp`/`fatfursa` and
+   `popbounc`; keep `irrmaze` on the legacy special-hardware path.
+4. While several pads are attached, retain a final UI/global-action smoke pass:
    - menu;
    - screenshot;
    - save/load state;

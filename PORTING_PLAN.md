@@ -45,8 +45,13 @@ This document outlines the remaining work needed to complete the cross-platform 
   Worlds, CPS2 `pzloop2`, and MVS `popbounc` preserve their per-player analog
   state. MVS special hardware cases that do not model independent local players
   remain on the legacy path.
-- ⚠️ Multi-controller runtime behavior still needs a real-hardware (or reliably
-  configured multi-pad PCSX2) pass, especially 3/4-player multitap titles.
+- ✅ Multi-controller runtime behavior has a reliable multi-pad PCSX2 pass:
+  CPS1 3P/4P, CPS2 `avsp` 3P, `ddtod`/`batcir` 4P, MVS special cases, and
+  NCDZ 2P routing are covered. CPS2 P3/P4 Start/Coin and `pzloop2` independent
+  paddle state were explicitly observed.
+- ⚠️ Real-hardware hotplug/late-multitap and a final multi-pad UI/global-hotkey
+  smoke pass remain desirable; they are validation polish rather than missing
+  core routing.
 - ⚠️ A final pass on real PS2 hardware is still desirable after the latest
   GUI/input/readback changes, especially screenshot output and NCDZ CDDA.
 
