@@ -1144,7 +1144,11 @@ static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 
 /*--------------------------------------------------------
-	Copy Rectangular Area with Horizontal Flip
+	Copy Rectangular Area with 180-degree Flip
+
+	Despite the legacy interface name, the PSP implementation
+	flips both axes. CPS1/CPS2 use this path for the hardware
+	screen-flip bit, which is a 180-degree screen rotation.
 --------------------------------------------------------*/
 
 static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
@@ -1172,12 +1176,12 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
-	/* Horizontal flip: swap U coordinates between left and right */
+	/* 180-degree flip: swap both U and V coordinates. */
 	gsKit_prim_quad_texture(gsGlobal, &srcTex,
-		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->top,
-		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->top,
-		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->bottom,
-		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->bottom,
+		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->bottom,
+		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->bottom,
+		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->top,
+		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->top,
 		0, color);
 
 	gsGlobal->PrimAlphaEnable = prev_alpha;
