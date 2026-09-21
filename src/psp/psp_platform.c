@@ -11,6 +11,7 @@
 #include <pspsdk.h>
 #include <pspctrl.h>
 #include <pspimpose_driver.h>
+#include <psputility_sysparam.h>
 #include <pspwlan.h>
 
 #include "SystemButtons.h"
@@ -268,6 +269,27 @@ static uint32_t psp_availableRam(void *data) {
 	return total;
 }
 
+static ui_language_t psp_getSystemLanguage(void *data) {
+	int language = PSP_SYSTEMPARAM_LANGUAGE_ENGLISH;
+	(void)data;
+
+	if (sceUtilityGetSystemParamInt(PSP_SYSTEMPARAM_ID_INT_LANGUAGE, &language) < 0)
+		return UI_LANG_ENGLISH;
+
+	switch (language) {
+	case PSP_SYSTEMPARAM_LANGUAGE_JAPANESE:
+		return UI_LANG_JAPANESE;
+	case PSP_SYSTEMPARAM_LANGUAGE_SPANISH:
+		return UI_LANG_SPANISH;
+	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_SIMPLIFIED:
+		return UI_LANG_CHINESE_SIMPLIFIED;
+	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_TRADITIONAL:
+		return UI_LANG_CHINESE_TRADITIONAL;
+	default:
+		return UI_LANG_ENGLISH;
+	}
+}
+
 platform_driver_t platform_psp = {
 	"psp",
 	psp_init,
@@ -278,4 +300,5 @@ platform_driver_t platform_psp = {
 	psp_getWlanSwitchState,
 	psp_getHardwareModel,
 	psp_availableRam,
+	psp_getSystemLanguage,
 };

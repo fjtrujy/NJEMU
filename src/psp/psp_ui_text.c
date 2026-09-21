@@ -9,10 +9,9 @@
 #include "psp.h"
 #include "common/ui_text_driver.h"
 #include "common/ui_text_legacy.h"
-#include <psputility_sysparam.h>
 
 typedef struct psp_ui_text {
-	uint32_t lang;
+	ui_language_t lang;
 	const char *ui_text[UI_TEXT_MAX];
 } psp_ui_text_t;
 
@@ -2699,37 +2698,31 @@ static void *psp_init(void)
 {
 	psp_ui_text_t *psp = (psp_ui_text_t*)calloc(1, sizeof(psp_ui_text_t));
 	const char *const *legacy_catalog = text_ENGLISH;
-	int lang = 0;
+	ui_language_t language = UI_LANG_ENGLISH;
 
 	if (psp == NULL)
 		return NULL;
 
-	sceUtilityGetSystemParamInt(PSP_SYSTEMPARAM_ID_INT_LANGUAGE, &lang);
+	if (platform_driver->getSystemLanguage != NULL)
+		language = platform_driver->getSystemLanguage(platform_data);
+	psp->lang = language;
 
-	switch (lang)
+	switch (language)
 	{
-	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_SIMPLIFIED:
-		psp->lang = LANG_CHINESE_SIMPLIFIED;
+	case UI_LANG_CHINESE_SIMPLIFIED:
 		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
-
-	case PSP_SYSTEMPARAM_LANGUAGE_CHINESE_TRADITIONAL:
-		psp->lang = LANG_CHINESE_TRADITIONAL;
+	case UI_LANG_CHINESE_TRADITIONAL:
 		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
-
-	case PSP_SYSTEMPARAM_LANGUAGE_JAPANESE:
-		psp->lang = LANG_JAPANESE;
+	case UI_LANG_JAPANESE:
 		legacy_catalog = text_JAPANESE;
 		break;
-
-	case PSP_SYSTEMPARAM_LANGUAGE_SPANISH:
-		psp->lang = LANG_SPANISH;
+	case UI_LANG_SPANISH:
 		legacy_catalog = text_SPANISH;
 		break;
-
+	case UI_LANG_ENGLISH:
 	default:
-		psp->lang = LANG_ENGLISH;
 		break;
 	}
 
@@ -2743,7 +2736,7 @@ static void psp_free(void *data)
 	free(psp);
 }
 
-static int32_t psp_getLanguage(void *data)
+static ui_language_t psp_getLanguage(void *data)
 {
 	psp_ui_text_t *psp = (psp_ui_text_t*)data;
 	return psp->lang;

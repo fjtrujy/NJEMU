@@ -9,20 +9,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ui_language.h"
 #include "ui_text_ids.h"
-
-#define LANG_ENGLISH	            0
-#define LANG_JAPANESE	            1
-#define LANG_CHINESE_SIMPLIFIED	    2
-#define LANG_CHINESE_TRADITIONAL    3
-#define LANG_FRENCH                 0
-#define LANG_SPANISH                0
-#define LANG_GERMAN                 0
-#define LANG_ITALIAN                0
-#define LANG_DUTCH                  0
-#define LANG_PORTUGUESE             0
-#define LANG_RUSSIAN                0
-#define LANG_KOREAN                 0
 
 #define TEXT(s)		ui_text_driver->getText(ui_text_data, s)
 
@@ -37,7 +25,7 @@ typedef struct ui_text_driver
 	void *(*init)(void);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
-	int32_t (*getLanguage)(void *data);
+	ui_language_t (*getLanguage)(void *data);
 	const char *(*getText)(void *data, ui_text_id_t id);
 
 } ui_text_driver_t;

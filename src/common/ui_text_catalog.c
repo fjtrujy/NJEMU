@@ -16,7 +16,7 @@
 
 struct ui_text_catalog
 {
-	uint16_t language;
+	ui_language_t language;
 	uint16_t message_count;
 	uint32_t string_blob_size;
 	size_t allocation_size;
@@ -24,7 +24,7 @@ struct ui_text_catalog
 	char *strings;
 };
 
-static const char *const language_tags[UI_TEXT_PACK_LANGUAGE_COUNT] = {
+static const char *const language_tags[UI_LANG_COUNT] = {
 	"en",
 	"ja",
 	"es",
@@ -52,13 +52,13 @@ static void set_error(ui_text_catalog_error_t *error, ui_text_catalog_error_t va
 }
 
 static int build_pack_path(char *path, size_t path_size, const char *base_dir,
-	uint16_t language)
+	ui_language_t language)
 {
 	const char *separator;
 	int written;
 	size_t base_len;
 
-	if (base_dir == NULL || language >= UI_TEXT_PACK_LANGUAGE_COUNT)
+	if (base_dir == NULL || (unsigned)language >= UI_LANG_COUNT)
 		return 0;
 
 	base_len = strlen(base_dir);
@@ -68,7 +68,7 @@ static int build_pack_path(char *path, size_t path_size, const char *base_dir,
 	return written >= 0 && (size_t)written < path_size;
 }
 
-static ui_text_catalog_t *load_exact(const char *path, uint16_t expected_language,
+static ui_text_catalog_t *load_exact(const char *path, ui_language_t expected_language,
 	ui_text_catalog_error_t *error)
 {
 	unsigned char header[UI_TEXT_PACK_HEADER_SIZE];
@@ -126,7 +126,7 @@ static ui_text_catalog_t *load_exact(const char *path, uint16_t expected_languag
 		set_error(error, UI_TEXT_CATALOG_BAD_VERSION);
 		goto fail;
 	}
-	if (language != expected_language || language >= UI_TEXT_PACK_LANGUAGE_COUNT) {
+	if (language != (uint16_t)expected_language || language >= UI_LANG_COUNT) {
 		set_error(error, UI_TEXT_CATALOG_BAD_LANGUAGE);
 		goto fail;
 	}
@@ -159,7 +159,7 @@ static ui_text_catalog_t *load_exact(const char *path, uint16_t expected_languag
 		goto fail;
 	}
 
-	catalog->language = language;
+	catalog->language = (ui_language_t)language;
 	catalog->message_count = message_count;
 	catalog->string_blob_size = blob_size;
 	catalog->allocation_size = allocation_size;
@@ -209,16 +209,16 @@ fail:
 }
 
 ui_text_catalog_t *ui_text_catalog_load(const char *base_dir,
-	uint16_t requested_language, uint16_t *loaded_language,
+	ui_language_t requested_language, ui_language_t *loaded_language,
 	ui_text_catalog_error_t *error)
 {
 	char path[1024];
 	ui_text_catalog_t *catalog;
 	ui_text_catalog_error_t load_error;
-	uint16_t language = requested_language;
+	ui_language_t language = requested_language;
 
-	if (language >= UI_TEXT_PACK_LANGUAGE_COUNT)
-		language = UI_TEXT_PACK_LANG_ENGLISH;
+	if ((unsigned)language >= UI_LANG_COUNT)
+		language = UI_LANG_ENGLISH;
 
 	if (build_pack_path(path, sizeof(path), base_dir, language)) {
 		catalog = load_exact(path, language, &load_error);
@@ -232,8 +232,8 @@ ui_text_catalog_t *ui_text_catalog_load(const char *base_dir,
 		load_error = UI_TEXT_CATALOG_BAD_SIZE;
 	}
 
-	if (language != UI_TEXT_PACK_LANG_ENGLISH) {
-		language = UI_TEXT_PACK_LANG_ENGLISH;
+	if (language != UI_LANG_ENGLISH) {
+		language = UI_LANG_ENGLISH;
 		if (build_pack_path(path, sizeof(path), base_dir, language)) {
 			catalog = load_exact(path, language, &load_error);
 			if (catalog != NULL) {
@@ -267,9 +267,9 @@ const char *ui_text_catalog_get(const ui_text_catalog_t *catalog, ui_text_id_t i
 	return catalog->strings + offset;
 }
 
-uint16_t ui_text_catalog_language(const ui_text_catalog_t *catalog)
+ui_language_t ui_text_catalog_language(const ui_text_catalog_t *catalog)
 {
-	return catalog != NULL ? catalog->language : UI_TEXT_PACK_LANG_ENGLISH;
+	return catalog != NULL ? catalog->language : UI_LANG_ENGLISH;
 }
 
 size_t ui_text_catalog_allocation_size(const ui_text_catalog_t *catalog)

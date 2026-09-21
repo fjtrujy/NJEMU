@@ -14,8 +14,13 @@
 static void *desktop_text_init(void)
 {
 	ui_text_catalog_error_t error;
+	ui_language_t requested_language = UI_LANG_ENGLISH;
+
+	if (platform_driver->getSystemLanguage != NULL)
+		requested_language = platform_driver->getSystemLanguage(platform_data);
+
 	ui_text_catalog_t *catalog = ui_text_catalog_load(
-		launchDir, UI_TEXT_PACK_LANG_ENGLISH, NULL, &error);
+		launchDir, requested_language, NULL, &error);
 
 	if (catalog == NULL) {
 		printf("Failed to load Desktop translation catalog: %s\n",
@@ -30,9 +35,9 @@ static void desktop_text_free(void *data)
 	ui_text_catalog_free((ui_text_catalog_t *)data);
 }
 
-static int32_t desktop_text_get_language(void *data)
+static ui_language_t desktop_text_get_language(void *data)
 {
-	return (int32_t)ui_text_catalog_language((const ui_text_catalog_t *)data);
+	return ui_text_catalog_language((const ui_text_catalog_t *)data);
 }
 
 static const char *desktop_text_get(void *data, ui_text_id_t id)

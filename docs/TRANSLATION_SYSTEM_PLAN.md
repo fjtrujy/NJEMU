@@ -585,6 +585,21 @@ object. PSP native compilation remains unavailable locally.
 - define Desktop behaviour explicitly;
 - audit all current direct `getLanguage()` users.
 
+T5 status (2026-09-21): implemented a unique five-value `ui_language_t`
+(`ENGLISH`, `JAPANESE`, `SPANISH`, simplified Chinese, traditional Chinese)
+whose numeric values match the `.lng` V1 language IDs. The previous aliases
+where unsupported languages (including Spanish) collapsed to English have been
+removed. `platform_driver_t` now exposes `getSystemLanguage()`: PS2 maps
+`configGetLanguage()`, PSP maps `sceUtilityGetSystemParamInt()`, and Desktop
+keeps its historical English-only behaviour explicitly. Both the common pack
+driver and the temporary PS2/PSP legacy adapters consume that platform result;
+no translation-storage file reads an OS language API directly anymore. All
+current `getLanguage()` consumers (file-browser naming, DIP switches, NCDZ
+defaults and UI layout behaviour) use the new `UI_LANG_*` identities. The four
+Desktop feature-on builds continue to pass 6/6 tests and all four PS2
+feature-on builds compile successfully. Native PSP compilation remains
+unavailable locally.
+
 ### T6 - Remove embedded/platform translation sources
 
 After byte-equivalence and runtime tests pass on all platforms:

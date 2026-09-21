@@ -113,14 +113,14 @@ static void source_pack_path(char *path, size_t path_size)
 static void test_valid_catalog(void)
 {
 	ui_text_catalog_error_t error = UI_TEXT_CATALOG_IO_ERROR;
-	uint16_t language = 99;
+	ui_language_t language = UI_LANG_COUNT;
 	ui_text_catalog_t *catalog = ui_text_catalog_load(
-		TEST_TRANSLATION_ROOT, UI_TEXT_PACK_LANG_ENGLISH, &language, &error);
+		TEST_TRANSLATION_ROOT, UI_LANG_ENGLISH, &language, &error);
 
 	assert(catalog != NULL);
 	assert(error == UI_TEXT_CATALOG_OK);
-	assert(language == UI_TEXT_PACK_LANG_ENGLISH);
-	assert(ui_text_catalog_language(catalog) == UI_TEXT_PACK_LANG_ENGLISH);
+	assert(language == UI_LANG_ENGLISH);
+	assert(ui_text_catalog_language(catalog) == UI_LANG_ENGLISH);
 	assert(ui_text_catalog_allocation_size(catalog) > 7000u);
 	assert(strcmp(ui_text_catalog_get(catalog, PLEASE_WAIT), "Please wait...") == 0);
 	assert(strcmp(ui_text_catalog_get(catalog, EOM), "") == 0);
@@ -135,17 +135,17 @@ static void test_missing_requested_language_falls_back(void)
 	char source[1024];
 	char destination[1024];
 	ui_text_catalog_error_t error;
-	uint16_t language = 99;
+	ui_language_t language = UI_LANG_COUNT;
 	ui_text_catalog_t *catalog;
 
 	make_temp_root(root, sizeof(root));
 	source_pack_path(source, sizeof(source));
 	temp_path(destination, sizeof(destination), root, "en.lng");
 	copy_file(source, destination);
-	catalog = ui_text_catalog_load(root, UI_TEXT_PACK_LANG_JAPANESE, &language, &error);
+	catalog = ui_text_catalog_load(root, UI_LANG_JAPANESE, &language, &error);
 	assert(catalog != NULL);
 	assert(error == UI_TEXT_CATALOG_OK);
-	assert(language == UI_TEXT_PACK_LANG_ENGLISH);
+	assert(language == UI_LANG_ENGLISH);
 	assert(strcmp(ui_text_catalog_get(catalog, PLEASE_WAIT), "Please wait...") == 0);
 	ui_text_catalog_free(catalog);
 	remove_temp_root(root);
@@ -157,7 +157,7 @@ static void test_corrupt_requested_language_falls_back(void)
 	char source[1024];
 	char destination[1024];
 	ui_text_catalog_error_t error;
-	uint16_t language = 99;
+	ui_language_t language = UI_LANG_COUNT;
 	ui_text_catalog_t *catalog;
 
 	make_temp_root(root, sizeof(root));
@@ -166,10 +166,10 @@ static void test_corrupt_requested_language_falls_back(void)
 	copy_file(source, destination);
 	temp_path(destination, sizeof(destination), root, "ja.lng");
 	copy_file(source, destination); /* Header still says English: invalid as ja.lng. */
-	catalog = ui_text_catalog_load(root, UI_TEXT_PACK_LANG_JAPANESE, &language, &error);
+	catalog = ui_text_catalog_load(root, UI_LANG_JAPANESE, &language, &error);
 	assert(catalog != NULL);
 	assert(error == UI_TEXT_CATALOG_OK);
-	assert(language == UI_TEXT_PACK_LANG_ENGLISH);
+	assert(language == UI_LANG_ENGLISH);
 	ui_text_catalog_free(catalog);
 	remove_temp_root(root);
 }
@@ -196,7 +196,7 @@ static void assert_corrupt_english_rejected(size_t offset, const unsigned char *
 	write_file(destination, data, size);
 	free(data);
 
-	catalog = ui_text_catalog_load(root, UI_TEXT_PACK_LANG_ENGLISH, NULL, &error);
+	catalog = ui_text_catalog_load(root, UI_LANG_ENGLISH, NULL, &error);
 	assert(catalog == NULL);
 	assert(error == expected_error);
 	remove_temp_root(root);
@@ -234,7 +234,7 @@ static void test_missing_english_fails(void)
 	ui_text_catalog_t *catalog;
 
 	make_temp_root(root, sizeof(root));
-	catalog = ui_text_catalog_load(root, UI_TEXT_PACK_LANG_ENGLISH, NULL, &error);
+	catalog = ui_text_catalog_load(root, UI_LANG_ENGLISH, NULL, &error);
 	assert(catalog == NULL);
 	assert(error == UI_TEXT_CATALOG_OPEN_FAILED);
 	remove_temp_root(root);

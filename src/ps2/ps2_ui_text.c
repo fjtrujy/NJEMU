@@ -7,12 +7,11 @@
 ******************************************************************************/
 
 #include <stdlib.h>
-#include <osd_config.h>
 #include "emumain.h"
 #include "common/ui_text_legacy.h"
 
 typedef struct ps2_ui_text {
-	uint32_t lang;
+	ui_language_t lang;
 	const char *ui_text[UI_TEXT_MAX];
 } ps2_ui_text_t;
 
@@ -2687,34 +2686,31 @@ static void *ps2_init(void)
 {
 	ps2_ui_text_t *ps2 = (ps2_ui_text_t*)calloc(1, sizeof(ps2_ui_text_t));
 	const char *const *legacy_catalog = text_ENGLISH;
+	ui_language_t language = UI_LANG_ENGLISH;
 
 	if (ps2 == NULL)
 		return NULL;
 
-	switch (configGetLanguage())
+	if (platform_driver->getSystemLanguage != NULL)
+		language = platform_driver->getSystemLanguage(platform_data);
+	ps2->lang = language;
+
+	switch (language)
 	{
-	case LANGUAGE_SIMPL_CHINESE:
-		ps2->lang = LANG_CHINESE_SIMPLIFIED;
+	case UI_LANG_CHINESE_SIMPLIFIED:
 		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
-
-	case LANGUAGE_TRAD_CHINESE:
-		ps2->lang = LANG_CHINESE_TRADITIONAL;
+	case UI_LANG_CHINESE_TRADITIONAL:
 		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
-
-	case LANGUAGE_JAPANESE:
-		ps2->lang = LANG_JAPANESE;
+	case UI_LANG_JAPANESE:
 		legacy_catalog = text_JAPANESE;
 		break;
-
-	case LANGUAGE_SPANISH:
-		ps2->lang = LANG_SPANISH;
+	case UI_LANG_SPANISH:
 		legacy_catalog = text_SPANISH;
 		break;
-
+	case UI_LANG_ENGLISH:
 	default:
-		ps2->lang = LANG_ENGLISH;
 		break;
 	}
 
@@ -2728,7 +2724,7 @@ static void ps2_free(void *data)
 	free(ps2);
 }
 
-static int32_t ps2_getLanguage(void *data)
+static ui_language_t ps2_getLanguage(void *data)
 {
 	ps2_ui_text_t *ps2 = (ps2_ui_text_t*)data;
 	return ps2->lang;

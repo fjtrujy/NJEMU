@@ -8,6 +8,7 @@
 #include <iopcontrol.h>
 #include <sbv_patches.h>
 #include <fileXio_rpc.h>
+#include <osd_config.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
 
@@ -134,6 +135,22 @@ static uint32_t ps2_availableRam(void *data) {
 	return total - baseline_reservation;
 }
 
+static ui_language_t ps2_getSystemLanguage(void *data) {
+	(void)data;
+	switch (configGetLanguage()) {
+	case LANGUAGE_JAPANESE:
+		return UI_LANG_JAPANESE;
+	case LANGUAGE_SPANISH:
+		return UI_LANG_SPANISH;
+	case LANGUAGE_SIMPL_CHINESE:
+		return UI_LANG_CHINESE_SIMPLIFIED;
+	case LANGUAGE_TRAD_CHINESE:
+		return UI_LANG_CHINESE_TRADITIONAL;
+	default:
+		return UI_LANG_ENGLISH;
+	}
+}
+
 platform_driver_t platform_ps2 = {
 	"ps2",
 	ps2_init,
@@ -144,4 +161,5 @@ platform_driver_t platform_ps2 = {
 	ps2_getWlanSwitchState,
 	ps2_getHardwareModel,
 	ps2_availableRam,
+	ps2_getSystemLanguage,
 };

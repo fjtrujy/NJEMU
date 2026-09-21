@@ -227,6 +227,7 @@ set(COMMON_SRC
 	    common/ui_layout.c
 	    common/ui_text_driver.h
     common/ui_text_driver.c
+	    common/ui_language.h
 	    common/ui_text_catalog.h
 	    common/ui_text_catalog.c
     common/font_t.h

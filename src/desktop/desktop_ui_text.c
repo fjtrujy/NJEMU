@@ -11,7 +11,7 @@
 #include "common/ui_text_legacy.h"
 
 typedef struct desktop_ui_text {
-	uint32_t lang;
+	ui_language_t lang;
 	const char *ui_text[UI_TEXT_MAX];
 } desktop_ui_text_t;
 
@@ -2701,27 +2701,27 @@ static void *desktop_init(void)
 	switch (configGetLanguage())
 	{
 	case LANGUAGE_SIMPL_CHINESE:
-		desktop->lang = LANG_CHINESE_SIMPLIFIED;
+		desktop->lang = UI_LANG_CHINESE_SIMPLIFIED;
 		legacy_catalog = text_CHINESE_SIMPLIFIED;
 		break;
 
 	case LANGUAGE_TRAD_CHINESE:
-		desktop->lang = LANG_CHINESE_TRADITIONAL;
+		desktop->lang = UI_LANG_CHINESE_TRADITIONAL;
 		legacy_catalog = text_CHINESE_TRADITIONAL;
 		break;
 
 	case LANGUAGE_JAPANESE:
-		desktop->lang = LANG_JAPANESE;
+		desktop->lang = UI_LANG_JAPANESE;
 		legacy_catalog = text_JAPANESE;
 		break;
 
 	case LANGUAGE_SPANISH:
-		desktop->lang = LANG_SPANISH;
+		desktop->lang = UI_LANG_SPANISH;
 		legacy_catalog = text_SPANISH;
 		break;
 
 	default:
-		desktop->lang = LANG_ENGLISH;
+		desktop->lang = UI_LANG_ENGLISH;
 		break;
 	}
 
@@ -2735,7 +2735,7 @@ static void desktop_free(void *data)
 	free(desktop);
 }
 
-static int32_t desktop_getLanguage(void *data)
+static ui_language_t desktop_getLanguage(void *data)
 {
 	desktop_ui_text_t *desktop = (desktop_ui_text_t*)data;
 	return desktop->lang;

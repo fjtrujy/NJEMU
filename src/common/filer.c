@@ -418,19 +418,19 @@ static int load_zipname(void)
 	char path[PATH_MAX], buf[256];
 	int found = 0;
 
-	if (ui_text_driver->getLanguage(ui_text_data) == LANG_JAPANESE)
+	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_JAPANESE)
 	{
 		sprintf(path, "%szipnamej." EXT, launchDir);
 		fd = open(path, O_RDONLY);
 		if (fd >= 0) { close(fd); found = 1; }
 	}
-	if (ui_text_driver->getLanguage(ui_text_data) == LANG_CHINESE_SIMPLIFIED)
+	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_SIMPLIFIED)
 	{
 		sprintf(path, "%szipnamech1." EXT, launchDir);
 		fd = open(path, O_RDONLY);
 		if (fd >= 0) { close(fd); found = 1; }
 	}
-	if (ui_text_driver->getLanguage(ui_text_data) == LANG_CHINESE_TRADITIONAL)
+	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_TRADITIONAL)
 	{
 		sprintf(path, "%szipnamech2." EXT, launchDir);
 		fd = open(path, O_RDONLY);
