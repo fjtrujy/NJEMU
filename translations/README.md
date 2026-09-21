@@ -41,16 +41,10 @@ python3 tools/build_translations.py
 ```
 
 The validator checks all five catalogs for completeness, exact manifest order,
-known escapes/tokens and the same `printf` conversion contract as English. While
-the embedded legacy tables still exist, it also compares every decoded value
-byte-for-byte with those tables across the complete core/feature matrix.
+known escapes/tokens and the same `printf` conversion contract as English.
+`messages.def` plus these five `.lang` files are now the authoritative source;
+the old platform-embedded C tables were removed after byte-equivalence was
+established during T0-T5.
 
-The initial sources were extracted with:
-
-```sh
-python3 tools/build_translations.py --extract-legacy
-```
-
-Re-extraction refuses to overwrite edited sources unless `--force` is supplied.
-Generated `.lng` runtime packs are introduced in T3 and must not be hand-edited.
-Their exact binary layout is documented in `docs/TRANSLATION_BINARY_FORMAT.md`.
+Generated `.lng` runtime packs must not be hand-edited. Their exact binary
+layout is documented in `docs/TRANSLATION_BINARY_FORMAT.md`.

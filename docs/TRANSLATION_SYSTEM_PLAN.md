@@ -611,6 +611,21 @@ After byte-equivalence and runtime tests pass on all platforms:
 - simplify CMake so translation storage does not vary with platform or feature
   flags.
 
+T6 status (2026-09-21): implemented. The three platform-embedded translation
+sources and the temporary Desktop catalog driver are deleted, along with
+`ui_text_legacy.h`, `legacy_layout.def`, the legacy mapping test and the T0
+capture tool that depended on those sources. `ui_text_driver.c` is now the
+single runtime text driver on Desktop, PS2 and PSP; it asks the platform driver
+for `ui_language_t` and loads the corresponding common `.lng` catalog. The old
+platform-specific text-driver registry is gone. `messages.def` plus the five
+`.lang` files are now the authoritative source, and `build_translations.py` is
+self-contained instead of reading deleted C tables. CMake generates the same
+five packs into every build directory regardless of platform/core/feature
+flags. Byte equivalence was established and committed before deletion in T0-T5.
+After removal, all four Desktop feature-on builds pass 5/5 tests and all four
+PS2 feature-on builds compile successfully while generating identical pack
+sizes. Native PSP compilation remains unavailable locally.
+
 ### T7 - Packaging
 
 Ensure every GUI package contains the required catalogs.

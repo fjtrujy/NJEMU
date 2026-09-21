@@ -31,14 +31,9 @@ typedef struct ui_text_driver
 } ui_text_driver_t;
 
 
-extern ui_text_driver_t ui_text_psp;
-extern ui_text_driver_t ui_text_ps2;
-extern ui_text_driver_t ui_text_desktop;
-extern ui_text_driver_t ui_text_null;
+extern ui_text_driver_t ui_text_common;
 
-extern ui_text_driver_t *ui_text_drivers[];
-
-#define ui_text_driver ui_text_drivers[0]
+#define ui_text_driver (&ui_text_common)
 
 extern void *ui_text_data;
 

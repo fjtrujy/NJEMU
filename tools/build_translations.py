@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Build-time parser and validator for NJEMU translation sources.
-
-T2 keeps the legacy runtime tables in place.  The editable ``translations/*.lang``
-files are nevertheless byte-exact: printable ASCII stays readable, legacy
-non-ASCII bytes use ``\\xNN`` escapes, and NJEMU's graphic glyph bytes use named
-tokens such as ``<CIRCLE>``.  T3 extends this tool with deterministic ``.lng``
-pack generation.
-"""
+"""Build-time parser, validator and .lng generator for NJEMU translations."""
 
 from __future__ import annotations
 
@@ -15,8 +8,6 @@ import re
 import struct
 import sys
 from pathlib import Path
-
-import capture_translation_contract as legacy
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,8 +50,6 @@ GRAPHIC_TOKENS = {
     "<LEFTTRIANGLE>": b"\x1d",
     "<RIGHTTRIANGLE>": b"\x1e",
 }
-BYTE_TO_GRAPHIC = {value[0]: token for token, value in GRAPHIC_TOKENS.items()}
-
 PRINTF_RE = re.compile(
     rb"%(?:[-+ #0]*)(?:\*|\d+)?(?:\.(?:\*|\d+))?"
     rb"(?:hh|h|ll|l|j|z|t|L)?[diuoxXfFeEgGaAcspn%]"
@@ -71,44 +60,29 @@ class TranslationError(RuntimeError):
     pass
 
 
-def runtime_bytes(value: bytes | None) -> bytes | None:
-    """Return the bytes visible through the legacy C-string API."""
-    if value is None:
-        return None
-    nul = value.find(b"\0")
-    return value if nul < 0 else value[:nul]
+def parse_stable_manifest(text: str) -> list[str]:
+    entries: list[tuple[int, str]] = []
+    for line_no, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("/*") or stripped.startswith("*"):
+            continue
+        match = re.fullmatch(r"UI_TEXT_ID\(\s*([A-Za-z_]\w*)\s*,\s*(\d+)\s*\)", stripped)
+        if not match:
+            raise TranslationError(
+                f"messages.def:{line_no}: unsupported manifest line: {stripped!r}"
+            )
+        entries.append((int(match.group(2)), match.group(1)))
 
-
-def encode_source_value(value: bytes | None) -> str:
-    if value is None:
-        return NULL_MARKER
-
-    parts: list[str] = []
-    last_index = len(value) - 1
-    for index, byte in enumerate(value):
-        if byte in BYTE_TO_GRAPHIC:
-            parts.append(BYTE_TO_GRAPHIC[byte])
-        elif byte == 0x0A:
-            parts.append(r"\n")
-        elif byte == 0x0D:
-            parts.append(r"\r")
-        elif byte == 0x09:
-            parts.append(r"\t")
-        elif byte == 0x00:
-            parts.append(r"\0")
-        elif byte == 0x5C:
-            parts.append(r"\\")
-        elif byte == 0x3C:
-            # Literal '<' is escaped so every unescaped <...> is a named token.
-            parts.append(r"\x3c")
-        elif byte == 0x20 and index == last_index:
-            # Avoid source-file trailing whitespace while preserving the byte.
-            parts.append(r"\x20")
-        elif 0x20 <= byte <= 0x7E:
-            parts.append(chr(byte))
-        else:
-            parts.append(f"\\x{byte:02x}")
-    return "".join(parts)
+    if not entries:
+        raise TranslationError("stable manifest is empty")
+    entries.sort()
+    ids = [entry_id for entry_id, _name in entries]
+    if ids != list(range(len(entries))):
+        raise TranslationError("stable manifest IDs are not contiguous from zero")
+    names = [name for _entry_id, name in entries]
+    if len(names) != len(set(names)):
+        raise TranslationError("stable manifest contains duplicate names")
+    return names
 
 
 def decode_source_value(text: str, context: str) -> bytes | None:
@@ -174,25 +148,6 @@ def decode_source_value(text: str, context: str) -> bytes | None:
     return bytes(out)
 
 
-def source_header(language: str) -> list[str]:
-    tokens = " ".join(GRAPHIC_TOKENS)
-    return [
-        f"# NJEMU translation source: {language}",
-        "# Byte-exact legacy phase: keep this file ASCII; use \\xNN for non-ASCII bytes.",
-        "# Escapes: \\n \\r \\t \\0 \\\\ \\xNN. END_OF_TEXT uses <NULL>.",
-        f"# Graphic tokens: {tokens}",
-        "",
-    ]
-
-
-def render_language_source(language: str, names: list[str], catalog: dict[str, bytes | None]) -> str:
-    lines = source_header(language)
-    for name in names:
-        lines.append(f"{name}={encode_source_value(catalog[name])}")
-    lines.append("")
-    return "\n".join(lines)
-
-
 def parse_language_source(path: Path) -> tuple[list[str], dict[str, bytes | None]]:
     try:
         text = path.read_text(encoding="ascii")
@@ -216,40 +171,6 @@ def parse_language_source(path: Path) -> tuple[list[str], dict[str, bytes | None
         values[key] = decode_source_value(encoded, f"{path}:{line_no} ({key})")
         order.append(key)
     return order, values
-
-
-def extract_legacy_catalogs() -> tuple[list[str], dict[str, dict[str, bytes | None]]]:
-    names, values, platform_errors, alignment_errors, _counts = legacy.capture_current()
-    structural_errors = platform_errors + alignment_errors
-    if structural_errors:
-        raise TranslationError("legacy contract is structurally inconsistent: " + "; ".join(structural_errors))
-    legacy.validate_current_contract(names, values)
-
-    catalogs: dict[str, dict[str, bytes | None]] = {}
-    for language in LANGUAGE_FILES:
-        catalogs[language] = {}
-        for name in names:
-            candidates = list(values[name][language])
-            if len(candidates) != 1:
-                raise TranslationError(
-                    f"legacy {language}:{name} resolves to {len(candidates)} byte sequences"
-                )
-            catalogs[language][name] = runtime_bytes(candidates[0])
-    return names, catalogs
-
-
-def extract_sources(directory: Path, force: bool) -> None:
-    names, catalogs = extract_legacy_catalogs()
-    directory.mkdir(parents=True, exist_ok=True)
-    for language, filename in LANGUAGE_FILES.items():
-        path = directory / filename
-        content = render_language_source(language, names, catalogs[language])
-        encoded = content.encode("ascii")
-        if path.exists() and path.read_bytes() != encoded and not force:
-            raise TranslationError(
-                f"refusing to overwrite edited source {path}; use --force only for deliberate re-extraction"
-            )
-        path.write_bytes(encoded)
 
 
 def printf_contract(value: bytes | None, context: str) -> tuple[str, ...] | None:
@@ -283,7 +204,7 @@ def load_and_validate_sources(
         manifest_text = manifest.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise TranslationError(f"missing stable manifest: {manifest}") from exc
-    names = legacy.parse_stable_manifest(manifest_text)
+    names = parse_stable_manifest(manifest_text)
     expected = set(names)
     catalogs: dict[str, dict[str, bytes | None]] = {}
 
@@ -312,21 +233,6 @@ def load_and_validate_sources(
                 )
 
     return names, catalogs
-
-
-def verify_against_legacy(names: list[str], catalogs: dict[str, dict[str, bytes | None]]) -> None:
-    legacy_names, legacy_catalogs = extract_legacy_catalogs()
-    if names != legacy_names:
-        raise TranslationError("source manifest order differs from the embedded legacy contract")
-    for language in LANGUAGE_FILES:
-        for name in names:
-            actual = catalogs[language][name]
-            expected = legacy_catalogs[language][name]
-            if actual != expected:
-                raise TranslationError(
-                    f"{language}:{name}: source bytes differ from embedded legacy bytes: "
-                    f"{actual!r} != {expected!r}"
-                )
 
 
 def schema_hash(names: list[str]) -> int:
@@ -485,21 +391,6 @@ def write_packs(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--extract-legacy",
-        action="store_true",
-        help="create the initial .lang sources from the verified embedded catalogs",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="allow --extract-legacy to overwrite edited .lang files",
-    )
-    parser.add_argument(
-        "--no-verify-legacy",
-        action="store_true",
-        help="skip byte-for-byte comparison with embedded catalogs (needed only after T6)",
-    )
-    parser.add_argument(
         "--translations-dir",
         type=Path,
         default=TRANSLATIONS_DIR,
@@ -519,13 +410,9 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        if args.extract_legacy:
-            extract_sources(args.translations_dir, args.force)
         names, catalogs = load_and_validate_sources(args.translations_dir)
-        if not args.no_verify_legacy:
-            verify_against_legacy(names, catalogs)
         pack_sizes = write_packs(args.output_dir, names, catalogs) if args.build else None
-    except (TranslationError, legacy.ContractError) as exc:
+    except TranslationError as exc:
         print(f"translation validation failed: {exc}", file=sys.stderr)
         return 1
 
