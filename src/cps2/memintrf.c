@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include "cps2.h"
+#include "common/memory_plan.h"
 #include "common/memory_sizes.h"
 
 
@@ -204,6 +205,8 @@ static int load_rom_cpu2(void)
 
 static int load_rom_gfx1(void)
 {
+	uint32_t planned_gfx_length = memory_length_gfx1;
+
 	gfx_total_elements[TILE08] = (memory_length_gfx1 - 0x800000) >> 6;
 	gfx_total_elements[TILE16] = memory_length_gfx1 >> 7;
 	gfx_total_elements[TILE32] = (memory_length_gfx1 - 0x800000) >> 9;
@@ -225,6 +228,27 @@ static int load_rom_gfx1(void)
 	{
 		error_memory("GFX_PEN_USAGE (tile32)");
 		return 0;
+	}
+
+	/* R2 shadow plan: at this point CPU/user/sound regions and GFX metadata are
+	 * already resident, while the large GFX allocation has not happened yet.
+	 * Log the new planner result without changing the legacy cache/preload path. */
+	if (platform_driver->queryMemoryInfo != NULL)
+	{
+		platform_memory_info_t memory_info;
+		if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
+		{
+			game_memory_requirements_t requirements;
+			memory_plan_t plan;
+			platform_memory_info_apply_env_overrides(&memory_info);
+			memset(&requirements, 0, sizeof(requirements));
+			requirements.core = MEMORY_PLAN_CORE_CPS2;
+			requirements.gfx_or_crom_bytes = planned_gfx_length;
+			if (memory_plan_build(&memory_info, &requirements, &plan))
+				memory_plan_log(&plan);
+			else
+				printf("[memory_plan] CPS2 shadow plan has no viable cache floor\n");
+		}
 	}
 
 	if (!cps2_use_preload)

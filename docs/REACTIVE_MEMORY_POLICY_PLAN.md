@@ -927,6 +927,37 @@ Acceptance:
 
 ### R2 - Introduce `memory_plan_t` and a pure budget solver
 
+**Status: completed on 2026-09-21; runtime remains in shadow/compare mode.**
+
+Implemented:
+
+- added a side-effect-free `memory_plan_build()` solver with five cacheable
+  budget tiers: `CRITICAL`, `LOW`, `MEDIUM`, `HIGH`, `VERY_HIGH`;
+- encoded separate CPS2 GFX and MVS C-ROM/PCM floor/weight/cap policy while
+  keeping the legacy four-profile `memory_profile_t` namespace separate;
+- allocations are produced in 64 KiB cache blocks, with safety reserve and
+  mandatory late allocations removed first;
+- the solver respects the largest contiguous allocation constraint, promotes
+  full-region residency when possible and performs GFX/C-ROM-first spill so
+  safe RAM is not stranded by a working-set cap;
+- added deterministic synthetic tests covering tier boundaries, 4-64 MiB
+  representative budgets, floor/cap transitions, inverse spill, full-resident
+  cases, block alignment, reserve accounting and fragmentation;
+- added shadow-plan checkpoints after mandatory allocations for CPS2 and MVS;
+  the computed result is logged but does not yet change cache/preload behavior.
+
+Validation performed:
+
+- Desktop MVS and CPS2 builds pass with 8/8 CTest tests;
+- PS2SDK MVS and CPS2 cross-builds pass;
+- PSPSDK MVS and CPS2 cross-builds pass and both generate `EBOOT.PBP`;
+- Desktop ROM smoke tests reached the shadow-plan checkpoint for MVS
+  (`pbobbl2n`) and CPS2 (`ssf2`) while retaining the legacy runtime cache path.
+
+R3 will turn the shadow targets into the actual streaming-cache allocations.
+The loading log should report the final allocated cache per active region, not
+just the shadow target, so allocation retry-down/format clamps remain visible.
+
 Make a side-effect-free function:
 
 ```c

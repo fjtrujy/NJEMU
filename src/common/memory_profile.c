@@ -9,8 +9,8 @@
 #include <string.h>
 #include "memory_profile.h"
 
-static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
-	[MEMORY_TIER_TINY] = {
+static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
+	[MEMORY_PROFILE_TIER_TINY] = {
 		.name                 = "tiny",
 		.min_ram_mb           = 0,
 		.preload_sound        = false,
@@ -22,7 +22,7 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.safety_threshold_mb  = 1,
 		.cache_floor_mb       = 2,
 	},
-	[MEMORY_TIER_SMALL] = {
+	[MEMORY_PROFILE_TIER_SMALL] = {
 		.name                 = "small",
 		.min_ram_mb           = 16,  /* PSP base ~20 MB free lands here */
 		.preload_sound        = false,
@@ -34,7 +34,7 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.safety_threshold_mb  = 2,
 		.cache_floor_mb       = 4,
 	},
-	[MEMORY_TIER_MEDIUM] = {
+	[MEMORY_PROFILE_TIER_MEDIUM] = {
 		.name                 = "medium",
 		.min_ram_mb           = 48,
 		.preload_sound        = true,
@@ -46,7 +46,7 @@ static const memory_profile_t profile_table[MEMORY_TIER_COUNT] = {
 		.safety_threshold_mb  = 2,
 		.cache_floor_mb       = 8,
 	},
-	[MEMORY_TIER_LARGE] = {
+	[MEMORY_PROFILE_TIER_LARGE] = {
 		.name                 = "large",
 		.min_ram_mb           = 96,
 		.preload_sound        = true,
@@ -66,7 +66,7 @@ static const memory_profile_t *parse_override(const char *value) {
 	if (value == NULL || *value == '\0') {
 		return NULL;
 	}
-	for (int i = 0; i < MEMORY_TIER_COUNT; i++) {
+	for (int i = 0; i < MEMORY_PROFILE_TIER_COUNT; i++) {
 		if (strcmp(value, profile_table[i].name) == 0) {
 			return &profile_table[i];
 		}
@@ -75,8 +75,8 @@ static const memory_profile_t *parse_override(const char *value) {
 }
 
 static const memory_profile_t *select_for_ram(uint32_t available_mb) {
-	const memory_profile_t *chosen = &profile_table[MEMORY_TIER_TINY];
-	for (int i = 0; i < MEMORY_TIER_COUNT; i++) {
+	const memory_profile_t *chosen = &profile_table[MEMORY_PROFILE_TIER_TINY];
+	for (int i = 0; i < MEMORY_PROFILE_TIER_COUNT; i++) {
 		if (available_mb >= profile_table[i].min_ram_mb) {
 			chosen = &profile_table[i];
 		}
@@ -105,7 +105,7 @@ const memory_profile_t *memory_profile_select(uint32_t available_ram_bytes) {
 	 * option was never propagated). Force the large tier so Makefile builds
 	 * keep their PSP Slim preload + 32 MB cache behaviour. */
 	if (chosen == NULL) {
-		chosen = &profile_table[MEMORY_TIER_LARGE];
+		chosen = &profile_table[MEMORY_PROFILE_TIER_LARGE];
 		source = "LARGE_MEMORY";
 	}
 #endif

@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include "mvs.h"
+#include "common/memory_plan.h"
 #include "common/memory_sizes.h"
 
 #define M68K_AMASK M68K_ADDR_MASK
@@ -1818,14 +1819,39 @@ int memory_init(void)
 #if !RELEASE
 	if (load_rom_user2() == 0) return 0;
 #endif
-	if (load_rom_cpu1() == 0) return 0;
-	if (load_rom_user1(0) == 0) return 0;
-	if (load_rom_cpu2() == 0) return 0;
-	if (load_rom_gfx1() == 0) return 0;
-	if (load_rom_gfx2() == 0) return 0;
-	if (load_rom_gfx4() == 0) return 0;
+		if (load_rom_cpu1() == 0) return 0;
+		if (load_rom_user1(0) == 0) return 0;
+		if (load_rom_cpu2() == 0) return 0;
+		if (load_rom_gfx1() == 0) return 0;
+		if (load_rom_gfx2() == 0) return 0;
+		if (load_rom_gfx4() == 0) return 0;
 
-	if (load_rom_sound1() == 0) return 0;
+		/* R2 shadow plan: CPU/BIOS/FIX allocations and decrypt scratch are done,
+		 * while SOUND1 (PCM/V-ROM) and C-ROM have not yet committed their large
+		 * steady-state allocations. SOUND2 remains a mandatory late allocation
+		 * only on the current path that keeps it enabled. */
+		if (platform_driver->queryMemoryInfo != NULL)
+		{
+			platform_memory_info_t memory_info;
+			if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
+			{
+				game_memory_requirements_t requirements;
+				memory_plan_t plan;
+				platform_memory_info_apply_env_overrides(&memory_info);
+				memset(&requirements, 0, sizeof(requirements));
+				requirements.core = MEMORY_PLAN_CORE_MVS;
+				requirements.gfx_or_crom_bytes = memory_length_gfx3;
+				requirements.pcm_or_vrom_bytes = option_sound_enable ? memory_length_sound1 : 0;
+				if (option_sound_enable && !disable_sound)
+					requirements.mandatory_late_allocations_bytes = memory_length_sound2;
+				if (memory_plan_build(&memory_info, &requirements, &plan))
+					memory_plan_log(&plan);
+				else
+					printf("[memory_plan] MVS shadow plan has no viable cache floor\n");
+			}
+		}
+
+		if (load_rom_sound1() == 0) return 0;
 
 #ifdef LARGE_MEMORY
 	{

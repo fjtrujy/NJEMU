@@ -238,6 +238,8 @@ set(COMMON_SRC
     common/platform_driver.c
 	common/platform_memory_info.h
 	common/platform_memory_info.c
+	common/memory_plan.h
+	common/memory_plan.c
     common/memory_profile.h
     common/memory_profile.c
     common/sound.h
@@ -800,6 +802,16 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 	add_test(NAME platform_memory_info_tests COMMAND platform_memory_info_tests)
+
+	add_executable(memory_plan_tests
+		tests/memory_plan_tests.c
+		src/common/memory_plan.c
+		src/common/platform_memory_info.c
+	)
+	target_include_directories(memory_plan_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME memory_plan_tests COMMAND memory_plan_tests)
 
     if(Python3_Interpreter_FOUND)
         add_test(

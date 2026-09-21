@@ -28,12 +28,12 @@
 #include <stdbool.h>
 
 typedef enum {
-	MEMORY_TIER_TINY = 0,
-	MEMORY_TIER_SMALL,
-	MEMORY_TIER_MEDIUM,
-	MEMORY_TIER_LARGE,
-	MEMORY_TIER_COUNT
-} memory_tier_t;
+	MEMORY_PROFILE_TIER_TINY = 0,
+	MEMORY_PROFILE_TIER_SMALL,
+	MEMORY_PROFILE_TIER_MEDIUM,
+	MEMORY_PROFILE_TIER_LARGE,
+	MEMORY_PROFILE_TIER_COUNT
+} memory_profile_tier_t;
 
 typedef struct {
 	const char *name;              /* "tiny", "small", "medium", "large" */
