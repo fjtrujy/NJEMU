@@ -88,6 +88,11 @@ contiguous block.
 `psp_availableRam()` currently uses `sceKernelTotalFreeMemSize()` and, only in a
 legacy `LARGE_MEMORY` build, adds `psp2k_mem_left`.
 
+This is also the wrong PSPSDK API for the metric we want: current PSPSDK
+documents `pspSdkTotalFreeUserMemSize()` as the amount of memory available in
+the user partition(s), explicitly distinguishing it from
+`sceKernelTotalFreeMemSize()`.
+
 For the new policy, PSP needs two distinct values:
 
 1. total free user memory;
@@ -648,15 +653,81 @@ Model detection is only useful if an extended-memory API/arena requires it.
 
 ### 6.4 PSP expanded memory / PSP2K region
 
-There are two possible end states. Investigate A first and retain B only if
-required for compatibility/performance.
+PSP needs an explicit arena model because NJEMU currently has **two different
+ways of seeing the extra RAM**, and they must never be counted at the same time.
+
+The runtime tier still depends on total *usable cacheable budget*, but allocation
+placement is a separate second step.
+
+Proposed PSP arena description:
+
+```c
+typedef enum psp_memory_mode {
+    PSP_MEMORY_USER_ONLY = 0,
+    PSP_MEMORY_USER_EXPANDED,   /* MEMSIZE exposed extra RAM to normal allocator */
+    PSP_MEMORY_LEGACY_EXTENDED  /* raw 0x0a000000 linear arena */
+} psp_memory_mode_t;
+
+typedef struct psp_memory_arenas {
+    psp_memory_mode_t mode;
+
+    uint64_t user_free_bytes;
+    uint64_t user_largest_block_bytes;
+
+    uint64_t extended_free_bytes;
+    uint64_t extended_largest_block_bytes;
+
+    bool extended_suspend_tail_needs_preservation;
+} psp_memory_arenas_t;
+```
+
+Critical invariant:
+
+```text
+MEMSIZE-expanded user heap OR legacy raw PSP2K arena
+                      never both
+```
+
+If the CFW has merged the extra RAM into the user partition, directly treating
+`0x0a000000-0x0bffffff` as a second private arena risks double-counting/aliasing
+memory already owned by the normal allocator.
+
+The final PSP integration is therefore a two-stage process:
+
+1. discover which memory exposure mode is active;
+2. feed its aggregate usable budget into the tier table;
+3. place the resulting cache targets into the available arena(s).
 
 #### A. Preferred: normal allocator sees all permitted user RAM
 
-Modern PSPSDK packaging can request expanded user memory. If the supported
-firmware matrix allows this reliably:
+Modern PSPSDK packaging supports a `MEMSIZE` field in `PARAM.SFO`. NJEMU should
+explicitly request `MEMSIZE=1` instead of depending on the SDK default. On
+firmware/CFW that exposes the additional RAM this makes it part of the normal
+user allocation space.
 
-- request expanded user RAM for the single PSP package;
+Do this in the PSP CMake packaging call:
+
+```cmake
+create_pbp_file(
+    TARGET ${TARGET}
+    ...
+    MEMSIZE 1
+)
+```
+
+Then query the memory actually exposed to the process:
+
+```c
+user_free    = pspSdkTotalFreeUserMemSize();
+user_largest = sceKernelMaxFreeMemSize();
+```
+
+Do not infer success from `MEMSIZE=1`, PSP model, or CFW version. The measured
+user partition is the truth.
+
+If the supported firmware matrix allows this reliably:
+
+- request expanded user RAM for the single PSP package (`MEMSIZE=1`);
 - allocate through normal `malloc`;
 - remove raw `PSP2K_MEM_TOP` / `psp2k_mem_offset` management;
 - remove the `kubridge` dependency used solely for old large-memory handling;
@@ -665,6 +736,28 @@ firmware matrix allows this reliably:
 
 This is substantially safer than maintaining a manually managed hard-coded
 32 MiB arena.
+
+##### How this maps to tiers
+
+Nothing PSP-specific is added to the tier table.
+
+Example, after mandatory allocations/reserve:
+
+```text
+PSP-1000-like process exposes 9 MiB cacheable
+    -> LOW tier
+    -> MVS gets floors/weights for LOW
+    -> all safe remainder spills into C-ROM
+
+PSP-2000/3000-like process exposes 38 MiB cacheable via MEMSIZE
+    -> HIGH tier
+    -> same exact executable/code paths
+    -> PCM gets its policy target
+    -> all remaining safe RAM spills into C-ROM/GFX
+```
+
+The extra PSP RAM therefore changes the **measured budget**, which naturally
+changes the tier. There is no "PSP Slim tier".
 
 #### B. Compatibility fallback: keep an explicit extended arena
 
@@ -681,6 +774,313 @@ void platform_extended_free(void *ptr);
 ```
 
 Core/cache code must never directly reference `PSP2K_MEM_TOP`.
+
+##### Legacy arena properties that must be preserved
+
+The current NJEMU implementation reveals several non-generic properties of this
+arena:
+
+- fixed 32 MiB range at `0x0a000000-0x0bffffff`;
+- bump/linear allocation through `psp2k_mem_offset`;
+- allocations are not individually freed; the arena is effectively reset per
+  game;
+- MVS can move already-loaded immutable regions into it to free normal heap;
+- neocrypt uses it as temporary scratch without advancing the permanent bump
+  pointer;
+- the last 4 MiB currently need explicit save/restore handling across PSP
+  sleep/resume once they are in use.
+
+Do not expose any of those details to CPS2/MVS core code. Model them inside a
+PSP arena allocator.
+
+Suggested API:
+
+```c
+typedef enum memory_arena_id {
+    MEMORY_ARENA_USER = 0,
+    MEMORY_ARENA_PSP_EXTENDED
+} memory_arena_id_t;
+
+void *platform_memory_alloc(memory_arena_id_t arena,
+                            size_t size,
+                            size_t alignment);
+
+bool platform_memory_can_reset(memory_arena_id_t arena);
+void platform_memory_reset(memory_arena_id_t arena);
+
+bool platform_memory_contains(memory_arena_id_t arena, const void *ptr);
+```
+
+For the linear PSP arena `free(ptr)` is deliberately not part of the interface;
+ownership is reset as a whole at game shutdown.
+
+##### How the raw 32 MiB arena participates in tier selection
+
+Compute two independent safe budgets:
+
+```text
+user_cacheable = user_free
+               - user_mandatory_late
+               - user_safety_reserve
+
+ext_cacheable = extended_free
+              - extended_required_reserve
+
+total_cacheable = user_cacheable + ext_cacheable
+```
+
+`total_cacheable` selects `LOW/MEDIUM/HIGH/...`, but the planner keeps the two
+arena capacities separate when placing buffers.
+
+This is crucial: 10 MiB user + 20 MiB extended is **not equivalent to one
+contiguous 30 MiB allocation**.
+
+##### PSP arena placement order
+
+For `PSP_MEMORY_LEGACY_EXTENDED`, use this initial placement policy:
+
+1. keep mandatory small/runtime allocations in the normal user heap;
+2. preserve the user-heap safety reserve;
+3. place the primary GFX/C-ROM cache spill in the **extended arena first**;
+4. place PCM/V-ROM according to the selected tier, using remaining extended
+   memory when appropriate;
+5. only consume normal user heap for cache after the extended arena target is
+   exhausted or unsuitable;
+6. use migration of immutable CPU/FIX/pen-usage regions only as a
+   fragmentation/contiguity optimization, not as the primary source of more
+   total budget.
+
+This formalizes the useful part of the current PSP trick: large, long-lived
+GFX cache data goes into the arena that is ideal for a linear allocation, while
+the regular heap keeps room for late small allocations.
+
+Example:
+
+```text
+after mandatory allocations:
+    user heap safe cacheable = 7 MiB
+    PSP2K extended usable    = 28 MiB
+    total                    = 35 MiB
+
+=> HIGH tier
+
+MVS target:
+    PCM = 3 MiB
+    C-ROM = 32 MiB
+
+ideal placement with segmented cache backing:
+    extended segment: C-ROM 28 MiB
+    user segment:     C-ROM 4 MiB
+    user:             PCM 3 MiB
+
+    user emergency reserve remains untouched
+```
+
+The current cache implementation cannot yet realize that ideal placement because
+`GFX_MEMORY` is one contiguous pointer. Therefore **segmented cache backing is a
+required part of the legacy dual-arena PSP path** if we want to honor the global
+"consume all safe RAM" invariant.
+
+##### Segmented GFX/C-ROM cache backing
+
+Today cache slots are addressed as:
+
+```c
+&GFX_MEMORY[slot << BLOCK_SHIFT]
+```
+
+That forces the complete cache to be one contiguous allocation. Replace that
+physical-storage assumption with a small segment table while keeping logical
+cache slots unchanged:
+
+```c
+typedef struct cache_segment {
+    uint8_t *base;
+    uint32_t first_slot;
+    uint32_t slot_count;
+    memory_arena_id_t arena;
+} cache_segment_t;
+
+typedef struct cache_backing {
+    cache_segment_t segments[3];
+    uint32_t segment_count;
+    uint32_t total_slots;
+} cache_backing_t;
+
+uint8_t *cache_slot_ptr(uint32_t slot);
+```
+
+On PSP legacy mode this initially needs at most two permanent cache segments:
+
+1. PSP2K extended arena;
+2. normal user heap.
+
+The abstraction can remain platform-independent so future ports are not forced
+back into a single giant allocation.
+
+Every direct `&GFX_MEMORY[idx << BLOCK_SHIFT]` access in `cache.c` must go
+through `cache_slot_ptr(idx)`. The LRU/cache metadata continues to use one
+logical slot index, so the I/O/cache algorithms do not need to know which arena
+owns a slot.
+
+This produces the desired PSP behaviour:
+
+```text
+tier target C-ROM = 32 MiB
+
+extended largest block = 28 MiB
+user largest safe block = 4 MiB
+
+segment 0 = 28 MiB extended
+segment 1 =  4 MiB user
+
+logical C-ROM cache = 32 MiB
+unused safe RAM = 0
+```
+
+Without segmentation the planner would have to cap the C-ROM cache at 28 MiB
+and either waste the remaining 4 MiB or give it to a less valuable region. That
+would violate the intended GFX-first spill policy.
+
+##### Contiguous full-resident path vs logically fully cached
+
+Keep two concepts separate:
+
+```text
+logical_cache_covers_entire_region
+single_contiguous_buffer_covers_entire_region
+```
+
+If the complete GFX/C-ROM source is represented across several cache segments,
+runtime I/O can still reach zero once every source block has a resident slot,
+but code that expects one contiguous decoded ROM pointer cannot automatically
+use the direct preload/decode path.
+
+Therefore `memory_plan_t` should eventually distinguish:
+
+```c
+bool gfx_fully_cached;          /* all source blocks fit across cache segments */
+bool gfx_contiguous_resident;   /* complete region fits in one suitable arena */
+```
+
+Use the direct CPS2/MVS preload path only for
+`gfx_contiguous_resident == true`. Otherwise retain the cache access machinery,
+even if its logical cache is large enough to hold 100% of the source data.
+
+##### State-save interaction
+
+`cache_alloc_state_buffer()` currently borrows the contiguous `GFX_MEMORY`
+buffer and may save/restore it as one range. Segmented cache backing invalidates
+that assumption.
+
+As part of R6, state-save must either:
+
+- allocate its temporary state buffer independently from cache backing; or
+- iterate/cache-backup each physical segment explicitly.
+
+The preferred design is independent state-save scratch. Cache storage should not
+double as unrelated temporary contiguous memory once multiple arenas are
+supported.
+
+##### Suspend/resume tail handling
+
+The current code preserves the last 4 MiB of the PSP2K area through
+`resume.bin` when that portion has been used. The new allocator must make this
+an arena property, not a cache/core special case.
+
+Two valid implementation stages:
+
+1. **conservative first version:** reserve the top 4 MiB, so the raw arena
+   exposes 28 MiB usable and needs no special cache knowledge;
+2. **full-capacity version:** expose all 32 MiB and have the platform memory
+   driver transparently save/restore the suspend-sensitive 4 MiB when committed.
+
+The second option matches the goal of exhausting useful RAM. It should be used
+after suspend/resume has been validated on real PSP hardware.
+
+The tier table itself does not change between 28 MiB and 32 MiB; only the
+measured `ext_cacheable` input changes.
+
+##### Neocrypt scratch
+
+Neocrypt is transient and must not permanently steal the spill budget.
+
+The planner should record the maximum scratch requirement and choose one of:
+
+```text
+extended scratch window
+    -> use raw extended arena temporarily, without committing it permanently
+
+user scratch
+    -> temporarily require largest_user_block >= scratch_size
+```
+
+After decrypt finishes, the scratch bytes become available to the final
+GFX/C-ROM spill plan. In other words, the tier should be computed from the
+**steady-state cache budget**, while startup validation additionally verifies
+that the transient decrypt peak can be satisfied.
+
+##### Existing MVS migration trick
+
+The current MVS large-memory path moves CPU1/CPU2/FIX/BIOS/pen-usage allocations
+to the extended region when SOUND1 pressure forces extended-memory use. Preserve
+the capability, but turn it into an explicit optional **repack** step:
+
+```text
+if planned cache target cannot be allocated because user heap is fragmented:
+    move eligible immutable allocations to extended arena
+    refresh user_free + user_largest
+    retry the same tier target
+```
+
+Do not perform migration merely because the device is a Slim. It should happen
+only when it improves the largest usable cache allocation or protects the user
+heap reserve.
+
+### 6.5 PSP mode detection order
+
+Recommended boot-time logic:
+
+```text
+1. Query pspSdkTotalFreeUserMemSize() + sceKernelMaxFreeMemSize().
+
+2. If measured user memory already reflects expanded capacity:
+       mode = PSP_MEMORY_USER_EXPANDED
+       raw PSP2K arena = disabled (avoid double-counting)
+
+3. Otherwise, if runtime capability checks prove legacy extended access safe:
+       mode = PSP_MEMORY_LEGACY_EXTENDED
+       expose PSP2K arena through platform memory driver
+
+4. Otherwise:
+       mode = PSP_MEMORY_USER_ONLY
+
+5. Build the tier from the resulting safe cacheable budget.
+```
+
+The exact threshold used to classify an expanded user partition should be
+derived from measured PSP-1000 vs PSP-2000/3000 baselines, not a magic model
+check. `kuKernelGetModel()` can remain as supporting capability evidence for the
+legacy raw-arena path, but measured memory remains authoritative.
+
+### 6.6 What happens to the old PSP tricks
+
+| Existing trick | New model |
+| --- | --- |
+| `LARGE_MEMORY=1` | deleted; same binary adapts at runtime |
+| `kuKernelGetModel()` | capability hint only for legacy raw arena |
+| `PSP2K_MEM_TOP` | hidden inside platform arena implementation, then ideally removed |
+| direct 32 MiB cache at `0x0a000000` | GFX/C-ROM primary spill into extended arena |
+| `psp2k_mem_alloc()` | platform linear-arena allocator |
+| `psp2k_mem_move()` | optional repack operation to improve user-heap contiguity |
+| `psp2k_mem_free()` no-op | replaced by arena ownership + reset-at-game-exit |
+| neocrypt raw scratch | transient arena reservation, released before final cache commitment |
+| top 4 MiB `resume.bin` backup | platform suspend/resume property of extended arena |
+| separate PSP/Slim build | one `MEMSIZE=1` package + runtime measurement |
+
+The key point is that the PSP tricks are **not another set of tiers**. They are
+ways of increasing or reshaping the RAM that the tier allocator is allowed to
+spend.
 
 ---
 
@@ -798,7 +1198,8 @@ Implement `platform_memory_info_t` and `queryMemoryInfo()`.
 
 - Desktop: available/budget-capped view;
 - PS2: physical total + controlled largest-block probe/estimate;
-- PSP: total free user memory + largest block + expanded-memory capability.
+- PSP: `pspSdkTotalFreeUserMemSize()` + `sceKernelMaxFreeMemSize()` + detected
+  memory exposure mode (`USER_ONLY`, `USER_EXPANDED`, `LEGACY_EXTENDED`).
 
 Add pure tests for snapshot normalization and overrides.
 
@@ -832,6 +1233,10 @@ Unit-test synthetic cases including:
 - GFX/C-ROM is always the primary spill target for CPS2/MVS;
 - unused budget is accepted only when all cacheable source regions are fully
   resident or a real contiguous-allocation constraint prevents using it;
+- PSP dual-arena cases such as `28 MiB extended + 4 MiB user` produce one
+  32 MiB logical GFX/C-ROM cache through two physical segments;
+- that same dual-arena case does not mark `gfx_contiguous_resident` unless one
+  arena alone can hold the complete source region;
 - full-region target sets the corresponding `*_fully_resident` flag;
 - every target is a multiple of the cache block size;
 - safety reserve never violated;
@@ -847,6 +1252,10 @@ At this stage runtime still uses old paths; compare/log new plan vs old behaviou
   `MAX_PCM_SIZE = 0x30` as the active cache size;
 - remove compile-time `MIN_CACHE_SIZE` / `MAX_CACHE_SIZE` policy;
 - feed `memory_plan.gfx_cache_bytes` / `pcm_cache_bytes` into `cache_start()`;
+- introduce `cache_backing_t` + `cache_slot_ptr()` so one logical GFX/C-ROM
+  cache can span multiple physical arenas/segments;
+- migrate direct `GFX_MEMORY + slot*BLOCK_SIZE` accesses to the backing
+  abstraction;
 - keep allocation retry-down as fragmentation safety;
 - retain core `MAX_CACHE_BLOCKS` only as a format/addressability limit, not a
   device-memory tier.
@@ -885,10 +1294,18 @@ Validate MVS cache correctness and existing cache-I/O profiling.
 
 Preferred path:
 
-- configure PSP packaging to request maximum supported user memory for every
-  build;
+- configure PSP packaging with explicit `MEMSIZE=1` to request maximum supported
+  user memory for every build (do not rely on the SDK default);
 - verify PSP-1000 still boots and reports its smaller memory;
 - verify PSP-2000/3000 reports expanded memory;
+- verify the raw PSP2K arena is disabled whenever extra memory is already merged
+  into the user partition;
+- verify legacy raw-arena fallback separately on firmware/CFW where it is still
+  required;
+- verify the same tier target can span extended + user cache segments with
+  `unused=0` when both arenas have usable capacity;
+- validate suspend/resume with the extended arena using less than 28 MiB, exactly
+  28 MiB and into the final 4 MiB;
 - remove separate large-memory title/build mode;
 - remove `kubridge` if no longer needed elsewhere.
 
@@ -953,6 +1370,9 @@ For each, assert:
 
 - PSP-1000;
 - PSP-2000/3000;
+- PSP-2000/3000 with `MEMSIZE=1` expanded user heap;
+- PSP legacy raw extended-arena mode, if retained;
+- PSP suspend/resume while GFX spill occupies the final 4 MiB of extended RAM;
 - PPSSPP configured with representative memory models;
 - native PS2;
 - PCSX2;
