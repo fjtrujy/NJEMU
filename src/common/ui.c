@@ -26,11 +26,18 @@ void load_background(int number)
 {
 	(void)number;
 
-	/* SCREEN_BITMAP remains the compact PSP-sized background cache. The cached
-	 * content is intentionally flat; resolution-dependent chrome is rendered by
-	 * show_background() after the cache has been expanded to the output. */
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(UI_PAL_BG2);
+
+#if defined(PSP)
+	/* PSP always presents the original 480x272 logical canvas 1:1.  Cache the
+	 * static chrome with the background as the legacy renderer did, instead of
+	 * rebuilding its gradients and shadows on every list-selection redraw. */
+	draw_bar_shadow();
+	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
+	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
+#endif
 
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 	video_driver->endFrame(video_data);
@@ -77,10 +84,14 @@ void show_background(void)
 				layout->output_width - viewport.right, layout->viewport_height, black);
 	}
 
+#if !defined(PSP)
+	/* Native-size backends can resize or use a non-identity viewport, so their
+	 * chrome must remain output-relative and is intentionally not cached. */
 	draw_bar_shadow();
 	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
 	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
 	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
+#endif
 }
 
 

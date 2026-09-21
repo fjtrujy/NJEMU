@@ -264,6 +264,7 @@ void bios_select(int flag)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
@@ -298,6 +299,7 @@ void bios_select(int flag)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else

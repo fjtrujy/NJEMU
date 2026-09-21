@@ -580,6 +580,7 @@ void commandlist(int flag)
 		{
 			update = 0;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CMDLIST);
@@ -641,6 +642,7 @@ void commandlist(int flag)
 			}
 
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else

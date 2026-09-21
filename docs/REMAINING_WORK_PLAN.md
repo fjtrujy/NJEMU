@@ -501,6 +501,17 @@ Acceptance criteria:
 - PS2 does not gain an unnecessary full-resolution copy of every legacy buffer;
 - save-state thumbnails and frame-copy paths remain correct.
 
+Runtime follow-up (2026-09-21): PSP/MVS exposed two composition bugs while
+validating the responsive GUI work. The common PSP video backend was reserving
+the CPS2-only depth buffer for every core, pushing MVS texture atlases into the
+fixed GUI texture area at the end of the 2 MiB EDRAM. MVS now omits that unused
+buffer (1,884,160 bytes allocated instead of 2,162,688), while CPS2 keeps its
+existing depth path. PSP rectangle copies also now pass width/height to
+`sceGuScissor()`, normalize GU state when entering a game frame, and keep one
+`beginFrame()`/`endFrame()` around each complete GUI redraw. PSP's static
+480x272 title-bar chrome is cached again; PS2/Desktop retain output-relative
+responsive drawing.
+
 ### C4 - Convert common screens to anchors and derived dimensions
 
 Migrate one screen family at a time.

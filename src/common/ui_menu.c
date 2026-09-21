@@ -238,6 +238,7 @@ static int menu_gamecfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -314,6 +315,7 @@ static int menu_gamecfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -920,6 +922,7 @@ int menu_cheatcfg(void)
 	int cur = *cheatcfg[sel].value;
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -997,6 +1000,7 @@ int menu_cheatcfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1175,6 +1179,7 @@ int menu_cheatcfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -1250,6 +1255,7 @@ int menu_cheatcfg(void)
 
 			update  = draw_battery_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1516,6 +1522,7 @@ static int menu_keycfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_KEYCONFIG);
@@ -1607,6 +1614,7 @@ static int menu_keycfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1835,6 +1843,7 @@ static int menu_dipswitch(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -1913,6 +1922,7 @@ static int menu_dipswitch(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -2063,7 +2073,6 @@ static void state_draw_thumbnail(void)
 	const uint32_t state_dst_fmt = 0;
 #endif
 
-	video_driver->beginFrame(video_data);
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
 	{
@@ -2094,7 +2103,6 @@ static void state_draw_thumbnail(void)
 		clip2.bottom = dy + dh;
 		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
-	video_driver->endFrame(video_data);
 }
 
 static void state_refresh_screen(int reload_thumbnail)
@@ -2250,8 +2258,8 @@ static int state_save_slot(void)
 	{
 		int res;
 
-		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
+		state_refresh_screen(0);
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
@@ -2263,9 +2271,9 @@ static int state_save_slot(void)
 
 		if (res)
 		{
+			video_driver->beginFrame(video_data);
 			state_refresh_screen(1);
 			draw_battery_status(1);
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->endFrame(video_data);
 			res = messagebox(MB_FINISHSAVESTATE);
@@ -2281,8 +2289,8 @@ static int state_load_slot(void)
 	{
 		int res;
 
-		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
+		state_refresh_screen(0);
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
@@ -2292,8 +2300,10 @@ static int state_load_slot(void)
 
 		if (res)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 			draw_battery_status(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 
 			messagebox(MB_FINISHLOADSTATE);
@@ -2345,11 +2355,13 @@ static int menu_state(void)
 	{
 		if (update & UI_FULL_REFRESH)
 		{
+			video_driver->beginFrame(video_data);
 			state_refresh_screen((prev_sel == state_sel) ? 0 : 1);
 
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else if (update & UI_PARTIAL_REFRESH)
@@ -2357,6 +2369,7 @@ static int menu_state(void)
 			int x, y, w, h;
 			RECT clip1, clip2;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon_light(12, 38 + state_sel * 22, UI_COLOR(UI_PAL_SELECT), ICON_MEMSTICK);
@@ -2376,15 +2389,14 @@ static int menu_state(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
-			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -2580,6 +2592,7 @@ void showmenu(void)
 	{
 		if (update & UI_FULL_REFRESH)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 #ifdef SAVE_STATE
@@ -2625,6 +2638,7 @@ void showmenu(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else if (update & UI_PARTIAL_REFRESH)
@@ -2632,6 +2646,7 @@ void showmenu(void)
 			int x, y, w, h;
 			RECT clip1, clip2;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			for (i = 0; i < rows; i++)
@@ -2654,15 +2669,14 @@ void showmenu(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
-			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
