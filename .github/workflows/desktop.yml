@@ -96,7 +96,13 @@ jobs:
           -DSAVE_STATE=${{ matrix.save_state }} \
           -DGUI=${{ matrix.gui }} \
           ..
-        make -j $(getconf _NPROCESSORS_ONLN)
+        if ! make -j $(getconf _NPROCESSORS_ONLN) 2>&1 | tee build.log; then
+          echo "Desktop build failed; surfacing compiler/linker diagnostics as annotations"
+          grep -E '(^|[[:space:]])(error:|fatal error:)|undefined reference|collect2: error|ld: error' build.log \
+            | tail -40 \
+            | sed 's/^/::error title=Desktop build::/' || true
+          exit 2
+        fi
         ctest --output-on-failure
         cmake --install .
 
