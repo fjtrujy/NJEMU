@@ -311,11 +311,40 @@ typedef struct memory_tier_policy {
 
     cache_region_policy_t gfx_or_crom;
     cache_region_policy_t pcm_or_vrom;
+
+    /* Where every otherwise-unassigned cache block goes first. */
+    cache_region_id_t primary_spill_target;
+    cache_region_id_t secondary_spill_target;
 } memory_tier_policy_t;
 ```
 
 The same table shape can serve both cores; unsupported regions simply have
 weight/floor zero.
+
+There is one additional rule that is more important than the weights:
+
+> **After the safety reserve has been removed, NJEMU should consume all useful
+> cacheable RAM.**
+
+The tier's floors/weights establish the preferred balance between regions. They
+must not leave an arbitrary unused remainder. Once the weighted distribution is
+done, every remaining cache block is assigned to the tier's spill targets until
+either the budget is exhausted or every cacheable source region is fully
+resident.
+
+For the current CPS2/MVS design, the primary spill target should be **GFX/C-ROM**.
+This is the most useful default sink because:
+
+- graphics are substantially larger than the small working-set caches;
+- every extra GFX/C-ROM cache block directly increases the probability of
+  avoiding storage I/O;
+- the region usually has enough addressable source data to absorb all remaining
+  constrained-console RAM;
+- MVS PCM already has a known small working-set policy, while C-ROM is the main
+  I/O bottleneck measured on PS2.
+
+Therefore a tier table is not a set of fixed cache sizes. It is a set of
+**minimums + relative priorities + caps + final spill order**.
 
 ### 4.3 Initial MVS distribution table
 
@@ -329,18 +358,20 @@ MVS has two genuinely competing cacheable regions today:
 The initial policy should preserve the proven ~3 MiB PCM working set for normal
 tiers while giving most additional RAM to C-ROM:
 
-| Tier | C-ROM floor | C-ROM weight | PCM floor | PCM weight | PCM cap | Full-resident promotion |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `CRITICAL` | 2 MiB | 4 | 0 | 1 | 1 MiB | none; PCM may remain unavailable if it cannot fit safely |
-| `LOW` | 4 MiB | 3 | 1 MiB | 1 | 3 MiB | none |
-| `MEDIUM` | 8 MiB | 4 | 2 MiB | 1 | 3 MiB | none |
-| `HIGH` | 12 MiB | 5 | 3 MiB | 1 | 3 MiB | allow full PCM only if it still leaves the C-ROM floor |
-| `VERY_HIGH` | 12 MiB | 5 | 3 MiB | 1 | region size | fill PCM completely when possible, then give all remaining RAM to C-ROM; both may become fully resident |
+| Tier | C-ROM floor | C-ROM weight | PCM floor | PCM weight | PCM cap | Primary spill | Full-resident promotion |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| `CRITICAL` | 2 MiB | 4 | 0 | 1 | 1 MiB | C-ROM | PCM may remain unavailable; consume every remaining safe block in C-ROM |
+| `LOW` | 4 MiB | 3 | 1 MiB | 1 | 3 MiB | C-ROM | after PCM reaches target/cap, all remainder goes to C-ROM |
+| `MEDIUM` | 8 MiB | 4 | 2 MiB | 1 | 3 MiB | C-ROM | after PCM reaches target/cap, all remainder goes to C-ROM |
+| `HIGH` | 12 MiB | 5 | 3 MiB | 1 | 3 MiB | C-ROM | C-ROM consumes all remaining safe memory; PCM may become resident only if explicitly uncapped later |
+| `VERY_HIGH` | 12 MiB | 5 | 3 MiB | 1 | region size | C-ROM, then PCM | fill PCM when useful, but C-ROM remains first sink for otherwise-unused RAM; both may become resident |
 
 The weight is applied **only after floors**. The cap prevents PCM from consuming
 RAM indefinitely at tiers where the legacy 3 MiB cache is already known to be a
 reasonable working set. Once a cap/region size is reached, its unused share is
-automatically transferred to C-ROM.
+automatically transferred to C-ROM. After the weighted pass finishes, C-ROM
+also receives **all remaining unassigned blocks**, not merely its weighted
+share.
 
 This table is a starting point for measurement. `CACHE_IO_PROFILE` already gives
 the hit/miss/read timing data needed to tune the C-ROM/PCM ratio on PS2.
@@ -364,6 +395,16 @@ GFX cache without requiring a separate `preload_gfx` mode in the policy. If the
 target cache equals `memory_length_gfx1`, the implementation may choose the
 most efficient full-resident loading path internally.
 
+Because GFX is the only current CPS2 cache bucket, CPS2 has an especially simple
+invariant:
+
+```text
+gfx_cache_bytes = min(cacheable_budget, memory_length_gfx1)
+```
+
+In other words, after the safety reserve, **all usable memory goes to GFX** until
+the complete GFX region is resident.
+
 ### 4.5 CPS1 and NCDZ
 
 The tier framework remains common, but CPS1/NCDZ should not be forced to create
@@ -386,8 +427,13 @@ For a core with N cacheable regions:
 7. clamp each target to `min(policy_cap, actual_region_size)`;
 8. redistribute every clamped region's excess among regions that can still
    grow;
-9. check every contiguous target against `largest_free_block_bytes`;
-10. allocation failure demotes/replans using the actual new snapshot.
+9. run a **spill pass**: while unassigned budget remains, give every available
+   cache block to `primary_spill_target` (GFX/C-ROM), then to the secondary
+   spill target if the primary source region is fully resident/capped;
+10. stop with unused cacheable RAM only when every cacheable source region is
+    fully resident or no remaining allocation shape can be represented safely;
+11. check every contiguous target against `largest_free_block_bytes`;
+12. allocation failure demotes/replans using the actual new snapshot.
 
 Pseudocode for MVS:
 
@@ -404,6 +450,14 @@ while budget >= BLOCK_SIZE and some_region_can_grow:
     clamp each region to its tier cap and real region size
     spill capped shares to the other region
 
+while budget >= BLOCK_SIZE and crom < crom_size:
+    crom += BLOCK_SIZE
+    budget -= BLOCK_SIZE
+
+while budget >= BLOCK_SIZE and pcm < pcm_size and pcm_policy_allows_growth:
+    pcm += BLOCK_SIZE
+    budget -= BLOCK_SIZE
+
 if pcm == pcm_size:
     pcm_fully_resident = true
 if crom == crom_size:
@@ -412,6 +466,17 @@ if crom == crom_size:
 
 This is deliberately block-based so the planner produces values the cache can
 actually consume without later rounding surprises.
+
+The expected invariant is therefore:
+
+```text
+gfx_cache_bytes + pcm_cache_bytes
+    == min(cacheable_budget, total_cacheable_source_bytes)
+```
+
+modulo block alignment and a real contiguous-allocation/fragmentation limit.
+The safety reserve is outside `cacheable_budget`, so satisfying this invariant
+does **not** consume the emergency margin.
 
 ---
 
@@ -762,6 +827,11 @@ Unit-test synthetic cases including:
 - MVS C-ROM/PCM targets at every floor/cap transition;
 - PCM cap spill correctly increases C-ROM target;
 - complete PCM/C-ROM region spill correctly redistributes to the other region;
+- after safety/mandatory deductions, no allocatable cache block remains
+  unassigned while GFX/C-ROM can still grow;
+- GFX/C-ROM is always the primary spill target for CPS2/MVS;
+- unused budget is accepted only when all cacheable source regions are fully
+  resident or a real contiguous-allocation constraint prevents using it;
 - full-region target sets the corresponding `*_fully_resident` flag;
 - every target is a multiple of the cache block size;
 - safety reserve never violated;
@@ -898,13 +968,13 @@ fallback.
 Use one compact diagnostic line at plan creation, for example:
 
 ```text
-[memory] free=27.8MiB largest=18.4MiB extended=0MiB reserve=2MiB plan=small sound=stream gfx=cache cache=16MiB
+[memory] free=27.8MiB largest=18.4MiB reserve=2MiB tier=MEDIUM budget=20.0MiB crom=17.0MiB pcm=3.0MiB unused=0
 ```
 
 And after allocations:
 
 ```text
-[memory] committed sound=0 gfx=0 cache=15.6MiB fallback=none
+[memory] committed crom=16.5MiB pcm=3.0MiB reserve=2.0MiB unused=0.5MiB reason=fragmentation
 ```
 
 This should be behind a normal diagnostic/log level once the migration is
@@ -921,13 +991,17 @@ stable, not noisy unconditional per-frame output.
 4. Total free bytes and largest contiguous block are different constraints and
    both must be respected.
 5. Safety reserve is deducted before optional allocations.
-6. Memory policy is decided at deterministic lifecycle checkpoints, never every
+6. After reserve/mandatory deductions, all safely usable cacheable RAM should
+   be assigned. GFX/C-ROM is the primary sink for otherwise-unassigned memory.
+7. Unused cacheable RAM is valid only if every cacheable source region is fully
+   resident or fragmentation/allocation-shape constraints make it unusable.
+8. Memory policy is decided at deterministic lifecycle checkpoints, never every
    frame.
-7. Allocation failure is a supported input to the planner, not an exceptional
+9. Allocation failure is a supported input to the planner, not an exceptional
    impossible state.
-8. PSP model is capability metadata only; actual measured memory drives policy.
-9. Core code must not know hard-coded PSP memory addresses after the migration.
-10. `resources/` is unrelated to this refactor and must not be touched.
+10. PSP model is capability metadata only; actual measured memory drives policy.
+11. Core code must not know hard-coded PSP memory addresses after the migration.
+12. `resources/` is unrelated to this refactor and must not be touched.
 
 ---
 
