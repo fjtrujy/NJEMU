@@ -98,16 +98,29 @@ Current PSPSDK provides a user-memory helper (`pspSdkTotalFreeUserMemSize()`) an
 important because a nominal 20 MiB free total does not imply that a 15 MiB GFX
 preload can be allocated contiguously.
 
-### 1.4 The current tier boundaries are too coarse to be the final policy
+### 1.4 Tiers should own distribution policy, not compile-time behaviour
 
-The existing tiers are useful as labels and test presets, but thresholds like
-16/48/96 MiB create artificial cliffs. Two devices with 47 and 48 MiB should
-not suddenly execute fundamentally different plans if the actual game only
-needs another 2 MiB.
+The existing tier idea is useful, but the current thresholds/toggles are too
+coarse. The desired end state is a **runtime tier table that describes how to
+distribute the cacheable RAM budget among the regions competing for memory**.
 
-The final decision should therefore be based on a **continuous byte budget**.
-Tiers may remain for logging/debug overrides, but they should not own cache or
-preload decisions.
+The tier must be selected from the **cacheable budget remaining after mandatory
+allocations and safety reserve**, not simply from physical RAM. This is
+important: a 32 MiB PS2 and a 32 MiB hypothetical device do not necessarily
+have the same amount of memory left when the cache is created.
+
+Within a tier, allocation remains continuous rather than becoming another hard
+binary switch. Each cacheable region has:
+
+- a minimum/floor;
+- a relative weight;
+- an optional cap;
+- its actual region size as the absolute maximum.
+
+The solver first satisfies floors, then distributes the remaining bytes by
+weight, caps any region that is already fully resident, and redistributes the
+unused remainder. Therefore crossing a tier boundary changes the *policy*, not
+the validity of a code path.
 
 ### 1.5 Cache sizing is still artificially capped by compile-time metadata
 
@@ -224,37 +237,181 @@ Do not promote or resize again during gameplay.
 
 ---
 
-## 4. Replace tiers as policy with a game-specific memory plan
+## 4. Runtime tier table + game-specific memory plan
 
 Introduce a per-load immutable plan:
 
 ```c
 typedef struct memory_plan {
+    memory_tier_t tier;
     uint64_t measured_free_bytes;
     uint64_t largest_free_block_bytes;
     uint64_t safety_reserve_bytes;
 
-    bool preload_sound;
-    bool preload_gfx;
     bool use_extended_arena;
     bool use_crypto_extended_scratch;
 
-    uint64_t gfx_preload_bytes;
-    uint64_t sound_preload_bytes;
-    uint64_t cache_bytes;
+    uint64_t gfx_cache_bytes;
+    uint64_t pcm_cache_bytes;
+
+    /* A cache target equal to the whole region is effectively a preload. */
+    bool gfx_fully_resident;
+    bool pcm_fully_resident;
 } memory_plan_t;
 ```
 
 The plan is computed once per game and then treated as immutable until
 `memory_shutdown()`.
 
-Keep `memory_tier_t` only as:
+`memory_tier_t` becomes the runtime **distribution policy selector**. It still
+must never decide whether code is compiled: all allocation/cache modes required
+by a core are present in the same executable.
 
-- a human-readable diagnostic classification;
-- a test override (`NJEMU_MEM_TIER`) while migration is in progress;
-- optionally a convenient way to select default reserve policy.
+### 4.1 Tier selection uses cacheable budget
 
-It must no longer directly decide whether a feature is compiled/active.
+Define:
+
+```text
+cacheable_budget = measured_free
+                 - mandatory_late_allocations
+                 - safety_reserve
+```
+
+Proposed initial tiers (values are intentionally benchmarkable policy defaults,
+not ABI):
+
+| Tier | Cacheable budget | Intended device/state |
+| --- | ---: | --- |
+| `CRITICAL` | `< 6 MiB` | very constrained / heavily fragmented |
+| `LOW` | `6-12 MiB` | PSP Fat-like constrained budget |
+| `MEDIUM` | `12-24 MiB` | normal constrained console budget |
+| `HIGH` | `24-40 MiB` | enough RAM for aggressive caching |
+| `VERY_HIGH` | `>= 40 MiB` | PSP Slim/desktop-like spare budget |
+
+These thresholds are applied to the budget **after** mandatory allocations, so
+they are portable across devices. We should tune them from real PS2/PSP cache
+miss measurements rather than from model names.
+
+### 4.2 Generic region policy descriptor
+
+Represent the table in data rather than scattered `if` statements:
+
+```c
+typedef struct cache_region_policy {
+    uint32_t floor_kb;
+    uint32_t weight;
+    uint32_t cap_kb;      /* 0 = only limited by region size/budget */
+    bool allow_full_resident;
+} cache_region_policy_t;
+
+typedef struct memory_tier_policy {
+    const char *name;
+    uint32_t min_cacheable_mb;
+    uint32_t safety_reserve_kb;
+
+    cache_region_policy_t gfx_or_crom;
+    cache_region_policy_t pcm_or_vrom;
+} memory_tier_policy_t;
+```
+
+The same table shape can serve both cores; unsupported regions simply have
+weight/floor zero.
+
+### 4.3 Initial MVS distribution table
+
+MVS has two genuinely competing cacheable regions today:
+
+- **C-ROM** (`memory_length_gfx3`) — sprite data, currently the main dynamic
+  cache and the most expensive PS2 storage path;
+- **V-ROM / PCM** (`memory_length_sound1`) — currently a fixed 3 MiB PCM cache
+  (`MAX_PCM_SIZE = 0x30` x 64 KiB) when sound cannot be fully resident.
+
+The initial policy should preserve the proven ~3 MiB PCM working set for normal
+tiers while giving most additional RAM to C-ROM:
+
+| Tier | C-ROM floor | C-ROM weight | PCM floor | PCM weight | PCM cap | Full-resident promotion |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `CRITICAL` | 2 MiB | 4 | 0 | 1 | 1 MiB | none; PCM may remain unavailable if it cannot fit safely |
+| `LOW` | 4 MiB | 3 | 1 MiB | 1 | 3 MiB | none |
+| `MEDIUM` | 8 MiB | 4 | 2 MiB | 1 | 3 MiB | none |
+| `HIGH` | 12 MiB | 5 | 3 MiB | 1 | 3 MiB | allow full PCM only if it still leaves the C-ROM floor |
+| `VERY_HIGH` | 12 MiB | 5 | 3 MiB | 1 | region size | fill PCM completely when possible, then give all remaining RAM to C-ROM; both may become fully resident |
+
+The weight is applied **only after floors**. The cap prevents PCM from consuming
+RAM indefinitely at tiers where the legacy 3 MiB cache is already known to be a
+reasonable working set. Once a cap/region size is reached, its unused share is
+automatically transferred to C-ROM.
+
+This table is a starting point for measurement. `CACHE_IO_PROFILE` already gives
+the hit/miss/read timing data needed to tune the C-ROM/PCM ratio on PS2.
+
+### 4.4 Initial CPS2 distribution table
+
+CPS2 currently has one main cacheable region: **GFX1**. QSound data is loaded as
+a normal ROM region rather than using the MVS-style PCM cache, so inventing a
+second percentage bucket would waste RAM.
+
+| Tier | GFX floor | GFX share | Full-resident promotion |
+| --- | ---: | ---: | --- |
+| `CRITICAL` | 2 MiB | 100% of cacheable budget | no |
+| `LOW` | 4 MiB | 100% | no |
+| `MEDIUM` | 8 MiB | 100% | if entire GFX region fits safely |
+| `HIGH` | 8 MiB | 100% | yes |
+| `VERY_HIGH` | 8 MiB | 100% | yes |
+
+Thus CPS2 naturally transitions from a small streaming cache to a 100%-resident
+GFX cache without requiring a separate `preload_gfx` mode in the policy. If the
+target cache equals `memory_length_gfx1`, the implementation may choose the
+most efficient full-resident loading path internally.
+
+### 4.5 CPS1 and NCDZ
+
+The tier framework remains common, but CPS1/NCDZ should not be forced to create
+cache buckets they do not currently need. Their region-policy weights remain
+zero until a real cacheable subsystem is identified. This avoids turning a
+memory-management refactor into speculative caching work.
+
+### 4.6 Distribution algorithm
+
+For a core with N cacheable regions:
+
+1. compute `cacheable_budget`;
+2. select the tier from the table above;
+3. align all allocations to the cache block size (currently 64 KiB where
+   applicable);
+4. satisfy each enabled region's floor;
+5. if all floors cannot fit, enter the documented fallback ladder rather than
+   overcommitting;
+6. distribute remaining memory proportional to region weights;
+7. clamp each target to `min(policy_cap, actual_region_size)`;
+8. redistribute every clamped region's excess among regions that can still
+   grow;
+9. check every contiguous target against `largest_free_block_bytes`;
+10. allocation failure demotes/replans using the actual new snapshot.
+
+Pseudocode for MVS:
+
+```text
+budget = cacheable_budget
+tier = select_tier(budget)
+
+crom = min(crom_floor[tier], crom_size)
+pcm  = min(pcm_floor[tier],  pcm_size)
+budget -= crom + pcm
+
+while budget >= BLOCK_SIZE and some_region_can_grow:
+    distribute BLOCK_SIZE chunks using tier weights
+    clamp each region to its tier cap and real region size
+    spill capped shares to the other region
+
+if pcm == pcm_size:
+    pcm_fully_resident = true
+if crom == crom_size:
+    gfx_fully_resident = true
+```
+
+This is deliberately block-based so the planner produces values the cache can
+actually consume without later rounding surprises.
 
 ---
 
@@ -290,46 +447,44 @@ allocation_size <= largest_free_block
 
 for every single contiguous allocation.
 
-### 5.3 CPS2 decision
+### 5.3 Apply the tier distribution table
 
-CPS2 has a useful binary choice:
+After reserve/mandatory deductions, the selected tier determines floors,
+weights and caps. This is the only normal source of cache targets.
 
-1. if complete GFX fits safely and contiguously, preload it;
-2. otherwise stream GFX through cache;
-3. in streaming mode, give cache the largest safe remainder above its floor.
+For CPS2 the table has one active bucket, so the entire cacheable budget flows
+to GFX until `memory_length_gfx1` is reached.
 
-Do not decide this from a tier boundary.
+For MVS the same budget is split between C-ROM and PCM/V-ROM according to the
+tier table in section 4.3. If PCM reaches its cap or complete region size, its
+share spills into C-ROM. If C-ROM becomes fully resident first, the inverse
+spill applies.
 
-Conceptually:
+Temporary crypto scratch is **not** a cache bucket: its lifetime is temporary
+and it must be handled as a transient contiguous-allocation constraint when the
+planner determines the reserve/arena needed during decryption.
+
+### 5.4 Promotion to fully resident
+
+There is no independent "preload mode" policy toggle.
+
+Instead:
 
 ```text
-if gfx_size + reserve <= free
-   && gfx_size <= largest_block:
-    preload_gfx = true
-    cache = 0
-else:
-    preload_gfx = false
-    cache = safe_remaining_cache_budget
+region_cache_target == region_total_size
+    => region is fully resident
 ```
 
-### 5.4 MVS decision
+The implementation may then use the fastest loading path for a fully resident
+region rather than filling it through the streaming cache machinery.
 
-MVS has independent consumers:
+This makes the transition monotonic:
 
-- mandatory CPU/fixed-layer allocations;
-- ADPCM preload vs PCM cache;
-- C-ROM graphics cache;
-- temporary crypto scratch.
+```text
+2 MiB cache -> 8 MiB cache -> 20 MiB cache -> complete region resident
+```
 
-Recommended priority:
-
-1. mandatory regions + safety reserve;
-2. sound preload when it fits without pushing C-ROM cache below its floor;
-3. temporary crypto scratch uses the best available arena only while decrypting;
-4. remaining safe memory goes to C-ROM cache.
-
-The crypto buffer should not be modeled as permanent resident memory if its
-lifetime is temporary.
+rather than switching between unrelated low/high-memory implementations.
 
 ### 5.5 Allocation fallback ladder
 
@@ -339,17 +494,18 @@ path exists.
 Example MVS fallback:
 
 ```text
-sound preload + cache
-    -> sound streaming + larger cache
-    -> shrink cache to floor
+planned C-ROM + PCM targets
+    -> reduce the region whose allocation failed to its floor
+    -> redistribute recovered budget to the other cacheable region
+    -> reduce both toward their floors
     -> fail only if mandatory allocations + cache floor cannot fit
 ```
 
 Example CPS2 fallback:
 
 ```text
-full GFX preload
-    -> streaming cache target
+full-resident GFX target fails
+    -> reduce GFX target to largest proven allocatable block
     -> shrink cache to floor
     -> fail cleanly
 ```
@@ -536,7 +692,9 @@ Actions:
 - compile both normal/extended allocation paths;
 - remove large-mode-specific free logic;
 - track allocation ownership/arena explicitly per buffer;
-- derive sound preload/PCM-cache mode from `memory_plan_t`.
+- size PCM/V-ROM caching from `memory_plan_t::pcm_cache_bytes`;
+- treat `pcm_cache_bytes == memory_length_sound1` as fully resident rather than
+  as a separate compile-time sound-preload mode.
 
 ### Group F - neocrypt scratch
 
@@ -597,12 +755,17 @@ bool memory_plan_build(
 
 Unit-test synthetic cases including:
 
-- 12/16/20/24/32/48/64/128/256 MiB;
+- cacheable budgets immediately below/at/above every tier boundary;
+- 4/6/8/12/16/24/32/40/48/64 MiB cacheable budgets;
 - fragmented case: large total free, small largest block;
-- CPS2 GFX just below/above preload threshold;
-- MVS sound preload just below/above fit threshold;
+- CPS2 GFX just below/equal/above the cacheable budget;
+- MVS C-ROM/PCM targets at every floor/cap transition;
+- PCM cap spill correctly increases C-ROM target;
+- complete PCM/C-ROM region spill correctly redistributes to the other region;
+- full-region target sets the corresponding `*_fully_resident` flag;
+- every target is a multiple of the cache block size;
 - safety reserve never violated;
-- cache never exceeds the selected budget;
+- sum of all cache targets never exceeds the selected cacheable budget;
 - deterministic results for the same inputs.
 
 At this stage runtime still uses old paths; compare/log new plan vs old behaviour.
@@ -610,25 +773,33 @@ At this stage runtime still uses old paths; compare/log new plan vs old behaviou
 ### R3 - Make cache size fully runtime-driven
 
 - dynamically size `cache_data` metadata;
+- dynamically size the MVS PCM cache metadata/data target instead of hard-coding
+  `MAX_PCM_SIZE = 0x30` as the active cache size;
 - remove compile-time `MIN_CACHE_SIZE` / `MAX_CACHE_SIZE` policy;
-- feed `memory_plan.cache_bytes` into `cache_start()`;
+- feed `memory_plan.gfx_cache_bytes` / `pcm_cache_bytes` into `cache_start()`;
 - keep allocation retry-down as fragmentation safety;
 - retain core `MAX_CACHE_BLOCKS` only as a format/addressability limit, not a
   device-memory tier.
 
 Validate MVS cache correctness and existing cache-I/O profiling.
 
-### R4 - CPS2 runtime preload/cache selection
+### R4 - CPS2 runtime cache/full-resident selection
 
 - unconditionally compile GFX preload/decode support;
 - remove `LARGE_MEMORY` from CPS2 headers/source;
-- select preload vs cache from `memory_plan`;
-- implement preload-allocation-failure -> cache fallback;
+- use `memory_plan.gfx_cache_bytes` as the single target;
+- select the direct full-resident load path only when
+  `gfx_cache_bytes == memory_length_gfx1`;
+- implement full-resident-allocation-failure -> smaller streaming-cache replan;
 - test same ROM in forced low/high budgets and compare decoded output/screenshots.
 
-### R5 - MVS sound + crypto + ownership cleanup
+### R5 - MVS C-ROM/PCM distribution + crypto + ownership cleanup
 
-- runtime-select sound preload vs PCM cache;
+- apply the tier table to C-ROM + PCM/V-ROM simultaneously;
+- make the legacy 3 MiB PCM size a tier policy cap rather than a compile-time
+  active cache size;
+- allow PCM/V-ROM to become fully resident when its target reaches the region
+  size and the selected tier permits it;
 - replace raw PSP2K assumptions with arena-aware allocation ownership;
 - migrate neocrypt scratch allocation;
 - ensure every allocation has one unambiguous matching free path;
