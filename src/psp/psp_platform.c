@@ -13,6 +13,7 @@
 #include <pspimpose_driver.h>
 #include <psputility_sysparam.h>
 #include <pspwlan.h>
+#include <string.h>
 
 #include "SystemButtons.h"
 #include "psp.h"
@@ -258,15 +259,26 @@ static int psp_getHardwareModel(void *data) {
 #endif
 }
 
-static uint32_t psp_availableRam(void *data) {
-	uint32_t total = (uint32_t)sceKernelTotalFreeMemSize();
-#if defined(LARGE_MEMORY) && ((EMU_SYSTEM == CPS2) || (EMU_SYSTEM == MVS))
-	extern int32_t psp2k_mem_left;
-	if (psp2k_mem_left > 0) {
-		total += (uint32_t)psp2k_mem_left;
+static bool psp_queryMemoryInfo(void *data, platform_memory_info_t *out) {
+	(void)data;
+	if (out == NULL) {
+		return false;
 	}
-#endif
-	return total;
+
+	memset(out, 0, sizeof(*out));
+	out->free_bytes = (uint64_t)pspSdkTotalFreeUserMemSize();
+	out->largest_free_block_bytes = (uint64_t)sceKernelMaxFreeMemSize();
+	out->capabilities = PLATFORM_MEMORY_CAP_QUERY_FREE | PLATFORM_MEMORY_CAP_QUERY_LARGEST_BLOCK;
+	platform_memory_info_normalize(out);
+	return true;
+}
+
+static uint32_t psp_availableRam(void *data) {
+	platform_memory_info_t info;
+	if (!psp_queryMemoryInfo(data, &info)) {
+		return 0;
+	}
+	return platform_memory_info_available_u32(&info);
 }
 
 static ui_language_t psp_getSystemLanguage(void *data) {
@@ -300,5 +312,6 @@ platform_driver_t platform_psp = {
 	psp_getWlanSwitchState,
 	psp_getHardwareModel,
 	psp_availableRam,
+	psp_queryMemoryInfo,
 	psp_getSystemLanguage,
 };

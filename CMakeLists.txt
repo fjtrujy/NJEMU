@@ -236,6 +236,8 @@ set(COMMON_SRC
     common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
+	common/platform_memory_info.h
+	common/platform_memory_info.c
     common/memory_profile.h
     common/memory_profile.c
     common/sound.h
@@ -789,6 +791,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ui_utf8_tests COMMAND ui_utf8_tests)
+
+	add_executable(platform_memory_info_tests
+		tests/platform_memory_info_tests.c
+		src/common/platform_memory_info.c
+	)
+	target_include_directories(platform_memory_info_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME platform_memory_info_tests COMMAND platform_memory_info_tests)
 
     if(Python3_Interpreter_FOUND)
         add_test(

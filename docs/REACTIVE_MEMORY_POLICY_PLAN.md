@@ -881,6 +881,37 @@ No behavioural changes in R0.
 
 ### R1 - Normalize platform memory telemetry
 
+**Status: completed on 2026-09-21.**
+
+Implemented:
+
+- added `platform_memory_info_t` with physical total, budget cap, free bytes,
+  largest free block, capability flags and reliability flags;
+- added `platform_driver_t::queryMemoryInfo()` while retaining `availableRam()`
+  as a temporary compatibility wrapper;
+- Desktop now reports live available memory where supported, keeps the 256 MiB
+  NJEMU cap and reports its largest-block value as an estimate;
+- PS2 now probes the largest allocatable contiguous block in 64 KiB increments
+  and uses that conservative result as its free-memory estimate;
+- PSP now uses `pspSdkTotalFreeUserMemSize()` plus
+  `sceKernelMaxFreeMemSize()` and no longer adds the raw PSP2K arena to the
+  telemetry result;
+- added `NJEMU_MEMORY_BUDGET_MB` and
+  `NJEMU_MEMORY_LARGEST_BLOCK_MB` overrides at the normalized snapshot layer;
+- added a common startup diagnostic line and unit tests for normalization,
+  effective-budget clamping and override parsing.
+
+Validation performed:
+
+- Desktop MVS build + 7/7 CTest tests pass;
+- PS2 MVS cross-build passes with the repository's PS2SDK toolchain;
+- PSP MVS cross-build passes with the repository's PSPSDK toolchain and creates
+  `EBOOT.PBP`.
+
+R1 deliberately does **not** enable `MEMSIZE=1` or remove the old PSP2K path;
+those remain R7/R8 work after the planner and runtime cache ownership have been
+migrated.
+
 Implement `platform_memory_info_t` and `queryMemoryInfo()`.
 
 - Desktop: available/budget-capped view;

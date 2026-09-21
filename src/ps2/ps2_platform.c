@@ -9,6 +9,8 @@
 #include <sbv_patches.h>
 #include <fileXio_rpc.h>
 #include <osd_config.h>
+#include <stdlib.h>
+#include <string.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
 
@@ -123,16 +125,57 @@ static int ps2_getHardwareModel(void *data) {
 	return 0;
 }
 
-static uint32_t ps2_availableRam(void *data) {
-	/* PS2 has a fixed 32 MB main RAM. GetMemorySize() returns the physical
-	 * total; we hold back a baseline for kernel, stacks, and late mallocs.
-	 */
+static uint64_t ps2_probe_largest_block(uint64_t limit) {
+	uint32_t low_blocks = 0;
+	uint32_t high_blocks = (uint32_t)(limit / CACHE_BLOCK_SIZE);
+
+	while (low_blocks < high_blocks) {
+		uint32_t mid_blocks = low_blocks + (high_blocks - low_blocks + 1u) / 2u;
+		size_t bytes = (size_t)mid_blocks * CACHE_BLOCK_SIZE;
+		void *probe = malloc(bytes);
+		if (probe != NULL) {
+			free(probe);
+			low_blocks = mid_blocks;
+		} else {
+			high_blocks = mid_blocks - 1u;
+		}
+	}
+
+	return (uint64_t)low_blocks * CACHE_BLOCK_SIZE;
+}
+
+static bool ps2_queryMemoryInfo(void *data, platform_memory_info_t *out) {
 	const uint32_t baseline_reservation = 4u * 1024u * 1024u;
 	uint32_t total = (uint32_t)GetMemorySize();
-	if (total <= baseline_reservation) {
+	uint64_t policy_cap = total > baseline_reservation ? total - baseline_reservation : 0;
+	uint64_t largest;
+	(void)data;
+
+	if (out == NULL) {
+		return false;
+	}
+	memset(out, 0, sizeof(*out));
+
+	largest = ps2_probe_largest_block(policy_cap);
+	out->physical_total_bytes = total;
+	out->budget_cap_bytes = policy_cap;
+	/* PS2SDK has no live total-user-heap query here. The largest successful
+	 * allocation is a conservative estimate for both planning dimensions.
+	 */
+	out->free_bytes = largest;
+	out->largest_free_block_bytes = largest;
+	out->capabilities = PLATFORM_MEMORY_CAP_QUERY_FREE | PLATFORM_MEMORY_CAP_QUERY_LARGEST_BLOCK;
+	out->reliability_flags = PLATFORM_MEMORY_FREE_IS_ESTIMATE | PLATFORM_MEMORY_LARGEST_IS_PROBED;
+	platform_memory_info_normalize(out);
+	return total != 0;
+}
+
+static uint32_t ps2_availableRam(void *data) {
+	platform_memory_info_t info;
+	if (!ps2_queryMemoryInfo(data, &info)) {
 		return 0;
 	}
-	return total - baseline_reservation;
+	return platform_memory_info_available_u32(&info);
 }
 
 static ui_language_t ps2_getSystemLanguage(void *data) {
@@ -161,5 +204,6 @@ platform_driver_t platform_ps2 = {
 	ps2_getWlanSwitchState,
 	ps2_getHardwareModel,
 	ps2_availableRam,
+	ps2_queryMemoryInfo,
 	ps2_getSystemLanguage,
 };

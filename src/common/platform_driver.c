@@ -18,6 +18,7 @@ platform_driver_t platform_null = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
 };
 
 platform_driver_t *platform_drivers[] = {

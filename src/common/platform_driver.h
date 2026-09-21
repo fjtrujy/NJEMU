@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "platform_memory_info.h"
 #include "ui_language.h"
 
 typedef struct platform_driver
@@ -33,6 +34,10 @@ typedef struct platform_driver
 	 * baseline; return 0 if unknown. Called once after init().
 	 */
 	uint32_t (*availableRam)(void *data);
+	/* Captures normalized platform memory telemetry. Returns false when the
+	 * platform cannot provide any useful memory information.
+	 */
+	bool (*queryMemoryInfo)(void *data, platform_memory_info_t *out);
 	/* Maps the platform/OS language to NJEMU's supported translation set. */
 	ui_language_t (*getSystemLanguage)(void *data);
 

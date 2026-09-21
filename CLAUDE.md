@@ -62,10 +62,13 @@ make -j4
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording
 
-The previous `LARGE_MEMORY` option has been removed. Memory tier (cache size,
-preload strategy) is now selected at runtime by `memory_profile_select()` from
-the platform's reported available RAM. Override with the `NJEMU_MEM_TIER` env
-var (`tiny|small|medium|large`) for testing.
+The previous `LARGE_MEMORY` option has been removed. Platforms now expose a
+normalized `queryMemoryInfo()` snapshot (free bytes, largest contiguous block,
+budget cap, reliability flags). The legacy memory profile is still selected at
+startup from that snapshot while the game-specific planner is being migrated.
+Use `NJEMU_MEM_TIER=tiny|small|medium|large` for the legacy tier override, or
+`NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` for deterministic
+memory-policy testing.
 
 ## Architecture
 
