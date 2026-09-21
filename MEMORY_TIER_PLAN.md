@@ -6,6 +6,10 @@
 > this design from coarse tier-driven behaviour to a continuous runtime budget
 > based on free memory, largest contiguous allocation, game requirements and
 > deterministic fallback.
+>
+> PSP legacy-CFW compatibility is intentionally out of scope. The authoritative
+> plan uses a single `MEMSIZE=1` PSP package and removes the raw PSP2K/kubridge
+> memory path rather than preserving or abstracting it.
 
 ## Goal
 
