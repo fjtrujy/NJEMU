@@ -86,6 +86,7 @@ jobs:
 
     - name: Compile project
       run: |
+        set -o pipefail
         mkdir build
         cd build
         cmake -DPLATFORM="DESKTOP" \
