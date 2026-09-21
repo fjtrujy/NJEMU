@@ -551,6 +551,15 @@ now 557 entries. Obvious spelling/diacritic corruption in `es.lang` was
 corrected without changing message contracts. Translation tests pass 28/28,
 and Desktop GUI builds pass 6/6 CTest with `COMMAND_LIST` both ON and OFF.
 
+Phase 3 final validation status (2026-09-21): feature-rich MVS builds
+successfully on PS2 and PSP after the Latin-1 cleanup, producing `MVS.elf` and
+`EBOOT.PBP` respectively with all five V2 packs installed. PPSSPP boots the
+final PSP build with Spanish, Japanese, Traditional Chinese and Simplified
+Chinese system-language overrides. Its HLE trace confirms the exact PSP
+`INT_LANGUAGE` values `3`, `0`, `0x0a` and `0x0b`; none of those boots emits a
+translation-loader warning. Together with the 28/28 generator tests and both
+6/6 Desktop CTest variants, Phase 3 UTF-8 end-to-end is considered closed.
+
 ## Migration plan
 
 ### T0 - Capture the current contract
