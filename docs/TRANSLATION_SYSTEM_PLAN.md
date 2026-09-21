@@ -489,6 +489,15 @@ both Chinese catalogs contain no hexadecimal byte escapes. English and Spanish
 retain only the four deliberately preserved `c2 b7` sequences described
 above (two entries per language).
 
+Encoding Phase 2 validation status (2026-09-21): all five regenerated packs are
+byte-identical to the pre-Phase-2 baseline. The Python translation suite passes
+24/24 tests. A feature-rich MVS configuration (`COMMAND_LIST=ON`,
+`SAVE_STATE=ON`, `GUI=ON`, `ADHOC=OFF`) builds successfully on Desktop,
+PS2 and PSP; Desktop also passes 5/5 CTest targets, PS2 produces `MVS.elf`,
+and PSP produces `EBOOT.PBP`. The five installed packs from every platform
+retain the locked SHA-256 hashes. No runtime renderer or binary pack-format
+change was required.
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the
