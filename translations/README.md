@@ -21,16 +21,18 @@ Duplicate, unknown, missing or reordered keys are rejected.
 
 The value syntax supports:
 
-- `\n`, `\r`, `\t` and `\0`;
+- `\n`, `\r` and `\t`;
 - `\\` for a literal backslash;
-- `\xNN` only for exact single-byte ASCII/control values below `0x80`;
+- `\=`, `\#`, `\<` and `\>` for literal syntax characters when needed;
 - named graphic tokens such as `<CIRCLE>`, `<CROSS>`, `<SQUARE>`,
   `<TRIANGLE>`, `<UPARROW>` and `<DOWNARROW>`;
 - `<NULL>` only as the complete value of the reserved `END_OF_TEXT` entry.
 
-Literal `<` bytes can be written as `\x3c`, so an unescaped `<...>` sequence
-is always treated as a graphic token. High-byte `\xNN` escapes are rejected;
-write the intended Unicode character directly instead.
+An unescaped `<...>` sequence is treated as a graphic token. Write `\<` and
+`\>` when literal angle brackets are required. Arbitrary hexadecimal byte
+escapes and embedded-NUL escapes are intentionally unsupported: textual
+content must be valid UTF-8 and should use the intended Unicode character
+directly.
 
 Graphic tokens are encoded in V2 packs as Unicode Private Use Area code points
 (`U+E000..`) rather than raw control bytes. The renderer maps those code points

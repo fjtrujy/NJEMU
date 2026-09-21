@@ -513,12 +513,14 @@ Phase 3 removes that last encoding dependency:
 - the UI renderer decodes UTF-8 and maps Unicode code points onto the existing
   GBK-backed glyph bitmap data, so the large font asset itself does not need to
   be replaced;
-- a compact generated Unicode -> glyph lookup contains only the characters
-  required by the shipped translation catalogs;
+- Latin-1 Unicode characters use the existing `latin1_14` font directly;
+- a compact generated Unicode -> glyph lookup contains only the remaining
+  characters required by the shipped translation catalogs;
 - legacy GBK decoding remains as a compatibility fallback for non-translation
   UI strings such as old resource metadata or filenames;
 - malformed UTF-8 packs are rejected by the runtime loader;
-- high-byte `\\xNN` escapes are removed from editable translation content.
+- arbitrary `\\xNN` and embedded-NUL escapes are removed from editable
+  translation content.
 
 This design keeps the UTF-8 migration cheap in RAM: it reuses `gbk_s14` and the
 existing legacy GBK table for compatibility rather than adding a second
@@ -532,13 +534,22 @@ byte-level compatibility with the V1 string payload.
 Phase 3 UTF-8 runtime milestone status (2026-09-21): implemented `.lng` V2
 with validated UTF-8 payloads, PUA-encoded graphic tokens, strict runtime
 UTF-8 validation and a compact generated Unicode-to-glyph lookup. The shipped
-catalogs currently require 558 non-ASCII glyph mappings. `uifont_*` decodes
+catalogs initially required 558 non-ASCII glyph mappings. `uifont_*` decodes
 UTF-8 directly and retains the old GBK path only as a compatibility fallback
 for non-translation strings. The four Phase 2 `c2 b7` escapes were normalized
 to literal `·`. Validation passes 27/27 Python translation tests and 6/6
 Desktop CTest targets; feature-rich MVS builds also succeed on PS2 and PSP.
 Relative to the Phase 2 MVS baseline, the UTF-8 decoder and compact lookup add
 about 3.6 KiB to the PS2 executable and 2.9 KiB to the PSP EBOOT.
+
+Phase 3 source/font cleanup status (2026-09-21): arbitrary hexadecimal byte
+escapes and embedded-NUL escapes are no longer accepted by `.lang` sources.
+Latin-1 characters are rendered by the existing `latin1_14` asset regardless
+of `COMMAND_LIST`, so Spanish can use correct diacritics such as `ñ`, `ó` and
+`ú` without extending the GBK lookup. The generated CJK/non-Latin-1 lookup is
+now 557 entries. Obvious spelling/diacritic corruption in `es.lang` was
+corrected without changing message contracts. Translation tests pass 28/28,
+and Desktop GUI builds pass 6/6 CTest with `COMMAND_LIST` both ON and OFF.
 
 ## Migration plan
 

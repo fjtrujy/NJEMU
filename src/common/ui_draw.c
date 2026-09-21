@@ -57,8 +57,8 @@ enum
 	FONT_TYPE_ASCII,
 	FONT_TYPE_GRAPHIC,
 	FONT_TYPE_GBKSIMHEI,
-#ifdef COMMAND_LIST
 	FONT_TYPE_LATIN1,
+#ifdef COMMAND_LIST
 	FONT_TYPE_COMMAND,
 #endif
 	FONT_TYPE_MAX
@@ -677,6 +677,11 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance
 			*type = FONT_TYPE_GRAPHIC;
 			return graphic < 0x0au ? graphic : graphic - 1u;
 		}
+		if (codepoint >= 0x00a0u && codepoint <= 0x00ffu)
+		{
+			*type = FONT_TYPE_LATIN1;
+			return (uint16_t)(codepoint - 0x0080u);
+		}
 		if (ui_unicode_glyph_lookup(codepoint, &glyph))
 		{
 			*type = FONT_TYPE_GBKSIMHEI;
@@ -717,25 +722,30 @@ int uifont_get_string_width(const char *s)
 		{
 			switch (type)
 			{
-			case FONT_TYPE_ASCII:
-				width += ascii_14p_get_pitch(code);
+				case FONT_TYPE_ASCII:
+					width += ascii_14p_get_pitch(code);
 					p += advance;
-				break;
+					break;
 
-			case FONT_TYPE_GRAPHIC:
-				width += graphic_font_get_pitch(code);
+				case FONT_TYPE_GRAPHIC:
+					width += graphic_font_get_pitch(code);
 					p += advance;
-				break;
+					break;
 
-			case FONT_TYPE_GBKSIMHEI:
-				width += gbk_s14p_get_pitch(code);
+				case FONT_TYPE_GBKSIMHEI:
+					width += gbk_s14p_get_pitch(code);
 					p += advance;
-				break;
+					break;
 
-			case FONT_TYPE_CONTROL:
-				width += ascii_14p_get_pitch(0);
+				case FONT_TYPE_LATIN1:
+					width += latin1_14_get_pitch(code);
 					p += advance;
-				break;
+					break;
+
+				case FONT_TYPE_CONTROL:
+					width += ascii_14p_get_pitch(0);
+					p += advance;
+					break;
 			}
 		}
 		else break;
@@ -993,36 +1003,45 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 
 		switch (type)
 		{
-		case FONT_TYPE_ASCII:
+			case FONT_TYPE_ASCII:
 			if (ascii_14p_get_gryph(&font, code))
 			{
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
 				p += advance;
-			break;
+				break;
 
-		case FONT_TYPE_GRAPHIC:
+			case FONT_TYPE_GRAPHIC:
 			if (graphic_font_get_gryph(&font, code))
 			{
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
 				p += advance;
-			break;
+				break;
 
-		case FONT_TYPE_GBKSIMHEI:
-			if (gbk_s14p_get_gryph(&font, code))
-			{
-				res = internal_font_putc(&font, sx, sy, r, g, b);
-				sx += font.pitch;
-			}
+			case FONT_TYPE_GBKSIMHEI:
+				if (gbk_s14p_get_gryph(&font, code))
+				{
+					res = internal_font_putc(&font, sx, sy, r, g, b);
+					sx += font.pitch;
+				}
 				p += advance;
-			break;
+				break;
 
-		default:
+			case FONT_TYPE_LATIN1:
+				if (latin1_14_get_gryph(&font, code))
+				{
+					res = internal_font_putc(&font, sx, sy, r, g, b);
+					sx += font.pitch;
+				}
 				p += advance;
-			break;
+				break;
+
+			default:
+				p += advance;
+				break;
 		}
 	}
 }
@@ -1045,37 +1064,46 @@ static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 
 		switch (type)
 		{
-		case FONT_TYPE_ASCII:
+			case FONT_TYPE_ASCII:
 			if ((res = ascii_14p_get_gryph(&font, code)) != 0)
 			{
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
 				p += advance;
-			break;
+				break;
 
-		case FONT_TYPE_GRAPHIC:
+			case FONT_TYPE_GRAPHIC:
 			if ((res = graphic_font_get_gryph(&font, code)) != 0)
 			{
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
 				p += advance;
-			break;
+				break;
 
-		case FONT_TYPE_GBKSIMHEI:
-			if ((res = gbk_s14p_get_gryph(&font, code)) != 0)
-			{
-				res = internal_shadow_putc(&font, sx, sy);
-				sx += font.pitch;
-			}
+			case FONT_TYPE_GBKSIMHEI:
+				if ((res = gbk_s14p_get_gryph(&font, code)) != 0)
+				{
+					res = internal_shadow_putc(&font, sx, sy);
+					sx += font.pitch;
+				}
 				p += advance;
-			break;
+				break;
 
-		default:
+			case FONT_TYPE_LATIN1:
+				if ((res = latin1_14_get_gryph(&font, code)) != 0)
+				{
+					res = internal_shadow_putc(&font, sx, sy);
+					sx += font.pitch;
+				}
+				p += advance;
+				break;
+
+			default:
 				p += advance;
 				res = 0;
-			break;
+				break;
 		}
 	}
 }

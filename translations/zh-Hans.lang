@@ -1,6 +1,6 @@
 # NJEMU translation source: zh-Hans
-# UTF-8 source; literal Unicode is transcoded to legacy GBK runtime bytes.
-# Escapes: \n \r \t \0 \\ \xNN. END_OF_TEXT uses <NULL>.
+# UTF-8 source; generated .lng V2 packs store UTF-8 directly.
+# Escapes: \n \r \t \\ \= \# \< \>. END_OF_TEXT uses <NULL>.
 # Graphic tokens: <UPARROW> <DOWNARROW> <LEFTARROW> <RIGHTARROW> <CIRCLE> <CROSS> <SQUARE> <TRIANGLE> <LTRIGGER> <RTRIGGER> <UPTRIANGLE> <DOWNTRIANGLE> <LEFTTRIANGLE> <RIGHTTRIANGLE>
 
 EOM=

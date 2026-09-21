@@ -60,10 +60,12 @@ the blob.
 
 ## Font mapping
 
-The pack contains Unicode text, not GBK codes or glyph indices. At build time a
-separate generated C lookup maps only the non-ASCII code points used by the
-shipped catalogs to the existing `gbk_s14` bitmap glyph indices. This keeps the
-pack format independent from the font implementation and avoids adding a full
+The pack contains Unicode text, not GBK codes or glyph indices. U+00A0 through
+U+00FF are rendered through NJEMU's existing Latin-1 font, which covers
+Spanish diacritics without involving GBK. At build time a separate generated
+C lookup maps the remaining non-ASCII code points required by the shipped
+catalogs to the existing `gbk_s14` bitmap glyph indices. This keeps the pack
+format independent from the font implementation and avoids adding a full
 Unicode font table.
 
 ## Validation requirements

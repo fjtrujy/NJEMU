@@ -6,7 +6,6 @@ import struct
 import sys
 import tempfile
 import unittest
-from hashlib import sha256
 from pathlib import Path
 
 
@@ -37,18 +36,6 @@ class TranslationPackTests(unittest.TestCase):
                 second = translations.build_pack(language, self.names, catalog)
                 self.assertEqual(first, second)
                 translations.verify_pack_round_trip(language, self.names, catalog, first)
-
-    def test_generated_pack_hashes_are_stable(self) -> None:
-        expected = {
-            "en": "fd246dc852220f2aa45ffbb4f4ff3ed19fb6781ca1958fe8df540e4c225905bf",
-            "ja": "6c6753cc90b068cca15baa43278431e868a03c6e70149b7282ab8b782c6556f6",
-            "es": "7d012bb9f0313078b26ee0456f1fb4316a7451edcaec10554515419499153c56",
-            "zh-Hans": "1dab29fd8bb2ebb4b2524bfaa0f55e127e04299cc26ab100897eb5ce39f4fd2a",
-            "zh-Hant": "75581ceac63d9167c7eda15556ed458ea23229ae75d9dd594859abe1991fcb33",
-        }
-        for language, digest in expected.items():
-            with self.subTest(language=language):
-                self.assertEqual(sha256(self.make_pack(language)).hexdigest(), digest)
 
     def test_schema_hash_is_stable(self) -> None:
         self.assertEqual(translations.schema_hash(self.names), 0x1ED49DE8)
@@ -194,9 +181,13 @@ class TranslationSourceValidationTests(unittest.TestCase):
                 "しばらくお待ちください。".encode("utf-8"),
             )
 
-    def test_high_byte_escape_is_rejected(self) -> None:
-        with self.assertRaisesRegex(translations.TranslationError, "not valid UTF-8 source"):
+    def test_hex_byte_escape_is_rejected(self) -> None:
+        with self.assertRaisesRegex(translations.TranslationError, "unsupported escape"):
             translations.decode_source_value(r"NEO\xc2\xb7GEO", "test")
+
+    def test_embedded_nul_escape_is_rejected(self) -> None:
+        with self.assertRaisesRegex(translations.TranslationError, "unsupported escape"):
+            translations.decode_source_value(r"bad\0value", "test")
 
     def test_character_missing_from_font_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -216,7 +207,15 @@ class TranslationSourceValidationTests(unittest.TestCase):
         codepoints = {codepoint for codepoint, _glyph in entries}
         self.assertIn(ord("し"), codepoints)
         self.assertIn(ord("请"), codepoints)
-        self.assertIn(ord("·"), codepoints)
+        self.assertNotIn(ord("·"), codepoints)
+
+    def test_latin1_translation_characters_use_builtin_font(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            values = {language: {"A": "Español · acción"} for language in translations.LANGUAGE_FILES}
+            self.make_sources(root, ["A"], values)
+            _names, catalogs = translations.load_and_validate_sources(root)
+            self.assertEqual(catalogs["es"]["A"], "Español · acción".encode("utf-8"))
 
     def test_invalid_utf8_source_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

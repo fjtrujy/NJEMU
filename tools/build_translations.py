@@ -118,7 +118,6 @@ def decode_source_value(text: str, context: str) -> bytes | None:
             "n": 0x0A,
             "r": 0x0D,
             "t": 0x09,
-            "0": 0x00,
             "\\": 0x5C,
             "=": 0x3D,
             "#": 0x23,
@@ -128,19 +127,6 @@ def decode_source_value(text: str, context: str) -> bytes | None:
         if escape in simple:
             out.append(simple[escape])
             index += 2
-            continue
-        if escape == "x":
-            digits = text[index + 2 : index + 4]
-            if len(digits) != 2 or not re.fullmatch(r"[0-9a-fA-F]{2}", digits):
-                raise TranslationError(f"{context}: \\x escape must contain exactly two hex digits")
-            byte = int(digits, 16)
-            if byte >= 0x80:
-                raise TranslationError(
-                    f"{context}: high-byte \\x{digits} escape is not valid UTF-8 source; "
-                    "use the literal Unicode character"
-                )
-            out.append(byte)
-            index += 4
             continue
         raise TranslationError(f"{context}: unsupported escape \\{escape}")
 
@@ -293,7 +279,9 @@ def required_unicode_glyphs(
             required.update(
                 ord(char)
                 for char in text
-                if ord(char) >= 0x80 and ord(char) not in graphic_codepoints
+                if ord(char) >= 0x80
+                and not (0x00A0 <= ord(char) <= 0x00FF)
+                and ord(char) not in graphic_codepoints
             )
 
     if not required:
