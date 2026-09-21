@@ -1501,6 +1501,12 @@ int ui_light_update(void)
 	if (prev_level == (light_level >> 1))
 		return 0;
 
+	/* PS2 intentionally keeps the selected-icon glow static. Rebuilding an
+	 * entire text-heavy 640x448 browser just to animate that glow dominated
+	 * controller latency. Selection changes still request their own redraw. */
+#if defined(PS2)
+	return 0;
+#else
 	/* The legacy partial-refresh path copies rectangles between PSP-sized frame
 	 * buffers. Keep it only on PSP, where those buffers and coordinates are the
 	 * native 480x272 UI. Desktop can now be resized down to that exact size too,
@@ -1509,6 +1515,7 @@ int ui_light_update(void)
 	return UI_PARTIAL_REFRESH;
 #else
 	return UI_FULL_REFRESH;
+#endif
 #endif
 }
 
@@ -1858,6 +1865,14 @@ static void draw_boxshadow(int sx, int sy, int w, int h, int code)
 
 void draw_box_shadow(int sx, int sy, int ex, int ey)
 {
+#if defined(PS2)
+	/* The original 9-slice Gaussian shadow was authored for the PSP's 480x272
+	 * surface. Repeating those 8x8 filtered tiles at PS2 resolution produces
+	 * visible seams/blur and a large number of textured draws. A simple offset
+	 * shadow is both cleaner and substantially cheaper on the GS. */
+	boxfill_alpha(sx + 3, sy + 3, ex + 3, ey + 3, 0, 0, 0, 6);
+	return;
+#else
 	int i, j, x, y, width, height;
 	int w, h, nw, nh;
 
@@ -1946,6 +1961,7 @@ void draw_box_shadow(int sx, int sy, int ex, int ey)
 	x += w;
 
 	draw_boxshadow(x, y, 8, 8, 8);
+#endif
 }
 
 
@@ -1955,6 +1971,10 @@ void draw_box_shadow(int sx, int sy, int ex, int ey)
 
 void draw_bar_shadow(void)
 {
+#if defined(PS2)
+	/* Native PS2 chrome uses an opaque title bar and crisp separator lines. */
+	return;
+#else
 	int x;
 
 	for (x = 0; x < ui_layout_get()->logical_width; x += 8)
@@ -1964,6 +1984,7 @@ void draw_bar_shadow(void)
 		draw_boxshadow(x, 16, 8, 4, 4);
 		draw_boxshadow(x, 20, 8, 8, 7);
 	}
+#endif
 }
 
 /******************************************************************************

@@ -117,8 +117,7 @@ static void update_inputport_multi(uint32_t controller_count)
 
 	primary_buttons = poll_gamepad_index(0);
 	if (systembuttons_available ? readHomeButton() :
-	    (primary_buttons & PLATFORM_PAD_START) &&
-	    (primary_buttons & PLATFORM_PAD_SELECT))
+	    pad_menu_combo_pressed(primary_buttons))
 	{
 		showmenu();
 		setup_autofire();
@@ -340,7 +339,7 @@ void update_inputport(void)
 
 	buttons = poll_gamepad();
 
-	if (systembuttons_available ? readHomeButton() : (buttons & PLATFORM_PAD_START) && (buttons & PLATFORM_PAD_SELECT))
+	if (systembuttons_available ? readHomeButton() : pad_menu_combo_pressed(buttons))
 	{
 		showmenu();
 		setup_autofire();

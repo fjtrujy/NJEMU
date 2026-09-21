@@ -326,6 +326,9 @@ static int menu_gamecfg(void)
 			video_driver->waitVsync(video_data);
 		}
 
+		/* Sample after the potentially expensive redraw so this iteration handles
+		 * the newest controller state instead of the previous frame's state. */
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -397,8 +400,6 @@ static int menu_gamecfg(void)
 		if (sel < top) top = sel;
 
 		if (prev_sel != sel) update = 1;
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 
@@ -1011,6 +1012,7 @@ int menu_cheatcfg(void)
 			video_driver->waitVsync(video_data);
 		}
 
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -1094,8 +1096,6 @@ int menu_cheatcfg(void)
 		if (sel < top) top = sel;
 
 		if (prev_sel != sel) update = 1;
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 
@@ -1625,6 +1625,7 @@ static int menu_keycfg(void)
 			video_driver->waitVsync(video_data);
 		}
 
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -1782,8 +1783,6 @@ static int menu_keycfg(void)
 		}
 #endif
 
-		pad_update();
-
 		if (Loop == LOOP_EXIT) break;
 
 	} while (!pad_pressed(PLATFORM_PAD_B2));
@@ -1933,6 +1932,7 @@ static int menu_dipswitch(void)
 			video_driver->waitVsync(video_data);
 		}
 
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -2004,8 +2004,6 @@ static int menu_dipswitch(void)
 		if (sel < top) top = sel;
 
 		if (prev_sel != sel) update = 1;
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 
@@ -2408,6 +2406,7 @@ static int menu_state(void)
 		}
 
 		update |= ui_light_update();
+		pad_update();
 		prev_sel = state_sel;
 		prev_func = state_func;
 
@@ -2480,8 +2479,6 @@ static int menu_state(void)
 
 		if (prev_sel != state_sel)
 			find_state_file(slot);
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 
@@ -2688,6 +2685,7 @@ void showmenu(void)
 		}
 
 		update |= ui_light_update();
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -2739,8 +2737,6 @@ void showmenu(void)
 		if (sel < top) top = sel;
 
 		if (prev_sel != sel) update |= 1;
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 

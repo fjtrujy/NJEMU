@@ -41,10 +41,21 @@ typedef struct ps2_ui_texture {
 	int vram_valid;             /* 1 if VRAM texture is up-to-date */
 } ps2_ui_texture_t;
 
+#define PS2_UI_FONT_RING_SIZE   32
+#define PS2_UI_FONT_RING_WIDTH  40
+#define PS2_UI_FONT_RING_HEIGHT 32
+
+typedef struct ps2_ui_font_ring_entry {
+	GSTEXTURE texture;
+	uint32_t *upload_buffer;
+} ps2_ui_font_ring_entry_t;
+
 typedef struct ps2_ui_data {
 	void *video_data;
 	GSGLOBAL *gsGlobal;
 	ps2_ui_texture_t textures[UI_TEXTURE_MAX];
+	ps2_ui_font_ring_entry_t font_ring[PS2_UI_FONT_RING_SIZE];
+	int font_ring_next;
 } ps2_ui_data_t;
 
 static ps2_ui_data_t ps2_ui;
@@ -132,6 +143,42 @@ static void *ps2_ui_draw_init(void *video_data)
 		return NULL;
 	}
 
+	/* Normal glyphs/shadows are tiny, but the common renderer rewrites one
+	 * 512-pixel-pitch scratch buffer for every character. Keep a ring of compact
+	 * GS destinations so up to 32 glyph upload+draw pairs can stay in one gsKit
+	 * queue. This avoids both a full GS FINISH per character and the historical
+	 * 512x48 upload for a ~10x14 glyph. */
+	for (i = 0; i < PS2_UI_FONT_RING_SIZE; i++)
+	{
+		ps2_ui_font_ring_entry_t *entry = &ps2_ui.font_ring[i];
+		size_t upload_size =
+			(size_t)PS2_UI_FONT_RING_WIDTH * PS2_UI_FONT_RING_HEIGHT * sizeof(uint32_t);
+
+		memset(&entry->texture, 0, sizeof(entry->texture));
+		entry->texture.Width = PS2_UI_FONT_RING_WIDTH;
+		entry->texture.Height = PS2_UI_FONT_RING_HEIGHT;
+		entry->texture.PSM = GS_PSM_CT32;
+		entry->texture.Filter = GS_FILTER_NEAREST;
+		entry->texture.Vram = gsKit_vram_alloc(ps2_ui.gsGlobal,
+			gsKit_texture_size(entry->texture.Width, entry->texture.Height,
+				entry->texture.PSM),
+			GSKIT_ALLOC_USERBUFFER);
+		if (entry->texture.Vram == GSKIT_ALLOC_ERROR) {
+			entry->texture.Vram = 0;
+			ps2_ui_release_buffers(&ps2_ui);
+			return NULL;
+		}
+		gsKit_setup_tbw(&entry->texture);
+
+		entry->upload_buffer = (uint32_t *)memalign(64, upload_size);
+		if (!entry->upload_buffer) {
+			ps2_ui_release_buffers(&ps2_ui);
+			return NULL;
+		}
+		memset(entry->upload_buffer, 0, upload_size);
+	}
+	ps2_ui.font_ring_next = 0;
+
 	return &ps2_ui;
 }
 
@@ -200,6 +247,13 @@ static void ps2_ui_release_buffers(ps2_ui_data_t *d)
 		d->textures[i].buffer_valid = 0;
 		d->textures[i].vram_valid = 0;
 	}
+
+	for (i = 0; i < PS2_UI_FONT_RING_SIZE; i++)
+	{
+		free(d->font_ring[i].upload_buffer);
+		d->font_ring[i].upload_buffer = NULL;
+		d->font_ring[i].texture.Mem = NULL;
+	}
 }
 
 /* Convert one row of 16-bit ABGR4444 / ABGR1555 to 32-bit ABGR8888. */
@@ -263,6 +317,20 @@ static void expand_buffer_to_upload(ps2_ui_texture_t *tex)
 				(w - copy_w) * 4);
 	}
 	(void)h;
+}
+
+static void expand_region_to_upload(ps2_ui_texture_t *tex,
+	uint32_t *dst, int width, int height)
+{
+	int y;
+
+	if (!tex || !tex->buffer || !dst || width <= 0 || height <= 0)
+		return;
+
+	for (y = 0; y < height; y++)
+		convert_row_to_8888(dst + (size_t)y * width,
+			tex->buffer + (size_t)y * tex->pitch,
+			width, tex->format);
 }
 
 static void ps2_ui_draw_term(void *data)
@@ -382,6 +450,41 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	if (!gst->Vram || !tex->buffer || !tex->upload_buffer || !gst->Mem)
 		return;
 
+	if (slot == UI_TEXTURE_FONT && su == 0 && sv == 0 &&
+	    sw > 0 && sh > 0 &&
+	    sw <= PS2_UI_FONT_RING_WIDTH && sh <= PS2_UI_FONT_RING_HEIGHT)
+	{
+		ps2_ui_font_ring_entry_t *entry =
+			&d->font_ring[d->font_ring_next];
+		size_t upload_size = (size_t)sw * sh * sizeof(uint32_t);
+
+		expand_region_to_upload(tex, entry->upload_buffer, sw, sh);
+		SyncDCache(entry->upload_buffer,
+			(uint8_t *)entry->upload_buffer + upload_size);
+		gsKit_texture_send_inline(gsGlobal, (u32 *)entry->upload_buffer,
+			sw, sh, entry->texture.Vram,
+			entry->texture.PSM, entry->texture.TBW, GS_CLUT_NONE);
+
+		(void)color;
+		video_driver->drawUISprite(d->video_data, &entry->texture,
+			entry->texture.PSM, 0,
+			entry->texture.Width, entry->texture.Height,
+			entry->texture.Width,
+			su, sv, sw, sh, dx, dy, dw, dh, blend);
+
+		d->font_ring_next++;
+		if (d->font_ring_next == PS2_UI_FONT_RING_SIZE) {
+			/* Submit a whole glyph batch at once. gsKit will wait for the
+			 * previous batch's FINISH before these ring slots are reused; only
+			 * the much shorter GIF DMA must complete before CPU buffers can be
+			 * overwritten. */
+			gsKit_queue_exec(gsGlobal);
+			dmaKit_wait_fast();
+			d->font_ring_next = 0;
+		}
+		return;
+	}
+
 	/* Lazy upload: any path that mutates the CPU buffer (uploadTexture,
 	 * clearTexture, getTextureBasePtr) clears vram_valid. Expand the
 	 * 16-bit ABGR4444/1555 staging buffer into 32-bit ABGR8888 (PS2 has
@@ -392,12 +495,27 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	 * be uploaded on every draw (same policy as the Desktop backend). */
 	if (tex->buffer_valid && (!tex->vram_valid || slot == UI_TEXTURE_FONT))
 	{
-		expand_buffer_to_upload(tex);
-		size_t upload_size = gsKit_texture_size_ee(gst->Width, gst->Height, gst->PSM);
-		SyncDCache(gst->Mem, (uint8_t *)gst->Mem + upload_size);
-		gsKit_texture_send_inline(gsGlobal, gst->Mem,
-			gst->Width, gst->Height, gst->Vram,
-			gst->PSM, gst->TBW, GS_CLUT_NONE);
+		if (slot == UI_TEXTURE_FONT && su == 0 && sv == 0 &&
+		    sw > 0 && sh > 0 && sw <= gst->Width && sh <= gst->Height)
+		{
+			size_t upload_size = (size_t)sw * sh * sizeof(uint32_t);
+			expand_region_to_upload(tex, tex->upload_buffer, sw, sh);
+			SyncDCache(tex->upload_buffer,
+				(uint8_t *)tex->upload_buffer + upload_size);
+			gsKit_texture_send_inline(gsGlobal, (u32 *)tex->upload_buffer,
+				sw, sh, gst->Vram,
+				gst->PSM, gst->TBW, GS_CLUT_NONE);
+		}
+		else
+		{
+			expand_buffer_to_upload(tex);
+			size_t upload_size =
+				gsKit_texture_size_ee(gst->Width, gst->Height, gst->PSM);
+			SyncDCache(gst->Mem, (uint8_t *)gst->Mem + upload_size);
+			gsKit_texture_send_inline(gsGlobal, gst->Mem,
+				gst->Width, gst->Height, gst->Vram,
+				gst->PSM, gst->TBW, GS_CLUT_NONE);
+		}
 		tex->vram_valid = 1;
 	}
 
@@ -407,12 +525,12 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 		gst->Width, gst->Height, gst->Width,
 		su, sv, sw, sh, dx, dy, dw, dh, blend);
 
-	/* The font scratch buffer is rewritten between glyphs (always at UV 0,0),
-	 * so its upload+draw must complete before the next glyph overwrites the
-	 * same VRAM area. Static UI atlases do not need this per-sprite stall. */
+	/* Oversized scratch draws (primarily the NJEMU logo) still use the legacy
+	 * single texture, so flush before common/ui_draw.c rewrites that same upload
+	 * buffer. Normal text takes the batched ring path above. */
 	if (slot == UI_TEXTURE_FONT) {
 		gsKit_queue_exec(gsGlobal);
-		gsKit_finish();
+		dmaKit_wait_fast();
 	}
 }
 

@@ -17,6 +17,11 @@ static const char *inifile_name = "ncdzpsp.ini";
 #elif defined(INCLUDE_CONFIG_STRUCT)
 
 #define DEFAULT_SAMPLERATE	1	// 22050Hz
+#if defined(PS2)
+#define DEFAULT_STRETCH		5	// Fill the PS2 output width using the 16:9 preset
+#else
+#define DEFAULT_STRETCH		4
+#endif
 
 /******************************************************************************
 	˜‹ÔìÌå
@@ -33,7 +38,7 @@ static cfg_type gamecfg_ncdz[] =
 	{ CFG_BOOL,	"CDROMSpeedLimit",		&neogeo_cdspeed_limit,	0,	1	},
 
 	{ CFG_NONE,	"[Video Settings]", },
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	5	},
+	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	1	},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	},
@@ -89,6 +94,8 @@ static cfg_type gamecfg_ncdz[] =
 
 	{ CFG_NONE, NULL, }
 };
+
+#undef DEFAULT_STRETCH
 
 #elif defined(INCLUDE_SETUP_CONFIG_STRUCT)
 
