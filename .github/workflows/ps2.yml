@@ -61,7 +61,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash cmake
+        apk add build-base git bash cmake python3
 
     - name: Compile project
       run: |

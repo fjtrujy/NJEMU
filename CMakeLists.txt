@@ -780,3 +780,11 @@ endif()
 install(DIRECTORY ${RESOURCE_DIR}
     DESTINATION .
 )
+
+# Translation packs are generated build artifacts shared by every platform.
+# Keep them as a separate install component so packaging validation does not
+# need to copy the user's potentially large ROM/cache resource tree.
+install(FILES ${TRANSLATION_PACKS}
+    DESTINATION lang
+    COMPONENT translations
+)

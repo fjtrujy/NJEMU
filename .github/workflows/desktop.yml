@@ -70,6 +70,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends \
           build-essential \
           git \
+          python3 \
           wget \
           unzip \
           libbz2-dev \

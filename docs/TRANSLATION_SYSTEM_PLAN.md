@@ -651,6 +651,22 @@ Validate relative paths on:
 Do not place generated/test catalogs under the user's `resources/` tree
 during development. Use isolated build/runtime directories for smoke tests.
 
+T7 packaging status (2026-09-21): implemented. CMake installs the five
+generated packs as a dedicated `translations` component under `lang/` for
+Desktop, PS2 and PSP, while the legacy PSP Makefile now builds the same packs
+and the legacy PSP artifact workflow uploads `lang/` alongside `EBOOT.PBP`.
+The CMake PSP/PS2 container workflows and Ubuntu Desktop workflow explicitly
+provide Python 3 for build-time pack generation. Isolated component installs
+for Desktop and PS2 produced exactly the required five files with byte-identical
+hashes and without copying/touching `resources/`. A Desktop runtime smoke passed
+text initialization from a build root containing `lang/`. A PCSX2 smoke mapped
+`host:` to the PS2 build root, executed the new ELF for ~7 seconds and remained
+alive through initialization with the adjacent `lang/` directory present. The
+legacy PSP Makefile pack target was syntax/generation-smoke-tested locally using
+a stub SDK include. Native PSP/PPSSPP and native PS2 hardware path validation
+remain external checks because a local PSP toolchain and connected consoles are
+not available in this session.
+
 ### T8 - Memory/performance verification
 
 For PS2 and PSP, record:
