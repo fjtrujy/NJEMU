@@ -447,6 +447,13 @@ apparently originating from a UTF-8 middle dot. Encoding Phase 2 deliberately
 keeps those bytes escaped rather than silently changing runtime output; any
 semantic correction belongs to the later renderer/content migration.
 
+Japanese source normalization status (2026-09-21): `ja.lang` is now readable
+UTF-8. All 5776 hexadecimal byte escapes were removed in favor of literal
+Unicode text while preserving graphic/control tokens. The regenerated
+`ja.lng` is byte-identical to the pre-normalization baseline and retains
+SHA-256 `9a39ba63d7962e515480fec74179f2461d8fcf9edc409fb5681874e719c9ee06`.
+The 24 translation tests remain green.
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the
