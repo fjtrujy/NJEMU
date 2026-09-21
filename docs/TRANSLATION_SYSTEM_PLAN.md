@@ -811,20 +811,19 @@ Acceptance target:
 - no recurring file I/O during GUI rendering;
 - clear net RAM reduction over the current implementation.
 
-T8 status (2026-09-21): PS2 measurement completed and documented in
-`docs/TRANSLATION_T8_MEASUREMENTS.md`. A clean pre-migration snapshot at
-`e56539d` was rebuilt with the current PS2 toolchain and compared against the
-post-migration builds. The actual `text+data+bss` image shrinks by 19,640 B
-(CPS1), 22,224 B (CPS2), 24,328 B (MVS) and 21,208 B (NCDZ). The English
-catalog is one 7456-byte PS2 allocation; after accounting for the old ~1512-byte
-pointer table this still leaves a conservative net RAM saving of about 13.7-18.4
-KiB depending on core. A temporary PCSX2 probe measured English pack loading at
-~2.05 ms with an 8192-byte heap-break increment (allocator granularity), and
-was removed after measurement. Runtime lookup is pure in-memory O(1) with no
-recurring I/O. PSP cross-compilation and PPSSPP runtime loading are now also
-validated; English remains one 7456-byte catalog allocation on the 32-bit PSP
-ABI. Real-PSP free-RAM/timing measurement is optional performance follow-up,
-not a blocker for the translation migration.
+T8 final status (2026-09-21): refreshed after UTF-8 V2 and documented in
+`docs/TRANSLATION_T8_MEASUREMENTS.md`. The clean pre-migration snapshot at
+`e56539d` was rebuilt with the current PS2 and PSP toolchains and compared with
+the final Phase 3 implementation. PS2 `text+data+bss` shrinks by 16,096-20,784
+B depending on core; PSP shrinks by 16,168-19,764 B. V2 resident catalog
+allocations range from 6,789 B (Traditional Chinese) to 11,541 B (Japanese).
+After accounting for the old ~1,512-byte pointer-copy heap, every core still
+saves RAM even with the largest catalog: 6,067-10,755 B on PS2 and
+6,139-9,735 B on PSP. PRX size also falls by 26,160-31,576 B across PSP cores.
+The original PCSX2 external-pack I/O probe remains ~2.05 ms for English; V2
+adds no recurring I/O. Runtime catalog lookup remains O(1); UTF-8 decoding only
+occurs during text measure/draw. Real-hardware free-RAM/storage timing remains
+optional performance follow-up, not a migration blocker.
 
 ### T9 - Cross-build fragility matrix
 
