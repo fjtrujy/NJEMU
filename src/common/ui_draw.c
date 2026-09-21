@@ -14,6 +14,8 @@
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
 #include "common/ui.h"
+#include "common/ui_unicode_glyph.h"
+#include "common/ui_utf8.h"
 #include "stdarg.h"
 
 
@@ -636,28 +638,61 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 	Font code lookup (user interface)
 ------------------------------------------------------*/
 
-static inline uint16_t uifont_get_code(const uint8_t *s, int *type)
+static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance)
 {
 	uint8_t c1 = s[0];
 	uint8_t c2 = s[1];
+	uint32_t codepoint;
+	uint16_t glyph;
+	size_t consumed;
 
-	if (isgbk1(c1) && isgbk2(c2))
-	{
-		*type = FONT_TYPE_GBKSIMHEI;
-		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
-	}
-	else if (isprintascii(c1))
-	{
-		*type = FONT_TYPE_ASCII;
-		return c1 - 0x20;
-	}
-	else if ((c1 >= 0x10 && c1 <= 0x1e) && c1 != 0x1a)
+	*advance = 1;
+
+	/* Preserve legacy in-process graphic control strings such as FONT_CIRCLE. */
+	if ((c1 >= 0x10 && c1 <= 0x1e) && c1 != 0x1a)
 	{
 		*type = FONT_TYPE_GRAPHIC;
 		if (c1 < 0x1a)
 			return c1 - 0x10;
-		else
-			return c1 - 0x11;
+		return c1 - 0x11;
+	}
+	if (isprintascii(c1))
+	{
+		*type = FONT_TYPE_ASCII;
+		return c1 - 0x20;
+	}
+	if (c1 < 0x80)
+	{
+		*type = FONT_TYPE_CONTROL;
+		return c1;
+	}
+
+	consumed = ui_utf8_decode(s, &codepoint);
+	if (consumed != 0)
+	{
+		*advance = (int)consumed;
+		if (codepoint >= 0xe000u && codepoint <= 0xe00eu && codepoint != 0xe00au)
+		{
+			uint16_t graphic = (uint16_t)(codepoint - 0xe000u);
+			*type = FONT_TYPE_GRAPHIC;
+			return graphic < 0x0au ? graphic : graphic - 1u;
+		}
+		if (ui_unicode_glyph_lookup(codepoint, &glyph))
+		{
+			*type = FONT_TYPE_GBKSIMHEI;
+			return glyph;
+		}
+		/* Valid but unsupported Unicode: render a visible replacement. */
+		*type = FONT_TYPE_ASCII;
+		return '?' - 0x20;
+	}
+
+	/* Compatibility path for legacy GBK resource metadata and filenames. */
+	if (isgbk1(c1) && isgbk2(c2))
+	{
+		*advance = 2;
+		*type = FONT_TYPE_GBKSIMHEI;
+		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
 	}
 	*type = FONT_TYPE_CONTROL;
 	return c1;
@@ -670,7 +705,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type)
 
 int uifont_get_string_width(const char *s)
 {
-	int width, type;
+	int width, type, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 
@@ -678,28 +713,28 @@ int uifont_get_string_width(const char *s)
 
 	while (*p)
 	{
-		if ((code = uifont_get_code(p, &type)) != CODE_NOTFOUND)
+		if ((code = uifont_get_code(p, &type, &advance)) != CODE_NOTFOUND)
 		{
 			switch (type)
 			{
 			case FONT_TYPE_ASCII:
 				width += ascii_14p_get_pitch(code);
-				p++;
+					p += advance;
 				break;
 
 			case FONT_TYPE_GRAPHIC:
 				width += graphic_font_get_pitch(code);
-				p++;
+					p += advance;
 				break;
 
 			case FONT_TYPE_GBKSIMHEI:
 				width += gbk_s14p_get_pitch(code);
-				p += 2;
+					p += advance;
 				break;
 
 			case FONT_TYPE_CONTROL:
 				width += ascii_14p_get_pitch(0);
-				p++;
+					p += advance;
 				break;
 			}
 		}
@@ -943,7 +978,7 @@ static int internal_light_putc(struct font_t *font, int sx, int sy)
 
 static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *s)
 {
-	int type, res = 1;
+	int type, res = 1, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 	struct font_t font;
@@ -954,7 +989,7 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 
 	while (*p && res)
 	{
-		code = uifont_get_code(p, &type);
+		code = uifont_get_code(p, &type, &advance);
 
 		switch (type)
 		{
@@ -964,7 +999,7 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
-			p++;
+				p += advance;
 			break;
 
 		case FONT_TYPE_GRAPHIC:
@@ -973,7 +1008,7 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
-			p++;
+				p += advance;
 			break;
 
 		case FONT_TYPE_GBKSIMHEI:
@@ -982,11 +1017,11 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
-			p += 2;
+				p += advance;
 			break;
 
 		default:
-			p++;
+				p += advance;
 			break;
 		}
 	}
@@ -999,14 +1034,14 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 
 static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 {
-	int type, res = 1;
+	int type, res = 1, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 	struct font_t font;
 
 	while (*p && res)
 	{
-		code = uifont_get_code(p, &type);
+		code = uifont_get_code(p, &type, &advance);
 
 		switch (type)
 		{
@@ -1016,7 +1051,7 @@ static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
-			p++;
+				p += advance;
 			break;
 
 		case FONT_TYPE_GRAPHIC:
@@ -1025,7 +1060,7 @@ static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
-			p++;
+				p += advance;
 			break;
 
 		case FONT_TYPE_GBKSIMHEI:
@@ -1034,11 +1069,12 @@ static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
-			p += 2;
+				p += advance;
 			break;
 
 		default:
-			res = 0;
+				p += advance;
+				res = 0;
 			break;
 		}
 	}

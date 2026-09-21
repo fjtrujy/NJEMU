@@ -230,6 +230,9 @@ set(COMMON_SRC
 	    common/ui_language.h
 	    common/ui_text_catalog.h
 	    common/ui_text_catalog.c
+	    common/ui_utf8.h
+	    common/ui_utf8.c
+	    common/ui_unicode_glyph.h
     common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
@@ -543,6 +546,7 @@ add_executable(${TARGET}
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
+set(UI_UNICODE_GLYPH_SOURCE "${CMAKE_BINARY_DIR}/generated/ui_unicode_glyph.c")
 set(TRANSLATION_PACKS
     "${TRANSLATION_PACK_DIR}/en.lng"
     "${TRANSLATION_PACK_DIR}/ja.lng"
@@ -551,14 +555,17 @@ set(TRANSLATION_PACKS
     "${TRANSLATION_PACK_DIR}/zh-Hant.lng"
 )
 add_custom_command(
-    OUTPUT ${TRANSLATION_PACKS}
+    OUTPUT ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${TRANSLATION_PACK_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/generated"
     COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
         --build
         --output-dir "${TRANSLATION_PACK_DIR}"
+        --unicode-map-output "${UI_UNICODE_GLYPH_SOURCE}"
     DEPENDS
         "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+        "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         "${CMAKE_SOURCE_DIR}/translations/messages.def"
         "${CMAKE_SOURCE_DIR}/translations/en.lang"
         "${CMAKE_SOURCE_DIR}/translations/ja.lang"
@@ -568,8 +575,12 @@ add_custom_command(
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     VERBATIM
 )
-add_custom_target(translation_packs ALL DEPENDS ${TRANSLATION_PACKS})
+add_custom_target(translation_packs ALL DEPENDS ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}")
 add_dependencies(${TARGET} translation_packs)
+if(GUI)
+    set_source_files_properties("${UI_UNICODE_GLYPH_SOURCE}" PROPERTIES GENERATED TRUE)
+    target_sources(${TARGET} PRIVATE "${UI_UNICODE_GLYPH_SOURCE}")
+endif()
 
 # Add the warning flags
 if (USE_ASAN)
@@ -759,6 +770,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_executable(ui_text_catalog_tests
         tests/ui_text_catalog_tests.c
         src/common/ui_text_catalog.c
+        src/common/ui_utf8.c
     )
     target_include_directories(ui_text_catalog_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -768,6 +780,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_dependencies(ui_text_catalog_tests translation_packs)
     add_test(NAME ui_text_catalog_tests COMMAND ui_text_catalog_tests)
+
+    add_executable(ui_utf8_tests
+        tests/ui_utf8_tests.c
+        src/common/ui_utf8.c
+    )
+    target_include_directories(ui_utf8_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_utf8_tests COMMAND ui_utf8_tests)
 
     if(Python3_Interpreter_FOUND)
         add_test(

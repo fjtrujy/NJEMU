@@ -529,6 +529,17 @@ The four deliberately preserved `c2 b7` sequences from Phase 2 can now be
 normalized to the intended middle dot `·`, because V2 no longer promises
 byte-level compatibility with the V1 string payload.
 
+Phase 3 UTF-8 runtime milestone status (2026-09-21): implemented `.lng` V2
+with validated UTF-8 payloads, PUA-encoded graphic tokens, strict runtime
+UTF-8 validation and a compact generated Unicode-to-glyph lookup. The shipped
+catalogs currently require 558 non-ASCII glyph mappings. `uifont_*` decodes
+UTF-8 directly and retains the old GBK path only as a compatibility fallback
+for non-translation strings. The four Phase 2 `c2 b7` escapes were normalized
+to literal `·`. Validation passes 27/27 Python translation tests and 6/6
+Desktop CTest targets; feature-rich MVS builds also succeed on PS2 and PSP.
+Relative to the Phase 2 MVS baseline, the UTF-8 decoder and compact lookup add
+about 3.6 KiB to the PS2 executable and 2.9 KiB to the PSP EBOOT.
+
 ## Migration plan
 
 ### T0 - Capture the current contract

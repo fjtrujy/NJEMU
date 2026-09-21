@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "ui_text_catalog.h"
+#include "ui_utf8.h"
 
 #define UI_TEXT_PACK_HEADER_SIZE 20u
 
@@ -181,14 +182,21 @@ static ui_text_catalog_t *load_exact(const char *path, ui_language_t expected_la
 
 	for (i = 0; i < message_count; ++i) {
 		uint16_t offset = catalog->offsets[i];
+		const char *terminator;
 		if (offset == UI_TEXT_PACK_NULL_OFFSET)
 			continue;
 		if (offset >= blob_size) {
 			set_error(error, UI_TEXT_CATALOG_BAD_OFFSET);
 			goto fail;
 		}
-		if (memchr(catalog->strings + offset, '\0', blob_size - offset) == NULL) {
+		terminator = (const char *)memchr(catalog->strings + offset, '\0', blob_size - offset);
+		if (terminator == NULL) {
 			set_error(error, UI_TEXT_CATALOG_MISSING_TERMINATOR);
+			goto fail;
+		}
+		if (!ui_utf8_validate_n(catalog->strings + offset,
+			(size_t)(terminator - (catalog->strings + offset)))) {
+			set_error(error, UI_TEXT_CATALOG_BAD_UTF8);
 			goto fail;
 		}
 	}
@@ -293,6 +301,7 @@ const char *ui_text_catalog_error_string(ui_text_catalog_error_t error)
 	case UI_TEXT_CATALOG_OUT_OF_MEMORY: return "out of memory";
 	case UI_TEXT_CATALOG_BAD_OFFSET: return "bad offset";
 	case UI_TEXT_CATALOG_MISSING_TERMINATOR: return "missing NUL terminator";
+	case UI_TEXT_CATALOG_BAD_UTF8: return "invalid UTF-8";
 	default: return "unknown error";
 	}
 }

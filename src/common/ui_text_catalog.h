@@ -15,7 +15,7 @@
 #include "ui_language.h"
 #include "ui_text_ids.h"
 
-#define UI_TEXT_PACK_VERSION 1u
+#define UI_TEXT_PACK_VERSION 2u
 #define UI_TEXT_PACK_NULL_OFFSET 0xffffu
 #define UI_TEXT_PACK_MAX_BLOB_SIZE 65534u
 
@@ -33,7 +33,8 @@ typedef enum ui_text_catalog_error
 	UI_TEXT_CATALOG_BAD_SCHEMA,
 	UI_TEXT_CATALOG_OUT_OF_MEMORY,
 	UI_TEXT_CATALOG_BAD_OFFSET,
-	UI_TEXT_CATALOG_MISSING_TERMINATOR
+	UI_TEXT_CATALOG_MISSING_TERMINATOR,
+	UI_TEXT_CATALOG_BAD_UTF8
 } ui_text_catalog_error_t;
 
 typedef struct ui_text_catalog ui_text_catalog_t;

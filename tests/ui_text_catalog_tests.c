@@ -58,6 +58,11 @@ static uint32_t read_u32le(const unsigned char *data)
 		| ((uint32_t)data[3] << 24);
 }
 
+static uint16_t read_u16le(const unsigned char *data)
+{
+	return (uint16_t)(data[0] | ((uint16_t)data[1] << 8));
+}
+
 static void write_u16le(unsigned char *data, uint16_t value)
 {
 	data[0] = (unsigned char)(value & 0xffu);
@@ -208,10 +213,12 @@ static void test_corrupt_catalogs(void)
 	unsigned char schema[4];
 	unsigned char offset[2];
 	unsigned char noop = 0;
+	unsigned char invalid_utf8 = 0xff;
 	char source[1024];
 	size_t size;
 	unsigned char *data;
 	uint32_t blob_size;
+	uint16_t please_wait_offset;
 
 	assert_corrupt_english_rejected(0, magic, sizeof(magic), UI_TEXT_CATALOG_BAD_MAGIC, 0);
 	write_u32le(schema, UI_TEXT_SCHEMA_HASH ^ 1u);
@@ -220,11 +227,15 @@ static void test_corrupt_catalogs(void)
 	source_pack_path(source, sizeof(source));
 	data = read_file(source, &size);
 	blob_size = read_u32le(data + 12);
+	please_wait_offset = read_u16le(data + PACK_HEADER_SIZE + PLEASE_WAIT * 2u);
 	free(data);
 	write_u16le(offset, (uint16_t)blob_size);
 	assert_corrupt_english_rejected(PACK_HEADER_SIZE, offset, sizeof(offset),
 		UI_TEXT_CATALOG_BAD_OFFSET, 0);
 	assert_corrupt_english_rejected(0, &noop, 0, UI_TEXT_CATALOG_BAD_SIZE, 1);
+	assert_corrupt_english_rejected(
+		PACK_HEADER_SIZE + UI_TEXT_MAX * 2u + please_wait_offset,
+		&invalid_utf8, sizeof(invalid_utf8), UI_TEXT_CATALOG_BAD_UTF8, 0);
 }
 
 static void test_missing_english_fails(void)

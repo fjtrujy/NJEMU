@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TRANSLATIONS_DIR = ROOT / "translations"
+GBK_TABLE_SOURCE = ROOT / "src/common/font/gbk_tbl.c"
 LANGUAGE_FILES = {
     "en": "en.lang",
     "ja": "ja.lang",
@@ -19,17 +20,10 @@ LANGUAGE_FILES = {
     "zh-Hans": "zh-Hans.lang",
     "zh-Hant": "zh-Hant.lang",
 }
-LEGACY_ENCODINGS = {
-    "en": "gbk",
-    "ja": "gbk",
-    "es": "gbk",
-    "zh-Hans": "gbk",
-    "zh-Hant": "gbk",
-}
 NULL_MARKER = "<NULL>"
 
 PACK_MAGIC = b"NJTL"
-PACK_VERSION = 1
+PACK_VERSION = 2
 PACK_NULL_OFFSET = 0xFFFF
 PACK_MAX_BLOB_SIZE = PACK_NULL_OFFSET - 1
 PACK_HEADER = struct.Struct("<4sHHHHII")
@@ -42,20 +36,20 @@ LANGUAGE_IDS = {
 }
 
 GRAPHIC_TOKENS = {
-    "<UPARROW>": b"\x10",
-    "<DOWNARROW>": b"\x11",
-    "<LEFTARROW>": b"\x12",
-    "<RIGHTARROW>": b"\x13",
-    "<CIRCLE>": b"\x14",
-    "<CROSS>": b"\x15",
-    "<SQUARE>": b"\x16",
-    "<TRIANGLE>": b"\x17",
-    "<LTRIGGER>": b"\x18",
-    "<RTRIGGER>": b"\x19",
-    "<UPTRIANGLE>": b"\x1b",
-    "<DOWNTRIANGLE>": b"\x1c",
-    "<LEFTTRIANGLE>": b"\x1d",
-    "<RIGHTTRIANGLE>": b"\x1e",
+    "<UPARROW>": 0xE000,
+    "<DOWNARROW>": 0xE001,
+    "<LEFTARROW>": 0xE002,
+    "<RIGHTARROW>": 0xE003,
+    "<CIRCLE>": 0xE004,
+    "<CROSS>": 0xE005,
+    "<SQUARE>": 0xE006,
+    "<TRIANGLE>": 0xE007,
+    "<LTRIGGER>": 0xE008,
+    "<RTRIGGER>": 0xE009,
+    "<UPTRIANGLE>": 0xE00B,
+    "<DOWNTRIANGLE>": 0xE00C,
+    "<LEFTTRIANGLE>": 0xE00D,
+    "<RIGHTTRIANGLE>": 0xE00E,
 }
 PRINTF_RE = re.compile(
     rb"%(?:[-+ #0]*)(?:\*|\d+)?(?:\.(?:\*|\d+))?"
@@ -92,7 +86,7 @@ def parse_stable_manifest(text: str) -> list[str]:
     return names
 
 
-def decode_source_value(text: str, context: str, legacy_encoding: str) -> bytes | None:
+def decode_source_value(text: str, context: str) -> bytes | None:
     if text == NULL_MARKER:
         return None
 
@@ -106,19 +100,14 @@ def decode_source_value(text: str, context: str, legacy_encoding: str) -> bytes 
                 raise TranslationError(f"{context}: unterminated graphic token")
             token = text[index : end + 1]
             try:
-                out.extend(GRAPHIC_TOKENS[token])
+                out.extend(chr(GRAPHIC_TOKENS[token]).encode("utf-8"))
             except KeyError as exc:
                 raise TranslationError(f"{context}: unknown graphic token {token!r}") from exc
             index = end + 1
             continue
 
         if char != "\\":
-            try:
-                out.extend(char.encode(legacy_encoding))
-            except UnicodeEncodeError as exc:
-                raise TranslationError(
-                    f"{context}: character {char!r} cannot be encoded as {legacy_encoding}"
-                ) from exc
+            out.extend(char.encode("utf-8"))
             index += 1
             continue
 
@@ -144,7 +133,13 @@ def decode_source_value(text: str, context: str, legacy_encoding: str) -> bytes 
             digits = text[index + 2 : index + 4]
             if len(digits) != 2 or not re.fullmatch(r"[0-9a-fA-F]{2}", digits):
                 raise TranslationError(f"{context}: \\x escape must contain exactly two hex digits")
-            out.append(int(digits, 16))
+            byte = int(digits, 16)
+            if byte >= 0x80:
+                raise TranslationError(
+                    f"{context}: high-byte \\x{digits} escape is not valid UTF-8 source; "
+                    "use the literal Unicode character"
+                )
+            out.append(byte)
             index += 4
             continue
         raise TranslationError(f"{context}: unsupported escape \\{escape}")
@@ -152,9 +147,7 @@ def decode_source_value(text: str, context: str, legacy_encoding: str) -> bytes 
     return bytes(out)
 
 
-def parse_language_source(
-    path: Path, legacy_encoding: str
-) -> tuple[list[str], dict[str, bytes | None]]:
+def parse_language_source(path: Path) -> tuple[list[str], dict[str, bytes | None]]:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
@@ -174,9 +167,7 @@ def parse_language_source(
             raise TranslationError(f"{path}:{line_no}: invalid key {key!r}")
         if key in values:
             raise TranslationError(f"{path}:{line_no}: duplicate key {key}")
-        values[key] = decode_source_value(
-            encoded, f"{path}:{line_no} ({key})", legacy_encoding
-        )
+        values[key] = decode_source_value(encoded, f"{path}:{line_no} ({key})")
         order.append(key)
     return order, values
 
@@ -217,9 +208,7 @@ def load_and_validate_sources(
     catalogs: dict[str, dict[str, bytes | None]] = {}
 
     for language, filename in LANGUAGE_FILES.items():
-        order, catalog = parse_language_source(
-            directory / filename, LEGACY_ENCODINGS[language]
-        )
+        order, catalog = parse_language_source(directory / filename)
         actual = set(catalog)
         missing = [name for name in names if name not in actual]
         unknown = sorted(actual - expected)
@@ -242,6 +231,7 @@ def load_and_validate_sources(
                     f"English {expected_contract}"
                 )
 
+    required_unicode_glyphs(catalogs)
     return names, catalogs
 
 
@@ -254,6 +244,119 @@ def schema_hash(names: list[str]) -> int:
             value ^= byte
             value = (value * 0x01000193) & 0xFFFFFFFF
     return value
+
+
+def load_gbk_unicode_glyph_map(path: Path = GBK_TABLE_SOURCE) -> dict[int, int]:
+    try:
+        text = path.read_text(encoding="ascii")
+    except FileNotFoundError as exc:
+        raise TranslationError(f"missing GBK glyph table: {path}") from exc
+    try:
+        body = text.split("{", 1)[1].rsplit("}", 1)[0]
+    except IndexError as exc:
+        raise TranslationError(f"{path}: could not locate GBK glyph table initializer") from exc
+    values = [int(value, 16) for value in re.findall(r"0x([0-9A-Fa-f]{4})", body)]
+    if len(values) != 0x7DC0:
+        raise TranslationError(
+            f"{path}: expected 0x7dc0 GBK glyph entries, found {len(values)}"
+        )
+
+    mapping: dict[int, int] = {}
+    for index, glyph in enumerate(values):
+        if glyph == 0xFFFF:
+            continue
+        encoded = 0x8140 + index
+        pair = bytes(((encoded >> 8) & 0xFF, encoded & 0xFF))
+        try:
+            char = pair.decode("gbk")
+        except UnicodeDecodeError:
+            continue
+        if len(char) != 1 or char.encode("gbk") != pair:
+            continue
+        mapping[ord(char)] = glyph
+    return mapping
+
+
+def required_unicode_glyphs(
+    catalogs: dict[str, dict[str, bytes | None]],
+) -> list[tuple[int, int]]:
+    required: set[int] = set()
+    graphic_codepoints = set(GRAPHIC_TOKENS.values())
+    for language, catalog in catalogs.items():
+        for name, value in catalog.items():
+            if value is None:
+                continue
+            try:
+                text = value.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise TranslationError(f"{language}:{name}: value is not valid UTF-8") from exc
+            required.update(
+                ord(char)
+                for char in text
+                if ord(char) >= 0x80 and ord(char) not in graphic_codepoints
+            )
+
+    if not required:
+        return []
+    available = load_gbk_unicode_glyph_map()
+    missing = sorted(codepoint for codepoint in required if codepoint not in available)
+    if missing:
+        rendered = ", ".join(f"U+{codepoint:04X}" for codepoint in missing[:12])
+        if len(missing) > 12:
+            rendered += ", ..."
+        raise TranslationError(
+            f"translation font is missing {len(missing)} Unicode glyph(s): {rendered}"
+        )
+    return [(codepoint, available[codepoint]) for codepoint in sorted(required)]
+
+
+def render_unicode_glyph_source(entries: list[tuple[int, int]]) -> str:
+    rows = "\n".join(
+        f"\t{{ 0x{codepoint:04x}u, 0x{glyph:04x}u }}," for codepoint, glyph in entries
+    )
+    return f"""/* Generated by tools/build_translations.py; do not edit. */
+#include <stddef.h>
+#include <stdint.h>
+
+#include "common/ui_unicode_glyph.h"
+
+static const ui_unicode_glyph_entry_t ui_unicode_glyphs[] = {{
+{rows}
+}};
+
+int ui_unicode_glyph_lookup(uint32_t codepoint, uint16_t *glyph)
+{{
+\tsize_t lo = 0;
+\tsize_t hi = sizeof(ui_unicode_glyphs) / sizeof(ui_unicode_glyphs[0]);
+
+\twhile (lo < hi) {{
+\t\tsize_t mid = lo + (hi - lo) / 2;
+\t\tuint32_t candidate = ui_unicode_glyphs[mid].codepoint;
+\t\tif (candidate < codepoint)
+\t\t\tlo = mid + 1;
+\t\telse
+\t\t\thi = mid;
+\t}}
+\tif (lo >= sizeof(ui_unicode_glyphs) / sizeof(ui_unicode_glyphs[0])
+\t\t|| ui_unicode_glyphs[lo].codepoint != codepoint)
+\t\treturn 0;
+\tif (glyph != NULL)
+\t\t*glyph = ui_unicode_glyphs[lo].glyph;
+\treturn 1;
+}}
+"""
+
+
+def write_unicode_glyph_source(
+    output: Path,
+    catalogs: dict[str, dict[str, bytes | None]],
+) -> int:
+    entries = required_unicode_glyphs(catalogs)
+    data = render_unicode_glyph_source(entries)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if not output.exists() or output.read_text(encoding="utf-8") != data:
+        output.write_text(data, encoding="utf-8")
+    return len(entries)
 
 
 def build_pack(language: str, names: list[str], catalog: dict[str, bytes | None]) -> bytes:
@@ -270,19 +373,19 @@ def build_pack(language: str, names: list[str], catalog: dict[str, bytes | None]
             offsets.append(PACK_NULL_OFFSET)
             continue
         if b"\0" in value:
-            raise TranslationError(f"{language}:{name}: embedded NUL cannot be represented in .lng V1")
+            raise TranslationError(f"{language}:{name}: embedded NUL cannot be represented in .lng V2")
         if len(blob) > PACK_MAX_BLOB_SIZE:
-            raise TranslationError(f"{language}: string blob exceeds .lng V1 16-bit offset limit")
+            raise TranslationError(f"{language}: string blob exceeds .lng V2 16-bit offset limit")
         offsets.append(len(blob))
         blob.extend(value)
         blob.append(0)
 
     if len(blob) > PACK_MAX_BLOB_SIZE:
         raise TranslationError(
-            f"{language}: string blob is {len(blob)} bytes; .lng V1 allows at most {PACK_MAX_BLOB_SIZE}"
+            f"{language}: string blob is {len(blob)} bytes; .lng V2 allows at most {PACK_MAX_BLOB_SIZE}"
         )
     if len(names) > 0xFFFF:
-        raise TranslationError(".lng V1 allows at most 65535 message IDs")
+        raise TranslationError(".lng V2 allows at most 65535 message IDs")
 
     header = PACK_HEADER.pack(
         PACK_MAGIC,
@@ -304,7 +407,7 @@ def parse_pack(
     expected_language: str | None = None,
 ) -> tuple[int, list[bytes | None]]:
     if len(data) < PACK_HEADER.size:
-        raise TranslationError(".lng file is smaller than the V1 header")
+        raise TranslationError(".lng file is smaller than the V2 header")
 
     magic, version, language_id, count, reserved, blob_size, pack_schema = PACK_HEADER.unpack_from(data)
     if magic != PACK_MAGIC:
@@ -314,7 +417,7 @@ def parse_pack(
     if language_id not in LANGUAGE_IDS.values():
         raise TranslationError(f"invalid .lng language id {language_id}")
     if reserved != 0:
-        raise TranslationError(".lng V1 reserved header field must be zero")
+        raise TranslationError(".lng V2 reserved header field must be zero")
     if blob_size > PACK_MAX_BLOB_SIZE:
         raise TranslationError(f".lng string blob exceeds {PACK_MAX_BLOB_SIZE} bytes")
 
@@ -360,7 +463,12 @@ def parse_pack(
         terminator = blob.find(b"\0", offset)
         if terminator < 0:
             raise TranslationError(f".lng message {message_id} is not NUL-terminated")
-        values.append(blob[offset:terminator])
+        value = blob[offset:terminator]
+        try:
+            value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise TranslationError(f".lng message {message_id} is not valid UTF-8") from exc
+        values.append(value)
     return language_id, values
 
 
@@ -409,7 +517,7 @@ def main() -> int:
     parser.add_argument(
         "--build",
         action="store_true",
-        help="emit deterministic .lng V1 runtime packs after validation",
+        help="emit deterministic .lng V2 runtime packs after validation",
     )
     parser.add_argument(
         "--output-dir",
@@ -417,11 +525,21 @@ def main() -> int:
         default=ROOT / "build/translations/lang",
         help="output directory for generated .lng files",
     )
+    parser.add_argument(
+        "--unicode-map-output",
+        type=Path,
+        help="emit the compact generated Unicode-to-glyph C lookup",
+    )
     args = parser.parse_args()
 
     try:
         names, catalogs = load_and_validate_sources(args.translations_dir)
         pack_sizes = write_packs(args.output_dir, names, catalogs) if args.build else None
+        glyph_count = (
+            write_unicode_glyph_source(args.unicode_map_output, catalogs)
+            if args.unicode_map_output is not None
+            else None
+        )
     except TranslationError as exc:
         print(f"translation validation failed: {exc}", file=sys.stderr)
         return 1
@@ -436,7 +554,12 @@ def main() -> int:
         rendered_pack_sizes = ", ".join(
             f"{language}={size} B" for language, size in pack_sizes.items()
         )
-        print(f"generated .lng V1 packs in {args.output_dir}: {rendered_pack_sizes}")
+        print(f"generated .lng V2 packs in {args.output_dir}: {rendered_pack_sizes}")
+    if glyph_count is not None:
+        print(
+            f"generated Unicode glyph lookup with {glyph_count} entries "
+            f"at {args.unicode_map_output}"
+        )
     return 0
 
 

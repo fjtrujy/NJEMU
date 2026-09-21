@@ -40,18 +40,15 @@ class TranslationPackTests(unittest.TestCase):
 
     def test_generated_pack_hashes_are_stable(self) -> None:
         expected = {
-            "en": "e287d6a283585cfdd41664c8e1ea57ec5fc8adeb6595edec227447fff5c4c415",
-            "ja": "9a39ba63d7962e515480fec74179f2461d8fcf9edc409fb5681874e719c9ee06",
-            "es": "79c351b857be24740976851ee9e22888e1766e9d78fdd0cf7b2531c1d12aeadc",
-            "zh-Hans": "89d6a5682f35c4c308ed5fd63c6229d10642212df65c0e2ca9efb33fe15ca9a0",
-            "zh-Hant": "700ed7b48f33225abd672935e56cd72a6019978851e5f0ad90e06b7523d9ed2f",
+            "en": "fd246dc852220f2aa45ffbb4f4ff3ed19fb6781ca1958fe8df540e4c225905bf",
+            "ja": "6c6753cc90b068cca15baa43278431e868a03c6e70149b7282ab8b782c6556f6",
+            "es": "7d012bb9f0313078b26ee0456f1fb4316a7451edcaec10554515419499153c56",
+            "zh-Hans": "1dab29fd8bb2ebb4b2524bfaa0f55e127e04299cc26ab100897eb5ce39f4fd2a",
+            "zh-Hant": "75581ceac63d9167c7eda15556ed458ea23229ae75d9dd594859abe1991fcb33",
         }
         for language, digest in expected.items():
             with self.subTest(language=language):
-                self.assertEqual(
-                    sha256(self.make_pack(language)).hexdigest(),
-                    digest,
-                )
+                self.assertEqual(sha256(self.make_pack(language)).hexdigest(), digest)
 
     def test_schema_hash_is_stable(self) -> None:
         self.assertEqual(translations.schema_hash(self.names), 0x1ED49DE8)
@@ -108,7 +105,14 @@ class TranslationPackTests(unittest.TestCase):
         data[-1] = ord("X")
         self.assert_rejected(bytes(data), "NUL-terminated")
 
-    def test_rejects_v1_blob_overflow(self) -> None:
+    def test_rejects_invalid_utf8_payload(self) -> None:
+        data = bytearray(self.make_pack())
+        count = len(self.names)
+        blob_start = translations.PACK_HEADER.size + count * 2
+        data[blob_start] = 0xFF
+        self.assert_rejected(bytes(data), "valid UTF-8")
+
+    def test_rejects_v2_blob_overflow(self) -> None:
         names = ["ONLY"]
         catalog = {"ONLY": b"x" * translations.PACK_MAX_BLOB_SIZE}
         with self.assertRaisesRegex(translations.TranslationError, "allows at most"):
@@ -179,7 +183,7 @@ class TranslationSourceValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(translations.TranslationError, "unsupported escape"):
                 translations.load_and_validate_sources(root)
 
-    def test_utf8_source_is_transcoded_to_legacy_gbk(self) -> None:
+    def test_utf8_source_is_preserved_in_runtime_pack(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             values = {"ja": {"A": "しばらくお待ちください。"}}
@@ -187,24 +191,32 @@ class TranslationSourceValidationTests(unittest.TestCase):
             _names, catalogs = translations.load_and_validate_sources(root)
             self.assertEqual(
                 catalogs["ja"]["A"],
-                "しばらくお待ちください。".encode("gbk"),
+                "しばらくお待ちください。".encode("utf-8"),
             )
 
-    def test_exact_byte_escape_still_bypasses_transcoding(self) -> None:
-        self.assertEqual(
-            translations.decode_source_value(
-                r"NEO\xc2\xb7GEO", "test", "gbk"
-            ),
-            b"NEO\xc2\xb7GEO",
-        )
+    def test_high_byte_escape_is_rejected(self) -> None:
+        with self.assertRaisesRegex(translations.TranslationError, "not valid UTF-8 source"):
+            translations.decode_source_value(r"NEO\xc2\xb7GEO", "test")
 
-    def test_unencodable_utf8_character_fails(self) -> None:
+    def test_character_missing_from_font_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             values = {"ja": {"A": "emoji 😀"}}
             self.make_sources(root, ["A"], values)
-            with self.assertRaisesRegex(translations.TranslationError, "cannot be encoded as gbk"):
+            with self.assertRaisesRegex(translations.TranslationError, "font is missing"):
                 translations.load_and_validate_sources(root)
+
+    def test_graphic_token_uses_private_use_codepoint(self) -> None:
+        encoded = translations.decode_source_value("<CIRCLE> OK", "test")
+        self.assertEqual(encoded, "\ue004 OK".encode("utf-8"))
+
+    def test_unicode_glyph_map_covers_catalogs(self) -> None:
+        _names, catalogs = translations.load_and_validate_sources(ROOT / "translations")
+        entries = translations.required_unicode_glyphs(catalogs)
+        codepoints = {codepoint for codepoint, _glyph in entries}
+        self.assertIn(ord("し"), codepoints)
+        self.assertIn(ord("请"), codepoints)
+        self.assertIn(ord("·"), codepoints)
 
     def test_invalid_utf8_source_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
