@@ -8,6 +8,7 @@
 
 #include <limits.h>
 #include <stdarg.h>
+#include <strings.h>
 #include "emumain.h"
 #include "common/config.h"
 
