@@ -1,5 +1,5 @@
 # NJEMU translation source: en
-# Byte-exact legacy phase: keep this file ASCII; use \xNN for non-ASCII bytes.
+# UTF-8 source; literal Unicode is transcoded to legacy GBK runtime bytes.
 # Escapes: \n \r \t \0 \\ \xNN. END_OF_TEXT uses <NULL>.
 # Graphic tokens: <UPARROW> <DOWNARROW> <LEFTARROW> <RIGHTARROW> <CIRCLE> <CROSS> <SQUARE> <TRIANGLE> <LTRIGGER> <RTRIGGER> <UPTRIANGLE> <DOWNTRIANGLE> <LEFTTRIANGLE> <RIGHTTRIANGLE>
 
@@ -32,9 +32,9 @@ COMPLETE=Complete.
 DELETE_STATE_FILE=Delete state file.
 MP3_NOT_FOUND=MP3 files not found. CDDA cannot play.
 IPL_NOT_FOUND=IPL.TXT not found.
-BOOT_NEOCD_BIOS=Boot NEO\xa1\xa4GEO CDZ BIOS.
-NEOGEO_CDZ_BIOS_NOT_FOUND=NEO\xa1\xa4GEO CDZ BIOS (neocd.bin) not found.
-INVALID_NEOGEO_CDZ_BIOS_FOUND=Invalid NEO\xa1\xa4GEO CDZ BIOS found.
+BOOT_NEOCD_BIOS=Boot NEO·GEO CDZ BIOS.
+NEOGEO_CDZ_BIOS_NOT_FOUND=NEO·GEO CDZ BIOS (neocd.bin) not found.
+INVALID_NEOGEO_CDZ_BIOS_FOUND=Invalid NEO·GEO CDZ BIOS found.
 CANNOT_LAUNCH_GAME=Cannot launch game.
 HELP_TITLE=Help - %s
 HELP_NOT_USE=Not use

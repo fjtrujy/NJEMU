@@ -468,6 +468,14 @@ byte-identical to the pre-normalization baseline and retains SHA-256
 `700ed7b48f33225abd672935e56cd72a6019978851e5f0ad90e06b7523d9ed2f`.
 The 24 translation tests remain green.
 
+English source normalization status (2026-09-21): the three valid GBK
+`a1 a4` middle-dot sequences are now literal UTF-8 `·` in `en.lang`. The
+two legacy `c2 b7` sequences remain explicit hexadecimal escapes so their
+current runtime bytes are not reinterpreted or changed. The regenerated
+`en.lng` is byte-identical to the pre-normalization baseline and retains
+SHA-256 `e287d6a283585cfdd41664c8e1ea57ec5fc8adeb6595edec227447fff5c4c415`.
+The 24 translation tests remain green.
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the
