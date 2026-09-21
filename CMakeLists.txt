@@ -324,6 +324,13 @@ set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_thread.c
 )
 
+if (ADHOC AND PLATFORM STREQUAL "PSP")
+    set(OS_SRC ${OS_SRC}
+        psp/adhoc.h
+        psp/adhoc.c
+    )
+endif()
+
 # CPU source files
 include_directories(
     src/cpu/m68000
@@ -676,6 +683,14 @@ elseif(PLATFORM STREQUAL "PSP")
         pspwlan
         pspdebug
     )
+    if(ADHOC)
+        target_link_libraries(${TARGET} PUBLIC
+            pspnet
+            pspnet_adhoc
+            pspnet_adhocctl
+            pspnet_adhocmatching
+        )
+    endif()
 endif()
 
 # Add libmad library if needed
