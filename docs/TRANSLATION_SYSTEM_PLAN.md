@@ -461,6 +461,13 @@ byte-identical to the pre-normalization baseline and retains SHA-256
 `89d6a5682f35c4c308ed5fd63c6229d10642212df65c0e2ca9efb33fe15ca9a0`.
 The 24 translation tests remain green.
 
+Traditional Chinese source normalization status (2026-09-21): `zh-Hant.lang`
+is now readable UTF-8. All 2489 hexadecimal byte escapes were removed while
+preserving the runtime byte stream. The regenerated `zh-Hant.lng` is
+byte-identical to the pre-normalization baseline and retains SHA-256
+`700ed7b48f33225abd672935e56cd72a6019978851e5f0ad90e06b7523d9ed2f`.
+The 24 translation tests remain green.
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the
