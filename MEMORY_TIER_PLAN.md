@@ -1,5 +1,12 @@
 # Memory Tier System — Replacing `LARGE_MEMORY`
 
+> **Status note (2026-09-21):** the foundation and part of this migration are
+> already implemented. For the remaining work, use
+> `docs/REACTIVE_MEMORY_POLICY_PLAN.md` as the authoritative plan. It updates
+> this design from coarse tier-driven behaviour to a continuous runtime budget
+> based on free memory, largest contiguous allocation, game requirements and
+> deterministic fallback.
+
 ## Goal
 
 Remove the binary `LARGE_MEMORY` CMake flag and replace it with a **runtime tier-based memory profile** selected from the actual available RAM at startup. The profile drives cache sizing, preload strategy, and platform-specific allocation choices.
