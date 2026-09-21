@@ -723,9 +723,47 @@ cross-compiled successfully for PS2. CPS2/MVS cover the cache-enabled cores.
 Every Desktop and PS2 build generated a byte-identical five-pack set with the
 same aggregate SHA-256 digest. The Python translation suite now has 20 tests and
 explicitly covers the generator failure modes listed below, including V1 blob
-overflow and deterministic output. Native PSP/`ADHOC=ON` remains the only
-external build validation item because no PSP toolchain/runtime is available
-locally.
+overflow and deterministic output. The PSP CMake workflow now includes explicit
+`ADHOC=ON` builds for CPS1/CPS2/MVS, removes the stale duplicate `LARGE_MEMORY`
+axis, and validates that every installed PSP artifact contains exactly the five
+required `.lng` catalogs. Native execution of that matrix remains an external CI
+check because no PSP toolchain is installed locally.
+
+## Remaining closure checklist
+
+The storage/identity migration itself is implemented. The only remaining work
+needed to close T0-T9 is platform validation that cannot currently be performed
+on this workstation:
+
+1. **PSP CMake CI**
+   - run the updated PSP matrix in the `pspdev/pspdev` container;
+   - confirm CPS1/CPS2/MVS build with `ADHOC=ON` + `SAVE_STATE=ON`;
+   - confirm all four cores package exactly the same five `.lng` files.
+2. **PPSSPP runtime smoke**
+   - launch a PSP artifact from a directory containing its adjacent `lang/`;
+   - verify catalog initialization succeeds and the GUI reaches normal startup;
+   - test at least English plus one non-English system-language selection if the
+     PPSSPP system-language setting is available.
+3. **Real PSP measurement**
+   - record `pspSdkTotalFreeUserMemSize()` immediately before and after catalog
+     initialization;
+   - record catalog allocation size and load time;
+   - optionally record `sceKernelMaxFreeMemSize()` before/after to make sure the
+     one-allocation loader does not create an unexpected fragmentation issue.
+4. **Real PS2 storage smoke (optional but useful)**
+   - boot with `lang/` beside the ELF/package and confirm all five language files
+     resolve from the native storage path;
+   - record real-device catalog I/O time if desired. PCSX2 already validates the
+     relative-path/package layout.
+
+Once those checks pass, T0-T9 can be marked fully closed. They are validation
+tasks only; no known translation-system implementation work remains.
+
+The encoding work described earlier under **Encoding migration policy, Phase 2**
+is a separate follow-up project. It should start only after the external-pack
+runtime checks above are complete, because Phase 2 intentionally changes the
+editable source representation from byte-exact ASCII escapes toward UTF-8 while
+keeping legacy runtime bytes stable.
 
 ## Tests to add
 

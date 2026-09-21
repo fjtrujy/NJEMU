@@ -60,7 +60,7 @@ PS2SDK exposes physical RAM via `GetMemorySize()` but no reliable query for curr
 
 ## PSP status
 
-The same loader and pack format are shared by PSP, but native PSP compilation/runtime measurement is unavailable locally. PSP-specific free-RAM and startup-I/O figures remain external validation. PSP can use `sceKernelTotalFreeMemSize()` for a real before/after free-memory sample when hardware/toolchain validation is available.
+The same loader and pack format are shared by PSP, but native PSP compilation/runtime measurement is unavailable locally. PSP-specific free-RAM and startup-I/O figures remain external validation. PSP should use `pspSdkTotalFreeUserMemSize()` for real before/after user-memory samples, together with `sceKernelMaxFreeMemSize()` when the largest contiguous user block is relevant. `sceKernelTotalFreeMemSize()` is not the metric NJEMU wants for user-heap accounting.
 
 ## T8 acceptance
 
