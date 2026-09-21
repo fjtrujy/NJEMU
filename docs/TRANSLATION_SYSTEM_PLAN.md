@@ -476,6 +476,19 @@ current runtime bytes are not reinterpreted or changed. The regenerated
 SHA-256 `e287d6a283585cfdd41664c8e1ea57ec5fc8adeb6595edec227447fff5c4c415`.
 The 24 translation tests remain green.
 
+Spanish source normalization status (2026-09-21): the same three valid GBK
+`a1 a4` middle-dot sequences are now literal UTF-8 `·` in `es.lang`, while
+the two legacy `c2 b7` sequences remain explicit hexadecimal escapes. The
+regenerated `es.lng` is byte-identical to the pre-normalization baseline and
+retains SHA-256
+`79c351b857be24740976851ee9e22888e1766e9d78fdd0cf7b2531c1d12aeadc`.
+The 24 translation tests remain green.
+
+At this point all five editable catalogs are UTF-8 source files. Japanese and
+both Chinese catalogs contain no hexadecimal byte escapes. English and Spanish
+retain only the four deliberately preserved `c2 b7` sequences described
+above (two entries per language).
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the
