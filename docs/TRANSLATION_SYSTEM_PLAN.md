@@ -498,12 +498,36 @@ and PSP produces `EBOOT.PBP`. The five installed packs from every platform
 retain the locked SHA-256 hashes. No runtime renderer or binary pack-format
 change was required.
 
-### Phase 3: optional UTF-8 renderer
+### Phase 3: UTF-8 end-to-end
 
-Only after the storage migration is stable should NJEMU consider teaching the
-font renderer to consume UTF-8 directly.
+Encoding Phase 2 established a byte-exact baseline first. That intermediate
+state is intentionally temporary: the editable sources are UTF-8 but the
+generator still transcodes them back to GBK for the V1 runtime packs.
 
-That is a separate project and must not block this plan.
+Phase 3 removes that last encoding dependency:
+
+- `.lang` remains readable UTF-8;
+- `.lng` V2 stores validated UTF-8 strings directly;
+- graphic tokens are encoded as Unicode Private Use Area code points rather
+  than raw `0x10..0x1e` control bytes;
+- the UI renderer decodes UTF-8 and maps Unicode code points onto the existing
+  GBK-backed glyph bitmap data, so the large font asset itself does not need to
+  be replaced;
+- a compact generated Unicode -> glyph lookup contains only the characters
+  required by the shipped translation catalogs;
+- legacy GBK decoding remains as a compatibility fallback for non-translation
+  UI strings such as old resource metadata or filenames;
+- malformed UTF-8 packs are rejected by the runtime loader;
+- high-byte `\\xNN` escapes are removed from editable translation content.
+
+This design keeps the UTF-8 migration cheap in RAM: it reuses `gbk_s14` and the
+existing legacy GBK table for compatibility rather than adding a second
+full-Unicode font table. The generated Unicode lookup for translated strings is
+expected to be only a few KiB.
+
+The four deliberately preserved `c2 b7` sequences from Phase 2 can now be
+normalized to the intended middle dot `·`, because V2 no longer promises
+byte-level compatibility with the V1 string payload.
 
 ## Migration plan
 
