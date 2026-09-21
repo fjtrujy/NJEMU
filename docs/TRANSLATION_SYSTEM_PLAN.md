@@ -686,6 +686,19 @@ Acceptance target:
 - no recurring file I/O during GUI rendering;
 - clear net RAM reduction over the current implementation.
 
+T8 status (2026-09-21): PS2 measurement completed and documented in
+`docs/TRANSLATION_T8_MEASUREMENTS.md`. A clean pre-migration snapshot at
+`e56539d` was rebuilt with the current PS2 toolchain and compared against the
+post-migration builds. The actual `text+data+bss` image shrinks by 19,640 B
+(CPS1), 22,224 B (CPS2), 24,328 B (MVS) and 21,208 B (NCDZ). The English
+catalog is one 7456-byte PS2 allocation; after accounting for the old ~1512-byte
+pointer table this still leaves a conservative net RAM saving of about 13.7-18.4
+KiB depending on core. A temporary PCSX2 probe measured English pack loading at
+~2.05 ms with an 8192-byte heap-break increment (allocator granularity), and
+was removed after measurement. Runtime lookup is pure in-memory O(1) with no
+recurring I/O. PSP runtime/free-RAM timing remains an external hardware/toolchain
+validation item.
+
 ### T9 - Cross-build fragility matrix
 
 Build at least:
