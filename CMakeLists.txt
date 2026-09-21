@@ -717,6 +717,14 @@ endif()
 target_link_libraries(${TARGET} PUBLIC
     z
 )
+
+# The GUI PNG implementation uses libm functions such as ceil().  Darwin
+# provides them through libSystem, but Linux requires an explicit -lm.
+if(PLATFORM STREQUAL "DESKTOP" AND NOT APPLE)
+    target_link_libraries(${TARGET} PUBLIC
+        m
+    )
+endif()
        
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")

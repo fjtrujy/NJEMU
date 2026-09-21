@@ -84,7 +84,7 @@ jobs:
           -DGUI=${{ matrix.gui }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
-        cmake --install .
+        cmake --install . --prefix "$PWD/install"
 
     - name: Validate translation package
       run: |
