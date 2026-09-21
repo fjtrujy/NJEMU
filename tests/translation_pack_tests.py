@@ -38,11 +38,20 @@ class TranslationPackTests(unittest.TestCase):
                 self.assertEqual(first, second)
                 translations.verify_pack_round_trip(language, self.names, catalog, first)
 
-    def test_generated_english_hash_is_stable(self) -> None:
-        self.assertEqual(
-            sha256(self.make_pack()).hexdigest(),
-            "e287d6a283585cfdd41664c8e1ea57ec5fc8adeb6595edec227447fff5c4c415",
-        )
+    def test_generated_pack_hashes_are_stable(self) -> None:
+        expected = {
+            "en": "e287d6a283585cfdd41664c8e1ea57ec5fc8adeb6595edec227447fff5c4c415",
+            "ja": "9a39ba63d7962e515480fec74179f2461d8fcf9edc409fb5681874e719c9ee06",
+            "es": "79c351b857be24740976851ee9e22888e1766e9d78fdd0cf7b2531c1d12aeadc",
+            "zh-Hans": "89d6a5682f35c4c308ed5fd63c6229d10642212df65c0e2ca9efb33fe15ca9a0",
+            "zh-Hant": "700ed7b48f33225abd672935e56cd72a6019978851e5f0ad90e06b7523d9ed2f",
+        }
+        for language, digest in expected.items():
+            with self.subTest(language=language):
+                self.assertEqual(
+                    sha256(self.make_pack(language)).hexdigest(),
+                    digest,
+                )
 
     def test_schema_hash_is_stable(self) -> None:
         self.assertEqual(translations.schema_hash(self.names), 0x1ED49DE8)
@@ -124,7 +133,7 @@ class TranslationSourceValidationTests(unittest.TestCase):
             lines = [
                 f"{name}={language_values.get(name, name)}" for name in manifest_names
             ]
-            (root / filename).write_text("\n".join(lines) + "\n", encoding="ascii")
+            (root / filename).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def test_complete_catalog_succeeds(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -168,6 +177,42 @@ class TranslationSourceValidationTests(unittest.TestCase):
             en = root / translations.LANGUAGE_FILES["en"]
             en.write_text(r"A=bad\q" + "\n", encoding="ascii")
             with self.assertRaisesRegex(translations.TranslationError, "unsupported escape"):
+                translations.load_and_validate_sources(root)
+
+    def test_utf8_source_is_transcoded_to_legacy_gbk(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            values = {"ja": {"A": "しばらくお待ちください。"}}
+            self.make_sources(root, ["A"], values)
+            _names, catalogs = translations.load_and_validate_sources(root)
+            self.assertEqual(
+                catalogs["ja"]["A"],
+                "しばらくお待ちください。".encode("gbk"),
+            )
+
+    def test_exact_byte_escape_still_bypasses_transcoding(self) -> None:
+        self.assertEqual(
+            translations.decode_source_value(
+                r"NEO\xc2\xb7GEO", "test", "gbk"
+            ),
+            b"NEO\xc2\xb7GEO",
+        )
+
+    def test_unencodable_utf8_character_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            values = {"ja": {"A": "emoji 😀"}}
+            self.make_sources(root, ["A"], values)
+            with self.assertRaisesRegex(translations.TranslationError, "cannot be encoded as gbk"):
+                translations.load_and_validate_sources(root)
+
+    def test_invalid_utf8_source_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.make_sources(root, ["A"])
+            ja = root / translations.LANGUAGE_FILES["ja"]
+            ja.write_bytes(b"A=bad\xff\n")
+            with self.assertRaisesRegex(translations.TranslationError, "valid UTF-8"):
                 translations.load_and_validate_sources(root)
 
     def test_printf_contract_mismatch_fails(self) -> None:

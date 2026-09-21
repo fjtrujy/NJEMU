@@ -431,6 +431,22 @@ normalized to a documented encoding, preferably UTF-8.
 
 The pack generator can then encode into the legacy runtime form if necessary.
 
+Encoding Phase 2 infrastructure status (2026-09-21): the generator now reads
+`.lang` sources as UTF-8 and transcodes literal Unicode text to the legacy GBK
+byte stream consumed by the current UI renderer. Exact `\xNN` escapes remain
+available as an explicit byte-preservation mechanism. An audit of all five
+current catalogs proved that every runtime string round-trips through GBK
+without byte changes. The pack tests now lock the SHA-256 digest of every
+language pack, not only English, and add UTF-8 transcoding, invalid UTF-8,
+unencodable-character and exact-byte-escape coverage (24/24 tests passing).
+No catalog source has been normalized yet in this infrastructure milestone.
+
+Four pre-existing entries (two English, two Spanish) contain the byte sequence
+`c2 b7`. Under the current GBK renderer those bytes decode as `路`, despite
+apparently originating from a UTF-8 middle dot. Encoding Phase 2 deliberately
+keeps those bytes escaped rather than silently changing runtime output; any
+semantic correction belongs to the later renderer/content migration.
+
 ### Phase 3: optional UTF-8 renderer
 
 Only after the storage migration is stable should NJEMU consider teaching the

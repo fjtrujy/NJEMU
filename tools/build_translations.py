@@ -19,6 +19,13 @@ LANGUAGE_FILES = {
     "zh-Hans": "zh-Hans.lang",
     "zh-Hant": "zh-Hant.lang",
 }
+LEGACY_ENCODINGS = {
+    "en": "gbk",
+    "ja": "gbk",
+    "es": "gbk",
+    "zh-Hans": "gbk",
+    "zh-Hant": "gbk",
+}
 NULL_MARKER = "<NULL>"
 
 PACK_MAGIC = b"NJTL"
@@ -85,17 +92,9 @@ def parse_stable_manifest(text: str) -> list[str]:
     return names
 
 
-def decode_source_value(text: str, context: str) -> bytes | None:
+def decode_source_value(text: str, context: str, legacy_encoding: str) -> bytes | None:
     if text == NULL_MARKER:
         return None
-
-    try:
-        text.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise TranslationError(
-            f"{context}: source values must stay ASCII during the byte-preserving phase; "
-            "use \\xNN for legacy bytes"
-        ) from exc
 
     out = bytearray()
     index = 0
@@ -114,7 +113,12 @@ def decode_source_value(text: str, context: str) -> bytes | None:
             continue
 
         if char != "\\":
-            out.append(ord(char))
+            try:
+                out.extend(char.encode(legacy_encoding))
+            except UnicodeEncodeError as exc:
+                raise TranslationError(
+                    f"{context}: character {char!r} cannot be encoded as {legacy_encoding}"
+                ) from exc
             index += 1
             continue
 
@@ -148,13 +152,15 @@ def decode_source_value(text: str, context: str) -> bytes | None:
     return bytes(out)
 
 
-def parse_language_source(path: Path) -> tuple[list[str], dict[str, bytes | None]]:
+def parse_language_source(
+    path: Path, legacy_encoding: str
+) -> tuple[list[str], dict[str, bytes | None]]:
     try:
-        text = path.read_text(encoding="ascii")
+        text = path.read_text(encoding="utf-8")
     except FileNotFoundError as exc:
         raise TranslationError(f"missing translation source: {path}") from exc
     except UnicodeDecodeError as exc:
-        raise TranslationError(f"{path}: file must remain ASCII during the byte-preserving phase") from exc
+        raise TranslationError(f"{path}: file must be valid UTF-8") from exc
 
     order: list[str] = []
     values: dict[str, bytes | None] = {}
@@ -168,7 +174,9 @@ def parse_language_source(path: Path) -> tuple[list[str], dict[str, bytes | None
             raise TranslationError(f"{path}:{line_no}: invalid key {key!r}")
         if key in values:
             raise TranslationError(f"{path}:{line_no}: duplicate key {key}")
-        values[key] = decode_source_value(encoded, f"{path}:{line_no} ({key})")
+        values[key] = decode_source_value(
+            encoded, f"{path}:{line_no} ({key})", legacy_encoding
+        )
         order.append(key)
     return order, values
 
@@ -209,7 +217,9 @@ def load_and_validate_sources(
     catalogs: dict[str, dict[str, bytes | None]] = {}
 
     for language, filename in LANGUAGE_FILES.items():
-        order, catalog = parse_language_source(directory / filename)
+        order, catalog = parse_language_source(
+            directory / filename, LEGACY_ENCODINGS[language]
+        )
         actual = set(catalog)
         missing = [name for name in names if name not in actual]
         unknown = sorted(actual - expected)
