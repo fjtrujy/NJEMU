@@ -562,6 +562,12 @@ translation-loader warning. Together with the 28/28 generator tests and both
 
 ## Migration plan
 
+The T0-T9 status paragraphs below are chronological records of the original
+storage/identity migration. References to V1, ASCII sources, embedded adapters
+or temporarily unavailable toolchains describe the state at that milestone,
+not the final runtime. The authoritative final format is UTF-8 `.lng` V2 as
+described in Phase 3 and `docs/TRANSLATION_BINARY_FORMAT.md`.
+
 ### T0 - Capture the current contract
 
 Before changing runtime code:
@@ -655,8 +661,10 @@ token, and a `%s` -> `%d` format mismatch; all were rejected as expected.
 Generated runtime packs should be build/package artifacts, not hand-edited
 files.
 
-T3 status (2026-09-21): implemented `.lng` V1 and documented it in
-`docs/TRANSLATION_BINARY_FORMAT.md`. V1 uses a 20-byte little-endian header,
+T3 status (2026-09-21): implemented `.lng` V1, which was the format documented
+at that milestone. The current `docs/TRANSLATION_BINARY_FORMAT.md` describes
+the later V2 format and its V1 compatibility history. V1 uses a 20-byte
+little-endian header,
 377 direct `uint16_t` offsets, a reserved `0xffff` NULL offset, a <=65534-byte
 NUL-terminated string blob, and a 32-bit FNV-1a schema hash over the explicit
 ID/name manifest (`0x1ed49de8` for the current schema).
@@ -709,7 +717,7 @@ object. PSP native compilation remains unavailable locally.
 
 T5 status (2026-09-21): implemented a unique five-value `ui_language_t`
 (`ENGLISH`, `JAPANESE`, `SPANISH`, simplified Chinese, traditional Chinese)
-whose numeric values match the `.lng` V1 language IDs. The previous aliases
+whose numeric values match the unchanged `.lng` V1/V2 language IDs. The previous aliases
 where unsupported languages (including Spanish) collapsed to English have been
 removed. `platform_driver_t` now exposes `getSystemLanguage()`: PS2 maps
 `configGetLanguage()`, PSP maps `sceUtilityGetSystemParamInt()`, and Desktop
@@ -841,26 +849,26 @@ For each build, assert representative stable IDs have identical numeric values.
 The same prebuilt language pack must work across all four cores and all tested
 feature combinations.
 
-T9 status (2026-09-21): locally completed and documented in
-`docs/TRANSLATION_T9_MATRIX.md`. Desktop validated all 16 combinations of four
-cores x `SAVE_STATE={ON,OFF}` x `COMMAND_LIST={ON,OFF}` with the four
-translation-specific tests passing in every build. The same 16 combinations
-cross-compiled successfully for PS2. CPS2/MVS cover the cache-enabled cores.
-Every Desktop and PS2 build generated a byte-identical five-pack set with the
-same aggregate SHA-256 digest. The Python translation suite now has 20 tests and
-explicitly covers the generator failure modes listed below, including V1 blob
-overflow and deterministic output. The PSP CMake workflow now includes explicit
-`ADHOC=ON` builds for CPS1/CPS2/MVS, removes the stale duplicate `LARGE_MEMORY`
-axis, and validates that every installed PSP artifact contains exactly the five
-required `.lng` catalogs. Local PSPSDK builds then executed that missing PSP
-coverage directly: CPS1/CPS2/MVS all link with `ADHOC=ON + SAVE_STATE=ON`, and
-NCDZ builds with `SAVE_STATE=ON + COMMAND_LIST=ON`. This exposed and fixed a
-pre-existing CMake omission of `psp/adhoc.c` and the PSP adhoc networking
-libraries. All four PSP builds generate byte-identical packs.
+T9 final status (2026-09-21): refreshed for UTF-8 V2 and documented in
+`docs/TRANSLATION_T9_MATRIX.md`. Desktop passes all 16 combinations of four
+cores x `SAVE_STATE={ON,OFF}` x `COMMAND_LIST={ON,OFF}`, with five
+translation-specific tests passing in every build (including the UTF-8 decoder
+test). The same 16 combinations cross-compile successfully for PS2. All 32
+builds generate the same five V2 packs with aggregate SHA-256
+`7c1f8343c876e431209f5d686ee7737c56aa00bb523b7141e7180e13a2c184ff`.
+PSP also passes the sensitive representative matrix: CPS1/CPS2/MVS link with
+`ADHOC=ON + SAVE_STATE=ON + COMMAND_LIST=OFF`, while NCDZ links with
+`SAVE_STATE=ON + COMMAND_LIST=ON`. All four generate the same V2 pack set.
+The Python translation suite now has 28 tests covering V2 overflow, invalid
+UTF-8, font repertoire, PUA graphic tokens, Latin-1 handling and deterministic
+round trips in addition to the original malformed-pack/schema tests. This
+reconfirms that stable IDs, pack contents and glyph coverage are independent of
+core/platform/feature flags after the renderer migration.
 
-## Closure status
+## Final closure status
 
-T0-T9 are complete for the translation storage/identity migration.
+T0-T9 are complete for the translation storage/identity migration, and
+Encoding Phases 2-3 are complete for the UTF-8 source/runtime migration.
 
 Validated platforms now include:
 
@@ -868,71 +876,77 @@ Validated platforms now include:
 - PS2 cross-build matrix + PCSX2 runtime smoke;
 - PSP cross-builds for all four cores, including ADHOC on CPS1/CPS2/MVS;
 - PPSSPP runtime selection for all five supported languages;
-- PSP requested-language -> English fallback with a deliberately missing pack.
+- PSP requested-language -> English fallback with a deliberately missing pack;
+- final UTF-8 V2 fragility matrices on Desktop, PS2 and PSP;
+- final PS2/PSP executable and resident-RAM accounting against `e56539d`.
 
 No known translation-system implementation or required validation work remains.
 Real PSP free-RAM/timing measurements and real PS2 storage timing can still be
-collected as performance data, but they are not blockers for this migration.
+collected as performance data, but they are not blockers.
 
-The encoding work described earlier under **Encoding migration policy, Phase 2**
-is a separate follow-up project. It can now start because the external-pack
-runtime checks are complete. Phase 2 intentionally changes the
-editable source representation from byte-exact ASCII escapes toward UTF-8 while
-keeping legacy runtime bytes stable.
-
-## Tests to add
+## Implemented validation coverage
 
 ### Generator tests
 
 - complete catalog succeeds;
 - missing key fails;
 - extra key fails;
-- duplicate key fails;
-- bad escape fails;
+- duplicate/reordered key fails;
+- bad escape and embedded-NUL escape fail;
+- invalid UTF-8 source fails;
+- unsupported font glyph fails;
 - format-argument mismatch fails;
-- string blob over V1 limit fails;
-- deterministic output hash.
+- string blob over V2 limit fails;
+- graphic-token PUA encoding is stable;
+- Latin-1 characters use the built-in font path;
+- deterministic all-language output and round trip.
 
-### Loader tests
+### Loader/decoder tests
 
 - valid pack;
 - truncated header;
-- wrong magic;
-- wrong version;
-- wrong schema;
+- wrong magic/version/language/count/schema/reserved fields;
 - truncated offset table;
 - out-of-range offset;
 - missing NUL terminator;
+- invalid UTF-8 payload;
+- UTF-8 ASCII/two-/three-/four-byte decoding and invalid-sequence rejection;
 - missing selected language -> English fallback;
 - missing English -> clean initialization failure.
 
-### Compatibility tests
+### Historical compatibility gate
 
-For each legacy language and the union of keys:
+For each legacy language and the union of keys, V1 migration used:
 
 ```text
 legacy_bytes(KEY) == new_catalog_bytes(KEY)
 ```
 
-This byte-equivalence test is the gate for deleting the embedded arrays.
+That byte-equivalence gate was completed before deleting the embedded arrays.
+Encoding Phase 2 repeated the same guarantee after normalizing editable sources.
+V2 then deliberately changed the payload contract to UTF-8 only after those
+baselines were locked and validated.
 
-## Non-goals for this migration
+## Historical non-goals of the storage migration
 
-Do not combine this work with:
+T0-T9 deliberately did not combine storage/identity work with:
 
 - redesigning the UI font renderer;
 - replacing all legacy fonts;
 - changing Japanese/Chinese glyph coverage;
 - translating DIP-switch source tables that are independent of the UI text
   catalog;
-- adding new languages before the five existing catalogs are migrated and
+- adding new languages before the five existing catalogs were migrated and
   validated.
 
-Those can follow once storage and identity are stable.
+Storage/identity is now stable. Phase 3 subsequently completed the UTF-8
+renderer work while reusing existing font assets and without expanding CJK
+glyph coverage. DIP-switch translation and adding new languages remain separate
+future work.
 
-## Expected end state
+## Completed end state
 
-When this plan is complete:
+The completed plan provides:
 
 - `TEXT(KEY)` remains simple at call sites;
 - every `KEY` has a stable build-independent ID;
@@ -943,4 +957,8 @@ When this plan is complete:
 - adding or editing a translation requires no C recompilation;
 - translation mistakes are caught by the generator/CI rather than by fragile
   positional alignment;
-- feature flags cannot renumber or desynchronize translations.
+- feature flags cannot renumber or desynchronize translations;
+- `.lang` and `.lng` V2 text is UTF-8 end-to-end;
+- graphic tokens have an encoding-independent PUA representation;
+- Latin-1 and the shipped Japanese/Chinese repertoire render without embedding
+  a second full Unicode font.
