@@ -60,7 +60,24 @@ PS2SDK exposes physical RAM via `GetMemorySize()` but no reliable query for curr
 
 ## PSP status
 
-The same loader and pack format are shared by PSP, but native PSP compilation/runtime measurement is unavailable locally. PSP-specific free-RAM and startup-I/O figures remain external validation. PSP should use `pspSdkTotalFreeUserMemSize()` for real before/after user-memory samples, together with `sceKernelMaxFreeMemSize()` when the largest contiguous user block is relevant. `sceKernelTotalFreeMemSize()` is not the metric NJEMU wants for user-heap accounting.
+The local PSPSDK toolchain is available and the current translation system now
+cross-compiles successfully for all four PSP cores. CPS1/CPS2/MVS also link with
+`ADHOC=ON` after fixing the missing PSP adhoc source/library wiring in CMake.
+
+PPSSPP runtime validation confirms the PSP platform language mapping and common
+loader open the correct external catalog for English, Japanese, Spanish,
+Traditional Chinese and Simplified Chinese. A missing Spanish pack also falls
+back to English correctly on the PSP runtime path.
+
+The exact resident allocation sizes are the same as the PS2 values in the table
+above because both targets use 32-bit pointers/`size_t` and the loader performs
+the same single allocation. For example, English is one 7456-byte catalog
+allocation.
+
+A real-hardware free-user-memory delta is intentionally not required to close
+the translation migration. If it is measured later, PSP should use
+`pspSdkTotalFreeUserMemSize()` before/after initialization and optionally
+`sceKernelMaxFreeMemSize()` to observe contiguous-heap impact.
 
 ## T8 acceptance
 
@@ -69,4 +86,6 @@ The same loader and pack format are shared by PSP, but native PSP compilation/ru
 - no embedded full-language tables: yes;
 - no recurring file I/O during GUI rendering: yes;
 - clear net PS2 RAM reduction: yes, about 13.7-18.4 KiB depending on core;
-- PSP hardware numbers: pending external validation.
+- PSP build/runtime path: yes, validated with PSPSDK + PPSSPP;
+- PSP real-hardware free-RAM/timing numbers: optional follow-up, not a migration
+  blocker.

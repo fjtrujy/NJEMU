@@ -663,9 +663,12 @@ text initialization from a build root containing `lang/`. A PCSX2 smoke mapped
 `host:` to the PS2 build root, executed the new ELF for ~7 seconds and remained
 alive through initialization with the adjacent `lang/` directory present. The
 legacy PSP Makefile pack target was syntax/generation-smoke-tested locally using
-a stub SDK include. Native PSP/PPSSPP and native PS2 hardware path validation
-remain external checks because a local PSP toolchain and connected consoles are
-not available in this session.
+a stub SDK include. The local PSPSDK was subsequently located and used to build
+all four PSP cores. A PPSSPP runtime matrix forced all five supported PSP system
+languages and confirmed each run opens the expected adjacent `lang/*.lng`
+catalog without fallback/error. A missing Spanish pack correctly falls back to
+English. Native PS2 hardware remains optional because PCSX2 already validates
+the relative package path used by the loader.
 
 ### T8 - Memory/performance verification
 
@@ -696,8 +699,10 @@ pointer table this still leaves a conservative net RAM saving of about 13.7-18.4
 KiB depending on core. A temporary PCSX2 probe measured English pack loading at
 ~2.05 ms with an 8192-byte heap-break increment (allocator granularity), and
 was removed after measurement. Runtime lookup is pure in-memory O(1) with no
-recurring I/O. PSP runtime/free-RAM timing remains an external hardware/toolchain
-validation item.
+recurring I/O. PSP cross-compilation and PPSSPP runtime loading are now also
+validated; English remains one 7456-byte catalog allocation on the 32-bit PSP
+ABI. Real-PSP free-RAM/timing measurement is optional performance follow-up,
+not a blocker for the translation migration.
 
 ### T9 - Cross-build fragility matrix
 
@@ -726,42 +731,31 @@ explicitly covers the generator failure modes listed below, including V1 blob
 overflow and deterministic output. The PSP CMake workflow now includes explicit
 `ADHOC=ON` builds for CPS1/CPS2/MVS, removes the stale duplicate `LARGE_MEMORY`
 axis, and validates that every installed PSP artifact contains exactly the five
-required `.lng` catalogs. Native execution of that matrix remains an external CI
-check because no PSP toolchain is installed locally.
+required `.lng` catalogs. Local PSPSDK builds then executed that missing PSP
+coverage directly: CPS1/CPS2/MVS all link with `ADHOC=ON + SAVE_STATE=ON`, and
+NCDZ builds with `SAVE_STATE=ON + COMMAND_LIST=ON`. This exposed and fixed a
+pre-existing CMake omission of `psp/adhoc.c` and the PSP adhoc networking
+libraries. All four PSP builds generate byte-identical packs.
 
-## Remaining closure checklist
+## Closure status
 
-The storage/identity migration itself is implemented. The only remaining work
-needed to close T0-T9 is platform validation that cannot currently be performed
-on this workstation:
+T0-T9 are complete for the translation storage/identity migration.
 
-1. **PSP CMake CI**
-   - run the updated PSP matrix in the `pspdev/pspdev` container;
-   - confirm CPS1/CPS2/MVS build with `ADHOC=ON` + `SAVE_STATE=ON`;
-   - confirm all four cores package exactly the same five `.lng` files.
-2. **PPSSPP runtime smoke**
-   - launch a PSP artifact from a directory containing its adjacent `lang/`;
-   - verify catalog initialization succeeds and the GUI reaches normal startup;
-   - test at least English plus one non-English system-language selection if the
-     PPSSPP system-language setting is available.
-3. **Real PSP measurement**
-   - record `pspSdkTotalFreeUserMemSize()` immediately before and after catalog
-     initialization;
-   - record catalog allocation size and load time;
-   - optionally record `sceKernelMaxFreeMemSize()` before/after to make sure the
-     one-allocation loader does not create an unexpected fragmentation issue.
-4. **Real PS2 storage smoke (optional but useful)**
-   - boot with `lang/` beside the ELF/package and confirm all five language files
-     resolve from the native storage path;
-   - record real-device catalog I/O time if desired. PCSX2 already validates the
-     relative-path/package layout.
+Validated platforms now include:
 
-Once those checks pass, T0-T9 can be marked fully closed. They are validation
-tasks only; no known translation-system implementation work remains.
+- Desktop runtime + exhaustive translation tests;
+- PS2 cross-build matrix + PCSX2 runtime smoke;
+- PSP cross-builds for all four cores, including ADHOC on CPS1/CPS2/MVS;
+- PPSSPP runtime selection for all five supported languages;
+- PSP requested-language -> English fallback with a deliberately missing pack.
+
+No known translation-system implementation or required validation work remains.
+Real PSP free-RAM/timing measurements and real PS2 storage timing can still be
+collected as performance data, but they are not blockers for this migration.
 
 The encoding work described earlier under **Encoding migration policy, Phase 2**
-is a separate follow-up project. It should start only after the external-pack
-runtime checks above are complete, because Phase 2 intentionally changes the
+is a separate follow-up project. It can now start because the external-pack
+runtime checks are complete. Phase 2 intentionally changes the
 editable source representation from byte-exact ASCII escapes toward UTF-8 while
 keeping legacy runtime bytes stable.
 

@@ -80,8 +80,59 @@ The C loader tests additionally cover real pack loading, English fallback and mi
 
 ## PSP / ADHOC
 
-The build system and translation source are now platform/feature independent, and the PSP Makefile/CMake packaging paths generate the same packs. Native PSP compilation is not available in this local environment, so `ADHOC=ON` on PSP is not claimed as executed. This remains the only external build/runtime validation item from T9.
+The local PSPSDK toolchain at `/Users/fjtrujy/Projects/toolchains/psp/pspdev`
+was used to close the remaining PSP build gap.
+
+Representative GUI builds completed successfully for all four cores:
+
+| Core | ADHOC | SAVE_STATE | COMMAND_LIST | Result |
+| --- | --- | --- | --- | --- |
+| CPS1 | ON | ON | OFF | pass |
+| CPS2 | ON | ON | OFF | pass |
+| MVS | ON | ON | OFF | pass |
+| NCDZ | OFF | ON | ON | pass |
+
+NCDZ does not support ADHOC. The first local `ADHOC=ON` build exposed a
+pre-existing CMake wiring defect: `common/adhoc.c` was compiled, but
+`psp/adhoc.c` and the PSP networking libraries were not linked. CMake was
+corrected to mirror the legacy PSP Makefile by adding `psp/adhoc.c` plus
+`pspnet`, `pspnet_adhoc`, `pspnet_adhocctl` and `pspnet_adhocmatching` when
+`ADHOC=ON`. CPS1/CPS2/MVS then linked successfully.
+
+Every PSP build generated five catalogs, and `cmp` confirmed all five files are
+byte-identical across CPS1, CPS2, MVS and NCDZ. Their SHA-256 values also match
+the Desktop/PS2 pack set documented above.
+
+## PPSSPP runtime matrix
+
+A CPS1 PSP GUI package was launched directly from an isolated build/install
+directory with adjacent `lang/`. PPSSPP `GameLanguage` was forced to each PSP
+language ID supported by NJEMU, and the HLE I/O log confirmed the expected file
+was opened with no translation fallback/error:
+
+| PSP system language | Catalog opened | Result |
+| --- | --- | --- |
+| English (`1`) | `lang/en.lng` | pass |
+| Japanese (`0`) | `lang/ja.lng` | pass |
+| Spanish (`3`) | `lang/es.lng` | pass |
+| Traditional Chinese (`10`) | `lang/zh-Hant.lng` | pass |
+| Simplified Chinese (`11`) | `lang/zh-Hans.lng` | pass |
+
+The emulator remained in its normal frame loop after initialization in every
+case.
+
+The PSP integration fallback was also tested by removing `es.lng` from an
+isolated runtime directory and forcing Spanish. PPSSPP logged the failed
+`umd0:/lang/es.lng` open followed by a successful `umd0:/lang/en.lng` open, and
+NJEMU printed:
+
+```text
+Translation catalog 2 unavailable; using English fallback
+```
 
 ## T9 result
 
-The same prebuilt language pack is valid across all four cores and every locally buildable tested feature combination on Desktop and PS2. The translation namespace is no longer coupled to `EMU_SYSTEM`, `SAVE_STATE`, `COMMAND_LIST`, `USE_CACHE` or platform-specific storage code.
+T9 is complete. The same prebuilt language packs are valid across all four cores
+and the tested Desktop, PS2 and PSP feature combinations, including PSP ADHOC.
+The translation namespace is no longer coupled to `EMU_SYSTEM`, `SAVE_STATE`,
+`COMMAND_LIST`, `USE_CACHE`, `ADHOC` or platform-specific storage code.
