@@ -715,6 +715,18 @@ For each build, assert representative stable IDs have identical numeric values.
 The same prebuilt language pack must work across all four cores and all tested
 feature combinations.
 
+T9 status (2026-09-21): locally completed and documented in
+`docs/TRANSLATION_T9_MATRIX.md`. Desktop validated all 16 combinations of four
+cores x `SAVE_STATE={ON,OFF}` x `COMMAND_LIST={ON,OFF}` with the four
+translation-specific tests passing in every build. The same 16 combinations
+cross-compiled successfully for PS2. CPS2/MVS cover the cache-enabled cores.
+Every Desktop and PS2 build generated a byte-identical five-pack set with the
+same aggregate SHA-256 digest. The Python translation suite now has 20 tests and
+explicitly covers the generator failure modes listed below, including V1 blob
+overflow and deterministic output. Native PSP/`ADHOC=ON` remains the only
+external build validation item because no PSP toolchain/runtime is available
+locally.
+
 ## Tests to add
 
 ### Generator tests
