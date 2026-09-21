@@ -967,9 +967,33 @@ void file_browser(void)
 	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 	logo(32, 5, UI_COLOR(UI_PAL_TITLE));
 
-	i = uifont_get_string_width(APPNAME_STR " " VERSION_STR) / 2;
-	draw_dialog(ui_layout_center_x() - (i + 62), ui_layout_center_y() - 48,
-		ui_layout_center_x() + (i + 62), ui_layout_center_y() + 48);
+	{
+		static const char *const splash_lines[] = {
+			APPNAME_STR " " VERSION_STR,
+			"for " PLATFORM_STR,
+			"NJ (https://fjtrujy.github.io/NJEMU/)",
+			"2011-2026 (https://github.com/fjtrujy/NJEMU)"
+		};
+		int splash_width = 0;
+		int dialog_half_width;
+
+		for (i = 0; i < (int)(sizeof(splash_lines) / sizeof(splash_lines[0])); i++) {
+			int width = uifont_get_string_width(splash_lines[i]);
+			if (width > splash_width)
+				splash_width = width;
+		}
+
+		/* Leave a comfortable text margin while keeping the dialog inside the
+		 * responsive logical canvas on narrow outputs such as the PSP. */
+		dialog_half_width = (splash_width + 32) / 2;
+		if (dialog_half_width > ui_layout_center_x() - 12)
+			dialog_half_width = ui_layout_center_x() - 12;
+
+		draw_dialog(ui_layout_center_x() - dialog_half_width,
+			ui_layout_center_y() - 48,
+			ui_layout_center_x() + dialog_half_width,
+			ui_layout_center_y() + 48);
+	}
 	uifont_print_shadow_center(ui_layout_center_y() - 30,
 		255,255,120, APPNAME_STR " " VERSION_STR);
 	uifont_print_shadow_center(ui_layout_center_y() - 7,

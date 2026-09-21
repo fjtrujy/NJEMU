@@ -19,15 +19,22 @@
 
 static RECT mvs_src_clip = { 24, 16, 24 + 304, 16 + 224 };
 
-static RECT mvs_clip[7] =
+typedef struct ps2_clip_size {
+	int16_t width;
+	int16_t height;
+} ps2_clip_size_t;
+
+/* Keep the option_stretch indices identical to PSP/common/menu/mvs.c.
+ * Destination placement is PS2-output-relative rather than inheriting the
+ * old PSP 480x272 coordinates. */
+static const ps2_clip_size_t mvs_clip_size[6] =
 {
-	{  0,  0,  0 + 640,  0 + 448 },	// option_stretch = 0  (640 x 448)
-	{ 88, 24, 88 + 304, 24 + 224 },	// option_stretch = 1  (304x224 19:14)
-	{ 80, 16, 80 + 320, 16 + 240 },	// option_stretch = 2  (320x240  4:3)
-	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 3  (360x270  4:3)
-	{ 57,  1, 57 + 360,  1 + 270 },	// option_stretch = 4  (366x270 19:14)
-	{ 30,  1, 30 + 420,  1 + 270 },	// option_stretch = 5  (420x270 14:9)
-	{  0,  1,  0 + 480,  1 + 270 }	    // option_stretch = 8  (480x270 16:9)
+	{ 304, 224 },	// option_stretch = 0  (off/native 19:14)
+	{ 320, 240 },	// option_stretch = 1  (4:3)
+	{ 360, 270 },	// option_stretch = 2  (4:3)
+	{ 366, 270 },	// option_stretch = 3  (19:14)
+	{ 420, 270 },	// option_stretch = 4  (14:9)
+	{ 480, 270 }	// option_stretch = 5  (16:9)
 };
 
 static bool tex_fix_changed;
@@ -40,6 +47,19 @@ static GSGLOBAL *gsGlobal;
 // All the textures has the same size, as this variable is used to calculate the vertexes.
 // SPR0, SPR1, SPR2 and FIX are all 512x512
 GSTEXTURE *atlas;
+
+static RECT ps2_centered_clip(const ps2_clip_size_t *size)
+{
+	int output_width = gsGlobal ? gsGlobal->Width : 640;
+	int output_height = gsGlobal ? gsGlobal->Height : 448;
+	RECT clip;
+
+	clip.left = (output_width - size->width) / 2;
+	clip.top = (output_height - size->height) / 2;
+	clip.right = clip.left + size->width;
+	clip.bottom = clip.top + size->height;
+	return clip;
+}
 
 // In GSKit 0,0 is not the top left corner, it is the center of the top left pixel.
 static inline gs_xyz2 vertex_to_XYZ2_pixel_perfect(float x, float y)
@@ -119,7 +139,8 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &mvs_clip[option_stretch]);
+	RECT dst_clip = ps2_centered_clip(&mvs_clip_size[option_stretch]);
+	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
 }
 

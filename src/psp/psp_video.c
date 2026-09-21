@@ -245,6 +245,23 @@ static void psp_endFrame(void *data)
 	sceGuSync(0, GU_SYNC_FINISH);
 }
 
+void psp_video_sync_ui_scratch(void *data)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+
+	assert(psp->frame_active && "UI scratch sync requires an active frame");
+
+	/* tex_font is rewritten for every proportional glyph.  Complete the draw
+	 * that samples its current contents before the CPU writes the next glyph,
+	 * then immediately continue the same logical frame with a fresh GU list. */
+	sceGuFinish();
+	sceGuSync(0, GU_SYNC_FINISH);
+	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
+	sceGuStart(GU_DIRECT, gulist);
+	sceGuDrawBufferList(pixel_format, (void *)psp->draw_frame, BUF_WIDTH);
+	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
+}
+
 /*--------------------------------------------------------
 		Resolve frame index to VRAM pointer
 --------------------------------------------------------*/
@@ -751,6 +768,7 @@ typedef struct Vertex16_t
 } Vertex16;
 
 static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int tex_width, int tex_height, int tex_stride,
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
@@ -765,7 +783,8 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	}
 
 	sceGuTexMode(tex_format, 0, 0, tex_swizzled);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex);
+	sceGuTexImage(0, tex_width, tex_height, tex_stride, tex);
+	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 
 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
@@ -777,14 +796,14 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 		vertices[0].x = dx;
 		vertices[0].y = dy;
 		vertices[0].z = 0;
-		vertices[0].color = 0;
+		vertices[0].color = 0xffff;
 
 		vertices[1].u = su + sw;
 		vertices[1].v = sv + sh;
 		vertices[1].x = dx + dw;
 		vertices[1].y = dy + dh;
 		vertices[1].z = 0;
-		vertices[1].color = 0;
+		vertices[1].color = 0xffff;
 
 		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
 	}

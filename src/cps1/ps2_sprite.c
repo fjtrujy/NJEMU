@@ -32,14 +32,21 @@
 
 static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
 
-static RECT cps_clip[6] =
+typedef struct ps2_clip_size {
+	int16_t width;
+	int16_t height;
+} ps2_clip_size_t;
+
+/* Keep option_stretch aligned with PSP/common/menu/cps.c.  The final entry is
+ * reserved for the rotated CPS presentation path. */
+static const ps2_clip_size_t cps_clip_size[6] =
 {
-	{  0,  0,  0 + 640,  0 + 448 },	// option_stretch = 0  (640 x 448)
-	{ 48, 24, 48 + 384, 24 + 224 },	// option_stretch = 1  (384x224)
-	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 2  (360x270  4:3)
-	{ 48,  1, 48 + 384,  1 + 270 },	// option_stretch = 3  (384x270 24:17)
-	{ 30,  1, 30 + 420,  1 + 270 },	// option_stretch = 4  (420x270 14:9)
-	{  0,  1,  0 + 480,  1 + 270 }	// option_stretch = 5  (480x270 16:9)
+	{ 384, 224 },	// option_stretch = 0  (off/native)
+	{ 360, 270 },	// option_stretch = 1  (4:3)
+	{ 384, 270 },	// option_stretch = 2  (24:17)
+	{ 466, 272 },	// option_stretch = 3  (12:7)
+	{ 480, 270 },	// option_stretch = 4  (16:9)
+	{ 204, 272 }	// rotated presentation (3:4)
 };
 
 
@@ -102,6 +109,19 @@ static GSPRIMPOINT ALIGN16_DATA vertices_stars[0x1000];
 static GSGLOBAL *gsGlobal;
 static GSTEXTURE *atlas_indexed;
 static GSTEXTURE *atlas_scrollh;
+
+static RECT ps2_centered_clip(const ps2_clip_size_t *size)
+{
+	int output_width = gsGlobal ? gsGlobal->Width : 640;
+	int output_height = gsGlobal ? gsGlobal->Height : 448;
+	RECT clip;
+
+	clip.left = (output_width - size->width) / 2;
+	clip.top = (output_height - size->height) / 2;
+	clip.right = clip.left + size->width;
+	clip.bottom = clip.top + size->height;
+	return clip;
+}
 
 // In GSKit 0,0 is not the top left corner, it is the center of the top left pixel.
 static inline gs_xyz2 vertex_to_XYZ2_pixel_perfect(float x, float y)
@@ -212,6 +232,8 @@ void blit_start(int high_layer)
 
 void blit_finish(void)
 {
+	RECT dst_clip;
+
 	if (cps_rotate_screen)
 	{
 		if (cps_flip_screen)
@@ -220,14 +242,16 @@ void blit_finish(void)
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &cps_src_clip, &cps_src_clip);
 			video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
-		video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[5]);
+		dst_clip = ps2_centered_clip(&cps_clip_size[5]);
+		video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &dst_clip);
 	}
 	else
 	{
+		dst_clip = ps2_centered_clip(&cps_clip_size[option_stretch]);
 		if (cps_flip_screen)
-			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &dst_clip);
 		else
-			video_driver->transferWorkFrame(video_data, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->transferWorkFrame(video_data, &cps_src_clip, &dst_clip);
 	}
 	video_driver->endFrame(video_data);
 }

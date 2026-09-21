@@ -404,6 +404,7 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	/* The texture itself carries the final font/icon colors. */
 	(void)color;
 	video_driver->drawUISprite(d->video_data, gst, gst->PSM, 0,
+		gst->Width, gst->Height, gst->Width,
 		su, sv, sw, sh, dx, dy, dw, dh, blend);
 
 	/* The font scratch buffer is rewritten between glyphs (always at UV 0,0),

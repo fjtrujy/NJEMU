@@ -348,6 +348,21 @@ Completed across both passes:
   copy path, preventing logical/physical rectangle mixing;
 - live Desktop resize is supported, and output-size changes force a common
   `UI_FULL_REFRESH`; the legacy partial-refresh copy path is now PSP-only.
+- PS2 game presentation rectangles now use the same stretch-option ordering as
+  the common MVS/NCDZ/CPS menus and are centered from the active
+  `gsGlobal->Width/Height`, so the game image no longer inherits PSP-era
+  destination coordinates;
+- PS2 clears now disable inherited alpha testing/blending and `clearScreen`
+  clears both physical screen buffers, preventing stale GUI/background pixels
+  from leaking into the first emulation frame or the next GUI frame;
+- the PSP proportional-font scratch texture no longer aliases the final rows of
+  EDRAM while being advertised to the GE as a fictitious 512x512 texture.  The
+  GE now binds the font as 512x64, while a 512x160 (~160 KiB) system-RAM backing
+  store preserves the same buffer's save-state-thumbnail scratch contract; font
+  updates use explicit cache writeback/texture invalidation and synchronization
+  before the scratch is rewritten for the next glyph;
+- PSP UI sprite bindings carry their actual texture dimensions/stride instead
+  of universally declaring every UI surface as 512x512.
 
 Validation completed so far:
 
@@ -376,11 +391,22 @@ Validation completed so far:
   Cartesian matrix;
 - enabling those feature combinations exposed a 64-bit PNG scratch-buffer pointer
   truncation; it is fixed portably with `uintptr_t` in Desktop/PS2/PSP.
-
-The local environment does not currently contain a PSP toolchain, so the final
-PSP compile/runtime confirmation remains a CI/hardware validation item. The CI
-configuration now contains both normal GUI-on jobs and feature-on GUI jobs, and
-the PSP layout path itself remains the identity 480x272 case.
+- the local PSP toolchain now validates MVS, CPS1, CPS2 and NCDZ with
+  `GUI=ON + SAVE_STATE=ON + COMMAND_LIST=ON`;
+- a production MVS PSP build was booted in current PPSSPP and visually confirms
+  the intended blue GUI background, dialog/shadow composition and correctly
+  colored/formed proportional text; an A/B build of the pre-`ui_draw_driver`
+  PSP implementation reproduced the old corrupted-font behavior, isolating the
+  defect to the historical EDRAM scratch layout rather than the responsive GUI
+  transform;
+- fresh PS2 feature-on builds pass for CPS1, CPS2, MVS and NCDZ, and the final
+  MVS ELF boots in PCSX2 at 640x448 with the responsive splash and no runtime
+  assert/abort/error in the application path;
+- an instrumented MVS PCSX2 round trip wrote its marker after `emu_main()`
+  returned, validating GUI -> game -> GUI ownership before the temporary test
+  hook was removed;
+- a fresh Desktop MVS feature-on build passes all six CTest targets, including
+  layout, text-ID/catalog, UTF-8 and translation-pack validation.
 
 The resolution-relative Phase C implementation is now complete and its policy is
 settled:
@@ -397,8 +423,9 @@ settled:
   of this phase because those modes also change GS timing, interlace/field mode,
   DW/DH and framebuffer requirements; that work should be treated as a separate
   presentation feature, not as a GUI-layout change;
-- the only remaining validation item is execution of the corrected PSP GUI CI
-  matrix and, ideally, a quick real-PSP visual smoke test.
+- the responsive-layout implementation is considered locally validated.  A
+  quick real-PSP visual smoke test remains useful hardware hardening, but is not
+  required to keep Phase C open.
 
 ### C0 - Inventory fixed layout assumptions
 
