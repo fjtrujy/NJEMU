@@ -41,7 +41,7 @@
 #define CODE_NOTFOUND		0xffff
 #define CODE_UNDERBAR		0xfffe
 
-#define isascii(c)			((c)  >= 0x20 && (c) <= 0x7e)
+#define isprintascii(c)		((c)  >= 0x20 && (c) <= 0x7e)
 #define islatin1(c)			((c)  >= 0x80)
 #define isgbk1(c)			(((c) >= 0x81 && (c) <= 0xfe))
 #define isgbk2(c)			((c)  >= 0x40 && (c) <= 0xfe && (c) != 0x7f && (c) != 0xff)
@@ -583,7 +583,7 @@ static uint16_t latin1_get_code(const uint8_t *s, int *type)
 		*type = FONT_TYPE_COMMAND;
 		return code;
 	}
-	else if (isascii(*s))
+	else if (isprintascii(*s))
 	{
 		*type = FONT_TYPE_ASCII;
 		return *s - 0x20;
@@ -617,7 +617,7 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 		*type = FONT_TYPE_GBKSIMHEI;
 		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
 	}
-	else if (isascii(c1))
+	else if (isprintascii(c1))
 	{
 		if (c1 != '\\')
 		{
@@ -646,7 +646,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type)
 		*type = FONT_TYPE_GBKSIMHEI;
 		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
 	}
-	else if (isascii(c1))
+	else if (isprintascii(c1))
 	{
 		*type = FONT_TYPE_ASCII;
 		return c1 - 0x20;
@@ -1545,7 +1545,7 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 
 	for (i = 0; i < len; i++)
 	{
-		uint8_t code = isascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
+		uint8_t code = isprintascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
 		int u = (code & 63) << 3;
 		int v = (code >> 6) << 3;
 
@@ -1594,7 +1594,7 @@ static void debug_font_print(void *frame, int sx, int sy, const char *s, int bg)
 
 	for (i = 0; i < len; i++)
 	{
-		uint8_t code = isascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
+		uint8_t code = isprintascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
 		int u = (code & 63) << 3;
 		int v = (code >> 6) << 3;
 
