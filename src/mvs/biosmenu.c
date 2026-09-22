@@ -310,6 +310,7 @@ void bios_select(int flag)
 			video_driver->waitVsync(video_data);
 		}
 
+		pad_update();
 		prev_sel = sel;
 
 		if (pad_pressed(PLATFORM_PAD_UP))
@@ -365,8 +366,6 @@ void bios_select(int flag)
 		if (sel < top) top = sel;
 
 		if (prev_sel != sel) update = 1;
-
-		pad_update();
 
 		if (Loop == LOOP_EXIT) break;
 	} while (!pad_pressed(PLATFORM_PAD_L) && !pad_pressed(PLATFORM_PAD_B2));

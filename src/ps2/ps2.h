@@ -18,6 +18,25 @@
 
 #define FONTSIZE			14
 
+/* Scale a size expressed in the legacy 480x272 presentation space to the
+ * largest uniform size that fits the active PS2 output. This keeps the
+ * stretch presets portable while preserving their aspect ratio. */
+static inline void ps2_scale_logical_size(int output_width, int output_height,
+	int logical_width, int logical_height, int *scaled_width, int *scaled_height)
+{
+	if ((int64_t)output_width * SCR_HEIGHT <=
+	    (int64_t)output_height * SCR_WIDTH)
+	{
+		*scaled_width = (logical_width * output_width + SCR_WIDTH / 2) / SCR_WIDTH;
+		*scaled_height = (logical_height * output_width + SCR_WIDTH / 2) / SCR_WIDTH;
+	}
+	else
+	{
+		*scaled_width = (logical_width * output_height + SCR_HEIGHT / 2) / SCR_HEIGHT;
+		*scaled_height = (logical_height * output_height + SCR_HEIGHT / 2) / SCR_HEIGHT;
+	}
+}
+
 /* Accessor used by ps2_ui_draw.c to reach gsGlobal inside ps2_video.c's
  * private ps2_video_t struct without exposing the full definition. The
  * caller casts to GSGLOBAL*. */

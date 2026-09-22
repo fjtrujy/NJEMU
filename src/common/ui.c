@@ -87,8 +87,16 @@ void show_background(void)
 #if !defined(PSP)
 	/* Native-size backends can resize or use a non-identity viewport, so their
 	 * chrome must remain output-relative and is intentionally not cached. */
+#if !defined(PS2)
 	draw_bar_shadow();
+#endif
+#if defined(PS2)
+	/* PS2 uses a crisp native-pixel UI. Keep the title bar opaque rather than
+	 * blending the old PSP chrome over the background. */
+	boxfill(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1));
+#else
 	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+#endif
 	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
 	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
 #endif
@@ -255,7 +263,14 @@ void draw_dialog(int sx, int sy, int ex, int ey)
 	sy++;
 	ey--;
 
+#if defined(PS2)
+	/* The PSP dialog intentionally lets the wallpaper bleed through. At native
+	 * PS2 resolution that reads as banding/noise, especially on interlaced
+	 * output. Use an opaque panel while retaining the outer shadow/border. */
+	boxfill(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1));
+#else
 	boxfill_alpha(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1), 10);
+#endif
 }
 
 
@@ -482,7 +497,7 @@ int ui_show_popup(int draw)
 	簡易書式付文字列表示
 ******************************************************************************/
 
-#define MAX_LINES	13
+#define MAX_LINES	32
 #define MIN_X		24
 #define MIN_Y		47
 #define INC_Y		16
@@ -498,6 +513,21 @@ static char msg_lines[MAX_LINES][128];
 static int msg_r[MAX_LINES];
 static int msg_g[MAX_LINES];
 static int msg_b[MAX_LINES];
+
+static int msg_visible_lines(void)
+{
+	int rows;
+	int text_bottom = ui_layout_bottom(12);
+
+	/* Keep the historical 13 rows on the 480x272 PSP canvas, but consume
+	 * extra logical height on larger outputs (24 rows at PS2 640x448). */
+	rows = ((text_bottom - MIN_Y - FONTSIZE) / INC_Y) + 1;
+	if (rows < 1)
+		rows = 1;
+	if (rows > MAX_LINES)
+		rows = MAX_LINES;
+	return rows;
+}
 
 
 /*--------------------------------------------------------
@@ -547,25 +577,30 @@ void msg_set_text_color(uint32_t color)
 void msg_printf(const char *text, ...)
 {
 	int y;
+	int visible_lines;
 	char buf[128];
 	va_list arg;
 
 	va_start(arg, text);
 	vsprintf(buf, text, arg);
 	va_end(arg);
+	visible_lines = msg_visible_lines();
 
 	if (linefeed)
 	{
-		if (cy == MAX_LINES)
+		if (cy >= visible_lines)
 		{
-			for (y = 1; y < MAX_LINES; y++)
+			int keep = visible_lines - 1;
+			int first = cy - keep;
+
+			for (y = 0; y < keep; y++)
 			{
-				strcpy(msg_lines[y - 1], msg_lines[y]);
-				msg_r[y - 1] = msg_r[y];
-				msg_g[y - 1] = msg_g[y];
-				msg_b[y - 1] = msg_b[y];
+				strcpy(msg_lines[y], msg_lines[first + y]);
+				msg_r[y] = msg_r[first + y];
+				msg_g[y] = msg_g[first + y];
+				msg_b[y] = msg_b[first + y];
 			}
-			cy = MAX_LINES - 1;
+			cy = keep;
 		}
 		strcpy(msg_lines[cy], buf);
 	}
@@ -586,7 +621,7 @@ void msg_printf(const char *text, ...)
 	draw_battery_status(1);
 	draw_volume_status(1);
 
-	for (y = 0; y <= cy; y++)
+	for (y = 0; y <= cy && y < visible_lines; y++)
 		uifont_print(MIN_X, MIN_Y + y * 16, msg_r[y], msg_g[y], msg_b[y], msg_lines[y]);
 	video_driver->endFrame(video_data);
 

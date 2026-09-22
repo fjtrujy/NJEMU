@@ -110,16 +110,22 @@ static GSGLOBAL *gsGlobal;
 static GSTEXTURE *atlas_indexed;
 static GSTEXTURE *atlas_scrollh;
 
-static RECT ps2_centered_clip(const ps2_clip_size_t *size)
+static RECT ps2_centered_clip(const ps2_clip_size_t *size, bool scale_logical)
 {
 	int output_width = gsGlobal ? gsGlobal->Width : 640;
 	int output_height = gsGlobal ? gsGlobal->Height : 448;
+	int width = size->width;
+	int height = size->height;
 	RECT clip;
 
-	clip.left = (output_width - size->width) / 2;
-	clip.top = (output_height - size->height) / 2;
-	clip.right = clip.left + size->width;
-	clip.bottom = clip.top + size->height;
+	if (scale_logical)
+		ps2_scale_logical_size(output_width, output_height,
+			size->width, size->height, &width, &height);
+
+	clip.left = (output_width - width) / 2;
+	clip.top = (output_height - height) / 2;
+	clip.right = clip.left + width;
+	clip.bottom = clip.top + height;
 	return clip;
 }
 
@@ -242,12 +248,13 @@ void blit_finish(void)
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &cps_src_clip, &cps_src_clip);
 			video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
-		dst_clip = ps2_centered_clip(&cps_clip_size[5]);
+		dst_clip = ps2_centered_clip(&cps_clip_size[5], true);
 		video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &dst_clip);
 	}
 	else
 	{
-		dst_clip = ps2_centered_clip(&cps_clip_size[option_stretch]);
+		dst_clip = ps2_centered_clip(&cps_clip_size[option_stretch],
+			option_stretch != 0);
 		if (cps_flip_screen)
 			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &dst_clip);
 		else

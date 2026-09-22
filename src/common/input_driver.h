@@ -41,6 +41,7 @@ uint32_t poll_gamepad_analog_index(uint32_t controller);
 void pad_update(void);
 bool pad_pressed(uint32_t code);
 bool pad_pressed_any(void);
+bool pad_menu_combo_pressed(uint32_t buttons);
 void pad_wait_clear(void);
 void pad_wait_press(int msec);
 

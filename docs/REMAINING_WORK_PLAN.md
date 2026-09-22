@@ -347,7 +347,27 @@ Completed across both passes:
 - non-legacy output sizes use complete GUI redraws instead of the old partial
   copy path, preventing logical/physical rectangle mixing;
 - live Desktop resize is supported, and output-size changes force a common
-  `UI_FULL_REFRESH`; the legacy partial-refresh copy path is now PSP-only.
+  `UI_FULL_REFRESH`; the legacy PSP framebuffer partial-copy path remains
+  PSP-only;
+- PS2 exposes the active GS output itself as its logical GUI canvas, keeping
+  native UI coordinates at 1:1.  This avoids fractionally scaling the 14px
+  bitmap font while center/right/bottom helpers still consume the complete
+  640x448 NTSC or 640x512 PAL output;
+- the PS2 file browser has a native-output selection refresh path: while the
+  visible page does not scroll it copies the previous physical frame and
+  redraws only the old row, new row and scrollbar rather than regenerating
+  every visible ROM title;
+- PS2 keeps the selected-icon glow static.  The previous non-PSP light
+  animation promoted each light step to `UI_FULL_REFRESH`, which continuously
+  repainted text-heavy browser screens even without controller input;
+- PS2 font rendering batches small glyph/shadow uploads through a 32-entry
+  40x32 texture ring.  Normal glyphs transfer only their actual rectangle
+  instead of the complete 512x48 scratch surface, avoiding one gsKit queue
+  execution/FINISH cycle per character.  Oversized scratch users such as the
+  NJEMU logo retain the compatible fallback path;
+- PS2 dialogs and title chrome now use opaque native-pixel fills and a simple
+  offset box shadow rather than the repeated PSP Gaussian 8x8 shadow tiles,
+  removing visible tile softness/seams and reducing textured GUI draws;
 - PS2 game presentation rectangles now use the same stretch-option ordering as
   the common MVS/NCDZ/CPS menus and are centered from the active
   `gsGlobal->Width/Height`, so the game image no longer inherits PSP-era
@@ -402,6 +422,15 @@ Validation completed so far:
 - fresh PS2 feature-on builds pass for CPS1, CPS2, MVS and NCDZ, and the final
   MVS ELF boots in PCSX2 at 640x448 with the responsive splash and no runtime
   assert/abort/error in the application path;
+- the follow-up native-pixel MVS PS2 build boots in PCSX2 with the compact font
+  ring allocated successfully and an opaque, uniform splash panel.  Scripted
+  macOS keyboard events did not reach the emulated pad reliably, so measured
+  controller-to-selection latency still requires manual PCSX2/real-hardware
+  confirmation rather than treating that automation as a pass;
+- after the responsiveness follow-up, normal PS2 GUI builds and
+  `GUI+SAVE_STATE+COMMAND_LIST` builds pass for CPS1/CPS2/MVS/NCDZ; PSP GUI
+  builds pass for the same four cores, and Desktop MVS passes all six CTest
+  targets;
 - an instrumented MVS PCSX2 round trip wrote its marker after `emu_main()`
   returned, validating GUI -> game -> GUI ownership before the temporary test
   hook was removed;
@@ -411,14 +440,17 @@ Validation completed so far:
 The resolution-relative Phase C implementation is now complete and its policy is
 settled:
 
-- common GUI layout always derives its responsive logical canvas and uniform
-  transform from the active platform output dimensions;
+- Desktop derives a responsive logical canvas and uniform transform from the
+  active output dimensions; PSP remains the original pixel-identical 480x272
+  canvas;
 - PS2 continues to use the video backend's configured GS mode (currently the
-  forced 60-Hz NTSC path with 448 lines) and the GUI consumes the resulting
-  `gsGlobal->Width/Height`;
+  forced 60-Hz NTSC path with 448 lines), but treats the reported
+  `gsGlobal->Width/Height` as native 1:1 logical coordinates.  This preserves
+  bitmap-font sharpness while keeping center/right/bottom layout
+  resolution-relative;
 - changing the PS2 presentation mode later does not require another common-GUI
-  coordinate rewrite; a backend that reports a different output size automatically
-  receives the same responsive layout treatment;
+  coordinate rewrite: the backend-reported output dimensions become the PS2
+  logical canvas directly;
 - adding user-selectable PS2 480p/widescreen modes is deliberately **not** part
   of this phase because those modes also change GS timing, interlace/field mode,
   DW/DH and framebuffer requirements; that work should be treated as a separate

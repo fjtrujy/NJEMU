@@ -1557,8 +1557,8 @@ static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	gsKit_set_test(gsGlobal, GS_ATEST_OFF);
 
 	gsKit_prim_sprite_texture(gsGlobal, texture,
-		(float)dx, (float)dy, (float)su, (float)sv,
-		(float)(dx + dw), (float)(dy + dh),
+		(float)dx - 0.5f, (float)dy - 0.5f, (float)su, (float)sv,
+		(float)(dx + dw) - 0.5f, (float)(dy + dh) - 0.5f,
 		(float)(su + sw), (float)(sv + sh),
 		0, GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80));
 

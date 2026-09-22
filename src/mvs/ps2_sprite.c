@@ -48,16 +48,22 @@ static GSGLOBAL *gsGlobal;
 // SPR0, SPR1, SPR2 and FIX are all 512x512
 GSTEXTURE *atlas;
 
-static RECT ps2_centered_clip(const ps2_clip_size_t *size)
+static RECT ps2_centered_clip(const ps2_clip_size_t *size, bool scale_logical)
 {
 	int output_width = gsGlobal ? gsGlobal->Width : 640;
 	int output_height = gsGlobal ? gsGlobal->Height : 448;
+	int width = size->width;
+	int height = size->height;
 	RECT clip;
 
-	clip.left = (output_width - size->width) / 2;
-	clip.top = (output_height - size->height) / 2;
-	clip.right = clip.left + size->width;
-	clip.bottom = clip.top + size->height;
+	if (scale_logical)
+		ps2_scale_logical_size(output_width, output_height,
+			size->width, size->height, &width, &height);
+
+	clip.left = (output_width - width) / 2;
+	clip.top = (output_height - height) / 2;
+	clip.right = clip.left + width;
+	clip.bottom = clip.top + height;
 	return clip;
 }
 
@@ -139,7 +145,8 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	RECT dst_clip = ps2_centered_clip(&mvs_clip_size[option_stretch]);
+	RECT dst_clip = ps2_centered_clip(&mvs_clip_size[option_stretch],
+		option_stretch != 0);
 	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
 }

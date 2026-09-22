@@ -50,6 +50,16 @@ void ui_layout_init(int logical_width, int logical_height,
 
 void ui_layout_init_responsive(int output_width, int output_height)
 {
+#if defined(PS2)
+	/* PS2 already exposes the native GS presentation size (normally 640x448
+	 * NTSC or 640x512 PAL). Keep UI pixels 1:1 there: scaling the legacy
+	 * 480x272 canvas made the 14px bitmap font land at fractional ~19px sizes
+	 * and was the main reason text looked soft. Edge/center helpers still make
+	 * the layout responsive because logical coordinates now are the output
+	 * coordinates themselves. */
+	ui_layout_init(output_width, output_height, output_width, output_height);
+	return;
+#else
 	float scale_x;
 	float scale_y;
 	float scale;
@@ -83,6 +93,7 @@ void ui_layout_init_responsive(int output_width, int output_height)
 	 * make the logical canvas overdraw the physical output. Arbitrary aspect
 	 * ratios may leave a single pixel of unused space on one axis. */
 	ui_layout_init(logical_width, logical_height, output_width, output_height);
+#endif
 }
 
 const ui_layout_metrics_t *ui_layout_get(void)

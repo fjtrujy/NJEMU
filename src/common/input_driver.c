@@ -21,6 +21,7 @@ static uint8_t pressed_count;
 static uint8_t pressed_delay;
 static uint64_t curr_time;
 static uint64_t prev_time;
+static bool menu_combo_down;
 
 void *input_info;
 
@@ -39,6 +40,7 @@ bool pad_init(void)
 	pressed_check = 0;
 	pressed_count = 0;
 	pressed_delay = 0;
+	menu_combo_down = false;
 	input_info = input_driver->init();
 	return input_info != NULL;
 }
@@ -170,6 +172,20 @@ void pad_update(void)
 bool pad_pressed(uint32_t code)
 {
 	return (pad & code) != 0;
+}
+
+/*--------------------------------------------------------
+	Get edge-triggered fallback menu combo
+--------------------------------------------------------*/
+
+bool pad_menu_combo_pressed(uint32_t buttons)
+{
+	bool down = (buttons & PLATFORM_PAD_START) &&
+		(buttons & PLATFORM_PAD_SELECT);
+	bool pressed = down && !menu_combo_down;
+
+	menu_combo_down = down;
+	return pressed;
 }
 
 
