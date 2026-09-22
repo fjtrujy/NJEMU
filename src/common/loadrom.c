@@ -209,6 +209,44 @@ int cachefile_open(int type)
 
 	return fd;
 }
+
+
+int64_t cachefile_zopen(int type, const char *name)
+{
+	int use_parent = 0;
+	int64_t fd;
+	char path[PATH_MAX];
+
+	switch (type)
+	{
+	case CACHE_CROM: use_parent = use_parent_crom; break;
+	case CACHE_SROM: use_parent = use_parent_srom; break;
+	case CACHE_VROM: use_parent = use_parent_vrom; break;
+	default: break;
+	}
+
+	if (use_parent && parent_name[0])
+	{
+		sprintf(path, "%s/%s_cache.zip", cache_dir, parent_name);
+		if (zip_open(path) != -1)
+		{
+			fd = zopen(name);
+			if (fd != -1)
+				return fd;
+			zip_close();
+		}
+	}
+
+	sprintf(path, "%s/%s_cache.zip", cache_dir, game_name);
+	if (zip_open(path) == -1)
+		return -1;
+
+	fd = zopen(name);
+	if (fd == -1)
+		zip_close();
+
+	return fd;
+}
 #endif
 
 

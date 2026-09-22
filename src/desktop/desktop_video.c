@@ -33,7 +33,7 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	windows_height = desktop->draw_extra_info ? TEXTURE_HEIGHT * 2 : OUTPUT_HEIGHT;
 
 
-    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windows_width, windows_height, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windows_width, windows_height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
 	// Check that the window was successfully created
 	if (window == NULL) {
@@ -44,6 +44,7 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	}
 
 	desktop->window = window;
+	SDL_SetWindowMinimumSize(window, SCR_WIDTH, SCR_HEIGHT);
 
 	// Create a renderer
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -96,7 +97,11 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 		printf("Could not create sdl_texture_scrbitmap: %s\n", SDL_GetError());
 		exit(1);
 	}
-	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, desktop->blendMode);
+	/* scrbitmap is the complete work frame and is copied opaquely to the
+	 * presentation target.  Using the layer blend equation here makes an
+	 * opaque source keep the previous destination contents, which exposes
+	 * undefined back-buffer pixels as coloured noise in the GUI background. */
+	SDL_SetTextureBlendMode(desktop->sdl_texture_scrbitmap, SDL_BLENDMODE_NONE);
 	
 	size_t texOffset = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
@@ -125,6 +130,18 @@ static void desktop_exit(desktop_video_t *desktop) {
 		desktop->sdl_texture_scrbitmap = NULL;
 	}
 
+	for (int i = 0; i < desktop->tex_layers_count; i++) {
+		desktop->tex_layers[i].buffer = NULL;
+		if (desktop->tex_layers[i].texture) {
+			SDL_DestroyTexture(desktop->tex_layers[i].texture);
+			desktop->tex_layers[i].texture = NULL;
+		}
+	}
+
+	free(desktop->tex_layers);
+	desktop->tex_layers = NULL;
+	desktop->tex_layers_count = 0;
+
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
@@ -134,24 +151,27 @@ static void desktop_exit(desktop_video_t *desktop) {
 		free(desktop->texturesMem);
 		desktop->texturesMem = NULL;
 	}
-
-	for (int i = 0; i < desktop->tex_layers_count; i++) {
-		desktop->tex_layers[i].buffer = NULL;
-		if (desktop->tex_layers[i].texture) {
-			SDL_DestroyTexture(desktop->tex_layers[i].texture);
-			desktop->tex_layers[i].texture = NULL;
-		}
-	}
 }
 
 static void desktop_free(void *data)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
+	if (!desktop)
+		return;
 
-	SDL_DestroyRenderer(desktop->renderer);
-	SDL_DestroyWindow(desktop->window);
-	
+	/* Renderer-owned textures must be destroyed before the renderer itself. */
 	desktop_exit(desktop);
+
+	if (desktop->renderer) {
+		SDL_DestroyRenderer(desktop->renderer);
+		desktop->renderer = NULL;
+	}
+
+	if (desktop->window) {
+		SDL_DestroyWindow(desktop->window);
+		desktop->window = NULL;
+	}
+
 	free(desktop);
 }
 

@@ -94,6 +94,12 @@ static uint32_t desktop_availableRam(void *data) {
 	return (uint32_t)total;
 }
 
+static ui_language_t desktop_getSystemLanguage(void *data) {
+	(void)data;
+	/* Desktop historically always selected English. Keep that behaviour explicit. */
+	return UI_LANG_ENGLISH;
+}
+
 platform_driver_t platform_desktop = {
 	"desktop",
 	desktop_init,
@@ -104,4 +110,5 @@ platform_driver_t platform_desktop = {
 	desktop_getWlanSwitchState,
 	desktop_getHardwareModel,
 	desktop_availableRam,
+	desktop_getSystemLanguage,
 };

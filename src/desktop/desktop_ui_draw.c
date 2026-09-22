@@ -156,6 +156,20 @@ static void desktop_ui_draw_term(void *data)
 	free(d);
 }
 
+static void desktop_ui_draw_getOutputSize(void *data, int *width, int *height)
+{
+	desktop_ui_data_t *d = (desktop_ui_data_t *)data;
+	SDL_Renderer *renderer = get_renderer(d);
+	int w = SCR_WIDTH;
+	int h = SCR_HEIGHT;
+
+	if (renderer)
+		SDL_GetRendererOutputSize(renderer, &w, &h);
+
+	if (width) *width = w;
+	if (height) *height = h;
+}
+
 /*------------------------------------------------------
 	Texture management
 ------------------------------------------------------*/
@@ -482,6 +496,7 @@ static void desktop_ui_draw_setScissor(void *data, int x, int y, int w, int h)
 const ui_draw_driver_t desktop_ui_draw_driver = {
 	desktop_ui_draw_init,
 	desktop_ui_draw_term,
+	desktop_ui_draw_getOutputSize,
 	desktop_ui_draw_uploadTexture,
 	desktop_ui_draw_clearTexture,
 	desktop_ui_draw_getTextureBasePtr,

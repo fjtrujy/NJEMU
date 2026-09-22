@@ -82,9 +82,16 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 	psp->scrbitmap = offset; // Store relative offset
 	offset += framesize;
 	offset = VRAM_ALIGN_UP(offset);
+#if (EMU_SYSTEM == CPS2)
+	/* Only CPS2 uses the Z buffer (for sprite-priority masking).  Reserving a
+	 * fourth full-screen buffer for every core shifts MVS/NCDZ texture atlases
+	 * into the fixed GUI texture area at the end of the PSP's 2 MiB EDRAM. */
 	psp->depth_frame = offset; // Store relative offset for depth buffer (16-bit)
 	offset += framesize;
 	offset = VRAM_ALIGN_UP(offset);
+#else
+	psp->depth_frame = 0;
+#endif
 
 	// Original buffers containing clut indexes
 	psp->tex_layers =
@@ -238,6 +245,23 @@ static void psp_endFrame(void *data)
 	sceGuSync(0, GU_SYNC_FINISH);
 }
 
+void psp_video_sync_ui_scratch(void *data)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+
+	assert(psp->frame_active && "UI scratch sync requires an active frame");
+
+	/* tex_font is rewritten for every proportional glyph.  Complete the draw
+	 * that samples its current contents before the CPU writes the next glyph,
+	 * then immediately continue the same logical frame with a fresh GU list. */
+	sceGuFinish();
+	sceGuSync(0, GU_SYNC_FINISH);
+	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
+	sceGuStart(GU_DIRECT, gulist);
+	sceGuDrawBufferList(pixel_format, (void *)psp->draw_frame, BUF_WIDTH);
+	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
+}
+
 /*--------------------------------------------------------
 		Resolve frame index to VRAM pointer
 --------------------------------------------------------*/
@@ -364,11 +388,12 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 	dh = dst_rect->bottom - dst_rect->top;
 
 	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
-	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
-				 dst_rect->bottom);
+	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 	sceGuDisable(GU_ALPHA_TEST);
+	sceGuDisable(GU_BLEND);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
+	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
@@ -417,21 +442,27 @@ static void psp_startWorkFrame(void *data, uint32_t color)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 
+	/* A GUI frame can leave both the clear color and fixed-function GU state in
+	 * a UI-specific configuration.  Normalize the game frame explicitly so the
+	 * first emulation frame cannot inherit GUI background/blending state. */
+	sceGuClearColor(color);
 	sceGuDrawBufferList(GU_PSM_5551, (void *)psp->draw_frame, BUF_WIDTH);
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
 
 	sceGuDrawBufferList(GU_PSM_5551, (void *)psp->scrbitmap, BUF_WIDTH);
-	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
-
 	sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);
-	sceGuClearColor(color);
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
 
 	sceGuClearColor(0);
+	sceGuDisable(GU_BLEND);
 	sceGuEnable(GU_ALPHA_TEST);
+	sceGuEnable(GU_TEXTURE_2D);
 	sceGuTexMode(GU_PSM_T8, 0, 0, GU_TRUE);
+	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+	psp->current_tex_layer = NULL;
+	psp->current_clut = NULL;
 
 	// sceGuFinish();
 	// sceGuSync(0, GU_SYNC_FINISH);
@@ -465,8 +496,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	dh = dst_rect->bottom - dst_rect->top;
 
 	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
-	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
-				 dst_rect->bottom);
+	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
@@ -533,8 +563,7 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	dh = dst_rect->bottom - dst_rect->top;
 
 	sceGuDrawBufferList(pixel_format, dst_ptr, BUF_WIDTH);
-	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
-				 dst_rect->bottom);
+	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
@@ -604,8 +633,7 @@ static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
 	dh = dst_rect->bottom - dst_rect->top;
 
 	sceGuDrawBufferList(dst_fmt, dst, BUF_WIDTH);
-	sceGuScissor(dst_rect->left, dst_rect->top, dst_rect->right,
-				 dst_rect->bottom);
+	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 
 	sceGuTexMode(src_fmt, 0, 0, GU_FALSE);
 	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
@@ -740,6 +768,7 @@ typedef struct Vertex16_t
 } Vertex16;
 
 static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int tex_width, int tex_height, int tex_stride,
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
@@ -754,7 +783,8 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	}
 
 	sceGuTexMode(tex_format, 0, 0, tex_swizzled);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, tex);
+	sceGuTexImage(0, tex_width, tex_height, tex_stride, tex);
+	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 
 	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
@@ -766,14 +796,14 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 		vertices[0].x = dx;
 		vertices[0].y = dy;
 		vertices[0].z = 0;
-		vertices[0].color = 0;
+		vertices[0].color = 0xffff;
 
 		vertices[1].u = su + sw;
 		vertices[1].v = sv + sh;
 		vertices[1].x = dx + dw;
 		vertices[1].y = dy + dh;
 		vertices[1].z = 0;
-		vertices[1].color = 0;
+		vertices[1].color = 0xffff;
 
 		sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, 2, NULL, vertices);
 	}

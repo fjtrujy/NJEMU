@@ -88,6 +88,173 @@ static cache_t *pcm_tail;
 
 static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
+static int64_t cache_file_pos;
+static int64_t pcm_file_pos;
+
+#ifdef CACHE_IO_PROFILE
+typedef struct cache_io_profile_s
+{
+	uint64_t preload_reads;
+	uint64_t preload_seeks;
+	uint64_t preload_seek_skips;
+	uint64_t preload_bytes;
+	uint64_t preload_time_us;
+	uint64_t hits;
+	uint64_t misses;
+	uint64_t sequential_misses;
+	uint64_t seeks;
+	uint64_t seek_skips;
+	uint64_t bytes_read;
+	uint64_t miss_time_us;
+	uint64_t max_miss_time_us;
+	int32_t last_miss_block;
+} cache_io_profile_t;
+
+static cache_io_profile_t crom_io_profile;
+static cache_io_profile_t pcm_io_profile;
+
+static uint64_t cache_io_now_us(void)
+{
+	if (ticker_data && ticker_driver && ticker_driver->currentUs)
+		return ticker_driver->currentUs(ticker_data);
+	return 0;
+}
+
+static void cache_io_profile_reset(cache_io_profile_t *profile)
+{
+	memset(profile, 0, sizeof(*profile));
+	profile->last_miss_block = -1;
+}
+
+static void cache_io_profile_miss(cache_io_profile_t *profile, int block)
+{
+	profile->misses++;
+	if (profile->last_miss_block >= 0 && block == profile->last_miss_block + 1)
+		profile->sequential_misses++;
+	profile->last_miss_block = block;
+}
+
+static void cache_io_profile_time(cache_io_profile_t *profile, uint64_t start)
+{
+	uint64_t elapsed;
+
+	if (!start)
+		return;
+
+	elapsed = cache_io_now_us() - start;
+	profile->miss_time_us += elapsed;
+	if (elapsed > profile->max_miss_time_us)
+		profile->max_miss_time_us = elapsed;
+}
+
+static void cache_io_profile_print(const char *name, const cache_io_profile_t *profile)
+{
+	uint64_t accesses = profile->hits + profile->misses;
+	uint64_t avg_us = profile->misses ? profile->miss_time_us / profile->misses : 0;
+	uint64_t rate_x100 = accesses ? (profile->hits * 10000) / accesses : 0;
+
+	printf("[cache-io] %s preload_reads=%llu preload_seeks=%llu "
+		"preload_seek_skips=%llu preload_bytes=%llu preload_time_us=%llu "
+		"hits=%llu misses=%llu hit_rate=%llu.%02llu%% "
+		"sequential_misses=%llu seeks=%llu seek_skips=%llu bytes=%llu "
+		"avg_miss_us=%llu max_miss_us=%llu\n",
+		name,
+		(unsigned long long)profile->preload_reads,
+		(unsigned long long)profile->preload_seeks,
+		(unsigned long long)profile->preload_seek_skips,
+		(unsigned long long)profile->preload_bytes,
+		(unsigned long long)profile->preload_time_us,
+		(unsigned long long)profile->hits,
+		(unsigned long long)profile->misses,
+		(unsigned long long)(rate_x100 / 100),
+		(unsigned long long)(rate_x100 % 100),
+		(unsigned long long)profile->sequential_misses,
+		(unsigned long long)profile->seeks,
+		(unsigned long long)profile->seek_skips,
+		(unsigned long long)profile->bytes_read,
+		(unsigned long long)avg_us,
+		(unsigned long long)profile->max_miss_time_us);
+}
+
+static void cache_io_profile_snapshot(const cache_io_profile_t *profile)
+{
+	if (profile->misses == 0 || (profile->misses & 15) != 0)
+		return;
+
+	cache_io_profile_print(profile == &pcm_io_profile ? "pcm" : "crom", profile);
+}
+#endif
+
+static int mvs_cache_read_block(int fd, int64_t *known_pos, uint16_t block,
+	uint8_t *dst
+#ifdef CACHE_IO_PROFILE
+	, cache_io_profile_t *profile, int runtime_miss
+#endif
+)
+{
+	const int64_t offset = (int64_t)block << BLOCK_SHIFT;
+	ssize_t bytes;
+#ifdef CACHE_IO_PROFILE
+	uint64_t start = cache_io_now_us();
+#endif
+
+	if (
+#ifdef CACHE_IO_FORCE_SEEK
+		1
+#else
+		*known_pos != offset
+#endif
+	)
+	{
+		if (lseek(fd, offset, SEEK_SET) < 0)
+		{
+			*known_pos = -1;
+			return 0;
+		}
+#ifdef CACHE_IO_PROFILE
+		if (runtime_miss)
+			profile->seeks++;
+		else
+			profile->preload_seeks++;
+#endif
+	}
+#ifdef CACHE_IO_PROFILE
+	else if (runtime_miss)
+	{
+		profile->seek_skips++;
+	}
+	else
+	{
+		profile->preload_seek_skips++;
+	}
+#endif
+
+	bytes = read(fd, dst, CACHE_BLOCK_SIZE);
+	if (bytes == CACHE_BLOCK_SIZE)
+		*known_pos = offset + CACHE_BLOCK_SIZE;
+	else
+		*known_pos = -1;
+
+#ifdef CACHE_IO_PROFILE
+	if (runtime_miss)
+	{
+		if (bytes > 0)
+			profile->bytes_read += (uint64_t)bytes;
+		cache_io_profile_time(profile, start);
+		cache_io_profile_snapshot(profile);
+	}
+	else
+	{
+		uint64_t elapsed = start ? cache_io_now_us() - start : 0;
+		profile->preload_reads++;
+		if (bytes > 0)
+			profile->preload_bytes += (uint64_t)bytes;
+		profile->preload_time_us += elapsed;
+	}
+#endif
+
+	return bytes == CACHE_BLOCK_SIZE;
+}
 #endif
 
 
@@ -108,16 +275,29 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 
 	if (idx == BLOCK_NOT_CACHED)
 	{
+#ifdef CACHE_IO_PROFILE
+		cache_io_profile_miss(&pcm_io_profile, new_block);
+#endif
 		p = pcm_head;
 		pcm_blocks[p->block] = BLOCK_NOT_CACHED;
 
 		p->block = new_block;
 		pcm_blocks[new_block] = p->idx;
 
-		lseek(pcm_fd, new_block << BLOCK_SHIFT, SEEK_SET);
-		read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+		mvs_cache_read_block(pcm_fd, &pcm_file_pos, new_block,
+			&memory_region_sound1[p->idx << BLOCK_SHIFT]
+#ifdef CACHE_IO_PROFILE
+			, &pcm_io_profile, 1
+#endif
+		);
 	}
-	else p = &pcm_data[idx];
+	else
+	{
+#ifdef CACHE_IO_PROFILE
+		pcm_io_profile.hits++;
+#endif
+		p = &pcm_data[idx];
+	}
 
 	if (p->frame != frames_displayed)
 	{
@@ -241,8 +421,12 @@ static int fill_cache(void)
 			p->block = block;
 			blocks[block] = p->idx;
 
-			lseek((int32_t)cache_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+			mvs_cache_read_block((int32_t)cache_fd, &cache_file_pos, block,
+				&GFX_MEMORY[p->idx << BLOCK_SHIFT]
+#ifdef CACHE_IO_PROFILE
+				, &crom_io_profile, 0
+#endif
+			);
 
 			head = p->next;
 			head->prev = NULL;
@@ -310,8 +494,12 @@ static int fill_cache(void)
 			p->block = block;
 			pcm_blocks[block] = p->idx;
 
-			lseek(pcm_fd, block << BLOCK_SHIFT, SEEK_SET);
-			read(pcm_fd, &memory_region_sound1[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+			mvs_cache_read_block(pcm_fd, &pcm_file_pos, block,
+				&memory_region_sound1[p->idx << BLOCK_SHIFT]
+#ifdef CACHE_IO_PROFILE
+				, &pcm_io_profile, 0
+#endif
+			);
 
 			pcm_head = p->next;
 			pcm_head->prev = NULL;
@@ -322,6 +510,7 @@ static int fill_cache(void)
 			pcm_tail->next = p;
 			pcm_tail = p;
 			i++;
+			block++;
 		}
 	}
 #else
@@ -439,13 +628,27 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 		blocks[new_block] = p->idx;
 
 #if (EMU_SYSTEM == MVS)
-		lseek((int32_t)cache_fd, new_block << BLOCK_SHIFT, SEEK_SET);
+	#ifdef CACHE_IO_PROFILE
+		cache_io_profile_miss(&crom_io_profile, new_block);
+	#endif
+		mvs_cache_read_block((int32_t)cache_fd, &cache_file_pos, new_block,
+			&GFX_MEMORY[p->idx << BLOCK_SHIFT]
+	#ifdef CACHE_IO_PROFILE
+			, &crom_io_profile, 1
+	#endif
+		);
 #else
 		lseek((int32_t)cache_fd, block_offset[new_block], SEEK_SET);
-#endif
 		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+	#endif
 	}
-	else p = &cache_data[idx];
+	else
+	{
+	#if (EMU_SYSTEM == MVS) && defined(CACHE_IO_PROFILE)
+		crom_io_profile.hits++;
+	#endif
+		p = &cache_data[idx];
+	}
 
 	if (p->next)
 	{
@@ -642,6 +845,13 @@ void cache_init(void)
 #if (EMU_SYSTEM == MVS)
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
+	cache_file_pos = -1;
+	pcm_file_pos = -1;
+
+#ifdef CACHE_IO_PROFILE
+	cache_io_profile_reset(&crom_io_profile);
+	cache_io_profile_reset(&pcm_io_profile);
+#endif
 
 	for (i = 0; i < MAX_PCM_BLOCKS; i++)
 		pcm_blocks[i] = BLOCK_NOT_CACHED;
@@ -697,20 +907,21 @@ int cache_start(void)
 	{
 		cache_type = CACHE_ZIPFILE;
 
-		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
-		if (zip_open(spr_cache_name) == -1)
+		if (use_parent_crom && parent_name[0])
 		{
-			if (strlen(parent_name))
+			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
+			if (zip_open(spr_cache_name) != -1)
 			{
-				sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
-				if (zip_open(spr_cache_name) == -1)
-				{
-					zip_close();
-				}
-				else found = 1;
+				found = 1;
 			}
 		}
-		else found = 1;
+
+		if (!found)
+		{
+			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
+			if (zip_open(spr_cache_name) != -1)
+				found = 1;
+		}
 
 		if (found)
 		{
@@ -758,6 +969,7 @@ int cache_start(void)
 		{
 			if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
 			{
+				pcm_file_pos = 0;
 				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * CACHE_BLOCK_SIZE)) != NULL)
 				{
 					pcm_cache_enable = 1;
@@ -785,6 +997,7 @@ int cache_start(void)
 			msg_printf(TEXT(COULD_NOT_OPEN_CACHE_FILE));
 			return 0;
 		}
+		cache_file_pos = 0;
 	}
 	/* For zip format, blocks will be accessed via zip_cache_open on demand */
 
@@ -1055,14 +1268,21 @@ int cache_start(void)
 void cache_shutdown(void)
 {
 #if (EMU_SYSTEM == MVS)
+#ifdef CACHE_IO_PROFILE
+	cache_io_profile_print("crom", &crom_io_profile);
+	if (pcm_cache_enable || pcm_io_profile.hits || pcm_io_profile.misses)
+		cache_io_profile_print("pcm", &pcm_io_profile);
+#endif
 	if (pcm_cache_enable)
 	{
 		if (pcm_fd != -1)
 		{
 			close(pcm_fd);
+			pcm_fd = -1;
 		}
 		pcm_cache_enable = 0;
 	}
+	pcm_file_pos = -1;
 #endif
 	if (cache_type == CACHE_RAWFILE)
 	{
@@ -1071,6 +1291,9 @@ void cache_shutdown(void)
 			close((int32_t)cache_fd);
 			cache_fd = -1;
 		}
+#if (EMU_SYSTEM == MVS)
+		cache_file_pos = -1;
+#endif
 	}
 	else if (cache_type == CACHE_ZIPFILE)
 	{
@@ -1095,13 +1318,22 @@ void cache_sleep(int flag)
 			if (cache_type == CACHE_RAWFILE)
 			{
 				close((int32_t)cache_fd);
+#if (EMU_SYSTEM == MVS)
+				cache_fd = -1;
+				cache_file_pos = -1;
+#endif
 			}
 			else if (cache_type == CACHE_ZIPFILE)
 			{
 				zip_close();
 			}
 #if (EMU_SYSTEM == MVS)
-			if (pcm_cache_enable) close(pcm_fd);
+			if (pcm_cache_enable)
+			{
+				close(pcm_fd);
+				pcm_fd = -1;
+				pcm_file_pos = -1;
+			}
 #endif
 		}
 		else
@@ -1110,6 +1342,7 @@ void cache_sleep(int flag)
 			{
 #if (EMU_SYSTEM == MVS)
 				cache_fd = cachefile_open(CACHE_CROM);
+				cache_file_pos = cache_fd >= 0 ? 0 : -1;
 #else
 				cache_fd = open(spr_cache_name, O_RDONLY, 0777);
 #endif
@@ -1121,7 +1354,10 @@ void cache_sleep(int flag)
 			/* CACHE_FOLDER: nothing to reopen */
 #if (EMU_SYSTEM == MVS)
 			if (pcm_cache_enable)
+			{
 				pcm_fd = cachefile_open(CACHE_VROM);
+				pcm_file_pos = pcm_fd >= 0 ? 0 : -1;
+			}
 #endif
 		}
 	}

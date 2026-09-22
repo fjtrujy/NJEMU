@@ -540,8 +540,23 @@ static int load_rom_cpu1(void)
 
 	for (i = 0; i < num_cpu1rom; )
 	{
+		int irrmaze_legacy_program = 0;
+
 		strcpy(fname, cpu1rom[i].name);
-		if ((res = file_open(game_name, parent, cpu1rom[i].crc, fname)) < 0)
+		res = file_open(game_name, parent, cpu1rom[i].crc, fname);
+
+		/* Older Irritating Maze sets store the same 2 MiB program image with
+		 * its 1 MiB halves already in the order expected by the CPU. */
+		if (res < 0
+		&& strcmp(game_name, "irrmaze") == 0
+		&& cpu1rom[i].crc == 0x4c2ff660)
+		{
+			strcpy(fname, "236-p1.bin");
+			res = file_open(game_name, parent, 0x6d536c6e, fname);
+			irrmaze_legacy_program = (res >= 0);
+		}
+
+		if (res < 0)
 		{
 			if (res == -1)
 				error_file(fname);
@@ -552,7 +567,17 @@ static int load_rom_cpu1(void)
 
 		msg_printf(TEXT(LOADING), fname);
 
-		i = rom_load(cpu1rom, memory_region_cpu1, i, num_cpu1rom);
+		if (irrmaze_legacy_program)
+		{
+			file_read(memory_region_cpu1, memory_length_cpu1);
+			i++;
+			while (i < num_cpu1rom && cpu1rom[i].type == ROM_CONTINUE)
+				i++;
+		}
+		else
+		{
+			i = rom_load(cpu1rom, memory_region_cpu1, i, num_cpu1rom);
+		}
 
 		file_close();
 	}
@@ -575,6 +600,7 @@ static int load_rom_cpu1(void)
 		case INIT_svc:      res = svc_px_decrypt();       break;
 		case INIT_samsho5:  res = samsho5_decrypt_68k();  break;
 		case INIT_kof2003:  res = kof2003_decrypt_68k();  break;
+		case INIT_kof2003h: res = kof2003h_decrypt_68k(); break;
 		case INIT_samsh5sp: res = samsh5sp_decrypt_68k(); break;
 		case INIT_matrim:   res = matrim_decrypt_68k();   break;
 
@@ -778,10 +804,17 @@ static int load_rom_gfx2(void)
 
 	if (encrypt_gfx2)
 	{
-#if USE_CACHE
-		if (cache_type == CACHE_ZIPFILE)
+		int32_t fd = cachefile_open(CACHE_SROM);
+
+		if (fd >= 0)
 		{
-			int64_t zfd = zopen("srom");
+			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
+			read(fd, memory_region_gfx2, memory_length_gfx2);
+			close(fd);
+		}
+		else
+		{
+			int64_t zfd = cachefile_zopen(CACHE_SROM, "srom");
 			if (zfd == -1)
 			{
 				error_file("cache/srom");
@@ -790,21 +823,7 @@ static int load_rom_gfx2(void)
 			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
 			zread(zfd, memory_region_gfx2, memory_length_gfx2);
 			zclose(zfd);
-		}
-		else
-#endif
-		{
-			int32_t fd;
-
-			if ((fd = cachefile_open(CACHE_SROM)) < 0)
-			{
-				error_file("cache/srom");
-				return 0;
-			}
-
-			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
-			read(fd, memory_region_gfx2, memory_length_gfx2);
-			close(fd);
+			zip_close();
 		}
 	}
 	else
@@ -1011,10 +1030,17 @@ static int load_rom_sound1(void)
 
 	if (encrypt_snd1)
 	{
-#if USE_CACHE
-		if (cache_type == CACHE_ZIPFILE)
+		int32_t fd = cachefile_open(CACHE_VROM);
+
+		if (fd >= 0)
 		{
-			int64_t zfd = zopen("vrom");
+			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
+			read(fd, memory_region_sound1, memory_length_sound1);
+			close(fd);
+		}
+		else
+		{
+			int64_t zfd = cachefile_zopen(CACHE_VROM, "vrom");
 			if (zfd == -1)
 			{
 				error_file("cache/vrom");
@@ -1023,21 +1049,7 @@ static int load_rom_sound1(void)
 			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
 			zread(zfd, memory_region_sound1, memory_length_sound1);
 			zclose(zfd);
-		}
-		else
-#endif
-		{
-			int32_t fd;
-
-			if ((fd = cachefile_open(CACHE_VROM)) < 0)
-			{
-				error_file("cache/vrom");
-				return 0;
-			}
-
-			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
-			read(fd, memory_region_sound1, memory_length_sound1);
-			close(fd);
+			zip_close();
 		}
 	}
 	else
@@ -1274,6 +1286,7 @@ static int load_rom_user2(void)
 static int load_rom_info(const char *game_name)
 {
 	int32_t fd;
+	const char *rominfo_name = game_name;
 	char path[PATH_MAX];
 	char *buf;
 	char linebuf[256];
@@ -1301,6 +1314,11 @@ static int load_rom_info(const char *game_name)
 	encrypt_usr1 = 0;
 
 	disable_sound = 0;
+
+	/* Keep the legacy public set name used by the game list/cache table while
+	 * accepting the newer rominfo name for Fatal Fury Special set 2. */
+	if (strcmp(game_name, "fatfursa") == 0)
+		rominfo_name = "fatfurspa";
 
 	sprintf(path, "%srominfo.mvs", launchDir);
 
@@ -1354,7 +1372,7 @@ static int load_rom_info(const char *game_name)
 					init    = strtok(NULL, " ,");
 					rotate  = strtok(NULL, " ");
 
-					if (strcasecmp(name, game_name) == 0)
+					if (strcasecmp(name, rominfo_name) == 0)
 					{
 						if (str_cmp(parent, "neogeo") == 0)
 						{
@@ -1730,7 +1748,7 @@ int memory_init(void)
 		{
 		case 1: msg_printf(TEXT(THIS_GAME_NOT_SUPPORTED)); break;
 		case 2: msg_printf(TEXT(ROM_NOT_FOUND)); break;
-		case 3: msg_printf(TEXT(ROMINFO_NOT_FOUND)); break;
+		case 3: msg_printf(TEXT(ROMINFO_NOT_FOUND_MVS)); break;
 		}
 		msg_printf(TEXT(PRESS_ANY_BUTTON2));
 		pad_wait_press(PAD_WAIT_INFINITY);
@@ -1944,6 +1962,7 @@ int memory_init(void)
 	case INIT_svcsplus:
 #endif
 	case INIT_kof2003:
+	case INIT_kof2003h:
 		neogeo_protection_r = pvc_protection_r;
 		neogeo_protection_w = pvc_protection_w;
 		break;

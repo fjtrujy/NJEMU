@@ -12,7 +12,10 @@
 
 #include "common/ui_draw.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui_layout.h"
 #include "common/ui.h"
+#include "common/ui_unicode_glyph.h"
+#include "common/ui_utf8.h"
 #include "stdarg.h"
 
 
@@ -40,7 +43,7 @@
 #define CODE_NOTFOUND		0xffff
 #define CODE_UNDERBAR		0xfffe
 
-#define isascii(c)			((c)  >= 0x20 && (c) <= 0x7e)
+#define isprintascii(c)		((c)  >= 0x20 && (c) <= 0x7e)
 #define islatin1(c)			((c)  >= 0x80)
 #define isgbk1(c)			(((c) >= 0x81 && (c) <= 0xfe))
 #define isgbk2(c)			((c)  >= 0x40 && (c) <= 0xfe && (c) != 0x7f && (c) != 0xff)
@@ -54,8 +57,8 @@ enum
 	FONT_TYPE_ASCII,
 	FONT_TYPE_GRAPHIC,
 	FONT_TYPE_GBKSIMHEI,
-#ifdef COMMAND_LIST
 	FONT_TYPE_LATIN1,
+#ifdef COMMAND_LIST
 	FONT_TYPE_COMMAND,
 #endif
 	FONT_TYPE_MAX
@@ -135,6 +138,71 @@ static const int gauss_fact[12][12] = {
 	{  1, 11, 55,165,330,462,462,330,165, 55, 11,  1 }
 };
 
+static void ui_driver_draw_sprite(int slot,
+	int su, int sv, int sw, int sh,
+	int dx, int dy, int dw, int dh,
+	uint32_t color, int blend)
+{
+	int x, y, w, h;
+
+	ui_layout_transform_rect(dx, dy, dw, dh, &x, &y, &w, &h);
+	ui_draw_driver->drawSprite(ui_draw_data, slot,
+		su, sv, sw, sh, x, y, w, h, color, blend);
+}
+
+static void ui_driver_draw_line(int x1, int y1, int x2, int y2, uint32_t color)
+{
+	int sx, sy, ex, ey;
+
+	ui_layout_transform_point(x1, y1, &sx, &sy);
+	ui_layout_transform_point(x2, y2, &ex, &ey);
+	ui_draw_driver->drawLine(ui_draw_data, sx, sy, ex, ey, color);
+}
+
+static void ui_driver_draw_line_gradient(int x1, int y1, int x2, int y2,
+	uint32_t color1, uint32_t color2)
+{
+	int sx, sy, ex, ey;
+
+	ui_layout_transform_point(x1, y1, &sx, &sy);
+	ui_layout_transform_point(x2, y2, &ex, &ey);
+	ui_draw_driver->drawLineGradient(ui_draw_data, sx, sy, ex, ey, color1, color2);
+}
+
+static void ui_driver_draw_rect(int x, int y, int w, int h, uint32_t color)
+{
+	int dx, dy, dw, dh;
+
+	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
+	ui_draw_driver->drawRect(ui_draw_data, dx, dy, dw, dh, color);
+}
+
+static void ui_driver_fill_rect(int x, int y, int w, int h, uint32_t color)
+{
+	int dx, dy, dw, dh;
+
+	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
+	ui_draw_driver->fillRect(ui_draw_data, dx, dy, dw, dh, color);
+}
+
+static void ui_driver_fill_rect_gradient(int x, int y, int w, int h,
+	uint32_t color1, uint32_t color2, int direction)
+{
+	int dx, dy, dw, dh;
+
+	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
+	ui_draw_driver->fillRectGradient(ui_draw_data, dx, dy, dw, dh,
+		color1, color2, direction);
+}
+
+static void ui_driver_set_scissor(int x, int y, int w, int h)
+{
+	int dx, dy, dw, dh;
+
+	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
+	ui_draw_driver->setScissor(ui_draw_data, dx, dy, dw, dh);
+}
+
 /******************************************************************************
 	Initialization
 ******************************************************************************/
@@ -144,6 +212,8 @@ static const int gauss_fact[12][12] = {
 int ui_init(void)
 {
 	int code, x, y, alpha;
+	int output_width = SCR_WIDTH;
+	int output_height = SCR_HEIGHT;
 	uint16_t *dst;
 	uint16_t color[8] = {
 		MAKECOL15(248,248,248),
@@ -160,6 +230,9 @@ int ui_init(void)
 	ui_draw_data = ui_draw_driver->init(video_data);
 	if (ui_draw_data == NULL)
 		return 0;
+
+	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	ui_layout_init_responsive(output_width, output_height);
 
 	/* Get CPU-writable base pointer for the font scratch texture */
 	tex_font = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
@@ -512,7 +585,7 @@ static uint16_t latin1_get_code(const uint8_t *s, int *type)
 		*type = FONT_TYPE_COMMAND;
 		return code;
 	}
-	else if (isascii(*s))
+	else if (isprintascii(*s))
 	{
 		*type = FONT_TYPE_ASCII;
 		return *s - 0x20;
@@ -546,7 +619,7 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 		*type = FONT_TYPE_GBKSIMHEI;
 		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
 	}
-	else if (isascii(c1))
+	else if (isprintascii(c1))
 	{
 		if (c1 != '\\')
 		{
@@ -565,28 +638,66 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 	Font code lookup (user interface)
 ------------------------------------------------------*/
 
-static inline uint16_t uifont_get_code(const uint8_t *s, int *type)
+static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance)
 {
 	uint8_t c1 = s[0];
 	uint8_t c2 = s[1];
+	uint32_t codepoint;
+	uint16_t glyph;
+	size_t consumed;
 
-	if (isgbk1(c1) && isgbk2(c2))
-	{
-		*type = FONT_TYPE_GBKSIMHEI;
-		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
-	}
-	else if (isascii(c1))
-	{
-		*type = FONT_TYPE_ASCII;
-		return c1 - 0x20;
-	}
-	else if ((c1 >= 0x10 && c1 <= 0x1e) && c1 != 0x1a)
+	*advance = 1;
+
+	/* Preserve legacy in-process graphic control strings such as FONT_CIRCLE. */
+	if ((c1 >= 0x10 && c1 <= 0x1e) && c1 != 0x1a)
 	{
 		*type = FONT_TYPE_GRAPHIC;
 		if (c1 < 0x1a)
 			return c1 - 0x10;
-		else
-			return c1 - 0x11;
+		return c1 - 0x11;
+	}
+	if (isprintascii(c1))
+	{
+		*type = FONT_TYPE_ASCII;
+		return c1 - 0x20;
+	}
+	if (c1 < 0x80)
+	{
+		*type = FONT_TYPE_CONTROL;
+		return c1;
+	}
+
+	consumed = ui_utf8_decode(s, &codepoint);
+	if (consumed != 0)
+	{
+		*advance = (int)consumed;
+		if (codepoint >= 0xe000u && codepoint <= 0xe00eu && codepoint != 0xe00au)
+		{
+			uint16_t graphic = (uint16_t)(codepoint - 0xe000u);
+			*type = FONT_TYPE_GRAPHIC;
+			return graphic < 0x0au ? graphic : graphic - 1u;
+		}
+		if (codepoint >= 0x00a0u && codepoint <= 0x00ffu)
+		{
+			*type = FONT_TYPE_LATIN1;
+			return (uint16_t)(codepoint - 0x0080u);
+		}
+		if (ui_unicode_glyph_lookup(codepoint, &glyph))
+		{
+			*type = FONT_TYPE_GBKSIMHEI;
+			return glyph;
+		}
+		/* Valid but unsupported Unicode: render a visible replacement. */
+		*type = FONT_TYPE_ASCII;
+		return '?' - 0x20;
+	}
+
+	/* Compatibility path for legacy GBK resource metadata and filenames. */
+	if (isgbk1(c1) && isgbk2(c2))
+	{
+		*advance = 2;
+		*type = FONT_TYPE_GBKSIMHEI;
+		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
 	}
 	*type = FONT_TYPE_CONTROL;
 	return c1;
@@ -599,7 +710,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type)
 
 int uifont_get_string_width(const char *s)
 {
-	int width, type;
+	int width, type, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 
@@ -607,29 +718,34 @@ int uifont_get_string_width(const char *s)
 
 	while (*p)
 	{
-		if ((code = uifont_get_code(p, &type)) != CODE_NOTFOUND)
+		if ((code = uifont_get_code(p, &type, &advance)) != CODE_NOTFOUND)
 		{
 			switch (type)
 			{
-			case FONT_TYPE_ASCII:
-				width += ascii_14p_get_pitch(code);
-				p++;
-				break;
+				case FONT_TYPE_ASCII:
+					width += ascii_14p_get_pitch(code);
+					p += advance;
+					break;
 
-			case FONT_TYPE_GRAPHIC:
-				width += graphic_font_get_pitch(code);
-				p++;
-				break;
+				case FONT_TYPE_GRAPHIC:
+					width += graphic_font_get_pitch(code);
+					p += advance;
+					break;
 
-			case FONT_TYPE_GBKSIMHEI:
-				width += gbk_s14p_get_pitch(code);
-				p += 2;
-				break;
+				case FONT_TYPE_GBKSIMHEI:
+					width += gbk_s14p_get_pitch(code);
+					p += advance;
+					break;
 
-			case FONT_TYPE_CONTROL:
-				width += ascii_14p_get_pitch(0);
-				p++;
-				break;
+				case FONT_TYPE_LATIN1:
+					width += latin1_14_get_pitch(code);
+					p += advance;
+					break;
+
+				case FONT_TYPE_CONTROL:
+					width += ascii_14p_get_pitch(0);
+					p += advance;
+					break;
 			}
 		}
 		else break;
@@ -799,7 +915,7 @@ static void make_light_texture(struct font_t *font)
 
 static int internal_font_putc(struct font_t *font, int sx, int sy, int r, int g, int b)
 {
-	if (sx + font->pitch < 0 || sx >= SCR_WIDTH)
+	if (sx + font->pitch < 0 || sx >= ui_layout_get()->logical_width)
 		return 0;
 
 	make_font_texture(font, r, g, b);
@@ -807,7 +923,7 @@ static int internal_font_putc(struct font_t *font, int sx, int sy, int r, int g,
 	sx += font->skipx;
 	sy += font->skipy;
 
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_FONT,
+	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width, font->height,
 		sx, sy, font->width, font->height,
 		0xFFFFFFFF, 1);
@@ -822,7 +938,7 @@ static int internal_font_putc(struct font_t *font, int sx, int sy, int r, int g,
 
 static int internal_shadow_putc(struct font_t *font, int sx, int sy)
 {
-	if (sx + font->pitch < 0 || sx >= SCR_WIDTH)
+	if (sx + font->pitch < 0 || sx >= ui_layout_get()->logical_width)
 		return 0;
 
 	make_shadow_texture(font);
@@ -830,7 +946,7 @@ static int internal_shadow_putc(struct font_t *font, int sx, int sy)
 	sx += font->skipx;
 	sy += font->skipy;
 
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_FONT,
+	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width + 4, font->height + 4,
 		sx, sy, font->width + 4, font->height + 4,
 		0xFFFFFFFF, 1);
@@ -845,7 +961,7 @@ static int internal_shadow_putc(struct font_t *font, int sx, int sy)
 
 static int internal_light_putc(struct font_t *font, int sx, int sy)
 {
-	if (sx + font->pitch < 0 || sx >= SCR_WIDTH)
+	if (sx + font->pitch < 0 || sx >= ui_layout_get()->logical_width)
 		return 0;
 
 	make_light_texture(font);
@@ -853,7 +969,7 @@ static int internal_light_putc(struct font_t *font, int sx, int sy)
 	sx += font->skipx;
 	sy += font->skipy;
 
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_FONT,
+	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width, font->height,
 		sx, sy, font->width, font->height,
 		0xFFFFFFFF, 1);
@@ -872,7 +988,7 @@ static int internal_light_putc(struct font_t *font, int sx, int sy)
 
 static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *s)
 {
-	int type, res = 1;
+	int type, res = 1, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 	struct font_t font;
@@ -883,40 +999,49 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 
 	while (*p && res)
 	{
-		code = uifont_get_code(p, &type);
+		code = uifont_get_code(p, &type, &advance);
 
 		switch (type)
 		{
-		case FONT_TYPE_ASCII:
+			case FONT_TYPE_ASCII:
 			if (ascii_14p_get_gryph(&font, code))
 			{
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
-			p++;
-			break;
+				p += advance;
+				break;
 
-		case FONT_TYPE_GRAPHIC:
+			case FONT_TYPE_GRAPHIC:
 			if (graphic_font_get_gryph(&font, code))
 			{
 				res = internal_font_putc(&font, sx, sy, r, g, b);
 				sx += font.pitch;
 			}
-			p++;
-			break;
+				p += advance;
+				break;
 
-		case FONT_TYPE_GBKSIMHEI:
-			if (gbk_s14p_get_gryph(&font, code))
-			{
-				res = internal_font_putc(&font, sx, sy, r, g, b);
-				sx += font.pitch;
-			}
-			p += 2;
-			break;
+			case FONT_TYPE_GBKSIMHEI:
+				if (gbk_s14p_get_gryph(&font, code))
+				{
+					res = internal_font_putc(&font, sx, sy, r, g, b);
+					sx += font.pitch;
+				}
+				p += advance;
+				break;
 
-		default:
-			p++;
-			break;
+			case FONT_TYPE_LATIN1:
+				if (latin1_14_get_gryph(&font, code))
+				{
+					res = internal_font_putc(&font, sx, sy, r, g, b);
+					sx += font.pitch;
+				}
+				p += advance;
+				break;
+
+			default:
+				p += advance;
+				break;
 		}
 	}
 }
@@ -928,47 +1053,57 @@ static inline void uifont_draw(int sx, int sy, int r, int g, int b, const char *
 
 static inline void uifont_draw_shadow(int sx, int sy, const char *s)
 {
-	int type, res = 1;
+	int type, res = 1, advance;
 	uint16_t code;
 	const uint8_t *p = (const uint8_t *)s;
 	struct font_t font;
 
 	while (*p && res)
 	{
-		code = uifont_get_code(p, &type);
+		code = uifont_get_code(p, &type, &advance);
 
 		switch (type)
 		{
-		case FONT_TYPE_ASCII:
+			case FONT_TYPE_ASCII:
 			if ((res = ascii_14p_get_gryph(&font, code)) != 0)
 			{
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
-			p++;
-			break;
+				p += advance;
+				break;
 
-		case FONT_TYPE_GRAPHIC:
+			case FONT_TYPE_GRAPHIC:
 			if ((res = graphic_font_get_gryph(&font, code)) != 0)
 			{
 				res = internal_shadow_putc(&font, sx, sy);
 				sx += font.pitch;
 			}
-			p++;
-			break;
+				p += advance;
+				break;
 
-		case FONT_TYPE_GBKSIMHEI:
-			if ((res = gbk_s14p_get_gryph(&font, code)) != 0)
-			{
-				res = internal_shadow_putc(&font, sx, sy);
-				sx += font.pitch;
-			}
-			p += 2;
-			break;
+			case FONT_TYPE_GBKSIMHEI:
+				if ((res = gbk_s14p_get_gryph(&font, code)) != 0)
+				{
+					res = internal_shadow_putc(&font, sx, sy);
+					sx += font.pitch;
+				}
+				p += advance;
+				break;
 
-		default:
-			res = 0;
-			break;
+			case FONT_TYPE_LATIN1:
+				if ((res = latin1_14_get_gryph(&font, code)) != 0)
+				{
+					res = internal_shadow_putc(&font, sx, sy);
+					sx += font.pitch;
+				}
+				p += advance;
+				break;
+
+			default:
+				p += advance;
+				res = 0;
+				break;
 		}
 	}
 }
@@ -991,7 +1126,7 @@ void uifont_print(int sx, int sy, int r, int g, int b, const char *s)
 void uifont_print_center(int sy, int r, int g, int b, const char *s)
 {
 	int width = uifont_get_string_width(s);
-	int sx = (SCR_WIDTH - width) / 2;
+	int sx = (ui_layout_get()->logical_width - width) / 2;
 
 	uifont_print(sx, sy, r, g, b, s);
 }
@@ -1015,7 +1150,7 @@ void uifont_print_shadow(int sx, int sy, int r, int g, int b, const char *s)
 void uifont_print_shadow_center(int sy, int r, int g, int b, const char *s)
 {
 	int width = uifont_get_string_width(s);
-	int sx = (SCR_WIDTH - width) / 2;
+	int sx = (ui_layout_get()->logical_width - width) / 2;
 
 	uifont_print_shadow(sx, sy, r, g, b, s);
 }
@@ -1344,6 +1479,10 @@ int ui_light_update(void)
 {
 	static int light_dir = 1;
 	int prev_level;
+	int output_update = ui_output_update();
+
+	if (output_update)
+		return output_update;
 
 	prev_level = light_level >> 1;
 
@@ -1359,7 +1498,36 @@ int ui_light_update(void)
 		light_dir = 1;
 	}
 
-	return (prev_level != (light_level >> 1)) ? UI_PARTIAL_REFRESH : 0;
+	if (prev_level == (light_level >> 1))
+		return 0;
+
+	/* The legacy partial-refresh path copies rectangles between PSP-sized frame
+	 * buffers. Keep it only on PSP, where those buffers and coordinates are the
+	 * native 480x272 UI. Desktop can now be resized down to that exact size too,
+	 * but its render-target copies are not the PSP partial-refresh contract. */
+#if defined(PSP)
+	return UI_PARTIAL_REFRESH;
+#else
+	return UI_FULL_REFRESH;
+#endif
+}
+
+int ui_output_update(void)
+{
+	int output_width = 0;
+	int output_height = 0;
+	const ui_layout_metrics_t *layout = ui_layout_get();
+
+	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	if (output_width <= 0 || output_height <= 0)
+		return 0;
+
+	if (layout->output_width == output_width &&
+		layout->output_height == output_height)
+		return 0;
+
+	ui_layout_init_responsive(output_width, output_height);
+	return UI_FULL_REFRESH;
 }
 
 
@@ -1374,17 +1542,18 @@ int ui_light_update(void)
 void draw_volume(int volume)
 {
 	int i, x;
+	const int y = ui_layout_bottom(41);
 
 	/* Speaker shadow */
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 		SPEEKER_SHADOW_X, 0, 32, 32,
-		3 + 24, 3 + 230, 32, 32,
+		3 + 24, 3 + y, 32, 32,
 		0xFFFFFFFF, 1);
 
 	/* Speaker icon */
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 		SPEEKER_X, 0, 32, 32,
-		24, 230, 32, 32,
+		24, y, 32, 32,
 		0xFFFFFFFF, 1);
 
 	x = 64;
@@ -1392,14 +1561,14 @@ void draw_volume(int volume)
 	/* Filled bars */
 	for (i = 0; i < volume; i++)
 	{
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_BAR_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + 230, 12, 32,
+			3 + x, 3 + y, 12, 32,
 			0xFFFFFFFF, 1);
 
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_BAR_X, 0, 12, 32,
-			x, 230, 12, 32,
+			x, y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		x += 12;
@@ -1408,14 +1577,14 @@ void draw_volume(int volume)
 	/* Empty dots */
 	for (; i < 30; i++)
 	{
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_DOT_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + 230, 12, 32,
+			3 + x, 3 + y, 12, 32,
 			0xFFFFFFFF, 1);
 
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_VOLICON,
+		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
 			VOLUME_DOT_X, 0, 12, 32,
-			x, 230, 12, 32,
+			x, y, 12, 32,
 			0xFFFFFFFF, 1);
 
 		x += 12;
@@ -1436,15 +1605,15 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 	int i;
 	int len = strlen(s);
 
-	ui_draw_driver->setScissor(ui_draw_data, sx, sy, 8 * len, 8);
+	ui_driver_set_scissor(sx, sy, 8 * len, 8);
 
 	for (i = 0; i < len; i++)
 	{
-		uint8_t code = isascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
+		uint8_t code = isprintascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
 		int u = (code & 63) << 3;
 		int v = (code >> 6) << 3;
 
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_SMALLFONT,
+		ui_driver_draw_sprite(UI_TEXTURE_SMALLFONT,
 			u, v, 8, 8,
 			sx, sy, 8, 8,
 			0xFFFFFFFF, bg ? 0 : 1);
@@ -1453,7 +1622,8 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 	}
 
 	/* Reset scissor to full screen */
-	ui_draw_driver->setScissor(ui_draw_data, 0, 0, SCR_WIDTH, SCR_HEIGHT);
+	ui_driver_set_scissor(0, 0,
+		ui_layout_get()->logical_width, ui_layout_get()->logical_height);
 }
 
 
@@ -1484,15 +1654,15 @@ static void debug_font_print(void *frame, int sx, int sy, const char *s, int bg)
 	int len = strlen(s);
 	(void)frame; /* frame target handled by driver */
 
-	ui_draw_driver->setScissor(ui_draw_data, sx, sy, 8 * len, 8);
+	ui_driver_set_scissor(sx, sy, 8 * len, 8);
 
 	for (i = 0; i < len; i++)
 	{
-		uint8_t code = isascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
+		uint8_t code = isprintascii((uint8_t)s[i]) ? s[i] - 0x20 : 0x20;
 		int u = (code & 63) << 3;
 		int v = (code >> 6) << 3;
 
-		ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_SMALLFONT,
+		ui_driver_draw_sprite(UI_TEXTURE_SMALLFONT,
 			u, v, 8, 8,
 			sx, sy, 8, 8,
 			0xFFFFFFFF, bg ? 0 : 1);
@@ -1500,7 +1670,8 @@ static void debug_font_print(void *frame, int sx, int sy, const char *s, int bg)
 		sx += 8;
 	}
 
-	ui_draw_driver->setScissor(ui_draw_data, 0, 0, SCR_WIDTH, SCR_HEIGHT);
+	ui_driver_set_scissor(0, 0,
+		ui_layout_get()->logical_width, ui_layout_get()->logical_height);
 }
 
 
@@ -1533,7 +1704,7 @@ void hline(int sx, int ex, int y, int r, int g, int b)
 {
 	uint32_t color = MAKECOL32(r, g, b);
 
-	ui_draw_driver->drawLine(ui_draw_data,
+	ui_driver_draw_line(
 		sx, y, ex + 1, y, color);
 }
 
@@ -1546,7 +1717,7 @@ void hline_alpha(int sx, int ex, int y, int r, int g, int b, int alpha)
 {
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
-	ui_draw_driver->drawLine(ui_draw_data,
+	ui_driver_draw_line(
 		sx, y, ex + 1, y, color);
 }
 
@@ -1560,7 +1731,7 @@ void hline_gradation(int sx, int ex, int y, int r1, int g1, int b1, int r2, int 
 	uint32_t color1 = MAKECOL32A(r1, g1, b1, ((alpha << 4) - 1));
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
-	ui_draw_driver->drawLineGradient(ui_draw_data,
+	ui_driver_draw_line_gradient(
 		sx, y, ex + 1, y, color1, color2);
 }
 
@@ -1573,7 +1744,7 @@ void vline(int x, int sy, int ey, int r, int g, int b)
 {
 	uint32_t color = MAKECOL32(r, g, b);
 
-	ui_draw_driver->drawLine(ui_draw_data,
+	ui_driver_draw_line(
 		x, sy, x, ey + 1, color);
 }
 
@@ -1586,7 +1757,7 @@ void vline_alpha(int x, int sy, int ey, int r, int g, int b, int alpha)
 {
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
-	ui_draw_driver->drawLine(ui_draw_data,
+	ui_driver_draw_line(
 		x, sy, x, ey + 1, color);
 }
 
@@ -1600,7 +1771,7 @@ void vline_gradation(int x, int sy, int ey, int r1, int g1, int b1, int r2, int 
 	uint32_t color1 = MAKECOL32A(r1, g1, b1, ((alpha << 4) - 1));
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
-	ui_draw_driver->drawLineGradient(ui_draw_data,
+	ui_driver_draw_line_gradient(
 		x, sy, x, ey + 1, color1, color2);
 }
 
@@ -1613,7 +1784,7 @@ void box(int sx, int sy, int ex, int ey, int r, int g, int b)
 {
 	uint32_t color = MAKECOL32(r, g, b);
 
-	ui_draw_driver->drawRect(ui_draw_data,
+	ui_driver_draw_rect(
 		sx, sy, ex - sx, ey - sy + 1, color);
 }
 
@@ -1626,7 +1797,7 @@ void boxfill(int sx, int sy, int ex, int ey, int r, int g, int b)
 {
 	uint32_t color = MAKECOL32(r, g, b);
 
-	ui_draw_driver->fillRect(ui_draw_data,
+	ui_driver_fill_rect(
 		sx, sy, ex - sx + 1, ey - sy + 1, color);
 }
 
@@ -1639,7 +1810,7 @@ void boxfill_alpha(int sx, int sy, int ex, int ey, int r, int g, int b, int alph
 {
 	uint32_t color = MAKECOL32A(r, g, b, ((alpha << 4) - 1));
 
-	ui_draw_driver->fillRect(ui_draw_data,
+	ui_driver_fill_rect(
 		sx, sy, ex - sx + 1, ey - sy + 1, color);
 }
 
@@ -1653,7 +1824,7 @@ void boxfill_gradation(int sx, int sy, int ex, int ey, int r1, int g1, int b1, i
 	uint32_t color1 = MAKECOL32A(r1, g1, b1, ((alpha << 4) - 1));
 	uint32_t color2 = MAKECOL32A(r2, g2, b2, ((alpha << 4) - 1));
 
-	ui_draw_driver->fillRectGradient(ui_draw_data,
+	ui_driver_fill_rect_gradient(
 		sx, sy, ex - sx + 1, ey - sy + 1,
 		color1, color2, dir);
 }
@@ -1669,14 +1840,15 @@ void boxfill_gradation(int sx, int sy, int ex, int ey, int r1, int g1, int b1, i
 
 static void draw_boxshadow(int sx, int sy, int w, int h, int code)
 {
-	ui_draw_driver->setScissor(ui_draw_data, sx, sy, w, h);
+	ui_driver_set_scissor(sx, sy, w, h);
 
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_BOXSHADOW,
+	ui_driver_draw_sprite(UI_TEXTURE_BOXSHADOW,
 		code << 3, 0, 8, 8,
 		sx, sy, 8, 8,
 		0xFFFFFFFF, 1);
 
-	ui_draw_driver->setScissor(ui_draw_data, 0, 0, SCR_WIDTH, SCR_HEIGHT);
+	ui_driver_set_scissor(0, 0,
+		ui_layout_get()->logical_width, ui_layout_get()->logical_height);
 }
 
 
@@ -1785,7 +1957,7 @@ void draw_bar_shadow(void)
 {
 	int x;
 
-	for (x = 0; x < SCR_WIDTH; x += 8)
+	for (x = 0; x < ui_layout_get()->logical_width; x += 8)
 	{
 		draw_boxshadow(x,  0, 8, 8, 4);
 		draw_boxshadow(x,  8, 8, 8, 4);
@@ -1835,12 +2007,12 @@ void logo(int sx, int sy, int r, int g, int b)
 	}
 
 #if (EMU_SYSTEM == MVS)
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_FONT,
+	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, 208, 14,
 		sx, sy, 208, 14,
 		0xFFFFFFFF, 1);
 #else
-	ui_draw_driver->drawSprite(ui_draw_data, UI_TEXTURE_FONT,
+	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, 232, 14,
 		sx, sy, 232, 14,
 		0xFFFFFFFF, 1);

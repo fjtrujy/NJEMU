@@ -196,7 +196,7 @@ int zwrite(int64_t fd, void *buf, unsigned size)
 	{
 		return zipWriteInFileInZip(zipfile, buf, size);
 	}
-	return 0;
+	return -1;
 }
 
 

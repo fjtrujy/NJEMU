@@ -28,6 +28,31 @@ jobs:
             adhoc: ON
           - adhoc: ON
             save_state: FALSE
+        include:
+          - target: CPS1
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: MVS
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: NCDZ
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     container: ps2dev/ps2dev:latest
@@ -36,7 +61,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash cmake
+        apk add build-base git bash cmake python3
 
     - name: Compile project
       run: |
@@ -49,6 +74,7 @@ jobs:
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
+          -DGUI=${{ matrix.gui }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
         cmake --install .

@@ -985,6 +985,10 @@ int input_init(void)
 	case INPTYPE_sf2:
 	case INPTYPE_sf2j:
 	case INPTYPE_sfzch:
+#if !RELEASE
+	case INPTYPE_wofch:
+	case INPTYPE_wofch3p:
+#endif
 		input_max_buttons = 6;
 		break;
 
@@ -993,10 +997,10 @@ int input_init(void)
 		break;
 	}
 
-#ifdef ADHOC
+	#ifdef ADHOC
 	if (adhoc_enable)
 		return adhoc_start_thread();
-#endif
+	#endif
 
 	return 1;
 }

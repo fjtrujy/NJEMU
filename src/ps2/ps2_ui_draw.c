@@ -23,6 +23,7 @@
 #include <dmaKit.h>
 #include "ps2/ps2.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui_layout.h"
 #include "common/video_driver.h"
 
 /******************************************************************************
@@ -271,6 +272,16 @@ static void ps2_ui_draw_term(void *data)
 	/* VRAM cleanup is handled by gsKit */
 }
 
+static void ps2_ui_draw_getOutputSize(void *data, int *width, int *height)
+{
+	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
+
+	if (width)
+		*width = d && d->gsGlobal ? d->gsGlobal->Width : SCR_WIDTH;
+	if (height)
+		*height = d && d->gsGlobal ? d->gsGlobal->Height : SCR_HEIGHT;
+}
+
 /*------------------------------------------------------
 	Texture management
 ------------------------------------------------------*/
@@ -393,6 +404,7 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	/* The texture itself carries the final font/icon colors. */
 	(void)color;
 	video_driver->drawUISprite(d->video_data, gst, gst->PSM, 0,
+		gst->Width, gst->Height, gst->Width,
 		su, sv, sw, sh, dx, dy, dw, dh, blend);
 
 	/* The font scratch buffer is rewritten between glyphs (always at UV 0,0),
@@ -460,8 +472,10 @@ static void ps2_ui_draw_setScissor(void *data, int x, int y, int w, int h)
 	top = y < 0 ? 0 : y;
 	right = x + w - 1;
 	bottom = y + h - 1;
-	if (right >= SCR_WIDTH) right = SCR_WIDTH - 1;
-	if (bottom >= SCR_HEIGHT) bottom = SCR_HEIGHT - 1;
+	if (right >= ui_layout_get()->output_width)
+		right = ui_layout_get()->output_width - 1;
+	if (bottom >= ui_layout_get()->output_height)
+		bottom = ui_layout_get()->output_height - 1;
 	if (left > right || top > bottom)
 		return;
 
@@ -477,6 +491,7 @@ static void ps2_ui_draw_setScissor(void *data, int x, int y, int w, int h)
 const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_init,
 	ps2_ui_draw_term,
+	ps2_ui_draw_getOutputSize,
 	ps2_ui_draw_uploadTexture,
 	ps2_ui_draw_clearTexture,
 	ps2_ui_draw_getTextureBasePtr,

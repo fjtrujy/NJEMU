@@ -159,6 +159,7 @@ typedef struct video_driver
 
 	/* 2D UI drawing primitives (used by ui_draw_driver backends) */
 	void (*drawUISprite)(void *data, void *tex, int tex_format, int tex_swizzled,
+	                    int tex_width, int tex_height, int tex_stride,
 	                    int su, int sv, int sw, int sh,
 	                    int dx, int dy, int dw, int dh, int blend);
 	void (*drawUILine)(void *data, int x1, int y1, int x2, int y2, uint32_t color);

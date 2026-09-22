@@ -29,6 +29,35 @@ jobs:
             adhoc: ON
           - adhoc: ON
             save_state: FALSE
+        include:
+          - os: ubuntu-latest
+            target: CPS1
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: CPS2
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: MVS
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - os: ubuntu-latest
+            target: NCDZ
+            large_memory: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     steps:
@@ -41,6 +70,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends \
           build-essential \
           git \
+          python3 \
           wget \
           unzip \
           libbz2-dev \
@@ -56,6 +86,7 @@ jobs:
 
     - name: Compile project
       run: |
+        set -o pipefail
         mkdir build
         cd build
         cmake -DPLATFORM="DESKTOP" \
@@ -64,8 +95,16 @@ jobs:
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
+          -DGUI=${{ matrix.gui }} \
           ..
-        make -j $(getconf _NPROCESSORS_ONLN)
+        if ! make -j $(getconf _NPROCESSORS_ONLN) 2>&1 | tee build.log; then
+          echo "Desktop build failed; surfacing compiler/linker diagnostics as annotations"
+          grep -E '(^|[[:space:]])(error:|fatal error:)|undefined reference|collect2: error|ld: error' build.log \
+            | tail -40 \
+            | sed 's/^/::error title=Desktop build::/' || true
+          exit 2
+        fi
+        ctest --output-on-failure
         cmake --install .
 
     - name: Get short SHA

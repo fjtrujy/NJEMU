@@ -23,4 +23,9 @@
 
 extern uint8_t gulist[GULIST_SIZE];
 
+/* The proportional UI font uses one mutable scratch texture.  Flush the
+ * current GU commands before common/ui_draw.c rewrites that scratch for the
+ * next glyph, while keeping ownership of the surrounding logical frame. */
+void psp_video_sync_ui_scratch(void *video_data);
+
 #endif /* PSP_VIDE_H */

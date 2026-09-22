@@ -9,6 +9,7 @@
 #include "emumain.h"
 #include "stdarg.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui_layout.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
 
@@ -23,14 +24,20 @@
 
 void load_background(int number)
 {
+	(void)number;
+
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(UI_PAL_BG2);
 
+#if defined(PSP)
+	/* PSP always presents the original 480x272 logical canvas 1:1.  Cache the
+	 * static chrome with the background as the legacy renderer did, instead of
+	 * rebuilding its gradients and shadows on every list-selection redraw. */
 	draw_bar_shadow();
-
-	boxfill_alpha(0, 0, 479, 23, UI_COLOR(UI_PAL_BG1), 10);
-	hline_alpha(0, 479, 23, UI_COLOR(UI_PAL_FRAME), 12);
-	hline_alpha(0, 479, 24, UI_COLOR(UI_PAL_FRAME), 10);
+	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
+	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
+#endif
 
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 	video_driver->endFrame(video_data);
@@ -43,7 +50,48 @@ void load_background(int number)
 
 void show_background(void)
 {
-	video_driver->transferWorkFrame(video_data, &full_rect, &full_rect);
+	int output_width;
+	int output_height;
+	const ui_layout_metrics_t *layout;
+	RECT viewport;
+	const uint32_t black = 0xff000000;
+
+	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	ui_layout_init_responsive(output_width, output_height);
+	layout = ui_layout_get();
+	viewport.left = layout->viewport_x;
+	viewport.top = layout->viewport_y;
+	viewport.right = layout->viewport_x + layout->viewport_width;
+	viewport.bottom = layout->viewport_y + layout->viewport_height;
+
+	video_driver->transferWorkFrame(video_data, &full_rect, &viewport);
+
+	/* transferWorkFrame() leaves the physical presentation target active on all
+	 * GUI backends. Native-layout platforms cover the full output; the fallback
+	 * bar fill remains useful if a future backend chooses an inset viewport. */
+	if (ui_layout_uses_output_transform()) {
+		if (viewport.top > 0)
+			ui_draw_driver->fillRect(ui_draw_data, 0, 0,
+				layout->output_width, viewport.top, black);
+		if (viewport.bottom < layout->output_height)
+			ui_draw_driver->fillRect(ui_draw_data, 0, viewport.bottom,
+				layout->output_width, layout->output_height - viewport.bottom, black);
+		if (viewport.left > 0)
+			ui_draw_driver->fillRect(ui_draw_data, 0, viewport.top,
+				viewport.left, layout->viewport_height, black);
+		if (viewport.right < layout->output_width)
+			ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
+				layout->output_width - viewport.right, layout->viewport_height, black);
+	}
+
+#if !defined(PSP)
+	/* Native-size backends can resize or use a non-identity viewport, so their
+	 * chrome must remain output-relative and is intentionally not cached. */
+	draw_bar_shadow();
+	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
+	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
+#endif
 }
 
 
@@ -102,8 +150,8 @@ int draw_battery_status(int draw)
 			sprintf(message, TEXT(WARNING_BATTERY_IS_LOW_PLEASE_CHARGE_BATTERY), bat);
 			width = uifont_get_string_width(message);
 
-			sx = (SCR_WIDTH - width) >> 1;
-			sy = (SCR_HEIGHT - FONTSIZE) >> 1;
+				sx = (ui_layout_get()->logical_width - width) >> 1;
+				sy = (ui_layout_get()->logical_height - FONTSIZE) >> 1;
 			ex = sx + width;
 			ey = sy + FONTSIZE;
 
@@ -279,15 +327,18 @@ static char progress_message[64];
 
 void init_progress(int total, const char *text)
 {
+	int cx = ui_layout_center_x();
+	int cy = ui_layout_center_y();
+
 	progress_current = 0;
 	progress_total   = total;
 	strcpy(progress_message, text);
 
 	video_driver->beginFrame(video_data);
-	draw_dialog(240-158, 136-26, 240+158, 136+26);
-	boxfill(240-151, 138+2, 240+151, 138+14, 0, 0, 0);
+	draw_dialog(cx - 158, cy - 26, cx + 158, cy + 26);
+	boxfill(cx - 151, cy + 4, cx + 151, cy + 16, 0, 0, 0);
 
-	uifont_print_shadow_center(118, 255,255,255, text);
+	uifont_print_shadow_center(cy - 18, 255,255,255, text);
 	draw_battery_status(1);
 	video_driver->endFrame(video_data);
 
@@ -301,18 +352,20 @@ void init_progress(int total, const char *text)
 
 void update_progress(void)
 {
+	int cx = ui_layout_center_x();
+	int cy = ui_layout_center_y();
 	int width = (++progress_current * 100 / progress_total) * 3;
 
 	video_driver->beginFrame(video_data);
 	show_background();
 
-	draw_dialog(240-158, 136-26, 240+158, 136+26);
-	boxfill(240-151, 138+2, 240+151, 138+14, 0, 0, 0);
+	draw_dialog(cx - 158, cy - 26, cx + 158, cy + 26);
+	boxfill(cx - 151, cy + 4, cx + 151, cy + 16, 0, 0, 0);
 
-	uifont_print_shadow_center(118, 255,255,255, progress_message);
+	uifont_print_shadow_center(cy - 18, 255,255,255, progress_message);
 	draw_battery_status(1);
 
-	boxfill(240-150, 138+3, 240-150+width-1, 138+13, 128, 128, 128);
+	boxfill(cx - 150, cy + 5, cx - 150 + width - 1, cy + 15, 128, 128, 128);
 	video_driver->endFrame(video_data);
 
 	video_driver->flipScreen(video_data, 1);
@@ -325,19 +378,22 @@ void update_progress(void)
 
 void show_progress(const char *text)
 {
+	int cx = ui_layout_center_x();
+	int cy = ui_layout_center_y();
+
 	video_driver->beginFrame(video_data);
 	show_background();
 
-	draw_dialog(240-158, 136-26, 240+158, 136+26);
-	boxfill(240-151, 138+2, 240+151, 138+14, 0, 0, 0);
+	draw_dialog(cx - 158, cy - 26, cx + 158, cy + 26);
+	boxfill(cx - 151, cy + 4, cx + 151, cy + 16, 0, 0, 0);
 
-	uifont_print_shadow_center(118, 255,255,255, text);
+	uifont_print_shadow_center(cy - 18, 255,255,255, text);
 	draw_battery_status(1);
 
 	if (progress_current)
 	{
 		int width = (progress_current * 100 / progress_total) * 3;
-		boxfill(240-150, 138+3, 240-150+width-1, 138+13, 128, 128, 128);
+		boxfill(cx - 150, cy + 5, cx - 150 + width - 1, cy + 15, 128, 128, 128);
 	}
 	video_driver->endFrame(video_data);
 
@@ -404,8 +460,8 @@ int ui_show_popup(int draw)
 			int sx, sy, ex, ey;
 			int width = uifont_get_string_width(ui_popup_message);
 
-			sx = (SCR_WIDTH - width) >> 1;
-			sy = (SCR_HEIGHT - FONTSIZE) >> 1;
+				sx = (ui_layout_get()->logical_width - width) >> 1;
+				sy = (ui_layout_get()->logical_height - FONTSIZE) >> 1;
 			ex = sx + width;
 			ey = sy + (FONTSIZE - 1);
 
@@ -436,6 +492,8 @@ static int linefeed;
 static int text_r = 0xff;
 static int text_g = 0xff;
 static int text_b = 0xff;
+static int msg_icon;
+static char msg_title[128];
 static char msg_lines[MAX_LINES][128];
 static int msg_r[MAX_LINES];
 static int msg_g[MAX_LINES];
@@ -450,15 +508,12 @@ void msg_screen_init(int wallpaper, int icon, const char *title)
 {
 	cy = 0;
 	linefeed = 1;
+	msg_icon = icon;
+	strncpy(msg_title, title, sizeof(msg_title) - 1);
+	msg_title[sizeof(msg_title) - 1] = '\0';
 	memset(msg_lines, 0, sizeof(msg_lines));
 
 	load_background(wallpaper);
-	video_driver->beginFrame(video_data);
-	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), icon);
-	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), title);
-	draw_dialog(14, 37, 465, 259);
-	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
-	video_driver->endFrame(video_data);
 }
 
 
@@ -525,6 +580,9 @@ void msg_printf(const char *text, ...)
 
 	video_driver->beginFrame(video_data);
 	show_background();
+	small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), msg_icon);
+	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), msg_title);
+	draw_dialog(14, 37, ui_layout_right(14), ui_layout_bottom(12));
 	draw_battery_status(1);
 	draw_volume_status(1);
 
@@ -791,7 +849,7 @@ int messagebox(int number)
 	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 
-	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
+	boxfill_alpha(0, 0, ui_layout_right(0), ui_layout_bottom(0), COLOR_BLACK, 8);
 
 	lines = 0;
 	width = 0;
@@ -808,10 +866,10 @@ int messagebox(int number)
 	width >>= 1;			// width / 2
 	height = lines << 3;	// (line * (FONTSIZE + 2)) / 2
 
-	sx = SCR_WIDTH / 2 - width;;
-	ex = SCR_WIDTH / 2 + width;
-	sy = SCR_HEIGHT / 2 - height;
-	ey = SCR_HEIGHT / 2 + height;
+	sx = ui_layout_center_x() - width;
+	ex = ui_layout_center_x() + width;
+	sy = ui_layout_center_y() - height;
+	ey = ui_layout_center_y() + height;
 
 	draw_dialog(sx - 21, sy - 21, ex + 21, ey + 21);
 
@@ -1095,6 +1153,7 @@ static UI_HELP *help_init(int number)
 int help(int number)
 {
 	int i;
+	int help_left;
 	char title[256];
 	const UI_HELP *help;
 
@@ -1105,8 +1164,16 @@ int help(int number)
 	video_driver->beginFrame(video_data);
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 
-	boxfill_alpha(0, 0, SCR_WIDTH - 1, SCR_HEIGHT - 1, COLOR_BLACK, 8);
-	draw_dialog(59, 34, 419, 264);
+	boxfill_alpha(0, 0, ui_layout_right(0), ui_layout_bottom(0), COLOR_BLACK, 8);
+	{
+		const int dialog_width = 360;
+		const int dialog_height = ui_layout_get()->logical_height - 42;
+		const int sx = ui_layout_center_x() - dialog_width / 2;
+		const int sy = 34;
+
+		draw_dialog(sx, sy, sx + dialog_width, sy + dialog_height);
+		help_left = sx + 14;
+	}
 
 	sprintf(title, TEXT(HELP_TITLE), help->menu_name);
 	uifont_print_shadow_center(43, UI_COLOR(UI_PAL_INFO), title);
@@ -1117,11 +1184,12 @@ int help(int number)
 		int g = *help->mes[i].g;
 		int b = *help->mes[i].b;
 
-		uifont_print(73, 70 + (i << 4), r, g, b, help->mes[i].text1);
-		uifont_print(143, 70 + (i << 4), r, g, b, help->mes[i].text2);
+		uifont_print(help_left, 70 + (i << 4), r, g, b, help->mes[i].text1);
+		uifont_print(help_left + 70, 70 + (i << 4), r, g, b, help->mes[i].text2);
 	}
 
-	uifont_print_shadow_center(240, UI_COLOR(UI_PAL_SELECT), TEXT(PRESS_ANY_BUTTON_TO_RETURN_TO_MENU));
+	uifont_print_shadow_center(ui_layout_bottom(32), UI_COLOR(UI_PAL_SELECT),
+		TEXT(PRESS_ANY_BUTTON_TO_RETURN_TO_MENU));
 
 	video_driver->endFrame(video_data);
 	video_driver->flipScreen(video_data, 1);

@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "ui_language.h"
 
 typedef struct platform_driver
 {
@@ -32,6 +33,8 @@ typedef struct platform_driver
 	 * baseline; return 0 if unknown. Called once after init().
 	 */
 	uint32_t (*availableRam)(void *data);
+	/* Maps the platform/OS language to NJEMU's supported translation set. */
+	ui_language_t (*getSystemLanguage)(void *data);
 
 } platform_driver_t;
 

@@ -87,6 +87,8 @@ static uint8_t coin_chuter[COIN_MAX][4] =
 static void check_eeprom_settings(int popup)
 {
 	uint8_t eeprom_value = EEPROM_read_data(driver->inp_eeprom);
+	if (eeprom_value >= sizeof(driver->inp_eeprom_value))
+		return;
 	uint8_t coin_type = driver->inp_eeprom_value[eeprom_value];
 
 	if (input_coin_chuter != coin_type)
@@ -208,6 +210,11 @@ static void update_inputport_multi(uint32_t controller_count)
 		buttons = adjust_input(buttons);
 		buttons = update_autofire(buttons, (int)controller);
 		set_input_flags(buttons);
+		/* P2_START is a legacy single-pad compatibility binding that lets one
+		 * physical controller start the opposite emulated player. In true
+		 * multi-controller mode each physical pad already owns its player, so
+		 * keeping this flag would allow cross-player start input. */
+		input_flag[P2_START] = 0;
 		if (controller != 0)
 			clear_secondary_system_flags();
 		if (serv_switch && controller == 0)

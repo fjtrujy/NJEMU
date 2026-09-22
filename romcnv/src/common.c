@@ -28,7 +28,7 @@ enum
 
 int lsb_first;
 
-int rom_fd;
+int64_t rom_fd;
 char delimiter = '/';
 
 char game_dir[PATH_MAX];
@@ -100,7 +100,7 @@ void file_close(void)
 	Open ROM File
 --------------------------------------------------------*/
 
-int file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
+int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
 {
 	int found = 0, res = -1;
 	struct zip_find_t file;

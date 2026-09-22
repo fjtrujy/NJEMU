@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.12)
 project(NJEMU)
 
+include(CTest)
+
 # Configuration
 
 # Different target availables
@@ -61,6 +63,8 @@ option(RELEASE "Release" OFF)
 option(SYSTEM_BUTTONS "System Buttons" OFF)
 option(USE_ASAN "Use ASAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
+option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
+option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
 
 # Add options to compiler definitions
 if (GUI)
@@ -89,6 +93,14 @@ endif()
 
 if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
     add_definitions(-DSYSTEM_BUTTONS=1)
+endif()
+
+if (CACHE_IO_PROFILE)
+    add_definitions(-DCACHE_IO_PROFILE=1)
+endif()
+
+if (CACHE_IO_FORCE_SEEK)
+    add_definitions(-DCACHE_IO_FORCE_SEEK=1)
 endif()
 
 # Version
@@ -209,10 +221,18 @@ set(COMMON_SRC
     common/input_driver.c
     common/video_driver.h
     common/video_driver.c
-    common/ui_draw_driver.h
-    common/ui_draw_driver.c
-    common/ui_text_driver.h
+	    common/ui_draw_driver.h
+	    common/ui_draw_driver.c
+	    common/ui_layout.h
+	    common/ui_layout.c
+	    common/ui_text_driver.h
     common/ui_text_driver.c
+	    common/ui_language.h
+	    common/ui_text_catalog.h
+	    common/ui_text_catalog.c
+	    common/ui_utf8.h
+	    common/ui_utf8.c
+	    common/ui_unicode_glyph.h
     common/font_t.h
     common/platform_driver.h
     common/platform_driver.c
@@ -301,12 +321,18 @@ set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_platform.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ticker.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_power.c
-    ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_text.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_input.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_video.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_audio.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_thread.c
 )
+
+if (ADHOC AND PLATFORM STREQUAL "PSP")
+    set(OS_SRC ${OS_SRC}
+        psp/adhoc.h
+        psp/adhoc.c
+    )
+endif()
 
 # CPU source files
 include_directories(
@@ -518,6 +544,44 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
+set(UI_UNICODE_GLYPH_SOURCE "${CMAKE_BINARY_DIR}/generated/ui_unicode_glyph.c")
+set(TRANSLATION_PACKS
+    "${TRANSLATION_PACK_DIR}/en.lng"
+    "${TRANSLATION_PACK_DIR}/ja.lng"
+    "${TRANSLATION_PACK_DIR}/es.lng"
+    "${TRANSLATION_PACK_DIR}/zh-Hans.lng"
+    "${TRANSLATION_PACK_DIR}/zh-Hant.lng"
+)
+add_custom_command(
+    OUTPUT ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${TRANSLATION_PACK_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/generated"
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+        --build
+        --output-dir "${TRANSLATION_PACK_DIR}"
+        --unicode-map-output "${UI_UNICODE_GLYPH_SOURCE}"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+        "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
+        "${CMAKE_SOURCE_DIR}/translations/messages.def"
+        "${CMAKE_SOURCE_DIR}/translations/en.lang"
+        "${CMAKE_SOURCE_DIR}/translations/ja.lang"
+        "${CMAKE_SOURCE_DIR}/translations/es.lang"
+        "${CMAKE_SOURCE_DIR}/translations/zh-Hans.lang"
+        "${CMAKE_SOURCE_DIR}/translations/zh-Hant.lang"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    VERBATIM
+)
+add_custom_target(translation_packs ALL DEPENDS ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}")
+add_dependencies(${TARGET} translation_packs)
+if(GUI)
+    set_source_files_properties("${UI_UNICODE_GLYPH_SOURCE}" PROPERTIES GENERATED TRUE)
+    target_sources(${TARGET} PRIVATE "${UI_UNICODE_GLYPH_SOURCE}")
+endif()
+
 # Add the warning flags
 if (USE_ASAN)
     set(ASAN_OPTIONS
@@ -630,6 +694,14 @@ elseif(PLATFORM STREQUAL "PSP")
         pspwlan
         pspdebug
     )
+    if(ADHOC)
+        target_link_libraries(${TARGET} PUBLIC
+            pspnet
+            pspnet_adhoc
+            pspnet_adhocctl
+            pspnet_adhocmatching
+        )
+    endif()
 endif()
 
 # Add libmad library if needed
@@ -656,6 +728,14 @@ endif()
 target_link_libraries(${TARGET} PUBLIC
     z
 )
+
+# The GUI PNG implementation uses libm functions such as ceil().  Darwin
+# provides them through libSystem, but Linux requires an explicit -lm.
+if(PLATFORM STREQUAL "DESKTOP" AND NOT APPLE)
+    target_link_libraries(${TARGET} PUBLIC
+        m
+    )
+endif()
        
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
@@ -667,6 +747,59 @@ if(PLATFORM STREQUAL "PSP")
         PREVIEW_PATH NULL
         TITLE "${TARGET}"
     )
+endif()
+
+if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_executable(ui_layout_tests
+        tests/ui_layout_tests.c
+        src/common/ui_layout.c
+    )
+    target_include_directories(ui_layout_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_layout_tests COMMAND ui_layout_tests)
+
+    add_executable(ui_text_id_tests
+        tests/ui_text_id_tests.c
+    )
+    target_include_directories(ui_text_id_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_text_id_tests COMMAND ui_text_id_tests)
+
+    add_executable(ui_text_catalog_tests
+        tests/ui_text_catalog_tests.c
+        src/common/ui_text_catalog.c
+        src/common/ui_utf8.c
+    )
+    target_include_directories(ui_text_catalog_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_definitions(ui_text_catalog_tests PRIVATE
+        TEST_TRANSLATION_ROOT="${CMAKE_BINARY_DIR}"
+    )
+    add_dependencies(ui_text_catalog_tests translation_packs)
+    add_test(NAME ui_text_catalog_tests COMMAND ui_text_catalog_tests)
+
+    add_executable(ui_utf8_tests
+        tests/ui_utf8_tests.c
+        src/common/ui_utf8.c
+    )
+    target_include_directories(ui_utf8_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_utf8_tests COMMAND ui_utf8_tests)
+
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME translation_source_validation
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
+        )
+        add_test(
+            NAME translation_pack_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
+        )
+    endif()
 endif()
 
 # ==============================================================================
@@ -690,4 +823,12 @@ endif()
 # Install resource files (copy entire directory structure, including README)
 install(DIRECTORY ${RESOURCE_DIR}
     DESTINATION .
+)
+
+# Translation packs are generated build artifacts shared by every platform.
+# Keep them as a separate install component so packaging validation does not
+# need to copy the user's potentially large ROM/cache resource tree.
+install(FILES ${TRANSLATION_PACKS}
+    DESTINATION lang
+    COMPONENT translations
 )

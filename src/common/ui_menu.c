@@ -10,6 +10,7 @@
 #include "emumain.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
+#include "common/ui_layout.h"
 
 #define MENU_BLANK	{ LF, }
 #define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
@@ -182,7 +183,7 @@ typedef struct {
 
 static int menu_gamecfg(void)
 {
-	int sel = 0, rows = 13, top = 0;
+	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, arrowl, arrowr, prev_sel, update = 1;
 	gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
 	gamecfg2_t *gamecfg2;
@@ -237,6 +238,7 @@ static int menu_gamecfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -251,7 +253,8 @@ static int menu_gamecfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, gamecfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, gamecfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -312,6 +315,7 @@ static int menu_gamecfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -849,7 +853,8 @@ int get_free_memory()
 int menu_cheatcfg(void)
 {
 	static int sel = 0, prev_sel = 0;//keep sel
-	static int rows = 13, top = 0;
+	static int top = 0;
+	int rows = ui_layout_visible_rows(40, 17);
 	int i, arrowl, arrowr, update = 1;
 	cheatcfg_t cheatcfg[CHEATCFG_MAX_ITEMS];
 	int cheatcfg_num;
@@ -917,6 +922,7 @@ int menu_cheatcfg(void)
 	int cur = *cheatcfg[sel].value;
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -929,7 +935,8 @@ int menu_cheatcfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(CHEAT_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, cheatcfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, cheatcfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -993,6 +1000,7 @@ int menu_cheatcfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1171,6 +1179,7 @@ int menu_cheatcfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -1185,7 +1194,8 @@ int menu_cheatcfg(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, gamecfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, gamecfg_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -1245,6 +1255,7 @@ int menu_cheatcfg(void)
 
 			update  = draw_battery_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1402,7 +1413,7 @@ enum
 
 static int menu_keycfg(void)
 {
-	int sel = 0, prev_sel, rows = 13, top = 0;
+	int sel = 0, prev_sel, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, j, arrowl, arrowr, update = 1;
 	keycfg_t keycfg[KEYCFG_MAX_ITEMS];
 	keycfg2_t *keycfg2;
@@ -1511,11 +1522,13 @@ static int menu_keycfg(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_KEYCONFIG);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(KEY_CONFIGURATION_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, keycfg_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, keycfg_num, sel);
 
 			arrowl = 0;
 			arrowr = 0;
@@ -1601,6 +1614,7 @@ static int menu_keycfg(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -1802,7 +1816,8 @@ static int menu_keycfg(void)
 
 static int menu_dipswitch(void)
 {
-	int sel = 0, rows = 13, top = 0, sx = 240;
+	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
+	int sx = ui_layout_center_x();
 	int i, arrowl, arrowr, prev_sel, update = 1;
 	dipswitch_t *dipswitch;
 	int dipswitch_num = 0;
@@ -1828,6 +1843,7 @@ static int menu_dipswitch(void)
 	{
 		if (update)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			arrowl = 0;
@@ -1842,7 +1858,8 @@ static int menu_dipswitch(void)
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(DIP_SWITCH_SETTINGS_MENU));
-			draw_scrollbar(469, 26, 479, 270, rows, dipswitch_num, sel);
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, dipswitch_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -1905,6 +1922,7 @@ static int menu_dipswitch(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -2024,6 +2042,24 @@ static uint8_t slot[10];
 static int state_func;
 static int state_sel;
 
+static int state_thumbnail_x(void)
+{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (machine_screen_type)
+		return ui_layout_get()->logical_width - 163;
+#endif
+	return ui_layout_get()->logical_width - 182;
+}
+
+static int state_info_x(void)
+{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	if (machine_screen_type)
+		return state_thumbnail_x() - 17;
+#endif
+	return state_thumbnail_x() - 8;
+}
+
 static void state_draw_thumbnail(void)
 {
 #if defined(PSP)
@@ -2037,27 +2073,43 @@ static void state_draw_thumbnail(void)
 	const uint32_t state_dst_fmt = 0;
 #endif
 
-	video_driver->beginFrame(video_data);
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
 	{
+		int dx, dy, dw, dh;
 		RECT clip1 = { 0, 0, 112, 152 };
-		RECT clip2 = { 317, 34, 317+112, 34+152 };
+		const int x = state_thumbnail_x();
+		RECT clip2;
+		ui_layout_transform_rect(x, 34, 112, 152,
+			&dx, &dy, &dw, &dh);
+		clip2.left = dx;
+		clip2.top = dy;
+		clip2.right = dx + dw;
+		clip2.bottom = dy + dh;
 		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	else
 #endif
 	{
+		int dx, dy, dw, dh;
 		RECT clip1 = { 0, 0, 152, 112 };
-		RECT clip2 = { 298, 52, 298+152, 52+112 };
+		const int x = state_thumbnail_x();
+		RECT clip2;
+		ui_layout_transform_rect(x, 52, 152, 112,
+			&dx, &dy, &dw, &dh);
+		clip2.left = dx;
+		clip2.top = dy;
+		clip2.right = dx + dw;
+		clip2.bottom = dy + dh;
 		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
-	video_driver->endFrame(video_data);
 }
 
 static void state_refresh_screen(int reload_thumbnail)
 {
 	int i, x;
+	const int preview_x = state_thumbnail_x();
+	const int info_x = state_info_x();
 	char name[16], state[32], buf[64];
 
 	if (reload_thumbnail)
@@ -2085,9 +2137,9 @@ static void state_refresh_screen(int reload_thumbnail)
 
 	show_background();
 	if (machine_screen_type)
-		draw_box_shadow(318, 33, 429, 184);
+		draw_box_shadow(preview_x + 1, 33, preview_x + 112, 184);
 	else
-		draw_box_shadow(298, 52, 449, 163);
+		draw_box_shadow(preview_x, 52, preview_x + 151, 163);
 	state_draw_thumbnail();
 
 	sprintf(buf, "%s %s", FONT_LTRIGGER, TEXT(MAIN_MENU));
@@ -2098,7 +2150,7 @@ static void state_refresh_screen(int reload_thumbnail)
 	uifont_print_shadow(i + 16, 5, UI_COLOR(UI_PAL_NORMAL), "|");
 	uifont_print_shadow(i + 24, 5, UI_COLOR(UI_PAL_TITLE), buf);
 
-	if (ui_text_driver->getLanguage(ui_text_data) == LANG_JAPANESE)
+	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_JAPANESE)
 		x = 20;
 	else
 		x = 0;
@@ -2154,49 +2206,49 @@ static void state_refresh_screen(int reload_thumbnail)
 
 	if (state_version == current_state_version || !slot[state_sel])
 	{
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		if (machine_screen_type)
-		{
-			uifont_print(300, 198, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
-			uifont_print(378, 198, UI_COLOR(UI_PAL_NORMAL), date_str);
-			uifont_print(300, 218, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
-			uifont_print(378, 218, UI_COLOR(UI_PAL_NORMAL), time_str);
-			uifont_print(300, 238, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
-			uifont_print(378, 238, UI_COLOR(UI_PAL_NORMAL), stver_str);
-		}
-		else
-#endif
-		{
-			uifont_print(290, 190, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
-			uifont_print(368, 190, UI_COLOR(UI_PAL_NORMAL), date_str);
-			uifont_print(290, 210, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
-			uifont_print(368, 210, UI_COLOR(UI_PAL_NORMAL), time_str);
-			uifont_print(290, 230, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
-			uifont_print(368, 230, UI_COLOR(UI_PAL_NORMAL), stver_str);
-		}
+	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+			if (machine_screen_type)
+			{
+				uifont_print(info_x, 198, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 198, UI_COLOR(UI_PAL_NORMAL), date_str);
+				uifont_print(info_x, 218, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 218, UI_COLOR(UI_PAL_NORMAL), time_str);
+				uifont_print(info_x, 238, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 238, UI_COLOR(UI_PAL_NORMAL), stver_str);
+			}
+			else
+	#endif
+			{
+				uifont_print(info_x, 190, UI_COLOR(UI_PAL_NORMAL), TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 190, UI_COLOR(UI_PAL_NORMAL), date_str);
+				uifont_print(info_x, 210, UI_COLOR(UI_PAL_NORMAL), TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 210, UI_COLOR(UI_PAL_NORMAL), time_str);
+				uifont_print(info_x, 230, UI_COLOR(UI_PAL_NORMAL), TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 230, UI_COLOR(UI_PAL_NORMAL), stver_str);
+			}
 	}
 	else
 	{
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		if (machine_screen_type)
-		{
-			uifont_print(300, 198, COLOR_GRAY, TEXT(PLAY_DATE));
-			uifont_print(378, 198, COLOR_GRAY, date_str);
-			uifont_print(300, 218, COLOR_GRAY, TEXT(SAVE_TIME));
-			uifont_print(378, 218, COLOR_GRAY, time_str);
-			uifont_print(300, 238, COLOR_GRAY, TEXT(STATE_VERSION));
-			uifont_print(378, 238, COLOR_GRAY, stver_str);
-		}
-		else
-#endif
-		{
-			uifont_print(290, 190, COLOR_GRAY, TEXT(PLAY_DATE));
-			uifont_print(368, 190, COLOR_GRAY, date_str);
-			uifont_print(290, 210, COLOR_GRAY, TEXT(SAVE_TIME));
-			uifont_print(368, 210, COLOR_GRAY, time_str);
-			uifont_print(290, 230, COLOR_GRAY, TEXT(STATE_VERSION));
-			uifont_print(368, 230, COLOR_GRAY, stver_str);
-		}
+	#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+			if (machine_screen_type)
+			{
+				uifont_print(info_x, 198, COLOR_GRAY, TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 198, COLOR_GRAY, date_str);
+				uifont_print(info_x, 218, COLOR_GRAY, TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 218, COLOR_GRAY, time_str);
+				uifont_print(info_x, 238, COLOR_GRAY, TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 238, COLOR_GRAY, stver_str);
+			}
+			else
+	#endif
+			{
+				uifont_print(info_x, 190, COLOR_GRAY, TEXT(PLAY_DATE));
+				uifont_print(info_x + 78, 190, COLOR_GRAY, date_str);
+				uifont_print(info_x, 210, COLOR_GRAY, TEXT(SAVE_TIME));
+				uifont_print(info_x + 78, 210, COLOR_GRAY, time_str);
+				uifont_print(info_x, 230, COLOR_GRAY, TEXT(STATE_VERSION));
+				uifont_print(info_x + 78, 230, COLOR_GRAY, stver_str);
+			}
 	}
 }
 
@@ -2206,8 +2258,8 @@ static int state_save_slot(void)
 	{
 		int res;
 
-		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
+		state_refresh_screen(0);
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
@@ -2219,9 +2271,9 @@ static int state_save_slot(void)
 
 		if (res)
 		{
+			video_driver->beginFrame(video_data);
 			state_refresh_screen(1);
 			draw_battery_status(1);
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->endFrame(video_data);
 			res = messagebox(MB_FINISHSAVESTATE);
@@ -2237,8 +2289,8 @@ static int state_load_slot(void)
 	{
 		int res;
 
-		state_refresh_screen(0);
 		video_driver->beginFrame(video_data);
+		state_refresh_screen(0);
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
@@ -2248,8 +2300,10 @@ static int state_load_slot(void)
 
 		if (res)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 			draw_battery_status(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 
 			messagebox(MB_FINISHLOADSTATE);
@@ -2301,11 +2355,13 @@ static int menu_state(void)
 	{
 		if (update & UI_FULL_REFRESH)
 		{
+			video_driver->beginFrame(video_data);
 			state_refresh_screen((prev_sel == state_sel) ? 0 : 1);
 
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else if (update & UI_PARTIAL_REFRESH)
@@ -2313,6 +2369,7 @@ static int menu_state(void)
 			int x, y, w, h;
 			RECT clip1, clip2;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			small_icon_light(12, 38 + state_sel * 22, UI_COLOR(UI_PAL_SELECT), ICON_MEMSTICK);
@@ -2332,15 +2389,14 @@ static int menu_state(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
-			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else
@@ -2459,6 +2515,16 @@ typedef struct
 	int help;
 } menu2_t;
 
+#if (EMU_SYSTEM == CPS1)
+#define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_CPS1
+#elif (EMU_SYSTEM == CPS2)
+#define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_CPS2
+#elif (EMU_SYSTEM == MVS)
+#define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_MVS
+#else
+#define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_NCDZ
+#endif
+
 
 static menu2_t mainmenu2[] =
 {
@@ -2470,7 +2536,7 @@ static menu2_t mainmenu2[] =
 #if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
 	{ MENU_DIP_SWITCH_SETTINGS, menu_dipswitch, ICON_DIPSWITCH, MENUHELP_DIP_SWITCH_SETTINGS },
 #endif
-	{ MENU_RESET_EMULATION,		menu_reset,		 ICON_SYSTEM,		MENUHELP_RESET_EMULATION     },
+	{ MENU_RESET_EMULATION,		menu_reset,		 ICON_SYSTEM,		MENUHELP_RESET_EMULATION_ID  },
 	{ MENU_RETURN_TO_BROWSER,	menu_browser,	 ICON_FOLDER,		MENUHELP_RETURN_TO_BROWSER   },
 	{ MENU_RETURN_TO_GAME,		NULL,			 ICON_RETURN,		MENUHELP_RETURN_TO_GAME      },
 	{ MENU_CHEAT_CONFIGURATION,	menu_cheatcfg,	 ICON_DIPSWITCH,	MENUHELP_CHEAT_CONFIGURATION },
@@ -2484,8 +2550,8 @@ static menu2_t mainmenu2[] =
 
 void showmenu(void)
 {
-	static int sel = 0, prev_sel = 0;
-	static int rows = 7, top = 0;
+	static int sel = 0, prev_sel = 0, top = 0;
+	int rows = ui_layout_visible_rows(40, 32);
 	int i, update = 1;
 	int mainmenu_num = 0;
 	char buf[128];
@@ -2526,6 +2592,7 @@ void showmenu(void)
 	{
 		if (update & UI_FULL_REFRESH)
 		{
+			video_driver->beginFrame(video_data);
 			show_background();
 
 #ifdef SAVE_STATE
@@ -2540,7 +2607,8 @@ void showmenu(void)
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(MAIN_MENU));
 #endif
-			draw_scrollbar(469, 26, 479, 270, rows, mainmenu_num, sel);
+				draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+					ui_layout_bottom(1), rows, mainmenu_num, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -2555,8 +2623,10 @@ void showmenu(void)
 					uifont_print_shadow(54, 37 + i * 32, UI_COLOR(UI_PAL_SELECT), mainmenu[sel].label);
 					uifont_print_shadow(54, 56 + i * 32, UI_COLOR(UI_PAL_SELECT), mainmenu[sel].help);
 
-					hline_gradation(54, 460, 53 + i * 32, UI_COLOR(UI_PAL_NORMAL), UI_COLOR(UI_PAL_SELECT), 14);
-					hline_gradation(55, 461, 54 + i * 32, COLOR_BLACK, COLOR_BLACK, 8);
+					hline_gradation(54, ui_layout_right(19), 53 + i * 32,
+						UI_COLOR(UI_PAL_NORMAL), UI_COLOR(UI_PAL_SELECT), 14);
+					hline_gradation(55, ui_layout_right(18), 54 + i * 32,
+						COLOR_BLACK, COLOR_BLACK, 8);
 				}
 				else
 				{
@@ -2568,6 +2638,7 @@ void showmenu(void)
 			update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else if (update & UI_PARTIAL_REFRESH)
@@ -2575,6 +2646,7 @@ void showmenu(void)
 			int x, y, w, h;
 			RECT clip1, clip2;
 
+			video_driver->beginFrame(video_data);
 			show_background();
 
 			for (i = 0; i < rows; i++)
@@ -2597,15 +2669,14 @@ void showmenu(void)
 			clip2.right  = clip2.left + w;
 			clip2.bottom = clip2.top  + h;
 
-			video_driver->beginFrame(video_data);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &full_rect, &full_rect);
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
-			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
 			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
+			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
 		else

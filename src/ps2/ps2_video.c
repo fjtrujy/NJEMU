@@ -291,6 +291,7 @@ static inline gs_texclut ps2_textclutForParameters(void *data, uint16_t *current
 void gsKit_custom_clear(GSGLOBAL *gsGlobal, gs_rgbaq color, uint16_t width, uint16_t height)
 {
 	u8 PrevZState;
+	u8 PrevAlphaTestState;
 	int PrevAlphaState;
 	u8 strips;
 	u8 remain;
@@ -301,8 +302,15 @@ void gsKit_custom_clear(GSGLOBAL *gsGlobal, gs_rgbaq color, uint16_t width, uint
 	u128 flat_content[count];
 
 	PrevZState = gsGlobal->Test->ZTST;
+	PrevAlphaTestState = gsGlobal->Test->ATE;
 	PrevAlphaState = gsGlobal->PrimAlphaEnable;
-	gsKit_set_test(gsGlobal, GS_ZTEST_OFF);
+	/* Clears are unconditional writes.  The normal game state enables a
+	 * TEQUAL/AREF=0 alpha test for indexed sprites; leaving that state active
+	 * rejects opaque clear colors (including the GUI's blue background) and
+	 * leaves stale pixels from the previous screen behind. */
+	gsGlobal->Test->ZTST = 1;
+	gsGlobal->Test->ATE = 0;
+	gsKit_set_test(gsGlobal, 0);
 	/* A clear must replace the render target.  PrimAlphaEnable is normally ON
 	 * for the emulator's textured primitives, but leaving it enabled here
 	 * makes the clear sprite blend with the previous framebuffer contents. */
@@ -318,6 +326,7 @@ void gsKit_custom_clear(GSGLOBAL *gsGlobal, gs_rgbaq color, uint16_t width, uint
 
 	gsGlobal->PrimAlphaEnable = PrevAlphaState;
 	gsGlobal->Test->ZTST = PrevZState;
+	gsGlobal->Test->ATE = PrevAlphaTestState;
 	gsKit_set_test(gsGlobal, 0);
 }
 
@@ -814,8 +823,11 @@ static void ps2_scissor(void *data, uint16_t left, uint16_t top, uint16_t right,
 --------------------------------------------------------*/
 
 static void ps2_clearScreen(void *data) {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	gsKit_clear(ps2->gsGlobal, ps2->clearScreenColor.color.rgbaq);
+	/* Keep the same semantic contract as the PSP backend: clear both physical
+	 * screen buffers.  Clearing only whichever target happened to be active left
+	 * GUI pixels visible when the emulator switched to the other buffer. */
+	video_driver->clearFrame(data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER);
+	video_driver->clearFrame(data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 }
 
 /*--------------------------------------------------------
@@ -1144,7 +1156,11 @@ static void ps2_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 
 /*--------------------------------------------------------
-	Copy Rectangular Area with Horizontal Flip
+	Copy Rectangular Area with 180-degree Flip
+
+	Despite the legacy interface name, the PSP implementation
+	flips both axes. CPS1/CPS2 use this path for the hardware
+	screen-flip bit, which is a 180-degree screen rotation.
 --------------------------------------------------------*/
 
 static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
@@ -1172,12 +1188,12 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
-	/* Horizontal flip: swap U coordinates between left and right */
+	/* 180-degree flip: swap both U and V coordinates. */
 	gsKit_prim_quad_texture(gsGlobal, &srcTex,
-		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->top,
-		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->top,
-		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->bottom,
-		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->bottom,
+		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->bottom,
+		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->bottom,
+		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->top,
+		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->top,
 		0, color);
 
 	gsGlobal->PrimAlphaEnable = prev_alpha;
@@ -1517,6 +1533,7 @@ static inline void ps2_ui_restore_alpha_blend(GSGLOBAL *gsGlobal, ps2_ui_alpha_s
 }
 
 static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int tex_width, int tex_height, int tex_stride,
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
@@ -1528,6 +1545,9 @@ static void ps2_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 
 	(void)tex_format;
 	(void)tex_swizzled;
+	(void)tex_width;
+	(void)tex_height;
+	(void)tex_stride;
 	if (!texture || !texture->Vram)
 		return;
 

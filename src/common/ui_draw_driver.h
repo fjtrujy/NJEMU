@@ -63,6 +63,13 @@ typedef struct ui_draw_driver
 	void (*term)(void *data);
 
 	/*
+	 * getOutputSize — Return the physical presentation size in pixels.
+	 * The common UI owns its logical coordinate space and uses this data to
+	 * derive a platform-independent viewport.
+	 */
+	void (*getOutputSize)(void *data, int *width, int *height);
+
+	/*
 	 * uploadTexture — Upload a pixel buffer to a named texture slot.
 	 *   slot:    UI_TEXTURE_* enum
 	 *   pixels:  source pixel data (16-bit per pixel)

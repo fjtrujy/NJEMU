@@ -49,6 +49,7 @@ enum
 };
 
 int cachefile_open(int type);
+int64_t cachefile_zopen(int type, const char *name);
 #endif
 
 void error_memory(const char *mem_name);

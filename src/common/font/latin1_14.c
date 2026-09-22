@@ -8,8 +8,6 @@
 
 ******************************************************************************/
 
-#ifdef COMMAND_LIST
-
 #include "emucfg.h"
 #include <stdint.h>
 #include "common/font_t.h"
@@ -371,4 +369,7 @@ int latin1_14_get_gryph(struct font_t *font, uint16_t code)
 	return 0;
 }
 
-#endif
+int latin1_14_get_pitch(uint16_t code)
+{
+	return code < NUM_FONTS ? 7 : 0;
+}

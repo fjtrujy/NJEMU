@@ -80,7 +80,8 @@ else
 VERSION_STR = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_BUILD)
 endif
 
-EXTRA_TARGETS = EBOOT.PBP
+TRANSLATION_STAMP = lang/.translations.stamp
+EXTRA_TARGETS = EBOOT.PBP $(TRANSLATION_STAMP)
 ifeq ($(LARGE_MEMORY), 1)
 PSP_EBOOT_TITLE = $(TARGET) $(VERSION_STR) for PSP Slim
 else
@@ -122,6 +123,7 @@ MAINOBJS = \
 	common/input_driver.o \
 	common/video_driver.o \
 	common/ui_text_driver.o \
+	common/ui_text_catalog.o \
 	common/platform_driver.o \
 	common/sound.o \
 
@@ -168,8 +170,7 @@ OSOBJS += \
 	$(OS)/$(OS)_power.o \
 	$(OS)/$(OS)_ticker.o \
 	$(OS)/$(OS)_input.o \
-	$(OS)/$(OS)_video.o \
-	$(OS)/$(OS)_ui_text.o \
+	$(OS)/$(OS)_video.o
 
 ifeq ($(ADHOC), 1)
 OSOBJS += $(OS)/adhoc.o
@@ -274,6 +275,11 @@ endif
 
 ALLOBJS = $(MAINOBJS) $(COREOBJS) $(OSOBJS) $(FONTOBJS) $(ICONOBJS)
 OBJS = $(ALLOBJS:%=src/%)
+
+$(TRANSLATION_STAMP): tools/build_translations.py translations/messages.def translations/en.lang translations/ja.lang translations/es.lang translations/zh-Hans.lang translations/zh-Hant.lang
+	@mkdir -p lang
+	python3 tools/build_translations.py --build --output-dir lang
+	@touch $@
 
 PSPSDK=$(shell psp-config --pspsdk-path)
 include $(PSPSDK)/lib/build.mak

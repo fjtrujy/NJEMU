@@ -13,21 +13,53 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} LARGE_MEMORY=${{ matrix.large_memory }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [MVS, NCDZ, CPS1, CPS2]
-        large_memory: [ON, OFF]
-        command_list: [OFF] #TODO: ON
-        adhoc: [OFF] #TODO: ON
-        save_state: [OFF] #TODO: OFF
+        command_list: [OFF]
+        adhoc: [OFF]
+        save_state: [OFF]
         gui: [OFF, ON]
-        exclude:
+        include:
+          - target: CPS1
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: MVS
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
           - target: NCDZ
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          # Translation-system fragility check: ADHOC used to participate in
+          # the conditional UI-text ID/table layout. NCDZ does not support it.
+          - target: CPS1
+            command_list: OFF
             adhoc: ON
-          - adhoc: ON
-            save_state: FALSE
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            command_list: OFF
+            adhoc: ON
+            save_state: ON
+            gui: ON
+          - target: MVS
+            command_list: OFF
+            adhoc: ON
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     container: pspdev/pspdev:latest
@@ -36,7 +68,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash
+        apk add build-base git bash python3
     
 
     - name: Compile project
@@ -46,13 +78,23 @@ jobs:
         cmake -DPLATFORM="PSP" \
           -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
           -DTARGET="${{ matrix.target }}" \
-          -DLARGE_MEMORY=${{ matrix.large_memory }} \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
+          -DGUI=${{ matrix.gui }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
-        cmake --install .
+        cmake --install . --prefix "$PWD/install"
+
+    - name: Validate translation package
+      run: |
+        python3 tools/build_translations.py
+        test -f build/install/lang/en.lng
+        test -f build/install/lang/es.lng
+        test -f build/install/lang/ja.lng
+        test -f build/install/lang/zh-Hans.lng
+        test -f build/install/lang/zh-Hant.lng
+        test "$(find build/install/lang -maxdepth 1 -type f -name '*.lng' | wc -l)" -eq 5
 
     - name: Get short SHA
       id: slug
@@ -62,5 +104,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v4
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-large_memory_${{ matrix.large_memory }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/
