@@ -5,6 +5,7 @@
 */
 
 #include <fcntl.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <zlib.h>
 #include <string.h>
@@ -79,7 +80,6 @@ typedef struct
 } unz_s;
 
 
-static zip_read_info_s zip_read_info;
 static unz_s unz;
 
 /* ===========================================================================
@@ -672,7 +672,10 @@ int unzOpenCurrentFile(unzFile file)
 				&offset_static_extrafield,&size_static_extrafield) != UNZ_OK)
 		return UNZ_BADZIPFILE;
 
-	pzip_read_info = &zip_read_info;
+	pzip_read_info = (zip_read_info_s *)malloc(sizeof(*pzip_read_info));
+	if (pzip_read_info == NULL)
+		return UNZ_INTERNALERROR;
+
 	pzip_read_info->offset_static_extrafield = offset_static_extrafield;
 	pzip_read_info->size_static_extrafield = size_static_extrafield;
 	pzip_read_info->pos_static_extrafield = 0;
@@ -873,6 +876,7 @@ int unzCloseCurrentFile(unzFile file)
 	pzip_read_info->stream_initialised = 0;
 
 	s->pzip_read_info = NULL;
+	free(pzip_read_info);
 
 	return err;
 }

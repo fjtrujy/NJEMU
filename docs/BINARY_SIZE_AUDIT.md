@@ -3,7 +3,7 @@
 Date: 2026-09-22
 
 This audit was started while closing R10 of the reactive-memory migration and
-is now updated through R14. R11 removed the largest immutable payload; R12-R14
+is now updated through R15. R11 removed the largest immutable payload; R12-R15
 continue with static/lifetime RAM savings that do not add work to emulation hot
 paths. Selective `-Os` and PS2 IRX externalization are explicitly deferred.
 
@@ -193,7 +193,40 @@ Validation performed:
 - PSP cross-build remains unavailable in the current local shell environment.
   The changed ownership code is common C and does not alter PSP-specific paths.
 
-## 6. Static RAM (`.bss`) follow-up audit
+## 6. R15 result: scope ZIP decompression scratch to an open entry
+
+The legacy unzip implementation kept one `zip_read_info_s` object in `.bss` for
+the whole process. Almost all of it is the 16 KiB compressed-input buffer, and
+the object is only meaningful between `unzOpenCurrentFile()` and
+`unzCloseCurrentFile()`.
+
+R15 allocates that object when a ZIP entry is opened and frees it when the entry
+is closed (including the existing close-on-ZIP-close path). This removes 16,512
+bytes of permanent `.bss` on the 32-bit console builds without changing the
+buffer size, inflate algorithm or read loop. CPS1/CPS2/MVS therefore return the
+scratch memory between ROM reads and before the post-load allocation probes;
+NCDZ may reacquire it while actively reading a zipped CD entry, as expected.
+
+Measured MVS PS2 GUI result:
+
+| Section | R14 | R15 | Delta |
+| --- | ---: | ---: | ---: |
+| `.text` | 913,080 B | 913,112 B | +32 B |
+| `.rodata` | 101,992 B | 101,992 B | 0 B |
+| `.data` | 406,432 B | 406,432 B | 0 B |
+| `.bss` | 2,287,432 B | 2,270,920 B | **-16,512 B** |
+| total sections | 5,756,653 B | 5,740,173 B | **-16,480 B** |
+
+Validation performed:
+
+- Desktop CPS1/CPS2/MVS/NCDZ application builds succeed;
+- MVS passes the complete 11-test Desktop CTest suite;
+- PS2 CPS1/CPS2/MVS/NCDZ GUI cross-builds succeed;
+- a standalone stored-ZIP smoke test successfully exercises
+  open-entry -> read -> close-entry -> close-ZIP with the dynamic scratch;
+- PSP cross-build remains unavailable in the current local shell environment.
+
+## 7. Static RAM (`.bss`) follow-up audit
 
 Representative large PSP symbols include. `gulist` remains in this list because
 it is genuinely required by PSP; R12 only removes its accidental cost on the
@@ -243,7 +276,7 @@ whereas compact storage would require reconstructing/tagging every vertex in a
 loop on the renderer hot path. The RAM saving does not justify that performance
 regression without profiling evidence to the contrary.
 
-## 7. Selective `-Os`: deferred
+## 8. Selective `-Os`: deferred
 
 Selective `-Os` is outside the scope of the current memory work. If revisited in
 a future optimization phase, the existing measurements below remain useful for
@@ -278,7 +311,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 8. PS2 IRX observations: deferred to `ps2_drivers`
+## 9. PS2 IRX observations: deferred to `ps2_drivers`
 
 Representative no-GUI PS2 builds currently contain approximately:
 
@@ -294,14 +327,15 @@ runtime IRX-loading/externalization layer as part of this work. If that saving i
 pursued later, the preferred design is to expose it cleanly from `ps2_drivers`
 first so applications can opt into the behavior through a simple shared API.
 
-## 9. Current status / future work
+## 10. Current status / future work
 
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
 2. **In progress:** audit large `.bss`/lifetime buffers. R12 removes the unused
    300 KiB PSP GU list from PS2/Desktop; R13 removes 64 KiB from MVS/NCDZ and
    127.75 KiB from CPS1/CPS2 color conversion storage; R14 returns 75,776 bytes
-   of ROM-browser metadata to the heap before emulation on CPS1/CPS2/MVS.
+   of ROM-browser metadata before emulation on CPS1/CPS2/MVS; R15 removes a
+   further 16,512 bytes of permanent ZIP decompression scratch on all cores.
 3. Continue only with buffers whose lifetime can be shortened without adding
    work to CPU/render/audio hot paths.
 4. **Deferred:** PS2 IRX externalization/runtime loading, preferably as a future
