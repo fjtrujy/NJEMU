@@ -1062,21 +1062,6 @@ void file_browser(void)
 	checkStartupDir();
 	getDir(curr_dir);
 
-#if defined(LARGE_MEMORY) && ((EMU_SYSTEM == CPS2) || (EMU_SYSTEM == MVS))
-	if (platform_driver->getDevkitVersion(platform_data) < 0x03070110 || platform_driver->getHardwareModel(platform_data) == 0)
-	{
-		video_driver->beginFrame(video_data);
-		show_background();
-		small_icon_shadow(6, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-		logo(32, 5, UI_COLOR(UI_PAL_TITLE));
-		video_driver->endFrame(video_data);
-		video_driver->flipScreen(video_data, 1);
-		messagebox(MB_PSPVERSIONERROR);
-		show_exit_screen();
-		goto error;
-	}
-#endif
-
 #if (EMU_SYSTEM == NCDZ)
 	check_neocd_bios();
 #endif

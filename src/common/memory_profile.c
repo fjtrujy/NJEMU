@@ -68,16 +68,6 @@ const memory_profile_t *memory_profile_select(uint32_t available_ram_bytes) {
 		}
 	}
 
-#ifdef LARGE_MEMORY
-	/* Legacy compile-time LARGE_MEMORY (Makefile builds only -- the CMake
-	 * option was never propagated). Force the large tier so Makefile builds
-	 * keep their PSP Slim preload + 32 MB cache behaviour. */
-	if (chosen == NULL) {
-		chosen = &profile_table[MEMORY_PROFILE_TIER_LARGE];
-		source = "LARGE_MEMORY";
-	}
-#endif
-
 	if (chosen == NULL) {
 		chosen = select_for_ram(available_mb);
 	}

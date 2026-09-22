@@ -1166,6 +1166,37 @@ Validation performed:
 
 ### R6 - State-save and UI cleanup
 
+**Status: completed on 2026-09-22.**
+
+Implemented:
+
+- non-ADHOC save-state now always tries a normal heap allocation first;
+- when that allocation fails on a cache-enabled core, save-state temporarily
+  backs up the beginning of the active GFX/C-ROM allocation and reuses it as
+  the state buffer, then restores it afterwards;
+- the chosen state-buffer owner is tracked explicitly at runtime, so freeing no
+  longer depends on `EMU_SYSTEM` or `LARGE_MEMORY`;
+- removed the compile-time PSP-2000/FW 3.71 M33 startup rejection and its
+  `MB_PSPVERSIONERROR` UI path. Supported memory is now determined by runtime
+  capabilities and the memory planner instead of the binary variant;
+- removed the final `LARGE_MEMORY` override from `memory_profile_select()`;
+  `src/common/` now contains no `LARGE_MEMORY` conditionals;
+- added the missing no-GUI `init_progress()` stubs for PS2/PSP, which were
+  required for `SAVE_STATE=ON` builds to link when GUI is disabled.
+
+Validation performed:
+
+- Desktop MVS and CPS2 with `SAVE_STATE=ON`: 8/8 CTest tests pass for each;
+- PS2 MVS/CPS2 with `SAVE_STATE=ON`, GUI off: both link successfully;
+- PS2 MVS/CPS2 with `SAVE_STATE=ON`, GUI on: both link successfully;
+- PSP MVS/CPS2 with `SAVE_STATE=ON`, GUI off: both generate `EBOOT.PBP`;
+- PSP MVS/CPS2 with `SAVE_STATE=ON`, GUI on: both generate `EBOOT.PBP`;
+- `rg '\\bLARGE_MEMORY\\b' src/common` returns no matches.
+
+R7 can now focus exclusively on requesting/exposing the maximum PSP user-memory
+configuration in one binary; common save-state/UI code no longer depends on the
+old large-memory build mode.
+
 - make state-save temporary buffer allocation runtime/capability-driven;
 - eliminate compile-time PSP-version warning UI;
 - remove remaining `LARGE_MEMORY` gates from common code.

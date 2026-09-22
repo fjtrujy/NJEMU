@@ -43,6 +43,12 @@ void show_progress(const char *text)
 	printf("show_progress: %s\n", text);
 }
 
+void init_progress(int total, const char *text)
+{
+	(void)total;
+	(void)text;
+}
+
 void update_progress(void)
 {
 }

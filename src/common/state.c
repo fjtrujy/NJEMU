@@ -324,13 +324,19 @@ int state_save(int slot)
 	}
 #else
 	{
+	#ifndef ADHOC
+		int state_buffer_uses_cache = 0;
+	#endif
 #ifdef ADHOC
 		state_buffer = state_buffer_base;
 #else
-#if (EMU_SYSTEM == CPS1 || (EMU_SYSTEM == CPS2 && defined(LARGE_MEMORY)))
 		state_buffer = state_buffer_base = malloc(STATE_BUFFER_SIZE);
-#else
-		state_buffer = state_buffer_base = cache_alloc_state_buffer(STATE_BUFFER_SIZE);
+#if USE_CACHE
+		if (!state_buffer)
+		{
+			state_buffer = state_buffer_base = cache_alloc_state_buffer(STATE_BUFFER_SIZE);
+			state_buffer_uses_cache = state_buffer != NULL;
+		}
 #endif
 		if (!state_buffer)
 		{
@@ -386,13 +392,14 @@ int state_save(int slot)
 		close(fd);
 		update_progress();
 
-#ifndef ADHOC
-#if (EMU_SYSTEM == CPS1 || (EMU_SYSTEM == CPS2 && defined(LARGE_MEMORY)))
-		free(state_buffer_base);
-#else
-		cache_free_state_buffer(STATE_BUFFER_SIZE);
+	#ifndef ADHOC
+#if USE_CACHE
+			if (state_buffer_uses_cache)
+				cache_free_state_buffer(STATE_BUFFER_SIZE);
+			else
 #endif
-#endif
+				free(state_buffer_base);
+	#endif
 		update_progress();
 
 		show_progress(buf);
