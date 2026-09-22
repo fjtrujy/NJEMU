@@ -9,6 +9,8 @@
 #ifndef MEMORY_CACHE_H
 #define MEMORY_CACHE_H
 
+#include "memory_plan.h"
+
 #if USE_CACHE
 
 #if (EMU_SYSTEM == CPS2)
@@ -41,7 +43,7 @@ extern uint32_t block_offset[MAX_CACHE_BLOCKS];
 #endif
 
 void cache_init(void);
-int cache_start(void);
+int cache_start(const memory_plan_t *plan);
 void cache_shutdown(void);
 void cache_sleep(int flag);
 

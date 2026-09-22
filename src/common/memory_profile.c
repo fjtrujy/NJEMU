@@ -17,10 +17,6 @@ static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = false,
-		.cache_min_mb         = 2,
-		.cache_max_mb         = 8,
-		.safety_threshold_mb  = 1,
-		.cache_floor_mb       = 2,
 	},
 	[MEMORY_PROFILE_TIER_SMALL] = {
 		.name                 = "small",
@@ -29,10 +25,6 @@ static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = false,
-		.cache_min_mb         = 2,   /* matches old !LARGE_MEMORY MIN_CACHE_SIZE (0x20) */
-		.cache_max_mb         = 20,  /* matches old !LARGE_MEMORY MAX_CACHE_SIZE (0x140) */
-		.safety_threshold_mb  = 2,
-		.cache_floor_mb       = 4,
 	},
 	[MEMORY_PROFILE_TIER_MEDIUM] = {
 		.name                 = "medium",
@@ -41,10 +33,6 @@ static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
 		.preload_crypto       = false,
 		.preload_gfx          = false,
 		.use_psp2k_region     = true,
-		.cache_min_mb         = 4,
-		.cache_max_mb         = 24,
-		.safety_threshold_mb  = 2,
-		.cache_floor_mb       = 8,
 	},
 	[MEMORY_PROFILE_TIER_LARGE] = {
 		.name                 = "large",
@@ -53,10 +41,6 @@ static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
 		.preload_crypto       = true,
 		.preload_gfx          = true,
 		.use_psp2k_region     = true,
-		.cache_min_mb         = 4,   /* matches old LARGE_MEMORY MIN_CACHE_SIZE (0x40) */
-		.cache_max_mb         = 32,  /* matches old LARGE_MEMORY MAX_CACHE_SIZE (0x200) */
-		.safety_threshold_mb  = 4,
-		.cache_floor_mb       = 8,
 	},
 };
 

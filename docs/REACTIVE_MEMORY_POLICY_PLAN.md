@@ -991,6 +991,50 @@ At this stage runtime still uses old paths; compare/log new plan vs old behaviou
 
 ### R3 - Make cache size fully runtime-driven
 
+**Status: completed on 2026-09-21.**
+
+Implemented:
+
+- `cache_start()` now receives the selected `memory_plan_t` and uses its GFX/
+  C-ROM and PCM targets as the runtime allocation request;
+- removed `MIN_CACHE_SIZE`, `MAX_CACHE_SIZE`, `MAX_PCM_SIZE` and the old
+  cache-size/safety fields from `memory_profile_t`; there is now one sizing
+  policy, the game-specific runtime planner;
+- `cache_data` and MVS `pcm_data` LRU metadata are dynamically sized to the
+  actual number of cache blocks;
+- GFX/C-ROM allocation is attempted first, preserving the policy's primary
+  spill priority, and PCM is allocated afterwards;
+- both data targets retry down in 64 KiB blocks when fragmentation prevents the
+  requested contiguous allocation;
+- `MAX_CACHE_BLOCKS` / `MAX_PCM_BLOCKS` remain only as cache format/
+  addressability limits;
+- CPS2 additionally clamps the streaming target to `driver->cache_size`, because
+  that is the compact cache-file payload after empty GFX blocks are removed;
+- MVS `SOUND_DISABLE` sets now defer SOUND1 to the runtime PCM plan instead of
+  letting the legacy profile eagerly preload it on high-memory hosts;
+- the loading/log view reports the **actual allocated cache versus cacheable
+  region size** after all clamps/retry-downs, for example:
+
+  ```text
+  GFX cache: 6144KB / 11584KB
+  PCM cache: 3072KB / 16384KB
+  C-ROM cache: 15360KB / 65536KB
+  ```
+
+Validation performed:
+
+- Desktop MVS and CPS2: 8/8 CTest tests pass;
+- CPS2 `ssf2` with an 8 MiB forced budget selects a 6 MiB GFX cache and logs
+  `6144KB / 11584KB`;
+- MVS `mslug5` with a 20 MiB forced budget selects 15 MiB C-ROM + 3 MiB PCM and
+  logs both effective allocations; high-memory mode reaches 64 MiB C-ROM +
+  16 MiB PCM;
+- PS2SDK MVS/CPS2 cross-builds pass;
+- PSPSDK MVS/CPS2 cross-builds pass and generate both `EBOOT.PBP` files.
+
+R4 remains responsible for deleting the separate CPS2 preload mode and choosing
+streaming versus direct fully-resident loading solely from `memory_plan_t`.
+
 - dynamically size `cache_data` metadata;
 - dynamically size the MVS PCM cache metadata/data target instead of hard-coding
   `MAX_PCM_SIZE = 0x30` as the active cache size;

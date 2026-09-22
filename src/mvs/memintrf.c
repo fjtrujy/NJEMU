@@ -114,6 +114,9 @@ int use_parent_crom;
 int use_parent_srom;
 int use_parent_vrom;
 
+static memory_plan_t mvs_memory_plan;
+static int mvs_memory_plan_valid;
+
 #ifdef LARGE_MEMORY
 uint32_t psp2k_mem_offset = PSP2K_MEM_TOP;
 int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
@@ -935,7 +938,7 @@ static int load_rom_gfx3(void)
 
 	if (memory_region_gfx3 == NULL)
 	{
-		if (cache_start() == 0)
+		if (!mvs_memory_plan_valid || cache_start(&mvs_memory_plan) == 0)
 		{
 			msg_printf(TEXT(PRESS_ANY_BUTTON2));
 			pad_wait_press(PAD_WAIT_INFINITY);
@@ -992,6 +995,12 @@ static int load_rom_sound1(void)
 		memory_length_sound1 = 0;
 		return 1;
 	}
+
+	/* SOUND_DISABLE sets are the PCM-cache path. Once the runtime planner has
+	 * produced a target, defer SOUND1 ownership to cache_start() even on hosts
+	 * where the legacy memory profile would otherwise preload it eagerly. */
+	if (disable_sound && mvs_memory_plan_valid)
+		return 1;
 
 	const memory_profile_t *profile = memory_profile_current();
 	bool use_psp2k = (profile != NULL && profile->use_psp2k_region);
@@ -1652,6 +1661,7 @@ int memory_init(void)
 	memory_region_user2  = NULL;
 #endif
 	memory_region_user3  = NULL;
+	mvs_memory_plan_valid = 0;
 
 	memory_length_cpu1   = 0;
 	memory_length_cpu2   = 0;
@@ -1826,28 +1836,29 @@ int memory_init(void)
 		if (load_rom_gfx2() == 0) return 0;
 		if (load_rom_gfx4() == 0) return 0;
 
-		/* R2 shadow plan: CPU/BIOS/FIX allocations and decrypt scratch are done,
-		 * while SOUND1 (PCM/V-ROM) and C-ROM have not yet committed their large
-		 * steady-state allocations. SOUND2 remains a mandatory late allocation
-		 * only on the current path that keeps it enabled. */
+			/* CPU/BIOS/FIX allocations and decrypt scratch are done here. Treat
+			 * SOUND1 as a PCM-cache candidate only for ROM sets that explicitly use
+			 * the streaming-sound path; otherwise sound regions are mandatory. */
 		if (platform_driver->queryMemoryInfo != NULL)
 		{
 			platform_memory_info_t memory_info;
 			if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
 			{
 				game_memory_requirements_t requirements;
-				memory_plan_t plan;
 				platform_memory_info_apply_env_overrides(&memory_info);
 				memset(&requirements, 0, sizeof(requirements));
 				requirements.core = MEMORY_PLAN_CORE_MVS;
 				requirements.gfx_or_crom_bytes = memory_length_gfx3;
-				requirements.pcm_or_vrom_bytes = option_sound_enable ? memory_length_sound1 : 0;
-				if (option_sound_enable && !disable_sound)
-					requirements.mandatory_late_allocations_bytes = memory_length_sound2;
-				if (memory_plan_build(&memory_info, &requirements, &plan))
-					memory_plan_log(&plan);
+				if (option_sound_enable && disable_sound)
+					requirements.pcm_or_vrom_bytes = memory_length_sound1;
+				else if (option_sound_enable)
+					requirements.mandatory_late_allocations_bytes =
+						(uint64_t)memory_length_sound1 + memory_length_sound2;
+				mvs_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &mvs_memory_plan);
+				if (mvs_memory_plan_valid)
+					memory_plan_log(&mvs_memory_plan);
 				else
-					printf("[memory_plan] MVS shadow plan has no viable cache floor\n");
+					printf("[memory_plan] MVS plan has no viable cache floor\n");
 			}
 		}
 

@@ -83,6 +83,8 @@ int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
  * the preload code path uses PSP2K symbols that don't exist on
  * other builds. */
 static int cps2_use_preload = 0;
+static memory_plan_t cps2_memory_plan;
+static int cps2_memory_plan_valid = 0;
 
 
 /******************************************************************************
@@ -230,32 +232,36 @@ static int load_rom_gfx1(void)
 		return 0;
 	}
 
-	/* R2 shadow plan: at this point CPU/user/sound regions and GFX metadata are
-	 * already resident, while the large GFX allocation has not happened yet.
-	 * Log the new planner result without changing the legacy cache/preload path. */
-	if (platform_driver->queryMemoryInfo != NULL)
-	{
-		platform_memory_info_t memory_info;
-		if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
+		/* CPU/user/sound regions and GFX metadata are already resident here, so
+		 * the runtime plan can budget the remaining heap for the GFX cache. */
+		if (platform_driver->queryMemoryInfo != NULL)
 		{
-			game_memory_requirements_t requirements;
-			memory_plan_t plan;
-			platform_memory_info_apply_env_overrides(&memory_info);
-			memset(&requirements, 0, sizeof(requirements));
-			requirements.core = MEMORY_PLAN_CORE_CPS2;
-			requirements.gfx_or_crom_bytes = planned_gfx_length;
-			if (memory_plan_build(&memory_info, &requirements, &plan))
-				memory_plan_log(&plan);
-			else
-				printf("[memory_plan] CPS2 shadow plan has no viable cache floor\n");
+			platform_memory_info_t memory_info;
+			if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
+			{
+				game_memory_requirements_t requirements;
+				platform_memory_info_apply_env_overrides(&memory_info);
+				memset(&requirements, 0, sizeof(requirements));
+				requirements.core = MEMORY_PLAN_CORE_CPS2;
+				requirements.gfx_or_crom_bytes = planned_gfx_length;
+				cps2_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &cps2_memory_plan);
+				if (cps2_memory_plan_valid)
+					memory_plan_log(&cps2_memory_plan);
+				else
+					printf("[memory_plan] CPS2 plan has no viable cache floor\n");
+			}
 		}
-	}
 
 	if (!cps2_use_preload)
 	{
+		if (!cps2_memory_plan_valid)
+		{
+			msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+			return 0;
+		}
 		memory_length_gfx1 = driver->cache_size;
 
-		if (cache_start() == 0)
+		if (cache_start(&cps2_memory_plan) == 0)
 		{
 			msg_printf(TEXT(PRESS_ANY_BUTTON2));
 			pad_wait_press(PAD_WAIT_INFINITY);
@@ -674,10 +680,11 @@ int memory_init(void)
 	gfx_pen_usage[TILE16] = NULL;
 	gfx_pen_usage[TILE32] = NULL;
 
-	/* Set the runtime preload flag from the active memory profile.
-	 * Restricted to LARGE_MEMORY builds because the preload code path
-	 * uses PSP2K-region symbols only declared then. */
-	cps2_use_preload = 0;
+		/* Set the runtime preload flag from the active memory profile.
+		 * Restricted to LARGE_MEMORY builds because the preload code path
+		 * uses PSP2K-region symbols only declared then. */
+		cps2_use_preload = 0;
+		cps2_memory_plan_valid = 0;
 #ifdef LARGE_MEMORY
 	{
 		const memory_profile_t *profile = memory_profile_current();

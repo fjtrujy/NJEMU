@@ -17,8 +17,11 @@ int main(void)
 	assert(MENUHELP_RESET_EMULATION_NCDZ == 256);
 	assert(ROMINFO_NOT_FOUND_CPS1 == 347);
 	assert(ROMINFO_NOT_FOUND_MVS == 349);
-	assert(END_OF_TEXT == 376);
-	assert(UI_TEXT_MAX == 377);
+	assert(CACHE_USAGE_GFX == 376);
+	assert(CACHE_USAGE_CROM == 377);
+	assert(CACHE_USAGE_PCM == 378);
+	assert(END_OF_TEXT == 379);
+	assert(UI_TEXT_MAX == 380);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

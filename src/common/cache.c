@@ -12,29 +12,14 @@
 #include "common/memory_sizes.h"
 
 #if USE_CACHE
-#ifdef LARGE_MEMORY
-#define MIN_CACHE_SIZE		0x40		// Lower limit, original 0x40, 4MB
-#else
-#define MIN_CACHE_SIZE		0x20		// Lower limit, original 0x40, 4MB
-#endif
-/*
-32MB 0x200 660CFW exit pspfiler and tempgba,crash.
-26MB 0x1a0 620CFW push vol and screen button crash.
-*/
-#ifdef LARGE_MEMORY
-#define MAX_CACHE_SIZE		0x200		// Upper limit 32MB 0x200  
-#else
-#define MAX_CACHE_SIZE		0x140		// Upper limit 20MB 0x140
-#endif
-#define CACHE_SAFETY		0x20000		// Free memory size after cache allocation 128KB
 #define BLOCK_MASK			0xffff
 #define BLOCK_SHIFT			16			// 16
 #define BLOCK_NOT_CACHED	0xffff
 #define BLOCK_EMPTY			0xffffffff
+#define MIN_RUNTIME_CACHE_BLOCKS ((2u * 1024u * 1024u) / CACHE_BLOCK_SIZE)
 
 #if (EMU_SYSTEM == MVS)
 #define MAX_PCM_BLOCKS		0x140		// 0x100 PCM for 3xx
-#define MAX_PCM_SIZE		0x30		// 0x30 smaller value = more remaining memory
 #endif
 
 
@@ -64,7 +49,7 @@ typedef struct cache_s
 } cache_t;
 
 
-static cache_t ALIGN16_DATA cache_data[MAX_CACHE_SIZE];
+static cache_t *cache_data;
 static cache_t *head;
 static cache_t *tail;
 
@@ -75,6 +60,43 @@ static int64_t cache_fd;
 int cache_type;
 static char spr_cache_name[PATH_MAX];
 
+static void cache_list_init(cache_t *data, int count, cache_t **list_head, cache_t **list_tail)
+{
+	int i;
+
+	*list_head = NULL;
+	*list_tail = NULL;
+	if (data == NULL || count <= 0)
+		return;
+
+	memset(data, 0, sizeof(*data) * (size_t)count);
+	for (i = 0; i < count; i++)
+	{
+		data[i].idx = i;
+		data[i].block = -1;
+		data[i].prev = i > 0 ? &data[i - 1] : NULL;
+		data[i].next = i + 1 < count ? &data[i + 1] : NULL;
+	}
+
+	*list_head = &data[0];
+	*list_tail = &data[count - 1];
+}
+
+static void cache_rotate_head_to_tail(cache_t **list_head, cache_t **list_tail)
+{
+	cache_t *p = *list_head;
+
+	if (p == NULL || p == *list_tail)
+		return;
+
+	*list_head = p->next;
+	(*list_head)->prev = NULL;
+	p->prev = *list_tail;
+	p->next = NULL;
+	(*list_tail)->next = p;
+	*list_tail = p;
+}
+
 #if (EMU_SYSTEM == MVS)
 /* Phase 2b.1: PCM cache infrastructure is always compiled. pcm_cache_enable
  * is the runtime gate; LARGE_MEMORY (or large tier with preload_sound) keeps
@@ -82,9 +104,10 @@ static char spr_cache_name[PATH_MAX];
  */
 int pcm_cache_enable;
 
-static cache_t ALIGN16_DATA pcm_data[MAX_PCM_SIZE];
+static cache_t *pcm_data;
 static cache_t *pcm_head;
 static cache_t *pcm_tail;
+static int num_pcm_cache;
 
 static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
@@ -428,14 +451,7 @@ static int fill_cache(void)
 #endif
 			);
 
-			head = p->next;
-			head->prev = NULL;
-
-			p->prev = tail;
-			p->next = NULL;
-
-			tail->next = p;
-			tail = p;
+				cache_rotate_head_to_tail(&head, &tail);
 			i++;
 
 			if (++block >= MAX_CACHE_BLOCKS)
@@ -469,14 +485,7 @@ static int fill_cache(void)
 				folder_cache_load(p->idx)
 			}
 
-			head = p->next;
-			head->prev = NULL;
-
-			p->prev = tail;
-			p->next = NULL;
-
-			tail->next = p;
-			tail = p;
+				cache_rotate_head_to_tail(&head, &tail);
 			i++;
 
 			if (++block >= MAX_CACHE_BLOCKS)
@@ -488,7 +497,7 @@ static int fill_cache(void)
 		i = 0;
 		block = 0;
 
-		while (i < MAX_PCM_SIZE)
+			while (i < num_pcm_cache)
 		{
 			p = pcm_head;
 			p->block = block;
@@ -501,14 +510,7 @@ static int fill_cache(void)
 #endif
 			);
 
-			pcm_head = p->next;
-			pcm_head->prev = NULL;
-
-			p->prev = pcm_tail;
-			p->next = NULL;
-
-			pcm_tail->next = p;
-			pcm_tail = p;
+				cache_rotate_head_to_tail(&pcm_head, &pcm_tail);
 			i++;
 			block++;
 		}
@@ -527,14 +529,7 @@ static int fill_cache(void)
 				lseek(cache_fd, block_offset[block], SEEK_SET);
 				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
-				head = p->next;
-				head->prev = NULL;
-
-				p->prev = tail;
-				p->next = NULL;
-
-				tail->next = p;
-				tail = p;
+				cache_rotate_head_to_tail(&head, &tail);
 				i++;
 			}
 
@@ -571,14 +566,7 @@ static int fill_cache(void)
 					folder_cache_load(p->idx)
 				}
 
-				head = p->next;
-				head->prev = NULL;
-
-				p->prev = tail;
-				p->next = NULL;
-
-				tail->next = p;
-				tail = p;
+				cache_rotate_head_to_tail(&head, &tail);
 				i++;
 			}
 
@@ -827,6 +815,13 @@ void cache_init(void)
 {
 	int i;
 
+	if (cache_data)
+	{
+		free(cache_data);
+		cache_data = NULL;
+	}
+	head = NULL;
+	tail = NULL;
 	num_cache = 0;
 	cache_fd = -1;
 
@@ -843,6 +838,14 @@ void cache_init(void)
 		blocks[i] = BLOCK_NOT_CACHED;
 
 #if (EMU_SYSTEM == MVS)
+	if (pcm_data)
+	{
+		free(pcm_data);
+		pcm_data = NULL;
+	}
+	pcm_head = NULL;
+	pcm_tail = NULL;
+	num_pcm_cache = 0;
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
 	cache_file_pos = -1;
@@ -863,13 +866,45 @@ void cache_init(void)
 	Start Cache Processing
 ------------------------------------------------------*/
 
-int cache_start(void)
+int cache_start(const memory_plan_t *plan)
 {
 	int i, found;
+	int requested_cache_blocks;
+	int minimum_cache_blocks;
+	int source_cache_blocks;
 	uint32_t size = 0;
 	char version_str[8] = {0};
 #if (EMU_SYSTEM == MVS)
 	int32_t fd;
+	int requested_pcm_blocks;
+#endif
+
+	if (plan == NULL)
+	{
+		msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+		return 0;
+	}
+
+	source_cache_blocks = (int)(((uint64_t)GFX_SIZE + CACHE_BLOCK_SIZE - 1) >> BLOCK_SHIFT);
+	requested_cache_blocks = (int)(plan->gfx_cache_bytes >> BLOCK_SHIFT);
+	if (requested_cache_blocks > source_cache_blocks)
+		requested_cache_blocks = source_cache_blocks;
+	if (requested_cache_blocks > MAX_CACHE_BLOCKS)
+		requested_cache_blocks = MAX_CACHE_BLOCKS;
+	if (requested_cache_blocks <= 0)
+	{
+		msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+		return 0;
+	}
+	minimum_cache_blocks = requested_cache_blocks < (int)MIN_RUNTIME_CACHE_BLOCKS ?
+		requested_cache_blocks : (int)MIN_RUNTIME_CACHE_BLOCKS;
+
+#if (EMU_SYSTEM == MVS)
+	requested_pcm_blocks = (int)(plan->pcm_cache_bytes >> BLOCK_SHIFT);
+	if (requested_pcm_blocks > MAX_PCM_BLOCKS)
+		requested_pcm_blocks = MAX_PCM_BLOCKS;
+	if (requested_pcm_blocks > (int)(((uint64_t)memory_length_sound1 + CACHE_BLOCK_SIZE - 1) >> BLOCK_SHIFT))
+		requested_pcm_blocks = (int)(((uint64_t)memory_length_sound1 + CACHE_BLOCK_SIZE - 1) >> BLOCK_SHIFT);
 #endif
 
 	zip_close();
@@ -965,27 +1000,11 @@ int cache_start(void)
 
 	if (cache_type == CACHE_RAWFILE)
 	{
-		if (option_sound_enable && disable_sound)
+		if (option_sound_enable && disable_sound && requested_pcm_blocks > 0)
 		{
-			if ((pcm_fd = cachefile_open(CACHE_VROM)) >= 0)
-			{
+			pcm_fd = cachefile_open(CACHE_VROM);
+			if (pcm_fd >= 0)
 				pcm_file_pos = 0;
-				if ((memory_region_sound1 = malloc(MAX_PCM_SIZE * CACHE_BLOCK_SIZE)) != NULL)
-				{
-					pcm_cache_enable = 1;
-					disable_sound = 0;
-					msg_printf(TEXT(PCM_CACHE_ENABLED));
-				}
-			}
-			if (!pcm_cache_enable)
-			{
-				if (pcm_fd >= 0)
-				{
-					close(pcm_fd);
-					pcm_fd = -1;
-				}
-				memory_length_sound1 = 0;
-			}
 		}
 	}
 
@@ -1135,13 +1154,50 @@ int cache_start(void)
 		return 0;
 	}
 
-	if ((GFX_MEMORY = (uint8_t *)malloc(GFX_SIZE + CACHE_SAFETY)) != NULL)
-	{
-		free(GFX_MEMORY);
-		GFX_MEMORY = (uint8_t *)malloc(GFX_SIZE);
-		memset(GFX_MEMORY, 0, GFX_SIZE);
+#endif
 
-		num_cache = GFX_SIZE >> 16;
+	GFX_MEMORY = NULL;
+	i = requested_cache_blocks;
+
+#ifdef LARGE_MEMORY
+	{
+		const memory_profile_t *profile = memory_profile_current();
+		int psp2k_blocks = PSP2K_MEM_SIZE >> BLOCK_SHIFT;
+		if ((profile == NULL || profile->use_psp2k_region) &&
+			psp2k_mem_left == PSP2K_MEM_SIZE &&
+			i <= psp2k_blocks)
+		{
+			GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
+			size = (uint32_t)i << BLOCK_SHIFT;
+		}
+	}
+#endif
+
+	if (GFX_MEMORY == NULL)
+	{
+		for (; i >= minimum_cache_blocks; --i)
+		{
+			size = (uint32_t)i << BLOCK_SHIFT;
+			GFX_MEMORY = (uint8_t *)malloc(size);
+			if (GFX_MEMORY != NULL)
+				break;
+		}
+
+		if (GFX_MEMORY == NULL)
+		{
+			msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
+			return 0;
+		}
+	}
+
+	num_cache = i;
+	memset(GFX_MEMORY, 0, size);
+
+#if (EMU_SYSTEM == CPS2)
+	if (num_cache >= source_cache_blocks)
+	{
+		read_cache = read_cache_static;
+		update_cache = NULL;
 	}
 	else
 #endif
@@ -1152,99 +1208,85 @@ int cache_start(void)
 			read_cache = read_cache_zipfile;
 		else
 			read_cache = read_cache_folder;
-
 		update_cache = update_cache_dynamic;
+	}
 
-		// Check allocatable size
+	cache_data = (cache_t *)malloc(sizeof(*cache_data) * (size_t)num_cache);
+	if (cache_data == NULL)
+	{
+		msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
+		return 0;
+	}
+	cache_list_init(cache_data, num_cache, &head, &tail);
 
+#if (EMU_SYSTEM == MVS)
+	/* GFX/C-ROM is the primary cache target. Only after it has been secured do
+	 * we consume the PCM target, retrying down in cache-block increments when
+	 * fragmentation prevents the planned contiguous allocation. */
+	if (option_sound_enable && disable_sound)
+	{
+		if (requested_pcm_blocks > 0 && pcm_fd >= 0)
 		{
-			/* Translate profile MB bounds to cache blocks, clamped to the
-			 * compile-time MIN/MAX (which size the static cache_data[] array
-			 * and the malloc-probe envelope).
-			 */
-			const memory_profile_t *profile = memory_profile_current();
-			int profile_max_blocks = MAX_CACHE_SIZE;
-			int profile_min_blocks = MIN_CACHE_SIZE;
-			if (profile != NULL) {
-				int p_max = (int)((profile->cache_max_mb << 20) >> BLOCK_SHIFT);
-				int p_min = (int)((profile->cache_min_mb << 20) >> BLOCK_SHIFT);
-				if (p_max > 0 && p_max < profile_max_blocks) profile_max_blocks = p_max;
-				if (p_min > profile_min_blocks)              profile_min_blocks = p_min;
-			}
-
-#ifdef LARGE_MEMORY
-			if ((profile == NULL || profile->use_psp2k_region)
-			    && psp2k_mem_left == PSP2K_MEM_SIZE)//ui32 bug
+			for (i = requested_pcm_blocks; i > 0; --i)
 			{
-				GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
-				i = profile_max_blocks;
-				size = i << BLOCK_SHIFT;
-			}
-			else
-#endif
-			{
-				for (i = MIN(GFX_SIZE >> BLOCK_SHIFT, profile_max_blocks); i >= profile_min_blocks; i--)
+				memory_region_sound1 = malloc((size_t)i << BLOCK_SHIFT);
+				if (memory_region_sound1 != NULL)
 				{
-					if ((GFX_MEMORY = (uint8_t *)malloc((i << BLOCK_SHIFT) + CACHE_SAFETY)) != NULL)
-					{
-						size = i << BLOCK_SHIFT;
-						free(GFX_MEMORY);
-						GFX_MEMORY = NULL;
-						break;
-					}
-				}
-
-				if (i < profile_min_blocks)
-				{
-					msg_printf(TEXT(MEMORY_NOT_ENOUGH));
-					return 0;
-				}
-
-				if ((GFX_MEMORY = (uint8_t *)malloc(size)) == NULL)
-				{
-					msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
-					return 0;
+					num_pcm_cache = i;
+					break;
 				}
 			}
 		}
 
-		memset(GFX_MEMORY, 0, size);
-
-		num_cache = i;
+		if (num_pcm_cache > 0)
+		{
+			pcm_cache_enable = 1;
+			disable_sound = 0;
+		}
+		else
+		{
+			if (pcm_fd >= 0)
+			{
+				close(pcm_fd);
+				pcm_fd = -1;
+			}
+			memory_length_sound1 = 0;
+		}
 	}
 
-	msg_printf(TEXT(xKB_CACHE_ALLOCATED), (num_cache << BLOCK_SHIFT) / 1024);
+	if (pcm_cache_enable)
+	{
+		pcm_data = (cache_t *)malloc(sizeof(*pcm_data) * (size_t)num_pcm_cache);
+		if (pcm_data == NULL)
+		{
+			free(memory_region_sound1);
+			memory_region_sound1 = NULL;
+			close(pcm_fd);
+			pcm_fd = -1;
+			pcm_cache_enable = 0;
+			num_pcm_cache = 0;
+			disable_sound = 1;
+			memory_length_sound1 = 0;
+		}
+		else
+		{
+			cache_list_init(pcm_data, num_pcm_cache, &pcm_head, &pcm_tail);
+			msg_printf(TEXT(PCM_CACHE_ENABLED));
+			msg_printf(TEXT(CACHE_USAGE_PCM),
+				(num_pcm_cache << BLOCK_SHIFT) / 1024,
+				memory_length_sound1 / 1024);
+		}
+	}
+#endif
 
-	for (i = 0; i < num_cache; i++)
-		cache_data[i].idx = i;
-
-	for (i = 1; i < num_cache; i++)
-		cache_data[i].prev = &cache_data[i - 1];
-
-	for (i = 0; i < num_cache - 1; i++)
-		cache_data[i].next = &cache_data[i + 1];
-
-	cache_data[0].prev = NULL;
-	cache_data[num_cache - 1].next = NULL;
-
-	head = &cache_data[0];
-	tail = &cache_data[num_cache - 1];
-
-#if (EMU_SYSTEM == MVS)
-	for (i = 0; i < MAX_PCM_SIZE; i++)
-		pcm_data[i].idx = i;
-
-	for (i = 1; i < MAX_PCM_SIZE; i++)
-		pcm_data[i].prev = &pcm_data[i - 1];
-
-	for (i = 0; i < MAX_PCM_SIZE - 1; i++)
-		pcm_data[i].next = &pcm_data[i + 1];
-
-	pcm_data[0].prev = NULL;
-	pcm_data[MAX_PCM_SIZE - 1].next = NULL;
-
-	pcm_head = &pcm_data[0];
-	pcm_tail = &pcm_data[MAX_PCM_SIZE - 1];
+#if (EMU_SYSTEM == CPS2)
+	msg_printf(TEXT(CACHE_USAGE_GFX),
+		(num_cache << BLOCK_SHIFT) / 1024,
+		(source_cache_blocks << BLOCK_SHIFT) / 1024);
+#elif (EMU_SYSTEM == MVS)
+	msg_printf(TEXT(CACHE_USAGE_CROM),
+		(num_cache << BLOCK_SHIFT) / 1024,
+		(source_cache_blocks << BLOCK_SHIFT) / 1024);
 #endif
 
 	if (!fill_cache())
@@ -1254,8 +1296,6 @@ int cache_start(void)
 		Loop = LOOP_BROWSER;
 		return 0;
 	}
-
-	if (size == 0) cache_shutdown();
 
 	return 1;
 }
@@ -1279,11 +1319,19 @@ void cache_shutdown(void)
 		{
 			close(pcm_fd);
 			pcm_fd = -1;
+			}
+			pcm_cache_enable = 0;
 		}
-		pcm_cache_enable = 0;
-	}
-	pcm_file_pos = -1;
-#endif
+		pcm_file_pos = -1;
+		if (pcm_data)
+		{
+			free(pcm_data);
+			pcm_data = NULL;
+		}
+		pcm_head = NULL;
+		pcm_tail = NULL;
+		num_pcm_cache = 0;
+	#endif
 	if (cache_type == CACHE_RAWFILE)
 	{
 		if (cache_fd != -1)
@@ -1299,9 +1347,16 @@ void cache_shutdown(void)
 	{
 		zip_close();
 	}
-	/* CACHE_FOLDER: nothing to close (blocks opened/closed on demand) */
+		/* CACHE_FOLDER: nothing to close (blocks opened/closed on demand) */
 
-	num_cache = 0;
+		if (cache_data)
+		{
+			free(cache_data);
+			cache_data = NULL;
+		}
+		head = NULL;
+		tail = NULL;
+		num_cache = 0;
 }
 
 
