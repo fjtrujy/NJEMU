@@ -222,7 +222,7 @@ static struct zipname_t
 	char zipname[16];
 	char title[128];
 	int flag;
-} zipname[MAX_GAMES];
+} *zipname;
 
 static int zipname_num;
 
@@ -489,6 +489,16 @@ static int load_zipname(void)
 	if (fd < 0)
 		return 0;
 
+	if (zipname == NULL)
+	{
+		zipname = (struct zipname_t *)malloc(sizeof(*zipname) * MAX_GAMES);
+		if (zipname == NULL)
+		{
+			close(fd);
+			return 0;
+		}
+	}
+
 	zipname_num = 0;
 	while (zipname_num < MAX_GAMES)
 	{
@@ -547,6 +557,8 @@ static int load_zipname(void)
 
 static void free_zipname(void)
 {
+	free(zipname);
+	zipname = NULL;
 	zipname_num = 0;
 }
 
@@ -993,10 +1005,9 @@ void file_browser(void)
 	for (i = 0; i < MAX_ENTRY; i++)
 		files[i] = (struct file_entry *)malloc(sizeof(struct file_entry));
 
-#if (EMU_SYSTEM != NCDZ)
-	memset(zipname, 0, sizeof(zipname));
-	zipname_num = 0;
-#endif
+	#if (EMU_SYSTEM != NCDZ)
+	free_zipname();
+	#endif
 
 	strcpy(curr_dir, launchDir);
 	strcat(curr_dir, "roms");

@@ -3,9 +3,9 @@
 Date: 2026-09-22
 
 This audit was started while closing R10 of the reactive-memory migration and
-is now updated through R12. R11 implemented the largest measured resident-RAM
-opportunity; R12 begins the static-buffer audit with a zero-cost platform
-ownership fix. Selective `-Os` remains intentionally deferred.
+is now updated through R14. R11 removed the largest immutable payload; R12-R14
+continue with static/lifetime RAM savings that do not add work to emulation hot
+paths. Selective `-Os` and PS2 IRX externalization are explicitly deferred.
 
 ## 1. PSP section footprint
 
@@ -156,7 +156,44 @@ The complete CPS1 Desktop CTest suite still has the existing target-specific
 `memory_plan_tests` assertion failure; the CPS1 application build and the new
 palette test both pass, and this failure is unrelated to the palette changes.
 
-## 5. Static RAM (`.bss`) remains the next memory target
+## 5. R14 result: scope the ROM-browser ZIP-name database to the menu
+
+`common/filer.c` kept a `MAX_GAMES` array of ZIP names/titles in `.bss`. On the
+32-bit console targets the 512 entries occupy 75,776 bytes. The browser already
+called `free_zipname()` immediately before `emu_main()`, but that function only
+reset the entry count, so none of the memory was actually returned to the heap.
+
+R14 changes the database to one contiguous heap allocation owned by the file
+browser. `load_zipname()` allocates it when the ROM list needs titles and
+`free_zipname()` now releases it before emulation starts. Returning from a game
+reloads the database exactly as before. This is intentionally a lifetime change,
+not a smaller database: all 512 entries and full 128-byte titles remain.
+
+Measured MVS PS2 GUI result on the R13 configuration:
+
+| Section | R13 | R14 | Delta |
+| --- | ---: | ---: | ---: |
+| `.text` | 913,112 B | 913,080 B | -32 B |
+| `.rodata` | 101,992 B | 101,992 B | 0 B |
+| `.data` | 406,432 B | 406,432 B | 0 B |
+| `.bss` | 2,363,208 B | 2,287,432 B | **-75,776 B** |
+| total sections | 5,832,461 B | 5,756,653 B | **-75,808 B** |
+
+The same 75,776-byte `.bss` reduction is present in CPS1/CPS2. More
+importantly, the allocation is gone before `emu_main()` performs ROM/cache
+planning, so this memory is genuinely available to the R10 allocation probes
+during gameplay rather than merely moving permanent state from `.bss` to heap.
+
+Validation performed:
+
+- Desktop MVS passes the complete 11-test CTest suite;
+- Desktop CPS1/CPS2 application builds succeed and the translation/font/palette
+  focused tests pass;
+- PS2 CPS1/CPS2/MVS GUI cross-builds succeed;
+- PSP cross-build remains unavailable in the current local shell environment.
+  The changed ownership code is common C and does not alter PSP-specific paths.
+
+## 6. Static RAM (`.bss`) follow-up audit
 
 Representative large PSP symbols include. `gulist` remains in this list because
 it is genuinely required by PSP; R12 only removes its accidental cost on the
@@ -168,7 +205,6 @@ other platforms.
 - `JumpTable`: 262,144 B
 - `cps1_gfxram`: 196,608 B
 - `vertices_object`: 163,840 B
-- `video_clut16`: 131,072 B
 - `SZHVC_add`: 131,072 B
 - `SZHVC_sub`: 131,072 B
 - `vertices_object_flat`: 122,880 B
@@ -192,11 +228,26 @@ are not required simultaneously could potentially become lifecycle-scoped heap
 allocations or share storage, but only after proving their ownership and hot-
 path requirements.
 
-## 6. Selective `-Os`: useful, but secondary
+The audit intentionally leaves the remaining large CPU/audio tables alone:
 
-The user's proposed split between `-O3` hot paths and `-Os` cold/menu code is
-technically reasonable. The measurements show, however, that it is not the
-first-order win.
+- C68K `JumpTable` is the opcode dispatch table used on every instruction;
+- CZ80 `SZHVC_add`/`SZHVC_sub` avoid flag recomputation in arithmetic hot paths;
+- MVS/NCDZ `lfo_pm_table` is read by YM2610 synthesis;
+- RAM/VRAM/GFX buffers contain live emulated state.
+
+The PS2 sprite vertex arrays were also considered for a compact representation.
+`GSPRIMUVPOINTFLAT` stores tagged 128-bit UV and XYZ2 values, so retaining only
+the payload coordinates could save hundreds of KiB. It was deliberately
+rejected: `ps2_video.c` currently submits those arrays with one linear `memcpy`,
+whereas compact storage would require reconstructing/tagging every vertex in a
+loop on the renderer hot path. The RAM saving does not justify that performance
+regression without profiling evidence to the contrary.
+
+## 7. Selective `-Os`: deferred
+
+Selective `-Os` is outside the scope of the current memory work. If revisited in
+a future optimization phase, the existing measurements below remain useful for
+choosing cold translation units while keeping CPU/render/audio paths at `-O3`.
 
 Representative PSP GUI object code sizes are:
 
@@ -227,7 +278,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 7. PS2 observations
+## 8. PS2 IRX observations: deferred to `ps2_drivers`
 
 Representative no-GUI PS2 builds currently contain approximately:
 
@@ -238,23 +289,25 @@ Representative no-GUI PS2 builds currently contain approximately:
 
 The on-disk ELF is larger because these development builds contain debug
 information. A significant fraction of PS2 `.data` is embedded IRX payloads
-(USB/filesystem/pad/audio/memory-card modules). A future PS2-specific audit
-should determine which modules are actually required for each storage/runtime
-configuration and whether their embedded images remain resident after module
-startup. That work is independent from compiler `-Os` tuning.
+(USB/filesystem/pad/audio/memory-card modules). NJEMU will not introduce its own
+runtime IRX-loading/externalization layer as part of this work. If that saving is
+pursued later, the preferred design is to expose it cleanly from `ps2_drivers`
+first so applications can opt into the behavior through a simple shared API.
 
-## 8. Recommended order for future size work
+## 9. Current status / future work
 
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
-2. **In progress:** audit large `.bss` buffers for platform ownership,
-   derivable data, mutually-exclusive use or lifecycle-scoped use. R12 removes
-   the unused 300 KiB PSP GU list from PS2/Desktop; R13 removes another 64 KiB
-   from MVS/NCDZ and 127.75 KiB from CPS1/CPS2 by replacing full color LUTs.
-3. Audit embedded PS2 IRX payloads and their post-load lifetime.
-4. Apply selective `-Os` to measured cold translation units.
-5. Re-measure performance and memory after every step; keep emulation/rendering
-   hot paths optimized for speed.
+2. **In progress:** audit large `.bss`/lifetime buffers. R12 removes the unused
+   300 KiB PSP GU list from PS2/Desktop; R13 removes 64 KiB from MVS/NCDZ and
+   127.75 KiB from CPS1/CPS2 color conversion storage; R14 returns 75,776 bytes
+   of ROM-browser metadata to the heap before emulation on CPS1/CPS2/MVS.
+3. Continue only with buffers whose lifetime can be shortened without adding
+   work to CPU/render/audio hot paths.
+4. **Deferred:** PS2 IRX externalization/runtime loading, preferably as a future
+   `ps2_drivers` capability rather than NJEMU-specific infrastructure.
+5. **Deferred:** selective `-Os`; keep the current optimization policy for this
+   phase.
 
 R10 itself deliberately stops at measurement. Its runtime-memory improvement
 comes from empirical allocation-shape probing, not from changing optimization
