@@ -248,6 +248,36 @@ static void test_block_alignment_and_determinism(void) {
 	assert_plan_invariants(&a, &game);
 }
 
+static void test_r9_forced_budget_matrix(void) {
+	const uint32_t budgets_mb[] = { 12, 16, 20, 24, 32, 48, 64, 96, 128, 256 };
+	size_t i;
+
+	for (i = 0; i < sizeof(budgets_mb) / sizeof(budgets_mb[0]); ++i) {
+		platform_memory_info_t memory;
+		game_memory_requirements_t cps2 = cps2_requirements(MIB(128), 0);
+		game_memory_requirements_t mvs = mvs_requirements(MIB(128), MIB(32), 0);
+		memory_plan_t cps2_a, cps2_b, mvs_a, mvs_b;
+
+		memset(&memory, 0, sizeof(memory));
+		memory.free_bytes = MIB(budgets_mb[i]);
+		memory.largest_free_block_bytes = memory.free_bytes;
+		memory.capabilities = PLATFORM_MEMORY_CAP_QUERY_FREE |
+			PLATFORM_MEMORY_CAP_QUERY_LARGEST_BLOCK;
+
+		assert(memory_plan_build(&memory, &cps2, &cps2_a));
+		assert(memory_plan_build(&memory, &cps2, &cps2_b));
+		assert(memcmp(&cps2_a, &cps2_b, sizeof(cps2_a)) == 0);
+		assert(cps2_a.measured_free_bytes == MIB(budgets_mb[i]));
+		assert_plan_invariants(&cps2_a, &cps2);
+
+		assert(memory_plan_build(&memory, &mvs, &mvs_a));
+		assert(memory_plan_build(&memory, &mvs, &mvs_b));
+		assert(memcmp(&mvs_a, &mvs_b, sizeof(mvs_a)) == 0);
+		assert(mvs_a.measured_free_bytes == MIB(budgets_mb[i]));
+		assert_plan_invariants(&mvs_a, &mvs);
+	}
+}
+
 int main(void) {
 	test_tier_boundaries();
 	test_cps2_budget_matrix();
@@ -258,6 +288,7 @@ int main(void) {
 	test_mvs_caps_and_spill();
 	test_mvs_fragmentation_limit();
 	test_block_alignment_and_determinism();
+	test_r9_forced_budget_matrix();
 	puts("memory_plan_tests: OK");
 	return 0;
 }

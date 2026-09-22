@@ -1305,6 +1305,48 @@ should return only historical documentation if intentionally retained.
 
 ### R9 - Validation matrix
 
+**Status: completed on 2026-09-22 for synthetic, Desktop, PSP build and emulator
+coverage. Physical PSP/PS2 model-specific validation remains deferred because no
+reachable hardware target produced a usable run in this session.**
+
+Validation performed:
+
+- added a permanent forced-budget matrix test covering 12, 16, 20, 24, 32,
+  48, 64, 96, 128 and 256 MiB for both CPS2 and MVS, asserting determinism and
+  planner invariants at every point;
+- repeated 20 real runtime smoke tests over the same budget matrix using CPS2
+  `ssf2` and MVS `mslug5`, confirming that logged effective cache sizes track
+  the selected memory plan and transition cleanly from partial streaming to
+  fully-resident regions;
+- Desktop functional matrix: CPS1, CPS2, MVS and NCDZ each build and pass 8/8
+  CTest tests in both a base configuration (`GUI=OFF`, `SAVE_STATE=OFF`,
+  `COMMAND_LIST=OFF`) and a full configuration (`GUI=ON`, `SAVE_STATE=ON`,
+  `COMMAND_LIST=ON`), for eight green builds total;
+- PSP ADHOC coverage: CPS1, CPS2 and MVS each build successfully with
+  `ADHOC=ON`, `SAVE_STATE=ON`, `GUI=ON`, and all three generate `EBOOT.PBP`;
+  NCDZ remains intentionally excluded because it does not support ADHOC;
+- representative PPSSPP and PCSX2 runs load and execute the corresponding PSP
+  and PS2 binaries, providing emulator coverage for the platform builds;
+- PSP physical validation was attempted earlier in this migration, but psplink
+  returned `Connection refused`; no model-specific PSP-1000 vs PSP-2000/3000
+  memory/suspend result is claimed;
+- no native PS2 hardware result is claimed for R9; that row remains a physical
+  follow-up rather than being inferred from PCSX2.
+
+Representative runtime results from the forced-budget matrix:
+
+```text
+MVS 12 MiB:  C-ROM 7936KB / 65536KB, PCM 2304KB / 16384KB
+MVS 20 MiB:  C-ROM 15360KB / 65536KB, PCM 3072KB / 16384KB
+MVS 96 MiB:  C-ROM 65536KB / 65536KB, PCM 16384KB / 16384KB
+CPS2 12 MiB: GFX 10240KB / 11584KB
+CPS2 16 MiB: GFX 12288KB / 12288KB
+```
+
+The compile-time memory migration is therefore validated across the available
+automated/runtime surfaces. Remaining hardware-only rows are explicit device
+QA, not blockers for the runtime-policy architecture.
+
 #### Functional
 
 For CPS1/CPS2/MVS/NCDZ:
