@@ -71,18 +71,6 @@ uint8_t *qsound_sharedram2;
 
 /* cache_parent_name is now declared unconditionally in emumain.c */
 
-#ifdef LARGE_MEMORY
-uint32_t psp2k_mem_offset = PSP2K_MEM_TOP;
-int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
-#endif
-
-/* Phase 2b.5: runtime preload flag. True => GFX1 is loaded eagerly
- * into a contiguous buffer (replaces the old USE_CACHE=0 path).
- * False => streaming cache via cache_start() (the USE_CACHE=1 path).
- * Only settable to 1 when LARGE_MEMORY is compile-time defined --
- * the preload code path uses PSP2K symbols that don't exist on
- * other builds. */
-static int cps2_use_preload = 0;
 static memory_plan_t cps2_memory_plan;
 static int cps2_memory_plan_valid = 0;
 
@@ -93,8 +81,6 @@ static int cps2_memory_plan_valid = 0;
 
 static struct rom_t cpu1rom[MAX_CPU1ROM];
 static struct rom_t cpu2rom[MAX_CPU2ROM];
-/* Phase 2b.5-prep: always declared. Used only in preload mode at runtime;
- * unused (bytes of bss) in cache mode. */
 static struct rom_t gfx1rom[MAX_GFX1ROM];
 static struct rom_t snd1rom[MAX_SND1ROM];
 
@@ -205,9 +191,47 @@ static int load_rom_cpu2(void)
 	GFX1 (graphic ROM)
 --------------------------------------------------------*/
 
+static int load_rom_gfx1_full_resident(void)
+{
+	int i, res;
+	char fname[32], *parent;
+
+	memset(memory_region_gfx1, 0, memory_length_gfx1);
+	memset(gfx_pen_usage[TILE08], 0, gfx_total_elements[TILE08]);
+	memset(gfx_pen_usage[TILE16], 0, gfx_total_elements[TILE16]);
+	memset(gfx_pen_usage[TILE32], 0, gfx_total_elements[TILE32]);
+
+	parent = strlen(parent_name) ? parent_name : NULL;
+
+	for (i = 0; i < num_gfx1rom; )
+	{
+		strcpy(fname, gfx1rom[i].name);
+		if ((res = file_open(game_name, parent, gfx1rom[i].crc, fname)) < 0)
+		{
+			if (res == -1)
+				error_file(fname);
+			else
+				error_crc(fname);
+			return 0;
+		}
+
+		msg_printf(TEXT(LOADING), fname);
+		i = rom_load(gfx1rom, memory_region_gfx1, i, num_gfx1rom);
+		file_close();
+	}
+
+	msg_printf(TEXT(DECODING_GFX));
+	cps2_gfx_decode();
+	msg_printf(TEXT(CACHE_USAGE_GFX), memory_length_gfx1 / 1024,
+		memory_length_gfx1 / 1024);
+
+	return 1;
+}
+
 static int load_rom_gfx1(void)
 {
 	uint32_t planned_gfx_length = memory_length_gfx1;
+	memory_plan_t streaming_plan;
 
 	gfx_total_elements[TILE08] = (memory_length_gfx1 - 0x800000) >> 6;
 	gfx_total_elements[TILE16] = memory_length_gfx1 >> 7;
@@ -232,82 +256,63 @@ static int load_rom_gfx1(void)
 		return 0;
 	}
 
-		/* CPU/user/sound regions and GFX metadata are already resident here, so
-		 * the runtime plan can budget the remaining heap for the GFX cache. */
-		if (platform_driver->queryMemoryInfo != NULL)
-		{
-			platform_memory_info_t memory_info;
-			if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
-			{
-				game_memory_requirements_t requirements;
-				platform_memory_info_apply_env_overrides(&memory_info);
-				memset(&requirements, 0, sizeof(requirements));
-				requirements.core = MEMORY_PLAN_CORE_CPS2;
-				requirements.gfx_or_crom_bytes = planned_gfx_length;
-				cps2_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &cps2_memory_plan);
-				if (cps2_memory_plan_valid)
-					memory_plan_log(&cps2_memory_plan);
-				else
-					printf("[memory_plan] CPS2 plan has no viable cache floor\n");
-			}
-		}
-
-	if (!cps2_use_preload)
+	/* CPU/user/sound regions and GFX metadata are already resident here, so
+	 * the runtime plan can budget the remaining heap for the GFX working set. */
+	if (platform_driver->queryMemoryInfo != NULL)
 	{
-		if (!cps2_memory_plan_valid)
+		platform_memory_info_t memory_info;
+		if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
 		{
-			msg_printf(TEXT(MEMORY_NOT_ENOUGH));
-			return 0;
-		}
-		memory_length_gfx1 = driver->cache_size;
-
-		if (cache_start(&cps2_memory_plan) == 0)
-		{
-			msg_printf(TEXT(PRESS_ANY_BUTTON2));
-			pad_wait_press(PAD_WAIT_INFINITY);
-			Loop = LOOP_BROWSER;
-			return 0;
+			game_memory_requirements_t requirements;
+			platform_memory_info_apply_env_overrides(&memory_info);
+			memset(&requirements, 0, sizeof(requirements));
+			requirements.core = MEMORY_PLAN_CORE_CPS2;
+			requirements.gfx_or_crom_bytes = planned_gfx_length;
+			cps2_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &cps2_memory_plan);
+			if (cps2_memory_plan_valid)
+				memory_plan_log(&cps2_memory_plan);
+			else
+				printf("[memory_plan] CPS2 plan has no viable cache floor\n");
 		}
 	}
-#ifdef LARGE_MEMORY
-	else
+
+	if (!cps2_memory_plan_valid)
 	{
-		int i, res;
-		char fname[32], *parent;
+		msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+		return 0;
+	}
 
-		memset(gfx_pen_usage[TILE08], 0, gfx_total_elements[TILE08]);
-		memset(gfx_pen_usage[TILE16], 0, gfx_total_elements[TILE16]);
-		memset(gfx_pen_usage[TILE32], 0, gfx_total_elements[TILE32]);
-
-		memory_region_gfx1 = (uint8_t *)psp2k_mem_offset;
-		psp2k_mem_offset += memory_length_gfx1;
-		psp2k_mem_left -= memory_length_gfx1;
-
-		parent = strlen(parent_name) ? parent_name : NULL;
-
-		for (i = 0; i < num_gfx1rom; )
+	if (cps2_memory_plan.gfx_fully_resident &&
+		cps2_memory_plan.gfx_cache_bytes == planned_gfx_length)
+	{
+		memory_region_gfx1 = (uint8_t *)malloc(planned_gfx_length);
+		if (memory_region_gfx1 != NULL)
 		{
-			strcpy(fname, gfx1rom[i].name);
-			if ((res = file_open(game_name, parent, gfx1rom[i].crc, fname)) < 0)
-			{
-				if (res == -1)
-					error_file(fname);
-				else
-					error_crc(fname);
+			if (!load_rom_gfx1_full_resident())
 				return 0;
-			}
-
-			msg_printf(TEXT(LOADING), fname);
-
-			i = rom_load(gfx1rom, memory_region_gfx1, i, num_gfx1rom);
-
-			file_close();
+			return 1;
 		}
 
-		msg_printf(TEXT(DECODING_GFX), fname);
-		cps2_gfx_decode();
+		msg_printf(TEXT(COULD_NOT_ALLOCATE_MEMORY_FOR_SPRITE_DATA));
+		msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
 	}
-#endif
+
+	/* Streaming fallback. If a full-resident allocation failed, clamp the
+	 * request to the compact cache-file payload; cache_start() may still retry
+	 * down in 64 KiB blocks if fragmentation prevents that target. */
+	streaming_plan = cps2_memory_plan;
+	if (streaming_plan.gfx_cache_bytes > driver->cache_size)
+		streaming_plan.gfx_cache_bytes = driver->cache_size;
+	streaming_plan.gfx_fully_resident = false;
+	memory_length_gfx1 = driver->cache_size;
+
+	if (cache_start(&streaming_plan) == 0)
+	{
+		msg_printf(TEXT(PRESS_ANY_BUTTON2));
+		pad_wait_press(PAD_WAIT_INFINITY);
+		Loop = LOOP_BROWSER;
+		return 0;
+	}
 
 	return 1;
 }
@@ -491,13 +496,13 @@ static int load_rom_info(const char *game_name)
 						sscanf(size, "%x", &memory_length_cpu2);
 						region = REGION_CPU2;
 					}
-					else if (strcmp(type, "GFX1") == 0)
-					{
-						sscanf(size, "%x", &memory_length_gfx1);
-						/* In cache mode the GFX ROM is streamed in by
-						 * cache_start; in preload mode we parse and load
-						 * each gfx1rom[] entry directly. */
-						region = cps2_use_preload ? REGION_GFX1 : REGION_SKIP;
+						else if (strcmp(type, "GFX1") == 0)
+						{
+							sscanf(size, "%x", &memory_length_gfx1);
+							/* Always retain the GFX ROM description. The runtime
+							 * memory plan decides later whether these entries are
+							 * loaded directly or served from the streaming cache. */
+							region = REGION_GFX1;
 					}
 					else if (strcmp(type, "SOUND1") == 0)
 					{
@@ -552,10 +557,7 @@ static int load_rom_info(const char *game_name)
 						num_cpu2rom++;
 						break;
 
-					/* Always-compiled REGION_GFX1 case; only reached at
-					 * runtime when region was set to REGION_GFX1 above
-					 * (i.e. cps2_use_preload was true). */
-					case REGION_GFX1:
+						case REGION_GFX1:
 						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
 						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
 						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
@@ -619,8 +621,7 @@ static int load_rom_info(const char *game_name)
 						num_cpu2rom++;
 						break;
 
-					/* Always-compiled; only reached when cps2_use_preload. */
-					case REGION_GFX1:
+						case REGION_GFX1:
 						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
 						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
 						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
@@ -680,20 +681,7 @@ int memory_init(void)
 	gfx_pen_usage[TILE16] = NULL;
 	gfx_pen_usage[TILE32] = NULL;
 
-		/* Set the runtime preload flag from the active memory profile.
-		 * Restricted to LARGE_MEMORY builds because the preload code path
-		 * uses PSP2K-region symbols only declared then. */
-		cps2_use_preload = 0;
-		cps2_memory_plan_valid = 0;
-#ifdef LARGE_MEMORY
-	{
-		const memory_profile_t *profile = memory_profile_current();
-		cps2_use_preload = (profile != NULL && profile->preload_gfx);
-	}
-
-	psp2k_mem_offset = PSP2K_MEM_TOP;
-	psp2k_mem_left   = PSP2K_MEM_SIZE;
-#endif
+	cps2_memory_plan_valid = 0;
 
 	cache_init();
 	pad_wait_clear();
@@ -727,10 +715,10 @@ int memory_init(void)
 	{
 		cache_parent_name[0] = '\0';
 	}
-	else if (!cps2_use_preload && !strcmp(game_name, "mpangj"))
+	else if (!strcmp(game_name, "mpangj"))
 	{
 		// Japanese version is probably a BAD DUMP (some sprites are missing).
-		// Only relevant in cache mode (which fetches from cache_parent_name).
+		// Keep its streaming cache independent from the parent cache.
 		cache_parent_name[0] = '\0';
 	}
 	else
@@ -881,17 +869,9 @@ void memory_shutdown(void)
 
 	if (memory_region_cpu1)   free(memory_region_cpu1);
 	if (memory_region_cpu2)   free(memory_region_cpu2);
-	/* Only free GFX1 if it was malloc'd by cache_start. In preload mode
-	 * memory_region_gfx1 points into the PSP2K kernel region which is
-	 * "freed" en bloc by the offset/left reset below. */
-	if (!cps2_use_preload && memory_region_gfx1) free(memory_region_gfx1);
+	if (memory_region_gfx1)   free(memory_region_gfx1);
 	if (memory_region_sound1) free(memory_region_sound1);
 	if (memory_region_user1)  free(memory_region_user1);
-
-#ifdef LARGE_MEMORY
-	psp2k_mem_offset = PSP2K_MEM_TOP;
-	psp2k_mem_left   = PSP2K_MEM_SIZE;
-#endif
 }
 
 

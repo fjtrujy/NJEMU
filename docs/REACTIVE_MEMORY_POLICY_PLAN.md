@@ -1048,6 +1048,48 @@ Validate MVS cache correctness and existing cache-I/O profiling.
 
 ### R4 - CPS2 runtime cache/full-resident selection
 
+**Status: completed on 2026-09-22.**
+
+Implemented:
+
+- CPS2 now always parses the full GFX ROM description; the choice between
+  direct full residency and streaming no longer changes `rominfo.cps2` parsing;
+- `memory_plan_t` is the single runtime selector: direct loading is used only
+  when the planner marks GFX fully resident and the target exactly matches the
+  complete GFX region;
+- the full-resident path now uses normal heap ownership, loads the original GFX
+  ROMs, runs the previously compile-time-gated decoder, and frees the same
+  allocation through the normal CPS2 shutdown path;
+- if the full-region `malloc` fails, CPS2 falls back to the compact cache-file
+  target and `cache_start()` retains its 64 KiB retry-down for fragmentation;
+- the renderer keeps one binary/runtime path: the cache address translator is
+  identity for direct full-resident GFX and switches to static/dynamic block
+  translation only when `cache_start()` is active;
+- removed all `LARGE_MEMORY`, PSP2K and `cps2_use_preload` references from
+  `src/cps2/`, and removed the obsolete `preload_gfx` legacy-profile toggle;
+- the PSP suspend/resume PSP2K `resume.bin` workaround is now MVS-only because
+  CPS2 no longer owns raw PSP2K memory;
+- the loading log reports full residency through the same effective cache line,
+  e.g. `GFX cache: 12288KB / 12288KB`.
+
+Validation performed:
+
+- Desktop CPS2 and MVS: 8/8 CTest tests pass;
+- `ssf2` with the default 256 MiB Desktop budget selects direct full residency
+  (`12288KB / 12288KB`) and runs normally;
+- the same `ssf2` binary forced to an 8 MiB budget selects streaming
+  (`6144KB / 11584KB`) and runs normally;
+- a temporary Desktop framebuffer readback at emulated frame 120 produced
+  byte-identical 640x480 ARGB8888 images for the two modes; both files had
+  SHA-256 `3630e065eb7b4540fbab11dbfd2619e8500f211b9c404380a1867fdc44b77c0c`;
+  the validation hook was removed afterwards;
+- PS2SDK CPS2 cross-build passes;
+- PSPSDK CPS2 cross-build passes and generates `EBOOT.PBP`;
+- a PSP build compiled with the historical `-DLARGE_MEMORY=1` define also
+  compiles all CPS2 objects and links successfully when the Makefile-equivalent
+  `-lpspkubridge` dependency is supplied, confirming no CPS2 PSP2K symbol
+  dependency remains.
+
 - unconditionally compile GFX preload/decode support;
 - remove `LARGE_MEMORY` from CPS2 headers/source;
 - use `memory_plan.gfx_cache_bytes` as the single target;

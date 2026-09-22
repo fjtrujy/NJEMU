@@ -33,7 +33,6 @@ typedef struct {
 	 */
 	bool       preload_sound;      /* MVS ADPCM, CPS2 QSound */
 	bool       preload_crypto;     /* MVS neocrypt buffers */
-	bool       preload_gfx;        /* CPS2 full GFX preload */
 	bool       use_psp2k_region;   /* PSP Slim 32 MB kernel region */
 
 } memory_profile_t;

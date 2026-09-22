@@ -182,8 +182,6 @@ WRITE16_HANDLER( cps1_output_w )
 	CPS2 Video Drawing Process
 ******************************************************************************/
 
-#if !USE_CACHE
-
 /*------------------------------------------------------
 	GFX Decode
 ------------------------------------------------------*/
@@ -318,9 +316,6 @@ void cps2_gfx_decode(void)
 			gfx_pen_usage[TILE32][i] = (count == 4*32) ? SPRITE_OPAQUE : SPRITE_TRANSPARENT;
 	}
 }
-
-#endif
-
 
 /*------------------------------------------------------
 	Create Color Table

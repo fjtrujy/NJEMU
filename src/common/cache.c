@@ -586,6 +586,11 @@ static int fill_cache(void)
 ------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS2)
+static uint32_t read_cache_direct(uint32_t offset)
+{
+	return offset;
+}
+
 static uint32_t read_cache_static(uint32_t offset)
 {
 	int idx = blocks[offset >> BLOCK_SHIFT];
@@ -830,7 +835,7 @@ void cache_init(void)
 	read_cache = NULL;
 #else
 	cache_type = CACHE_NOTFOUND;
-	read_cache = read_cache_static;
+	read_cache = read_cache_direct;
 #endif
 	update_cache = NULL;
 
@@ -1159,7 +1164,7 @@ int cache_start(const memory_plan_t *plan)
 	GFX_MEMORY = NULL;
 	i = requested_cache_blocks;
 
-#ifdef LARGE_MEMORY
+	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
 	{
 		const memory_profile_t *profile = memory_profile_current();
 		int psp2k_blocks = PSP2K_MEM_SIZE >> BLOCK_SHIFT;
@@ -1425,17 +1430,16 @@ void cache_sleep(int flag)
 	Temporarily Allocate State Save Area
 ------------------------------------------------------*/
 
-/* Phase 2b.6: cache_alloc_type is always declared. 1 = state-save was
- * staged into the PSP2K kernel region; 0 = staged into a file. The
- * !LARGE_MEMORY path always uses the file (use_psp2k=false keeps it 0).
- */
+	/* Phase 2b.6: cache_alloc_type is always declared. 1 = state-save was
+	 * staged into the MVS PSP2K kernel region; 0 = staged into a file.
+	 */
 static int cache_alloc_type = 0;
 
 uint8_t *cache_alloc_state_buffer(int32_t size)
 {
 	cache_alloc_type = 0;
 
-#ifdef LARGE_MEMORY
+	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
 	{
 		const memory_profile_t *profile = memory_profile_current();
 		if ((profile == NULL || profile->use_psp2k_region) &&
