@@ -21,7 +21,7 @@ void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
 static int64_t rom_fd = -1;
 
-#if defined(PS2) && defined(GUI)
+#if defined(GUI)
 #define ROM_LOAD_PROGRESS_MIN_SIZE (128 * 1024)
 #define ROM_LOAD_PROGRESS_STEPS 4
 
@@ -325,7 +325,7 @@ _continue:
 
 	if (rom[idx].skip == 0)
 	{
-	#if defined(PS2) && defined(GUI)
+	#if defined(GUI)
 		file_read_with_progress(&mem[offset], rom[idx].length);
 	#else
 		file_read(&mem[offset], rom[idx].length);
@@ -338,7 +338,7 @@ _continue:
 	{
 		int c;
 		int skip = rom[idx].skip + rom[idx].group;
-#if defined(PS2) && defined(GUI)
+#if defined(GUI)
 		rom_load_progress_t progress;
 		init_rom_load_progress(&progress, rom[idx].length);
 #endif
@@ -356,7 +356,7 @@ _continue:
 				mem[offset] = c;
 				offset += skip;
 				length++;
-#if defined(PS2) && defined(GUI)
+#if defined(GUI)
 				report_rom_load_progress(&progress, length);
 #endif
 			}
@@ -371,7 +371,7 @@ _continue:
 				mem[offset + 1] = c;
 				offset += skip;
 				length += 2;
-#if defined(PS2) && defined(GUI)
+#if defined(GUI)
 				report_rom_load_progress(&progress, length);
 #endif
 			}

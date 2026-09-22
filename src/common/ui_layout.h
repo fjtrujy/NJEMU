@@ -27,7 +27,8 @@ typedef struct ui_layout_metrics
 
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height);
-void ui_layout_init_responsive(int output_width, int output_height);
+void ui_layout_compute_responsive_size(int output_width, int output_height,
+	int *logical_width, int *logical_height);
 const ui_layout_metrics_t *ui_layout_get(void);
 int ui_layout_uses_output_transform(void);
 void ui_layout_transform_point(int x, int y, int *out_x, int *out_y);

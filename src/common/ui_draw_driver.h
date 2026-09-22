@@ -46,6 +46,18 @@ enum {
 };
 
 /*------------------------------------------------------
+	Backend capabilities
+------------------------------------------------------*/
+
+enum {
+	UI_DRAW_CAP_CACHE_CHROME        = 1u << 0,
+	UI_DRAW_CAP_TRANSLUCENT_CHROME  = 1u << 1,
+	UI_DRAW_CAP_FILTERED_SHADOWS    = 1u << 2,
+	UI_DRAW_CAP_ANIMATED_GLOW       = 1u << 3,
+	UI_DRAW_CAP_PARTIAL_REFRESH     = 1u << 4
+};
+
+/*------------------------------------------------------
 	Driver interface
 ------------------------------------------------------*/
 
@@ -68,6 +80,15 @@ typedef struct ui_draw_driver
 	 * derive a platform-independent viewport.
 	 */
 	void (*getOutputSize)(void *data, int *width, int *height);
+
+	/* getLogicalSize — Select the logical UI canvas for a physical output.
+	 * Backends can choose native 1:1 coordinates or a scaled logical canvas
+	 * without leaking platform checks into common UI code. */
+	void (*getLogicalSize)(void *data, int output_width, int output_height,
+	                      int *logical_width, int *logical_height);
+
+	/* Rendering/style capabilities used by common UI policy. */
+	uint32_t capabilities;
 
 	/*
 	 * uploadTexture — Upload a pixel buffer to a named texture slot.
@@ -182,5 +203,8 @@ extern const ui_draw_driver_t *ui_draw_drivers[];
 #define ui_draw_driver ui_draw_drivers[0]
 
 extern void *ui_draw_data;
+
+void ui_draw_configure_layout(void);
+int ui_draw_has_capability(uint32_t capability);
 
 #endif /* COMMON_UI_DRAW_DRIVER_H */

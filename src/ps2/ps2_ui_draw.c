@@ -350,6 +350,14 @@ static void ps2_ui_draw_getOutputSize(void *data, int *width, int *height)
 		*height = d && d->gsGlobal ? d->gsGlobal->Height : SCR_HEIGHT;
 }
 
+static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_height,
+	int *logical_width, int *logical_height)
+{
+	(void)data;
+	if (logical_width) *logical_width = output_width;
+	if (logical_height) *logical_height = output_height;
+}
+
 /*------------------------------------------------------
 	Texture management
 ------------------------------------------------------*/
@@ -610,6 +618,8 @@ const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_init,
 	ps2_ui_draw_term,
 	ps2_ui_draw_getOutputSize,
+	ps2_ui_draw_getLogicalSize,
+	0,
 	ps2_ui_draw_uploadTexture,
 	ps2_ui_draw_clearTexture,
 	ps2_ui_draw_getTextureBasePtr,

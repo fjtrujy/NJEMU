@@ -48,23 +48,14 @@ void ui_layout_init(int logical_width, int logical_height,
 	metrics.viewport_y = (output_height - metrics.viewport_height) / 2;
 }
 
-void ui_layout_init_responsive(int output_width, int output_height)
+void ui_layout_compute_responsive_size(int output_width, int output_height,
+	int *logical_width, int *logical_height)
 {
-#if defined(PS2)
-	/* PS2 already exposes the native GS presentation size (normally 640x448
-	 * NTSC or 640x512 PAL). Keep UI pixels 1:1 there: scaling the legacy
-	 * 480x272 canvas made the 14px bitmap font land at fractional ~19px sizes
-	 * and was the main reason text looked soft. Edge/center helpers still make
-	 * the layout responsive because logical coordinates now are the output
-	 * coordinates themselves. */
-	ui_layout_init(output_width, output_height, output_width, output_height);
-	return;
-#else
 	float scale_x;
 	float scale_y;
 	float scale;
-	int logical_width;
-	int logical_height;
+	int width;
+	int height;
 
 	if (output_width <= 0)
 		output_width = UI_LAYOUT_BASE_WIDTH;
@@ -82,18 +73,17 @@ void ui_layout_init_responsive(int output_width, int output_height)
 	if (scale <= 0.0f)
 		scale = 1.0f;
 
-	logical_width = (int)((float)output_width / scale + 0.9999f);
-	logical_height = (int)((float)output_height / scale + 0.9999f);
-	if (logical_width < UI_LAYOUT_BASE_WIDTH)
-		logical_width = UI_LAYOUT_BASE_WIDTH;
-	if (logical_height < UI_LAYOUT_BASE_HEIGHT)
-		logical_height = UI_LAYOUT_BASE_HEIGHT;
+	width = (int)((float)output_width / scale + 0.9999f);
+	height = (int)((float)output_height / scale + 0.9999f);
+	if (width < UI_LAYOUT_BASE_WIDTH)
+		width = UI_LAYOUT_BASE_WIDTH;
+	if (height < UI_LAYOUT_BASE_HEIGHT)
+		height = UI_LAYOUT_BASE_HEIGHT;
 
-	/* Reuse the normal aspect-preserving transform so integer rounding can never
-	 * make the logical canvas overdraw the physical output. Arbitrary aspect
-	 * ratios may leave a single pixel of unused space on one axis. */
-	ui_layout_init(logical_width, logical_height, output_width, output_height);
-#endif
+	if (logical_width)
+		*logical_width = width;
+	if (logical_height)
+		*logical_height = height;
 }
 
 const ui_layout_metrics_t *ui_layout_get(void)

@@ -91,6 +91,14 @@ static void psp_ui_draw_getOutputSize(void *data, int *width, int *height)
 	if (height) *height = SCR_HEIGHT;
 }
 
+static void psp_ui_draw_getLogicalSize(void *data, int output_width, int output_height,
+	int *logical_width, int *logical_height)
+{
+	(void)data;
+	if (logical_width) *logical_width = output_width;
+	if (logical_height) *logical_height = output_height;
+}
+
 static void psp_ui_draw_uploadTexture(void *data, int slot,
 	const uint16_t *pixels, int w, int h, int pitch, int format, int swizzle)
 {
@@ -276,6 +284,12 @@ const ui_draw_driver_t psp_ui_draw_driver = {
 	psp_ui_draw_init,
 	psp_ui_draw_term,
 	psp_ui_draw_getOutputSize,
+	psp_ui_draw_getLogicalSize,
+	UI_DRAW_CAP_CACHE_CHROME |
+		UI_DRAW_CAP_TRANSLUCENT_CHROME |
+		UI_DRAW_CAP_FILTERED_SHADOWS |
+		UI_DRAW_CAP_ANIMATED_GLOW |
+		UI_DRAW_CAP_PARTIAL_REFRESH,
 	psp_ui_draw_uploadTexture,
 	psp_ui_draw_clearTexture,
 	psp_ui_draw_getTextureBasePtr,

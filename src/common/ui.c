@@ -18,35 +18,50 @@
 	背景描画
 ******************************************************************************/
 
+static int ui_background_cache_matches_layout(void)
+{
+	const ui_layout_metrics_t *layout = ui_layout_get();
+	int cache_width = full_rect.right - full_rect.left;
+	int cache_height = full_rect.bottom - full_rect.top;
+
+	return cache_width == layout->logical_width &&
+		cache_height == layout->logical_height;
+}
+
+static void draw_ui_chrome(void)
+{
+	draw_bar_shadow();
+
+	if (ui_draw_has_capability(UI_DRAW_CAP_TRANSLUCENT_CHROME))
+		boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
+	else
+		boxfill(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1));
+
+	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
+	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
+}
+
 /*------------------------------------------------------
 	背景画像読み込み
 ------------------------------------------------------*/
 
 void load_background(int number)
 {
+	int cache_background;
+
 	(void)number;
+	ui_draw_configure_layout();
+	cache_background = ui_background_cache_matches_layout();
 
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(UI_PAL_BG2);
 
-#if defined(PSP)
-	/* PSP always presents the original 480x272 logical canvas 1:1.  Cache the
-	 * static chrome with the background as the legacy renderer did, instead of
-	 * rebuilding its gradients and shadows on every list-selection redraw. */
-	draw_bar_shadow();
-	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
-	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
-	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
-#endif
+	if (cache_background && ui_draw_has_capability(UI_DRAW_CAP_CACHE_CHROME))
+		draw_ui_chrome();
 
-	/* PSP/Desktop still cache the legacy background in SCREEN_BITMAP.  PS2 uses
-	 * a native 640x448/640x512 logical UI, while SCREEN_BITMAP is intentionally
-	 * only the old 480x272 render surface.  Caching through full_rect there would
-	 * preserve only the top-left PSP-sized portion of the background. */
-#if !defined(PS2)
+	if (cache_background)
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
 		COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
-#endif
 	video_driver->endFrame(video_data);
 }
 
@@ -57,70 +72,47 @@ void load_background(int number)
 
 void show_background(void)
 {
-	int output_width;
-	int output_height;
-
-#if !defined(PS2)
 	const ui_layout_metrics_t *layout;
 	RECT viewport;
 	const uint32_t black = 0xff000000;
-#endif
+	int cache_background;
 
-	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
-	ui_layout_init_responsive(output_width, output_height);
-
-#if !defined(PS2)
+	ui_draw_configure_layout();
 	layout = ui_layout_get();
-#endif
+	cache_background = ui_background_cache_matches_layout();
 
-#if defined(PS2)
-	/* PS2 renders UI at native GS resolution.  Rebuild the inexpensive solid
-	 * background directly in the physical draw buffer instead of scaling or
-	 * clipping the legacy 480x272 SCREEN_BITMAP cache. */
-	ui_fill_frame(UI_PAL_BG2);
-#else
-	viewport.left = layout->viewport_x;
-	viewport.top = layout->viewport_y;
-	viewport.right = layout->viewport_x + layout->viewport_width;
-	viewport.bottom = layout->viewport_y + layout->viewport_height;
+	if (cache_background)
+	{
+		viewport.left = layout->viewport_x;
+		viewport.top = layout->viewport_y;
+		viewport.right = layout->viewport_x + layout->viewport_width;
+		viewport.bottom = layout->viewport_y + layout->viewport_height;
 
-	video_driver->transferWorkFrame(video_data, &full_rect, &viewport);
+		video_driver->transferWorkFrame(video_data, &full_rect, &viewport);
 
-	/* transferWorkFrame() leaves the physical presentation target active on all
-	 * GUI backends. Native-layout platforms cover the full output; the fallback
-	 * bar fill remains useful if a future backend chooses an inset viewport. */
-	if (ui_layout_uses_output_transform()) {
-		if (viewport.top > 0)
-			ui_draw_driver->fillRect(ui_draw_data, 0, 0,
-				layout->output_width, viewport.top, black);
-		if (viewport.bottom < layout->output_height)
-			ui_draw_driver->fillRect(ui_draw_data, 0, viewport.bottom,
-				layout->output_width, layout->output_height - viewport.bottom, black);
-		if (viewport.left > 0)
-			ui_draw_driver->fillRect(ui_draw_data, 0, viewport.top,
-				viewport.left, layout->viewport_height, black);
-		if (viewport.right < layout->output_width)
-			ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
-				layout->output_width - viewport.right, layout->viewport_height, black);
+		if (ui_layout_uses_output_transform())
+		{
+			if (viewport.top > 0)
+				ui_draw_driver->fillRect(ui_draw_data, 0, 0,
+					layout->output_width, viewport.top, black);
+			if (viewport.bottom < layout->output_height)
+				ui_draw_driver->fillRect(ui_draw_data, 0, viewport.bottom,
+					layout->output_width, layout->output_height - viewport.bottom, black);
+			if (viewport.left > 0)
+				ui_draw_driver->fillRect(ui_draw_data, 0, viewport.top,
+					viewport.left, layout->viewport_height, black);
+			if (viewport.right < layout->output_width)
+				ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
+					layout->output_width - viewport.right, layout->viewport_height, black);
+		}
 	}
-#endif
+	else
+	{
+		ui_fill_frame(UI_PAL_BG2);
+	}
 
-#if !defined(PSP)
-	/* Native-size backends can resize or use a non-identity viewport, so their
-	 * chrome must remain output-relative and is intentionally not cached. */
-#if !defined(PS2)
-	draw_bar_shadow();
-#endif
-#if defined(PS2)
-	/* PS2 uses a crisp native-pixel UI. Keep the title bar opaque rather than
-	 * blending the old PSP chrome over the background. */
-	boxfill(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1));
-#else
-	boxfill_alpha(0, 0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_BG1), 10);
-#endif
-	hline_alpha(0, ui_layout_right(0), 23, UI_COLOR(UI_PAL_FRAME), 12);
-	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
-#endif
+	if (!cache_background || !ui_draw_has_capability(UI_DRAW_CAP_CACHE_CHROME))
+		draw_ui_chrome();
 }
 
 
@@ -284,14 +276,10 @@ void draw_dialog(int sx, int sy, int ex, int ey)
 	sy++;
 	ey--;
 
-#if defined(PS2)
-	/* The PSP dialog intentionally lets the wallpaper bleed through. At native
-	 * PS2 resolution that reads as banding/noise, especially on interlaced
-	 * output. Use an opaque panel while retaining the outer shadow/border. */
-	boxfill(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1));
-#else
-	boxfill_alpha(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1), 10);
-#endif
+	if (ui_draw_has_capability(UI_DRAW_CAP_TRANSLUCENT_CHROME))
+		boxfill_alpha(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1), 10);
+	else
+		boxfill(sx, sy, ex, ey, UI_COLOR(UI_PAL_BG1));
 }
 
 

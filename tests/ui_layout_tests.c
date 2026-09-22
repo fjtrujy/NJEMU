@@ -7,10 +7,13 @@ static void test_responsive_layout(int width, int height,
 	int expected_rows)
 {
 	const ui_layout_metrics_t *layout;
+	int logical_width;
+	int logical_height;
 	int center_x;
 	int center_y;
 
-	ui_layout_init_responsive(width, height);
+	ui_layout_compute_responsive_size(width, height, &logical_width, &logical_height);
+	ui_layout_init(logical_width, logical_height, width, height);
 	layout = ui_layout_get();
 
 	assert(layout->logical_width == expected_logical_width);
@@ -35,12 +38,15 @@ static void test_responsive_layout(int width, int height,
 	assert(center_y >= height / 2 - 1 && center_y <= height / 2 + 1);
 }
 
-static void test_ps2_content_scaling(void)
+static void test_responsive_content_scaling(void)
 {
+	int logical_width;
+	int logical_height;
 	int x;
 	int y;
 
-	ui_layout_init_responsive(640, 448);
+	ui_layout_compute_responsive_size(640, 448, &logical_width, &logical_height);
+	ui_layout_init(logical_width, logical_height, 640, 448);
 	ui_layout_transform_point(210, 40, &x, &y);
 	assert(x == 280);
 	assert(y == 53);
@@ -79,7 +85,7 @@ int main(void)
 	test_responsive_layout(1024, 768, 480, 360, 16);
 	test_responsive_layout(1920, 1080, 484, 272, 11);
 	test_responsive_layout(600, 900, 480, 720, 34);
-	test_ps2_content_scaling();
+	test_responsive_content_scaling();
 	test_aspect_preserving_viewport();
 	return 0;
 }

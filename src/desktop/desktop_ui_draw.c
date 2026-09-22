@@ -12,6 +12,7 @@
 #include <SDL.h>
 #include "desktop/desktop.h"
 #include "common/ui_draw_driver.h"
+#include "common/ui_layout.h"
 #include "common/video_driver.h"
 
 #define SCR_WIDTH 480
@@ -168,6 +169,14 @@ static void desktop_ui_draw_getOutputSize(void *data, int *width, int *height)
 
 	if (width) *width = w;
 	if (height) *height = h;
+}
+
+static void desktop_ui_draw_getLogicalSize(void *data, int output_width, int output_height,
+	int *logical_width, int *logical_height)
+{
+	(void)data;
+	ui_layout_compute_responsive_size(output_width, output_height,
+		logical_width, logical_height);
 }
 
 /*------------------------------------------------------
@@ -497,6 +506,10 @@ const ui_draw_driver_t desktop_ui_draw_driver = {
 	desktop_ui_draw_init,
 	desktop_ui_draw_term,
 	desktop_ui_draw_getOutputSize,
+	desktop_ui_draw_getLogicalSize,
+	UI_DRAW_CAP_TRANSLUCENT_CHROME |
+		UI_DRAW_CAP_FILTERED_SHADOWS |
+		UI_DRAW_CAP_ANIMATED_GLOW,
 	desktop_ui_draw_uploadTexture,
 	desktop_ui_draw_clearTexture,
 	desktop_ui_draw_getTextureBasePtr,
