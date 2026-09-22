@@ -103,7 +103,60 @@ Validation performed:
   shell's configured paths, so this small platform-guard change was not
   re-cross-built for PSP in this R12 pass.
 
-## 4. Static RAM (`.bss`) remains the next memory target
+## 4. R13 result: replace derived full-palette LUTs
+
+The next large `.bss` candidates were `video_clut16` tables. They do not hold
+emulated state: they cache deterministic conversions from each machine's native
+palette word to the renderer's 15-bit color format.
+
+For MVS/NCDZ the 32,768-entry table is unnecessary. Neo Geo's palette encoding
+is only a permutation of the five red/green/blue bits, so R13 converts it with
+bit operations and removes the 65,536-byte table completely.
+
+CPS1/CPS2 include a four-bit brightness term, but each output component depends
+only on `(brightness, component)`. The old 65,536-entry `uint16_t` table is now
+a 16x16 `uint8_t` component table (256 bytes). Palette conversion performs three
+lookups in this cache-hot table and combines the resulting five-bit channels.
+The net static-RAM saving is **130,816 bytes per CPS core**.
+
+`palette_convert_tests` exhaustively compares the replacement against the old
+algorithms for all 32,768 Neo Geo colors and all 65,536 CPS palette words. This
+proves exact 15-bit output equivalence rather than relying on visual inspection.
+
+Measured MVS PS2 GUI result on the same R12 configuration:
+
+| Section | R12 | R13 | Delta |
+| --- | ---: | ---: | ---: |
+| `.text` | 913,416 B | 913,112 B | -304 B |
+| `.rodata` | 101,992 B | 101,992 B | 0 B |
+| `.data` | 406,432 B | 406,432 B | 0 B |
+| `.bss` | 2,428,744 B | 2,363,208 B | **-65,536 B** |
+| total sections | 5,898,301 B | 5,832,461 B | **-65,840 B** |
+
+Representative PS2 GUI section sizes after R13 are:
+
+| Core | `.text` | `.rodata` | `.data` | `.bss` |
+| --- | ---: | ---: | ---: | ---: |
+| CPS1 | 899,256 B | 110,120 B | 673,632 B | 2,693,448 B |
+| CPS2 | 812,104 B | 103,024 B | 402,256 B | 2,235,336 B |
+| MVS | 913,112 B | 101,992 B | 406,432 B | 2,363,208 B |
+| NCDZ | 868,408 B | 141,544 B | 395,200 B | 2,244,552 B |
+
+Validation performed:
+
+- Desktop CPS1/CPS2/MVS/NCDZ builds succeed;
+- the exhaustive palette-conversion test passes in all Desktop core builds;
+- MVS additionally passes the complete 11-test Desktop CTest suite;
+- PS2 CPS1/CPS2/MVS/NCDZ GUI cross-builds succeed;
+- the local PSP compiler installation remains unavailable in this shell, so
+  PSP cross-build validation is still pending. The replacement code is shared
+  C with no platform-specific API dependency.
+
+The complete CPS1 Desktop CTest suite still has the existing target-specific
+`memory_plan_tests` assertion failure; the CPS1 application build and the new
+palette test both pass, and this failure is unrelated to the palette changes.
+
+## 5. Static RAM (`.bss`) remains the next memory target
 
 Representative large PSP symbols include. `gulist` remains in this list because
 it is genuinely required by PSP; R12 only removes its accidental cost on the
@@ -139,7 +192,7 @@ are not required simultaneously could potentially become lifecycle-scoped heap
 allocations or share storage, but only after proving their ownership and hot-
 path requirements.
 
-## 5. Selective `-Os`: useful, but secondary
+## 6. Selective `-Os`: useful, but secondary
 
 The user's proposed split between `-O3` hot paths and `-Os` cold/menu code is
 technically reasonable. The measurements show, however, that it is not the
@@ -174,7 +227,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 6. PS2 observations
+## 7. PS2 observations
 
 Representative no-GUI PS2 builds currently contain approximately:
 
@@ -190,13 +243,14 @@ should determine which modules are actually required for each storage/runtime
 configuration and whether their embedded images remain resident after module
 startup. That work is independent from compiler `-Os` tuning.
 
-## 7. Recommended order for future size work
+## 8. Recommended order for future size work
 
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
 2. **In progress:** audit large `.bss` buffers for platform ownership,
-   mutually-exclusive use or lifecycle-scoped use. R12 already removes the
-   unused 300 KiB PSP GU list from PS2/Desktop.
+   derivable data, mutually-exclusive use or lifecycle-scoped use. R12 removes
+   the unused 300 KiB PSP GU list from PS2/Desktop; R13 removes another 64 KiB
+   from MVS/NCDZ and 127.75 KiB from CPS1/CPS2 by replacing full color LUTs.
 3. Audit embedded PS2 IRX payloads and their post-load lifetime.
 4. Apply selective `-Os` to measured cold translation units.
 5. Re-measure performance and memory after every step; keep emulation/rendering

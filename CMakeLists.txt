@@ -844,7 +844,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	)
 	add_test(NAME memory_plan_tests COMMAND memory_plan_tests)
 
-    if(Python3_Interpreter_FOUND)
+	add_executable(palette_convert_tests
+		tests/palette_convert_tests.c
+	)
+	target_include_directories(palette_convert_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME palette_convert_tests COMMAND palette_convert_tests)
+
+	if(Python3_Interpreter_FOUND)
         add_test(
             NAME translation_source_validation
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py

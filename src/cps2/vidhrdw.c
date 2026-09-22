@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "cps2.h"
+#include "common/palette_convert.h"
 
 
 /******************************************************************************
@@ -86,7 +87,7 @@ static int16_t cps2_scanline_end;
 static uint32_t cps2_scroll3_base;
 static uint32_t cps2_kludge;
 
-static uint16_t ALIGN16_DATA video_clut16[65536];
+static uint8_t ALIGN16_DATA cps_color_component_lut[16][16];
 uint16_t ALIGN16_DATA video_palette[cps2_palette_size >> 1];
 
 
@@ -323,41 +324,7 @@ void cps2_gfx_decode(void)
 
 static void cps2_init_tables(void)
 {
-	int r, g, b, bright;
-
-	for (bright = 0; bright < 16; bright++)
-	{
-		for (r = 0; r < 16; r++)
-		{
-			for (g = 0; g < 16; g++)
-			{
-				for (b = 0; b < 16; b++)
-				{
-					uint16_t pen;
-					int r2, g2, b2, bright2;
-					float fr, fg, fb;
-
-					pen = (bright << 12) | (r << 8) | (g << 4) | b;
-
-					bright2 = bright + 16;
-
-					fr = (float)(r * bright2) / (15.0 * 31.0);
-					fg = (float)(g * bright2) / (15.0 * 31.0);
-					fb = (float)(b * bright2) / (15.0 * 31.0);
-
-					r2 = (int)(fr * 255.0) - 15;
-					g2 = (int)(fg * 255.0) - 15;
-					b2 = (int)(fb * 255.0) - 15;
-
-					if (r2 < 0) r2 = 0;
-					if (g2 < 0) g2 = 0;
-					if (b2 < 0) b2 = 0;
-
-					video_clut16[pen] = MAKECOL15(r2, g2, b2);
-				}
-			}
-		}
-	}
+	cps_palette_component_lut_init(cps_color_component_lut);
 
 	if (driver->flags & 2)
 		cps2_build_palette = cps2_build_palette_delay;
@@ -462,7 +429,7 @@ static void cps2_build_palette_normal(void)
 			if (palette != cps2_old_palette[offset])
 			{
 				cps2_old_palette[offset] = palette;
-				video_palette[offset] = video_clut16[palette];
+					video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
 			}
 		}
 	}
@@ -489,7 +456,7 @@ static void cps2_build_palette_delay(void)
 			if (palette != cps2_old_palette[offset])
 			{
 				cps2_old_palette[offset] = palette;
-				video_palette[offset] = video_clut16[palette];
+					video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
 			}
 
 			palette = cps2_palette[offset];
@@ -508,7 +475,7 @@ static void cps2_build_palette_delay(void)
 			if (palette != cps2_old_palette[offset])
 			{
 				cps2_old_palette[offset] = palette;
-				video_palette[offset] = video_clut16[palette];
+					video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
 			}
 		}
 	}

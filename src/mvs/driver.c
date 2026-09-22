@@ -8,6 +8,7 @@
 
 #include "mvs.h"
 #include "common/memory_sizes.h"
+#include "common/palette_convert.h"
 
 
 #define IRQ2CTRL_ENABLE				0x10
@@ -945,7 +946,7 @@ WRITE16_HANDLER( neogeo_paletteram_w )
 	color = COMBINE_DATA(&palettes[palette_bank][offset]);
 
 	if (offset & 0x0f)
-		video_palette[offset] = video_clut16[color & 0x7fff];
+		video_palette[offset] = neogeo_palette_to_555(color);
 }
 
 

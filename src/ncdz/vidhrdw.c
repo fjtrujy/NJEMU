@@ -24,6 +24,7 @@
 ******************************************************************************/
 
 #include "ncdz.h"
+#include "common/palette_convert.h"
 #include "common/memory_sizes.h"
 #include <unistd.h>
 
@@ -42,7 +43,6 @@ uint32_t palette_bank;
 
 uint16_t *video_palette;
 uint16_t ALIGN16_DATA video_palettebank[2][NEOGEO_PALETTE_SIZE / 2];
-uint16_t ALIGN16_DATA video_clut16[NEOGEO_CLUT_SIZE];
 
 uint8_t fix_pen_usage[0x20000 / 32];
 uint8_t spr_pen_usage[0x400000 / 128];
@@ -336,26 +336,7 @@ static void draw_spr_prio(int min_y, int max_y)
 
 void neogeo_video_init(void)
 {
-	int i, r, g, b;
-
-	for (r = 0; r < 32; r++)
-	{
-		for (g = 0; g < 32; g++)
-		{
-			for (b = 0; b < 32; b++)
-			{
-				int r1 = (r << 3) | (r >> 2);
-				int g1 = (g << 3) | (g >> 2);
-				int b1 = (b << 3) | (b >> 2);
-
-				uint16_t color = ((r & 1) << 14) | ((r & 0x1e) << 7)
-							 | ((g & 1) << 13) | ((g & 0x1e) << 3)
-							 | ((b & 1) << 12) | ((b & 0x1e) >> 1);
-
-				video_clut16[color] = MAKECOL15(r1, g1, b1);
-			}
-		}
-	}
+	int i;
 
 	skip_fullmode0 = &memory_region_user2[0x100*0x40*0];
 	tile_fullmode0 = &memory_region_user2[0x100*0x40*1];
@@ -641,8 +622,8 @@ STATE_LOAD( video )
 	{
 		if (i & 0x0f)
 		{
-			video_palettebank[0][i] = video_clut16[palettes[0][i] & 0x7fff];
-			video_palettebank[1][i] = video_clut16[palettes[1][i] & 0x7fff];
+				video_palettebank[0][i] = neogeo_palette_to_555(palettes[0][i]);
+				video_palettebank[1][i] = neogeo_palette_to_555(palettes[1][i]);
 		}
 	}
 

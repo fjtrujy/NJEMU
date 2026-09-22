@@ -25,7 +25,6 @@ extern uint32_t palette_bank;
 
 extern uint16_t *video_palette;
 extern uint16_t video_palettebank[2][0x2000 / 2];
-extern uint16_t video_clut16[0x8000];
 
 extern uint8_t  fix_pen_usage[0x20000 / 32];
 extern uint8_t  spr_pen_usage[0x400000 / 128];

@@ -8,6 +8,7 @@
 
 #include <limits.h>
 #include "ncdz.h"
+#include "common/palette_convert.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -1147,7 +1148,7 @@ WRITE16_HANDLER( neogeo_paletteram_w )
 	COMBINE_DATA(addr);
 
 	if (offset & 0x0f)
-		video_palette[offset] = video_clut16[*addr & 0x7fff];
+		video_palette[offset] = neogeo_palette_to_555(*addr);
 }
 
 
