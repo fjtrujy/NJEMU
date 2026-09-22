@@ -1676,7 +1676,9 @@ int memory_init(void)
 	if (res < 0)
 	{
 		pad_wait_clear();
-		video_driver->clearScreen(video_data);
+		/* Keep the already-rendered "Load ROM / Checking BIOS" screen visible
+		 * while bios_select() scans neogeo.zip. Clearing here left PS2 users
+		 * staring at a black screen for several seconds on first boot. */
 		bios_select(1);
 		if (neogeo_bios == -1)
 		{

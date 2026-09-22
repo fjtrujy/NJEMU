@@ -7,6 +7,8 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#include "common/ui.h"
+#include "common/ui_layout.h"
 
 
 /******************************************************************************
@@ -232,9 +234,12 @@ static int bios_check(int flag)
 
 void bios_select(int flag)
 {
-	int sel = 0, rows = 13, top = 0;
+	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, prev_sel, update = 1;
 	int old_bios = neogeo_bios;
+
+	if (rows < 1)
+		rows = 1;
 
 	if (!bios_check(flag)) return;
 
@@ -267,11 +272,10 @@ void bios_select(int flag)
 			video_driver->beginFrame(video_data);
 			show_background();
 
-			small_icon(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(BIOS_SELECT_MENU));
-
-			if (top != 0)
-				uifont_print(118, 24, UI_COLOR(UI_PAL_SELECT), FONT_UPTRIANGLE);
+				small_icon(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+				uifont_print(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(BIOS_SELECT_MENU));
+				draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+					ui_layout_bottom(1), rows, BIOS_MAX, sel);
 
 			for (i = 0; i < rows; i++)
 			{
@@ -291,12 +295,7 @@ void bios_select(int flag)
 				}
 			}
 
-			if (flag != 2 && top + rows < BIOS_MAX)
-				uifont_print(118, 260, UI_COLOR(UI_PAL_SELECT), FONT_DOWNTRIANGLE);
-			if (flag == 2 && sel > 12)
-				uifont_print(118, 260, UI_COLOR(UI_PAL_SELECT), FONT_DOWNTRIANGLE);
-
-			update  = draw_battery_status(1);
+				update  = draw_battery_status(1);
 			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
