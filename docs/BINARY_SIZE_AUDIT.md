@@ -369,17 +369,52 @@ first so applications can opt into the behavior through a simple shared API.
 
 ## 11. Current status / future work
 
+Final representative PS2 GUI sizes after R16 (`SAVE_STATE=ON`,
+`COMMAND_LIST=ON`) are:
+
+| Core | `.text` | `.rodata` | `.data` | `.bss` | total sections |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CPS1 | 898,904 B | 110,120 B | 673,632 B | 2,470,088 B | 6,202,039 B |
+| CPS2 | 812,104 B | 103,024 B | 402,256 B | 2,143,048 B | 5,454,887 B |
+| MVS | 913,112 B | 101,992 B | 406,432 B | 2,270,920 B | 5,740,173 B |
+| NCDZ | 868,440 B | 141,544 B | 395,200 B | 2,228,040 B | 5,820,337 B |
+
+The cumulative linked `.bss` reduction from R12-R16 is **661,376 B for
+CPS1**, **530,304 B for CPS2**, **465,024 B for MVS**, and **389,248 B for
+NCDZ**. For CPS1, 131,072 bytes of that total are feature-scoped rather than
+unconditionally eliminated: Forgotten Worlds/Strider reacquire the stars
+buffer at runtime, while other CPS1 games retain the full saving.
+
+Final validation status:
+
+- all four Desktop application targets build successfully;
+- MVS passes the complete 11-test CTest suite in the existing assertions-on
+  build;
+- the CPS1/CPS2/NCDZ Release audit directories compile tests with `-DNDEBUG`;
+  `memory_plan_tests` uses side-effecting calls inside `assert(...)`, so that
+  test binary is invalid in Release and aborts after the calls are compiled
+  out. Fresh assertions-on CPS1/CPS2/NCDZ builds all pass
+  `memory_plan_tests: OK`; this is a test-configuration issue, not a runtime
+  memory regression;
+- all four PS2 GUI cross-builds succeed with the final sources;
+- a fresh PSP cross-build cannot be run in the current shell because no
+  runnable installed PSP cross-toolchain is available. R11 had previously been
+  cross-built with PSPSDK; the later common/PSP source changes preserve the
+  platform's existing alignment/capacity contracts but still require a future
+  PSP link/device validation when that toolchain is available.
+
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
-2. **In progress:** audit large `.bss`/lifetime buffers. R12 removes the unused
+2. **Completed for the current phase:** audit large `.bss`/lifetime buffers.
+   R12 removes the unused
    300 KiB PSP GU list from PS2/Desktop; R13 removes 64 KiB from MVS/NCDZ and
    127.75 KiB from CPS1/CPS2 color conversion storage; R14 returns 75,776 bytes
    of ROM-browser metadata before emulation on CPS1/CPS2/MVS; R15 removes a
    further 16,512 bytes of permanent ZIP decompression scratch on all cores;
    R16 makes the CPS1 stars vertex buffer conditional, saving 128 KiB on PS2
    (32 KiB on PSP) for games that do not implement the stars layer.
-3. Continue only with buffers whose lifetime can be shortened without adding
-   work to CPU/render/audio hot paths.
+3. Further RAM work should only resume when a new candidate can shorten
+   lifetime or remove storage without adding work to CPU/render/audio hot paths.
 4. **Deferred:** PS2 IRX externalization/runtime loading, preferably as a future
    `ps2_drivers` capability rather than NJEMU-specific infrastructure.
 5. **Deferred:** selective `-Os`; keep the current optimization policy for this
