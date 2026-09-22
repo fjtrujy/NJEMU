@@ -28,14 +28,9 @@ typedef struct platform_driver
 	int32_t (*getDevkitVersion)(void *data);
 	bool (*getWlanSwitchState)(void *data);
 	int (*getHardwareModel)(void *data);
-	/* Returns the amount of free RAM in bytes that the emulator can plausibly
-	 * allocate at startup. Used by the memory profile selector to pick a tier
-	 * (cache size, preload strategy). Implementations may cap or reserve a
-	 * baseline; return 0 if unknown. Called once after init().
-	 */
-	uint32_t (*availableRam)(void *data);
 	/* Captures normalized platform memory telemetry. Returns false when the
-	 * platform cannot provide any useful memory information.
+	 * platform cannot provide any useful memory information. R10 cache capacity
+	 * is established by retained allocation probes; this is diagnostic data.
 	 */
 	bool (*queryMemoryInfo)(void *data, platform_memory_info_t *out);
 	/* Maps the platform/OS language to NJEMU's supported translation set. */

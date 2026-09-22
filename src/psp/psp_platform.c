@@ -235,14 +235,6 @@ static bool psp_queryMemoryInfo(void *data, platform_memory_info_t *out) {
 	return true;
 }
 
-static uint32_t psp_availableRam(void *data) {
-	platform_memory_info_t info;
-	if (!psp_queryMemoryInfo(data, &info)) {
-		return 0;
-	}
-	return platform_memory_info_available_u32(&info);
-}
-
 static ui_language_t psp_getSystemLanguage(void *data) {
 	int language = PSP_SYSTEMPARAM_LANGUAGE_ENGLISH;
 	(void)data;
@@ -273,7 +265,6 @@ platform_driver_t platform_psp = {
 	psp_getDevkitVersion,
 	psp_getWlanSwitchState,
 	psp_getHardwareModel,
-	psp_availableRam,
 	psp_queryMemoryInfo,
 	psp_getSystemLanguage,
 };

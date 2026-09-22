@@ -116,6 +116,7 @@ int use_parent_vrom;
 
 static memory_plan_t mvs_memory_plan;
 static int mvs_memory_plan_valid;
+static memory_allocation_shape_t mvs_memory_shape;
 
 
 /******************************************************************************
@@ -818,9 +819,11 @@ static int load_rom_gfx3(void)
 
 	if (!use_streaming && mvs_memory_plan_valid &&
 		mvs_memory_plan.gfx_fully_resident &&
-		mvs_memory_plan.gfx_cache_bytes == memory_length_gfx3)
+		mvs_memory_plan.gfx_cache_bytes >= memory_length_gfx3)
 	{
-		memory_region_gfx3 = malloc(memory_length_gfx3);
+		memory_allocation_shape_release_reserve(&mvs_memory_shape);
+		memory_region_gfx3 = mvs_memory_shape.gfx_memory;
+		mvs_memory_shape.gfx_memory = NULL;
 
 		if (memory_region_gfx3 != NULL)
 		{
@@ -861,12 +864,27 @@ static int load_rom_gfx3(void)
 		msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
 	}
 
-	if (!mvs_memory_plan_valid || cache_start(&mvs_memory_plan) == 0)
+	memory_allocation_shape_release_reserve(&mvs_memory_shape);
+	if (!mvs_memory_plan_valid)
 	{
 		msg_printf(TEXT(PRESS_ANY_BUTTON2));
 		pad_wait_press(PAD_WAIT_INFINITY);
 		Loop = LOOP_BROWSER;
 		return 0;
+	}
+
+	{
+		void *gfx_memory = mvs_memory_shape.gfx_memory;
+		void *pcm_memory = mvs_memory_shape.pcm_memory;
+		mvs_memory_shape.gfx_memory = NULL;
+		mvs_memory_shape.pcm_memory = NULL;
+		if (cache_start(&mvs_memory_plan, gfx_memory, pcm_memory) == 0)
+		{
+			msg_printf(TEXT(PRESS_ANY_BUTTON2));
+			pad_wait_press(PAD_WAIT_INFINITY);
+			Loop = LOOP_BROWSER;
+			return 0;
+		}
 	}
 
 	return 1;
@@ -923,18 +941,31 @@ static int load_rom_sound1(void)
 	cache_candidate = disable_sound;
 	if (cache_candidate && (!mvs_memory_plan_valid ||
 		!mvs_memory_plan.pcm_fully_resident ||
-		mvs_memory_plan.pcm_cache_bytes != memory_length_sound1))
+		mvs_memory_plan.pcm_cache_bytes < memory_length_sound1 ||
+		memory_length_sound2 != 0))
 	{
 		return 1;
 	}
 
-	if ((memory_region_sound1 = malloc(memory_length_sound1)) == NULL)
+	if (cache_candidate)
+	{
+		/* The retained reserve exists to protect loader/cache setup allocations.
+		 * Once the final PCM buffer is committed, make that reserve available to
+		 * file/zip I/O instead of keeping it artificially occupied. */
+		memory_allocation_shape_release_reserve(&mvs_memory_shape);
+		memory_region_sound1 = mvs_memory_shape.pcm_memory;
+		mvs_memory_shape.pcm_memory = NULL;
+	}
+	else
+	{
+		memory_region_sound1 = malloc(memory_length_sound1);
+	}
+
+	if (memory_region_sound1 == NULL)
 	{
 		if (cache_candidate)
 		{
-			/* A full-resident target is an optimization. Fragmentation may still
-			 * make it unavailable; leave disable_sound set so cache_start() falls
-			 * back to the planned streaming PCM allocation. */
+			/* The empirical shape may choose streaming PCM instead. */
 			return 1;
 		}
 
@@ -1575,6 +1606,7 @@ int memory_init(void)
 #endif
 	memory_region_user3  = NULL;
 	mvs_memory_plan_valid = 0;
+	memset(&mvs_memory_shape, 0, sizeof(mvs_memory_shape));
 
 	memory_length_cpu1   = 0;
 	memory_length_cpu2   = 0;
@@ -1744,35 +1776,45 @@ int memory_init(void)
 		if (load_rom_gfx2() == 0) return 0;
 		if (load_rom_gfx4() == 0) return 0;
 
-			/* CPU/BIOS/FIX allocations and decrypt scratch are done here. Treat
-			 * SOUND1 as a PCM-cache candidate only for ROM sets that explicitly use
-			 * the streaming-sound path; otherwise sound regions are mandatory. */
-		if (platform_driver->queryMemoryInfo != NULL)
-		{
-			platform_memory_info_t memory_info;
-			if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
-			{
-				game_memory_requirements_t requirements;
-				platform_memory_info_apply_env_overrides(&memory_info);
-				memset(&requirements, 0, sizeof(requirements));
-				requirements.core = MEMORY_PLAN_CORE_MVS;
-				requirements.gfx_or_crom_bytes = memory_length_gfx3;
-				if (option_sound_enable && disable_sound)
-					requirements.pcm_or_vrom_bytes = memory_length_sound1;
-				else if (option_sound_enable)
-					requirements.mandatory_late_allocations_bytes =
-						(uint64_t)memory_length_sound1 + memory_length_sound2;
-				mvs_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &mvs_memory_plan);
-				if (mvs_memory_plan_valid)
-					memory_plan_log(&mvs_memory_plan);
-				else
-					printf("[memory_plan] MVS plan has no viable cache floor\n");
-			}
-		}
-
+	/* Load non-cache sound regions before probing so the empirical shape sees the
+	 * heap exactly as the C-ROM allocation will see it. SOUND_DISABLE sets keep
+	 * SOUND1 as the secondary probe/cache region. */
+	if (option_sound_enable && !disable_sound)
+	{
 		if (load_rom_sound1() == 0) return 0;
+		if (load_rom_sound2() == 0) return 0;
+	}
 
-	if (load_rom_sound2() == 0) return 0;
+	{
+		memory_probe_constraints_t constraints;
+		game_memory_requirements_t requirements;
+		memory_probe_constraints_default(&constraints);
+		memset(&requirements, 0, sizeof(requirements));
+		requirements.core = MEMORY_PLAN_CORE_MVS;
+		requirements.gfx_or_crom_bytes = memory_length_gfx3;
+		if (option_sound_enable && disable_sound)
+			requirements.pcm_or_vrom_bytes = memory_length_sound1;
+
+		mvs_memory_plan_valid = memory_plan_allocate_shape(&requirements, &constraints,
+			&mvs_memory_shape);
+		if (mvs_memory_plan_valid)
+		{
+			mvs_memory_plan = mvs_memory_shape.plan;
+			memory_plan_log(&mvs_memory_plan);
+		}
+		else
+		{
+			printf("[memory_plan] MVS empirical probe has no viable cache shape\n");
+			msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+			return 0;
+		}
+	}
+
+	if (option_sound_enable && disable_sound)
+	{
+		if (load_rom_sound1() == 0) return 0;
+		if (load_rom_sound2() == 0) return 0;
+	}
 	if (load_rom_gfx3() == 0) return 0;
 
 	if (disable_sound)
@@ -2006,6 +2048,7 @@ void memory_shutdown(void)
 	int i;
 
 	cache_shutdown();
+	memory_allocation_shape_release(&mvs_memory_shape);
 
 	for (i = 0; i < 3; i++)
 	{

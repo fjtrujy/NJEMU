@@ -62,12 +62,13 @@ make -j4
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording
 
-PSP packages explicitly request the largest user-memory partition (`MEMSIZE=1`)
-and platforms expose a normalized `queryMemoryInfo()` snapshot (free bytes,
-largest contiguous block, budget cap, reliability flags). `memory_plan_t` owns
-runtime GFX/C-ROM/PCM residency and cache sizing. Use
-`NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` for deterministic
-memory-policy testing.
+PSP packages explicitly request the largest user-memory partition (`MEMSIZE=1`).
+Platform `queryMemoryInfo()` values are diagnostic telemetry only. CPS2/MVS
+cache capacity is established at ROM-load time by retained empirical allocator
+probes after mandatory regions are resident; MVS may use independent C-ROM and
+PCM blocks from different heap holes. `memory_plan_t` still owns reserve/floor
+policy. Use `NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` as
+deterministic caps for memory-policy testing.
 
 ## Architecture
 

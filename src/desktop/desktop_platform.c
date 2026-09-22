@@ -129,14 +129,6 @@ static bool desktop_queryMemoryInfo(void *data, platform_memory_info_t *out) {
 	return true;
 }
 
-static uint32_t desktop_availableRam(void *data) {
-	platform_memory_info_t info;
-	if (!desktop_queryMemoryInfo(data, &info)) {
-		return 0;
-	}
-	return platform_memory_info_available_u32(&info);
-}
-
 static ui_language_t desktop_getSystemLanguage(void *data) {
 	(void)data;
 	/* Desktop historically always selected English. Keep that behaviour explicit. */
@@ -152,7 +144,6 @@ platform_driver_t platform_desktop = {
 	desktop_getDevkitVersion,
 	desktop_getWlanSwitchState,
 	desktop_getHardwareModel,
-	desktop_availableRam,
 	desktop_queryMemoryInfo,
 	desktop_getSystemLanguage,
 };

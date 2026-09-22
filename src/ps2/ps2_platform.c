@@ -170,14 +170,6 @@ static bool ps2_queryMemoryInfo(void *data, platform_memory_info_t *out) {
 	return total != 0;
 }
 
-static uint32_t ps2_availableRam(void *data) {
-	platform_memory_info_t info;
-	if (!ps2_queryMemoryInfo(data, &info)) {
-		return 0;
-	}
-	return platform_memory_info_available_u32(&info);
-}
-
 static ui_language_t ps2_getSystemLanguage(void *data) {
 	(void)data;
 	switch (configGetLanguage()) {
@@ -203,7 +195,6 @@ platform_driver_t platform_ps2 = {
 	ps2_getDevkitVersion,
 	ps2_getWlanSwitchState,
 	ps2_getHardwareModel,
-	ps2_availableRam,
 	ps2_queryMemoryInfo,
 	ps2_getSystemLanguage,
 };

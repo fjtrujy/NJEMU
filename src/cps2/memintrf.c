@@ -73,6 +73,7 @@ uint8_t *qsound_sharedram2;
 
 static memory_plan_t cps2_memory_plan;
 static int cps2_memory_plan_valid = 0;
+static memory_allocation_shape_t cps2_memory_shape;
 
 
 /******************************************************************************
@@ -232,6 +233,8 @@ static int load_rom_gfx1(void)
 {
 	uint32_t planned_gfx_length = memory_length_gfx1;
 	memory_plan_t streaming_plan;
+	memory_probe_constraints_t constraints;
+	game_memory_requirements_t requirements;
 
 	gfx_total_elements[TILE08] = (memory_length_gfx1 - 0x800000) >> 6;
 	gfx_total_elements[TILE16] = memory_length_gfx1 >> 7;
@@ -256,24 +259,35 @@ static int load_rom_gfx1(void)
 		return 0;
 	}
 
-	/* CPU/user/sound regions and GFX metadata are already resident here, so
-	 * the runtime plan can budget the remaining heap for the GFX working set. */
-	if (platform_driver->queryMemoryInfo != NULL)
+	/* All mandatory CPS2 regions are resident at this point. Probe the allocator
+	 * itself and retain the successful GFX allocation so planning and ownership
+	 * cannot diverge between two malloc calls. */
+	memory_probe_constraints_default(&constraints);
+	memset(&requirements, 0, sizeof(requirements));
+	requirements.core = MEMORY_PLAN_CORE_CPS2;
+	requirements.gfx_or_crom_bytes = planned_gfx_length;
+	cps2_memory_plan_valid = memory_plan_allocate_shape(&requirements, &constraints,
+		&cps2_memory_shape);
+
+	/* A partial CPS2 allocation backs the compact streaming cache, not the full
+	 * decoded GFX image. Re-probe against that real payload ceiling if necessary. */
+	if (cps2_memory_plan_valid && !cps2_memory_shape.plan.gfx_fully_resident &&
+		cps2_memory_shape.plan.gfx_cache_bytes > driver->cache_size)
 	{
-		platform_memory_info_t memory_info;
-		if (platform_driver->queryMemoryInfo(platform_data, &memory_info))
-		{
-			game_memory_requirements_t requirements;
-			platform_memory_info_apply_env_overrides(&memory_info);
-			memset(&requirements, 0, sizeof(requirements));
-			requirements.core = MEMORY_PLAN_CORE_CPS2;
-			requirements.gfx_or_crom_bytes = planned_gfx_length;
-			cps2_memory_plan_valid = memory_plan_build(&memory_info, &requirements, &cps2_memory_plan);
-			if (cps2_memory_plan_valid)
-				memory_plan_log(&cps2_memory_plan);
-			else
-				printf("[memory_plan] CPS2 plan has no viable cache floor\n");
-		}
+		memory_allocation_shape_release(&cps2_memory_shape);
+		requirements.gfx_or_crom_bytes = driver->cache_size;
+		cps2_memory_plan_valid = memory_plan_allocate_shape(&requirements, &constraints,
+			&cps2_memory_shape);
+	}
+
+	if (cps2_memory_plan_valid)
+	{
+		cps2_memory_plan = cps2_memory_shape.plan;
+		memory_plan_log(&cps2_memory_plan);
+	}
+	else
+	{
+		printf("[memory_plan] CPS2 empirical probe has no viable cache shape\n");
 	}
 
 	if (!cps2_memory_plan_valid)
@@ -283,9 +297,11 @@ static int load_rom_gfx1(void)
 	}
 
 	if (cps2_memory_plan.gfx_fully_resident &&
-		cps2_memory_plan.gfx_cache_bytes == planned_gfx_length)
+		cps2_memory_plan.gfx_cache_bytes >= planned_gfx_length)
 	{
-		memory_region_gfx1 = (uint8_t *)malloc(planned_gfx_length);
+		memory_allocation_shape_release_reserve(&cps2_memory_shape);
+		memory_region_gfx1 = (uint8_t *)cps2_memory_shape.gfx_memory;
+		cps2_memory_shape.gfx_memory = NULL;
 		if (memory_region_gfx1 != NULL)
 		{
 			if (!load_rom_gfx1_full_resident())
@@ -301,17 +317,20 @@ static int load_rom_gfx1(void)
 	 * request to the compact cache-file payload; cache_start() may still retry
 	 * down in 64 KiB blocks if fragmentation prevents that target. */
 	streaming_plan = cps2_memory_plan;
-	if (streaming_plan.gfx_cache_bytes > driver->cache_size)
-		streaming_plan.gfx_cache_bytes = driver->cache_size;
 	streaming_plan.gfx_fully_resident = false;
 	memory_length_gfx1 = driver->cache_size;
+	memory_allocation_shape_release_reserve(&cps2_memory_shape);
 
-	if (cache_start(&streaming_plan) == 0)
 	{
-		msg_printf(TEXT(PRESS_ANY_BUTTON2));
-		pad_wait_press(PAD_WAIT_INFINITY);
-		Loop = LOOP_BROWSER;
-		return 0;
+		void *gfx_memory = cps2_memory_shape.gfx_memory;
+		cps2_memory_shape.gfx_memory = NULL;
+		if (cache_start(&streaming_plan, gfx_memory, NULL) == 0)
+		{
+			msg_printf(TEXT(PRESS_ANY_BUTTON2));
+			pad_wait_press(PAD_WAIT_INFINITY);
+			Loop = LOOP_BROWSER;
+			return 0;
+		}
 	}
 
 	return 1;
@@ -682,6 +701,7 @@ int memory_init(void)
 	gfx_pen_usage[TILE32] = NULL;
 
 	cps2_memory_plan_valid = 0;
+	memset(&cps2_memory_shape, 0, sizeof(cps2_memory_shape));
 
 	cache_init();
 	pad_wait_clear();
@@ -862,6 +882,7 @@ int memory_init(void)
 void memory_shutdown(void)
 {
 	cache_shutdown();
+	memory_allocation_shape_release(&cps2_memory_shape);
 
 	if (gfx_pen_usage[TILE08]) free(gfx_pen_usage[TILE08]);
 	if (gfx_pen_usage[TILE16]) free(gfx_pen_usage[TILE16]);

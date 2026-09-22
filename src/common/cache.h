@@ -43,7 +43,7 @@ extern uint32_t block_offset[MAX_CACHE_BLOCKS];
 #endif
 
 void cache_init(void);
-int cache_start(const memory_plan_t *plan);
+int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallocated_pcm);
 void cache_shutdown(void);
 void cache_sleep(int flag);
 

@@ -278,6 +278,59 @@ static void test_r9_forced_budget_matrix(void) {
 	}
 }
 
+static void test_r10_cps2_empirical_shape(void) {
+	game_memory_requirements_t game = cps2_requirements(MIB(64), 0);
+	memory_probe_constraints_t constraints;
+	memory_allocation_shape_t shape;
+
+	memset(&constraints, 0, sizeof(constraints));
+	constraints.total_cap_bytes = MIB(12);
+	constraints.single_block_cap_bytes = MIB(12);
+	assert(memory_plan_allocate_shape(&game, &constraints, &shape));
+	assert(shape.plan.allocation_probed);
+	assert(shape.plan.tier == MEMORY_TIER_LOW);
+	assert(shape.plan.gfx_cache_bytes == MIB(10));
+	assert(shape.plan.pcm_cache_bytes == 0);
+	assert(shape.plan.safety_reserve_bytes == MIB(2));
+	assert(shape.gfx_memory != NULL);
+	assert(shape.reserve_memory != NULL);
+	assert_plan_invariants(&shape.plan, &game);
+	memory_allocation_shape_release(&shape);
+}
+
+static void test_r10_mvs_uses_multiple_contiguous_holes(void) {
+	game_memory_requirements_t game = mvs_requirements(MIB(64), MIB(16), 0);
+	memory_probe_constraints_t constraints;
+	memory_allocation_shape_t shape;
+
+	memset(&constraints, 0, sizeof(constraints));
+	constraints.total_cap_bytes = MIB(24);
+	constraints.single_block_cap_bytes = MIB(10);
+	assert(memory_plan_allocate_shape(&game, &constraints, &shape));
+	assert(shape.plan.allocation_probed);
+	assert(shape.plan.tier == MEMORY_TIER_MEDIUM);
+	assert(shape.plan.gfx_cache_bytes == MIB(10));
+	assert(shape.plan.pcm_cache_bytes == MIB(10));
+	assert(shape.plan.gfx_cache_bytes + shape.plan.pcm_cache_bytes >
+		constraints.single_block_cap_bytes);
+	assert(shape.plan.safety_reserve_bytes == MIB(2));
+	assert(shape.gfx_memory != NULL);
+	assert(shape.pcm_memory != NULL);
+	assert(shape.reserve_memory != NULL);
+	assert_plan_invariants(&shape.plan, &game);
+	memory_allocation_shape_release(&shape);
+}
+
+static void test_r10_shape_rejects_late_mandatory_allocations(void) {
+	game_memory_requirements_t game = cps2_requirements(MIB(16), MIB(1));
+	memory_probe_constraints_t constraints;
+	memory_allocation_shape_t shape;
+
+	memset(&constraints, 0, sizeof(constraints));
+	constraints.total_cap_bytes = MIB(32);
+	assert(!memory_plan_allocate_shape(&game, &constraints, &shape));
+}
+
 int main(void) {
 	test_tier_boundaries();
 	test_cps2_budget_matrix();
@@ -289,6 +342,9 @@ int main(void) {
 	test_mvs_fragmentation_limit();
 	test_block_alignment_and_determinism();
 	test_r9_forced_budget_matrix();
+	test_r10_cps2_empirical_shape();
+	test_r10_mvs_uses_multiple_contiguous_holes();
+	test_r10_shape_rejects_late_mandatory_allocations();
 	puts("memory_plan_tests: OK");
 	return 0;
 }

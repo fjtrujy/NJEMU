@@ -869,7 +869,7 @@ void cache_init(void)
 	Start Cache Processing
 ------------------------------------------------------*/
 
-int cache_start(const memory_plan_t *plan)
+int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallocated_pcm)
 {
 	int i, found;
 	int requested_cache_blocks;
@@ -887,6 +887,17 @@ int cache_start(const memory_plan_t *plan)
 		msg_printf(TEXT(MEMORY_NOT_ENOUGH));
 		return 0;
 	}
+
+	/* R10 allocation-shape probes retain the buffers that proved the requested
+	 * shape is feasible. Adopt them here instead of freeing and reallocating the
+	 * same sizes. Ownership transfers to the normal memory-region shutdown path. */
+	GFX_MEMORY = (uint8_t *)preallocated_gfx;
+#if (EMU_SYSTEM == MVS)
+	if (preallocated_pcm != NULL)
+		memory_region_sound1 = preallocated_pcm;
+#else
+	(void)preallocated_pcm;
+#endif
 
 	source_cache_blocks = (int)(((uint64_t)GFX_SIZE + CACHE_BLOCK_SIZE - 1) >> BLOCK_SHIFT);
 	requested_cache_blocks = (int)(plan->gfx_cache_bytes >> BLOCK_SHIFT);
@@ -1159,7 +1170,6 @@ int cache_start(const memory_plan_t *plan)
 
 #endif
 
-	GFX_MEMORY = NULL;
 	i = requested_cache_blocks;
 
 	if (GFX_MEMORY == NULL)
@@ -1177,6 +1187,10 @@ int cache_start(const memory_plan_t *plan)
 			msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
 			return 0;
 		}
+	}
+	else
+	{
+		size = (uint32_t)i << BLOCK_SHIFT;
 	}
 
 	num_cache = i;
@@ -1212,30 +1226,45 @@ int cache_start(const memory_plan_t *plan)
 	/* GFX/C-ROM is the primary cache target. Only after it has been secured do
 	 * we consume the PCM target, retrying down in cache-block increments when
 	 * fragmentation prevents the planned contiguous allocation. */
-	if (option_sound_enable && disable_sound)
-	{
-		if (requested_pcm_blocks > 0 && pcm_fd >= 0)
+		if (option_sound_enable && disable_sound)
 		{
-			for (i = requested_pcm_blocks; i > 0; --i)
+			if (requested_pcm_blocks > 0 && pcm_fd >= 0)
+		{
+			if (memory_region_sound1 != NULL)
 			{
-				memory_region_sound1 = malloc((size_t)i << BLOCK_SHIFT);
-				if (memory_region_sound1 != NULL)
+				num_pcm_cache = requested_pcm_blocks;
+			}
+			else
+			{
+				for (i = requested_pcm_blocks; i > 0; --i)
 				{
-					num_pcm_cache = i;
-					break;
+					memory_region_sound1 = malloc((size_t)i << BLOCK_SHIFT);
+					if (memory_region_sound1 != NULL)
+					{
+						num_pcm_cache = i;
+						break;
+					}
 				}
 			}
 		}
 
-		if (num_pcm_cache > 0)
-		{
-			pcm_cache_enable = 1;
-			disable_sound = 0;
-		}
-		else
-		{
-			if (pcm_fd >= 0)
+			if (num_pcm_cache > 0)
 			{
+				pcm_cache_enable = 1;
+				disable_sound = 0;
+			}
+			else
+			{
+				/* An empirical R10 shape may have retained a PCM buffer before the
+				 * cache file was opened. If PCM streaming is unavailable, release
+				 * that otherwise-unused allocation immediately. */
+				if (preallocated_pcm != NULL && memory_region_sound1 != NULL)
+				{
+					free(memory_region_sound1);
+					memory_region_sound1 = NULL;
+				}
+				if (pcm_fd >= 0)
+				{
 				close(pcm_fd);
 				pcm_fd = -1;
 			}

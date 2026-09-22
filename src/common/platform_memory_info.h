@@ -47,9 +47,6 @@ void platform_memory_info_apply_env_overrides(platform_memory_info_t *info);
 /* Free memory after the platform-wide NJEMU budget cap, if any. */
 uint64_t platform_memory_info_effective_budget(const platform_memory_info_t *info);
 
-/* Compatibility value for the legacy platform_driver::availableRam callback. */
-uint32_t platform_memory_info_available_u32(const platform_memory_info_t *info);
-
 void platform_memory_info_log(const platform_memory_info_t *info);
 
 #endif /* PLATFORM_MEMORY_INFO_H */

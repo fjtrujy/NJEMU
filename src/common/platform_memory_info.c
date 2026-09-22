@@ -99,11 +99,6 @@ uint64_t platform_memory_info_effective_budget(const platform_memory_info_t *inf
 	return result;
 }
 
-uint32_t platform_memory_info_available_u32(const platform_memory_info_t *info) {
-	uint64_t available = platform_memory_info_effective_budget(info);
-	return available > UINT32_MAX ? UINT32_MAX : (uint32_t)available;
-}
-
 void platform_memory_info_log(const platform_memory_info_t *info) {
 	if (info == NULL) {
 		return;

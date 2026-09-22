@@ -1347,6 +1347,81 @@ The compile-time memory migration is therefore validated across the available
 automated/runtime surfaces. Remaining hardware-only rows are explicit device
 QA, not blockers for the runtime-policy architecture.
 
+### R10 - Empirical allocation-shape planning
+
+**Status: completed on 2026-09-22.**
+
+R1-R9 still use a scalar memory snapshot (`free_bytes` plus one
+`largest_free_block_bytes`) to choose a target and only then ask the allocator
+for the real buffers. That is conservative on PS2 in particular: several
+independent free holes can back C-ROM and PCM simultaneously even when no one
+contiguous allocation spans their combined size.
+
+R10 changes the runtime decision point from **estimate -> plan -> allocate** to
+**probe the real allocation shape -> retain those allocations -> use them**:
+
+- run the probe only after ROM/core allocations that are mandatory for the
+  selected game have become resident and temporary decrypt scratch has gone;
+- cap every search at 512 MiB and at the actual source/format requirements, so
+  the probe can never grow without a useful emulator consumer;
+- search in 64 KiB cache blocks with binary/power-of-two subdivision rather
+  than linearly walking every possible size;
+- reserve the safety allocation concurrently with candidate cache buffers, so
+  fragmentation is part of the test rather than a mathematical subtraction;
+- CPS2 searches one GFX/cache block; MVS searches C-ROM first and then PCM while
+  the C-ROM allocation remains resident, allowing two different heap holes to
+  be used at the same time;
+- once binary search establishes the final sizes, those sizes are immediately
+  committed and retained; the resulting buffers are adopted directly by the
+  cache/full-resident paths instead of performing a later planning allocation;
+- runtime SDK/platform memory figures remain useful telemetry, but no longer
+  determine how much cache memory is assumed to be allocatable;
+- `NJEMU_MEMORY_BUDGET_MB` and `NJEMU_MEMORY_LARGEST_BLOCK_MB` remain supported
+  as deterministic test constraints on the empirical search.
+
+The tier table remains a policy definition for reserve/floor choices. Capacity
+itself is established by successful simultaneous allocations, not by a device
+model or a reported theoretical heap size.
+
+R10 also records binary-size composition for PSP/PS2/Desktop. Selective `-Os`
+for cold/menu/UI translation units is a possible later optimization, but is
+explicitly outside R10: first identify `.text`, `.rodata`, `.data`, `.bss` and
+the largest symbols so size work is evidence-driven and does not accidentally
+degrade hot emulation/rendering code.
+
+Validation performed:
+
+- permanent R10 unit tests cover a retained CPS2 shape, an MVS two-block shape
+  whose combined caches exceed the allowed largest individual allocation, and
+  rejection of plans that still contain mandatory late allocations;
+- Desktop CPS2 and MVS pass 8/8 CTest tests after the migration;
+- the complete 12/16/20/24/32/48/64/96/128/256 MiB forced-budget runtime matrix
+  passes for `ssf2` and `mslug5` using empirical allocations;
+- with `NJEMU_MEMORY_BUDGET_MB=24` and
+  `NJEMU_MEMORY_LARGEST_BLOCK_MB=10`, CPS2 correctly obtains one 10 MiB GFX
+  block while MVS obtains **10 MiB C-ROM + 10 MiB PCM + 2 MiB reserve**. This
+  explicitly proves that R10 can exploit two heap holes where the old PS2
+  scalar model would have reported only 10 MiB usable;
+- MVS `mslug` exercises the direct fully-resident C-ROM path using the retained
+  probe allocation (`16384KB / 16384KB`);
+- a fully-resident MVS PCM allocation now releases the retained safety block
+  before ROM/cache I/O so the reserve is actually available for transient
+  loader allocations; an unused preallocated PCM block is also reclaimed if
+  PCM streaming cannot be opened;
+- PS2SDK CPS2/MVS builds link successfully;
+- PSPSDK CPS2/MVS builds generate `EBOOT.PBP`, and the CPS2 R10 EBOOT boots in
+  PPSSPP;
+- the obsolete `platform_driver::availableRam` compatibility callback was
+  deleted. `queryMemoryInfo()` remains startup telemetry only; cache capacity is
+  decided by the allocator-shape probe at ROM-load time;
+- physical PSP/PS2 validation remains hardware QA and is not inferred from the
+  cross-build/emulator results.
+
+The binary/static-RAM measurements and follow-up recommendations are recorded
+in `docs/BINARY_SIZE_AUDIT.md`. The most important finding is that GUI builds
+currently embed roughly 2.65 MiB of CJK font/lookup data, making font
+externalization or subsetting a much larger opportunity than selective `-Os`.
+
 #### Functional
 
 For CPS1/CPS2/MVS/NCDZ:
@@ -1422,8 +1497,9 @@ stable, not noisy unconditional per-frame output.
    devices.
 2. Compile-time flags must never decide cache/preload ownership.
 3. No optional preload may make a game fail if the streaming path could run.
-4. Total free bytes and largest contiguous block are different constraints and
-   both must be respected.
+4. Total free bytes and largest contiguous block remain useful telemetry, but
+   runtime cache capacity must be proven by the actual simultaneous allocation
+   shape needed by the core.
 5. Safety reserve is deducted before optional allocations.
 6. After reserve/mandatory deductions, all safely usable cacheable RAM should
    be assigned. GFX/C-ROM is the primary sink for otherwise-unassigned memory.
@@ -1451,7 +1527,8 @@ Recommended implementation sequence:
 6. **R6** state/UI cleanup;
 7. **R7** PSP single-binary memory exposure;
 8. **R8** delete `LARGE_MEMORY` completely;
-9. **R9** full forced-budget + hardware validation.
+9. **R9** full forced-budget + hardware validation;
+10. **R10** empirical retained allocation-shape probing.
 
 The most important architectural rule is to complete R1/R2 **before** deleting
 `LARGE_MEMORY`. That gives every later conversion a single tested decision
