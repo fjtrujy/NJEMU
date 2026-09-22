@@ -7,7 +7,6 @@
 #include <sifrpc.h>
 #include <iopcontrol.h>
 #include <sbv_patches.h>
-#include <fileXio_rpc.h>
 #include <osd_config.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,8 +15,6 @@
 
 typedef struct ps2_platform {
 } ps2_platform_t;
-
-#define PS2_FILEXIO_DEFAULT_RW_BUFFER_SIZE (16 * 1024)
 
 static void reset_IOP()
 {
@@ -38,30 +35,15 @@ static void prepare_IOP()
 
 static bool init_drivers()
 {
-	int rw_buffer_result;
-
 	init_only_boot_ps2_filesystem_driver();
 	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
 		deinit_only_boot_ps2_filesystem_driver();
 		return false;
 	}
 
-	/* fileXio.irx frees its current RW buffer before allocating the requested
-	 * replacement.  If a 64 KiB allocation fails on a memory-constrained IOP,
-	 * ignoring the error leaves fileXio with a NULL transfer buffer and the next
-	 * large read can hang.  Prefer a cache-block-sized buffer, but always restore
-	 * the fileXio default when the larger allocation is unavailable. */
-	rw_buffer_result = fileXioSetRWBufferSize(CACHE_BLOCK_SIZE);
-	if (rw_buffer_result < 0) {
-		printf("[ps2] fileXio %u-byte RW buffer unavailable (%d); falling back to %u bytes\n",
-			(unsigned)CACHE_BLOCK_SIZE, rw_buffer_result,
-			(unsigned)PS2_FILEXIO_DEFAULT_RW_BUFFER_SIZE);
-		if (fileXioSetRWBufferSize(PS2_FILEXIO_DEFAULT_RW_BUFFER_SIZE) < 0) {
-			deinit_audio_driver();
-			deinit_only_boot_ps2_filesystem_driver();
-			return false;
-		}
-	}
+	/* Keep fileXio's default 16 KiB RW buffer. Increasing it to the 64 KiB
+	 * emulation cache block size has proved unreliable on real PS2 hardware,
+	 * while the SDK default is sufficient for the streaming ZIP read path. */
 	return true;
 }
 
