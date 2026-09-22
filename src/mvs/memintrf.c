@@ -1808,6 +1808,7 @@ int memory_init(void)
 		{
 			printf("[memory_plan] MVS empirical probe has no viable cache shape\n");
 			msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+			Loop = LOOP_BROWSER;
 			return 0;
 		}
 	}

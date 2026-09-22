@@ -293,6 +293,7 @@ static int load_rom_gfx1(void)
 	if (!cps2_memory_plan_valid)
 	{
 		msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+		Loop = LOOP_BROWSER;
 		return 0;
 	}
 
