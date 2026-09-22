@@ -431,55 +431,86 @@ static uint64_t probe_max_secondary_preference(uint64_t gfx_floor_bytes,
 	return best_blocks * MEMORY_PLAN_BLOCK_SIZE;
 }
 
-static bool probe_secondary_with_primary(void *gfx_memory, uint64_t pcm_bytes,
-	uint64_t reserve_bytes, uint64_t total_cap, uint64_t single_cap,
-	uint64_t gfx_bytes) {
-	void *pcm = NULL;
-	void *reserve = NULL;
-	bool ok = false;
-	(void)gfx_memory;
+static bool retain_shape_at_or_below(uint64_t *gfx_bytes, uint64_t gfx_floor,
+	uint64_t pcm_bytes, uint64_t reserve_bytes, uint64_t total_cap,
+	uint64_t single_cap, void **gfx_out, void **pcm_out, void **reserve_out) {
+	uint64_t candidate_blocks;
+	uint64_t floor_blocks;
 
-	if (!shape_sizes_fit_constraints(gfx_bytes, pcm_bytes, reserve_bytes,
-		total_cap, single_cap)) {
+	if (gfx_bytes == NULL || gfx_out == NULL || pcm_out == NULL || reserve_out == NULL) {
 		return false;
 	}
-	if (pcm_bytes != 0 && (pcm = malloc((size_t)pcm_bytes)) == NULL) {
-		goto done;
-	}
-	if (reserve_bytes != 0 && (reserve = malloc((size_t)reserve_bytes)) == NULL) {
-		goto done;
-	}
-	ok = true;
 
-done:
-	free(reserve);
-	free(pcm);
-	return ok;
+	candidate_blocks = align_down_block(*gfx_bytes) / MEMORY_PLAN_BLOCK_SIZE;
+	floor_blocks = align_up_block(gfx_floor) / MEMORY_PLAN_BLOCK_SIZE;
+
+	while (candidate_blocks >= floor_blocks) {
+		uint64_t candidate = candidate_blocks * MEMORY_PLAN_BLOCK_SIZE;
+		void *gfx = NULL;
+		void *pcm = NULL;
+		void *reserve = NULL;
+		bool ok = false;
+
+		if (!shape_sizes_fit_constraints(candidate, pcm_bytes, reserve_bytes,
+			total_cap, single_cap)) {
+			goto next;
+		}
+		if (candidate != 0 && (gfx = malloc((size_t)candidate)) == NULL) {
+			goto next;
+		}
+		if (pcm_bytes != 0 && (pcm = malloc((size_t)pcm_bytes)) == NULL) {
+			goto next;
+		}
+		if (reserve_bytes != 0 && (reserve = malloc((size_t)reserve_bytes)) == NULL) {
+			goto next;
+		}
+		ok = true;
+
+next:
+		if (ok) {
+			*gfx_bytes = candidate;
+			*gfx_out = gfx;
+			*pcm_out = pcm;
+			*reserve_out = reserve;
+			return true;
+		}
+		free(reserve);
+		free(pcm);
+		free(gfx);
+		if (candidate_blocks == floor_blocks) {
+			break;
+		}
+		candidate_blocks--;
+	}
+
+	return false;
 }
 
-static uint64_t probe_max_secondary(void *gfx_memory, uint64_t gfx_bytes,
-	uint64_t low_bytes, uint64_t high_bytes, uint64_t reserve_bytes,
-	uint64_t total_cap, uint64_t single_cap) {
-	uint64_t low_blocks = align_up_block(low_bytes) / MEMORY_PLAN_BLOCK_SIZE;
+static uint64_t grow_retained_allocation(void **memory, uint64_t current_bytes,
+	uint64_t high_bytes) {
+	uint64_t low_blocks = align_up_block(current_bytes) / MEMORY_PLAN_BLOCK_SIZE;
 	uint64_t high_blocks = align_down_block(high_bytes) / MEMORY_PLAN_BLOCK_SIZE;
-	uint64_t best_blocks = 0;
 
-	while (low_blocks <= high_blocks) {
-		uint64_t mid_blocks = low_blocks + (high_blocks - low_blocks) / 2;
+	if (memory == NULL || high_blocks < low_blocks) {
+		return current_bytes;
+	}
+
+	/* realloc() keeps the previous allocation valid when a larger candidate
+	 * fails, so the winning secondary cache is never lost while probing upward. */
+	while (low_blocks < high_blocks) {
+		uint64_t mid_blocks = low_blocks + (high_blocks - low_blocks + 1u) / 2u;
 		uint64_t candidate = mid_blocks * MEMORY_PLAN_BLOCK_SIZE;
-		if (probe_secondary_with_primary(gfx_memory, candidate, reserve_bytes,
-			total_cap, single_cap, gfx_bytes)) {
-			best_blocks = mid_blocks;
-			low_blocks = mid_blocks + 1;
+		void *grown = realloc(*memory, (size_t)candidate);
+
+		if (grown != NULL) {
+			*memory = grown;
+			low_blocks = mid_blocks;
 		} else {
-			if (mid_blocks == 0) {
-				break;
-			}
-			high_blocks = mid_blocks - 1;
+			high_blocks = mid_blocks - 1u;
 		}
 	}
 
-	return best_blocks * MEMORY_PLAN_BLOCK_SIZE;
+	return low_blocks * MEMORY_PLAN_BLOCK_SIZE;
 }
 
 static uint64_t policy_floor_bytes(uint64_t source_bytes,
@@ -510,7 +541,7 @@ static bool try_allocate_tier_shape(memory_tier_t tier,
 	uint64_t pcm_high;
 	uint64_t pcm_bytes = 0;
 	uint64_t committed;
-	void *gfx_memory;
+	void *gfx_memory = NULL;
 	void *pcm_memory = NULL;
 	void *reserve_memory = NULL;
 
@@ -539,35 +570,22 @@ static bool try_allocate_tier_shape(memory_tier_t tier,
 		return false;
 	}
 
-	gfx_memory = malloc((size_t)gfx_bytes);
-	if (gfx_memory == NULL) {
+	/* The probes above intentionally free their temporary allocations, but the
+	 * final shape must not rely on the heap reproducing the same placement.  On
+	 * fragmented console heaps that assumption can make a later reserve malloc
+	 * fail even though the probe succeeded.  Recreate the preferred shape as one
+	 * transaction and retain it; if the exact primary maximum cannot be retained,
+	 * step down by one cache block until a proven shape is kept alive. */
+	if (!retain_shape_at_or_below(&gfx_bytes, gfx_floor, pcm_preferred,
+		reserve_bytes, total_cap, single_cap, &gfx_memory, &pcm_memory,
+		&reserve_memory)) {
 		return false;
 	}
+	pcm_bytes = pcm_preferred;
 
 	if (game->core == MEMORY_PLAN_CORE_MVS && pcm_ceiling != 0) {
 		pcm_high = min_u64(pcm_ceiling, total_cap - reserve_bytes - gfx_bytes);
-		pcm_bytes = probe_max_secondary(gfx_memory, gfx_bytes, pcm_preferred,
-			pcm_high, reserve_bytes, total_cap, single_cap);
-		if (pcm_bytes < pcm_preferred) {
-			free(gfx_memory);
-			return false;
-		}
-		if (pcm_bytes != 0) {
-			pcm_memory = malloc((size_t)pcm_bytes);
-			if (pcm_memory == NULL) {
-				free(gfx_memory);
-				return false;
-			}
-		}
-	}
-
-	if (reserve_bytes != 0) {
-		reserve_memory = malloc((size_t)reserve_bytes);
-		if (reserve_memory == NULL) {
-			free(pcm_memory);
-			free(gfx_memory);
-			return false;
-		}
+		pcm_bytes = grow_retained_allocation(&pcm_memory, pcm_bytes, pcm_high);
 	}
 
 	committed = gfx_bytes + pcm_bytes;

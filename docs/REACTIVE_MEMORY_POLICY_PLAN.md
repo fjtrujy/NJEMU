@@ -1383,6 +1383,28 @@ The tier table remains a policy definition for reserve/floor choices. Capacity
 itself is established by successful simultaneous allocations, not by a device
 model or a reported theoretical heap size.
 
+#### PS2 retained-shape correction
+
+Subsequent PS2 GUI validation with `mslug3` exposed a gap between the R10 design
+and its implementation. The binary-search probes correctly proved that a
+`C-ROM + PCM + safety reserve` shape fitted the live heap, but the winning probe
+was then freed and its three buffers were allocated again independently. On the
+fragmented PS2 heap, the second allocation sequence could choose different
+holes: PCM could consume the hole that the successful probe had left for the
+safety reserve. All tiers would then be rejected even though their simultaneous
+minimum allocations demonstrably fitted, returning to the ROM browser and
+making the `Load Rom` screen appear repeatedly.
+
+The planner now separates **measurement** from **retained commitment** more
+carefully. Binary search still finds the preferred primary-cache upper bound,
+but the final `GFX/C-ROM + preferred PCM + reserve` shape is recreated as one
+transaction and kept alive. If the exact probed primary size cannot be retained,
+the planner descends in 64 KiB blocks until the first complete shape can itself
+be retained. Only after that does MVS opportunistically grow PCM with `realloc`;
+failed growth leaves the already-retained PCM allocation untouched. This makes
+the implementation match R10's architectural rule that usable capacity is the
+capacity backed by allocations that survive into the runtime cache.
+
 R10 also records binary-size composition for PSP/PS2/Desktop. Selective `-Os`
 for cold/menu/UI translation units is a possible later optimization, but is
 explicitly outside R10: first identify `.text`, `.rodata`, `.data`, `.bss` and
@@ -1409,6 +1431,11 @@ Validation performed:
   loader allocations; an unused preallocated PCM block is also reclaimed if
   PCM streaming cannot be opened;
 - PS2SDK CPS2/MVS builds link successfully;
+- the PS2 MVS GUI + `COMMAND_LIST=ON` `mslug3` regression is reproduced in an
+  isolated PCSX2 instance before the correction (`memory_plan_allocate_shape()`
+  rejects every tier), while the corrected build retains a valid shape, loads
+  cached PCM and C-ROM successfully, reaches `memory_init()` success, and stays
+  in the emulation loop instead of returning to the browser;
 - PSPSDK CPS2/MVS builds generate `EBOOT.PBP`, and the CPS2 R10 EBOOT boots in
   PPSSPP;
 - the obsolete `platform_driver::availableRam` compatibility callback was
