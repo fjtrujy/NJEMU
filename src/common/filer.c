@@ -1407,6 +1407,7 @@ void file_browser(void)
 					*p = '\0';
 
 					getDir(curr_dir);
+					update = UI_FULL_REFRESH;
 					sel = 0;
 					prev_sel = -1;
 
@@ -1426,6 +1427,7 @@ void file_browser(void)
 				strcat(curr_dir, "/");
 				strcat(curr_dir, files[sel]->name);
 				getDir(curr_dir);
+				update = UI_FULL_REFRESH;
 #if (EMU_SYSTEM == NCDZ)
 				if (neocddir && !bios_error)
 				{
@@ -1564,8 +1566,6 @@ void file_browser(void)
 		}
 
 		{
-			int previous_top = top;
-
 			if (top > nfiles - rows) top = nfiles - rows;
 			if (top < 0) top = 0;
 			if (sel >= nfiles) sel = 0;
@@ -1579,12 +1579,7 @@ void file_browser(void)
 				title_counter = 60;
 				title_image = -1;
 #endif
-#if defined(PS2) && (EMU_SYSTEM != NCDZ)
-				update = (top == previous_top) ?
-					UI_PARTIAL_REFRESH : UI_FULL_REFRESH;
-#else
 				update = UI_FULL_REFRESH;
-#endif
 			}
 #if (EMU_SYSTEM == NCDZ)
 			else if (title_counter)
