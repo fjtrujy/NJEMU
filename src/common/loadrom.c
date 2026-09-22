@@ -21,6 +21,68 @@ void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
 static int64_t rom_fd = -1;
 
+#if defined(PS2) && defined(GUI)
+#define ROM_LOAD_PROGRESS_MIN_SIZE (128 * 1024)
+#define ROM_LOAD_PROGRESS_STEPS 4
+
+typedef struct
+{
+	size_t step;
+	size_t next;
+	unsigned percent;
+} rom_load_progress_t;
+
+static void init_rom_load_progress(rom_load_progress_t *progress, size_t total)
+{
+	if (total < ROM_LOAD_PROGRESS_MIN_SIZE)
+	{
+		progress->step = 0;
+		progress->next = 0;
+		progress->percent = 0;
+		return;
+	}
+
+	progress->step = (total + ROM_LOAD_PROGRESS_STEPS - 1) / ROM_LOAD_PROGRESS_STEPS;
+	progress->next = progress->step;
+	progress->percent = 100 / ROM_LOAD_PROGRESS_STEPS;
+}
+
+static void report_rom_load_progress(rom_load_progress_t *progress, size_t current)
+{
+	if (progress->step == 0 || current < progress->next)
+		return;
+
+	msg_printf("  %u%%\r", progress->percent);
+	progress->next += progress->step;
+	progress->percent += 100 / ROM_LOAD_PROGRESS_STEPS;
+	if (progress->percent > 100)
+		progress->percent = 100;
+}
+
+static void file_read_with_progress(uint8_t *buf, size_t length)
+{
+	size_t offset = 0;
+	size_t chunk_size = length;
+	rom_load_progress_t progress;
+
+	init_rom_load_progress(&progress, length);
+	if (progress.step != 0)
+		chunk_size = progress.step;
+
+	while (offset < length)
+	{
+		size_t chunk = length - offset;
+
+		if (chunk > chunk_size)
+			chunk = chunk_size;
+
+		file_read(buf + offset, chunk);
+		offset += chunk;
+		report_rom_load_progress(&progress, offset);
+	}
+}
+#endif
+
 
 /******************************************************************************
 	ROM File Reading
@@ -263,7 +325,11 @@ _continue:
 
 	if (rom[idx].skip == 0)
 	{
+	#if defined(PS2) && defined(GUI)
+		file_read_with_progress(&mem[offset], rom[idx].length);
+	#else
 		file_read(&mem[offset], rom[idx].length);
+	#endif
 
 		if (rom[idx].type == ROM_WORDSWAP)
 			swab(&mem[offset], &mem[offset], rom[idx].length);
@@ -272,6 +338,10 @@ _continue:
 	{
 		int c;
 		int skip = rom[idx].skip + rom[idx].group;
+#if defined(PS2) && defined(GUI)
+		rom_load_progress_t progress;
+		init_rom_load_progress(&progress, rom[idx].length);
+#endif
 
 		length = 0;
 
@@ -286,6 +356,9 @@ _continue:
 				mem[offset] = c;
 				offset += skip;
 				length++;
+#if defined(PS2) && defined(GUI)
+				report_rom_load_progress(&progress, length);
+#endif
 			}
 		}
 		else
@@ -298,6 +371,9 @@ _continue:
 				mem[offset + 1] = c;
 				offset += skip;
 				length += 2;
+#if defined(PS2) && defined(GUI)
+				report_rom_load_progress(&progress, length);
+#endif
 			}
 		}
 	}
