@@ -64,6 +64,11 @@ enum
 	FONT_TYPE_MAX
 };
 
+static inline uint16_t gbk_glyph_index(uint8_t lead, uint8_t trail)
+{
+	return (uint16_t)(((lead - 0x81u) * 0xc0u) + (trail - 0x40u));
+}
+
 
 /******************************************************************************
 	Global data
@@ -226,10 +231,16 @@ int ui_init(void)
 		MAKECOL15(192,192,192)
 	};
 
+	if (!gbk_s14_font_init(launchDir))
+		return 0;
+
 	/* Initialize the driver — allocates platform-specific texture storage */
 	ui_draw_data = ui_draw_driver->init(video_data);
 	if (ui_draw_data == NULL)
+	{
+		gbk_s14_font_shutdown();
 		return 0;
+	}
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
 	ui_layout_init_responsive(output_width, output_height);
@@ -240,6 +251,7 @@ int ui_init(void)
 	{
 		ui_draw_driver->term(ui_draw_data);
 		ui_draw_data = NULL;
+		gbk_s14_font_shutdown();
 		return 0;
 	}
 
@@ -424,6 +436,7 @@ void ui_exit(void)
 	tex_smallfont = NULL;
 	tex_volicon = NULL;
 	tex_boxshadow = NULL;
+	gbk_s14_font_shutdown();
 }
 
 
@@ -617,7 +630,7 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 	else if (isgbk1(c1) && isgbk2(c2))
 	{
 		*type = FONT_TYPE_GBKSIMHEI;
-		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
+		return gbk_glyph_index(c1, c2);
 	}
 	else if (isprintascii(c1))
 	{
@@ -697,7 +710,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance
 	{
 		*advance = 2;
 		*type = FONT_TYPE_GBKSIMHEI;
-		return gbk_table[(c2 | (c1 << 8)) - 0x8140];
+		return gbk_glyph_index(c1, c2);
 	}
 	*type = FONT_TYPE_CONTROL;
 	return c1;

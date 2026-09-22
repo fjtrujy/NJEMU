@@ -11,6 +11,7 @@
 
 #include "emumain.h"
 #include "common/font_t.h"
+#include "common/font/gbk_s14_runtime.h"
 
 #define CHARSET_DEFAULT		0
 #define CHARSET_ISO8859_1	1
@@ -36,10 +37,6 @@ extern const uint8_t font_s[];
 // Shadow Data
 extern const uint8_t shadow[9][8][4];
 
-// GBK Font Table
-extern const uint16_t gbk_table[];
-
-
 /*------------------------------------------------------
 	Font Functions
 ------------------------------------------------------*/
@@ -51,8 +48,6 @@ int graphic_font_get_pitch(uint16_t code);
 int ascii_14p_get_gryph(struct font_t *font, uint16_t code);
 int ascii_14p_get_pitch(uint16_t code);
 
-int gbk_s14p_get_gryph(struct font_t *font, uint16_t code);
-int gbk_s14p_get_pitch(uint16_t code);
 int latin1_14_get_gryph(struct font_t *font, uint16_t code);
 int latin1_14_get_pitch(uint16_t code);
 
@@ -68,7 +63,6 @@ int icon_l_get_light(struct font_t *font, uint16_t code);
 #ifdef COMMAND_LIST
 int command_font_get_gryph(struct font_t *font, uint16_t code);
 int ascii_14_get_gryph(struct font_t *font, uint16_t code);
-int gbk_s14_get_gryph(struct font_t *font, uint16_t code);
 #endif
 
 

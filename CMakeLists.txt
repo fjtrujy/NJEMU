@@ -279,8 +279,8 @@ else()
         common/font/command.c
         common/font/ascii_14.c
         common/font/latin1_14.c
-        common/font/gbk_s14.c
-        common/font/gbk_tbl.c
+        common/font/gbk_s14_runtime.h
+        common/font/gbk_s14_runtime.c
     )
 
     # UI drawing primitives (portable core)
@@ -581,6 +581,24 @@ add_dependencies(${TARGET} translation_packs)
 if(GUI)
     set_source_files_properties("${UI_UNICODE_GLYPH_SOURCE}" PROPERTIES GENERATED TRUE)
     target_sources(${TARGET} PRIVATE "${UI_UNICODE_GLYPH_SOURCE}")
+
+    set(GBK_FONT_ASSET "${CMAKE_BINARY_DIR}/font/gbk_s14.bin")
+    add_custom_command(
+        OUTPUT "${GBK_FONT_ASSET}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/font"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+            --source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
+            --table-source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
+            --output "${GBK_FONT_ASSET}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+            "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
+            "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
+        VERBATIM
+    )
+    add_custom_target(font_assets ALL DEPENDS "${GBK_FONT_ASSET}")
+    add_dependencies(${TARGET} font_assets)
 endif()
 
 # Add the warning flags
@@ -792,7 +810,22 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME ui_utf8_tests COMMAND ui_utf8_tests)
 
-	add_executable(platform_memory_info_tests
+    if(GUI)
+        add_executable(font_runtime_tests
+            tests/font_runtime_tests.c
+            src/common/font/gbk_s14_runtime.c
+        )
+        target_include_directories(font_runtime_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        target_compile_definitions(font_runtime_tests PRIVATE
+            TEST_FONT_ROOT="${CMAKE_BINARY_DIR}"
+        )
+        add_dependencies(font_runtime_tests font_assets)
+        add_test(NAME font_runtime_tests COMMAND font_runtime_tests)
+    endif()
+
+		add_executable(platform_memory_info_tests
 		tests/platform_memory_info_tests.c
 		src/common/platform_memory_info.c
 	)
@@ -819,6 +852,13 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_test(
             NAME translation_pack_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
+        )
+        add_test(
+            NAME font_asset_validation
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_font_asset.py
+                --source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_s14.c
+                --table-source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_tbl.c
         )
     endif()
 endif()
@@ -853,3 +893,9 @@ install(FILES ${TRANSLATION_PACKS}
     DESTINATION lang
     COMPONENT translations
 )
+if(GUI)
+    install(FILES "${GBK_FONT_ASSET}"
+        DESTINATION font
+        COMPONENT translations
+    )
+endif()

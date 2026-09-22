@@ -2,9 +2,9 @@
 
 Date: 2026-09-22
 
-This audit was performed while closing R10 of the reactive-memory migration.
-It is intentionally observational: no selective `-Os`, font externalization,
-or buffer-size optimization is applied here.
+This audit was started while closing R10 of the reactive-memory migration and
+updated after R11 implemented the largest measured resident-RAM opportunity.
+Selective `-Os` and large-buffer changes remain intentionally deferred.
 
 ## 1. PSP section footprint
 
@@ -21,7 +21,7 @@ The important distinction is that file size and runtime RAM pressure are not
 the same problem. `.bss` does not materially inflate the PRX on disk, but it is
 resident RAM that directly reduces the heap available to ROM/cache data.
 
-## 2. Largest GUI/binary-size opportunity: embedded CJK font data
+## 2. R11 result: external CJK font data
 
 The GUI build adds about 2.69 MiB of `.rodata`. Almost all of that increase is
 explained by two translation units:
@@ -35,18 +35,39 @@ explained by two translation units:
 tables. Together these two objects account for roughly 2.65 MiB of immutable
 data in every GUI binary, independently of which language is actually selected.
 
-This is a much larger opportunity than compiler size tuning. A future phase
-should investigate one or more of:
+R11 audited the data rather than subsetting it:
 
-- moving the full CJK glyph payload to an external resource loaded only when
-  required;
-- generating per-language or translation-corpus glyph subsets at build time;
-- keeping only a small built-in fallback font and loading additional glyph
-  packs on demand;
-- sharing/compressing lookup metadata if random glyph access remains cheap.
+- `gbk_s14` contains 24,192 fixed 14x14 4-bpp glyphs, exactly 98 bytes each;
+- all position entries equal `glyph * 98`;
+- width, height and pitch are uniformly 14; skip values are uniformly zero;
+- all runtime-valid entries in `gbk_tbl` equal the arithmetic mapping
+  `(lead - 0x81) * 0xc0 + (trail - 0x40)`.
 
-Any such change must preserve the existing Unicode/translation behavior and
-must account for I/O latency on PSP/PS2 before replacing resident tables.
+The complete 2,370,816-byte bitmap is therefore generated as
+`font/gbk_s14.bin` and read through a 64-entry LRU glyph cache. No glyphs are
+removed, so translated UI, legacy GBK names/metadata and command-list text keep
+the original repertoire. The redundant metadata and GBK lookup arrays are no
+longer linked into GUI binaries.
+
+Measured PSP GUI result, using configurations comparable to the R10 rows:
+
+| Core | `.text` | `.rodata` | `.data` | `.bss` | Total section delta |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CPS2 R11 | 669,644 B | 83,900 B | 17,520 B | 1,996,012 B | -2,644,656 B |
+| MVS R11 | 757,712 B | 82,884 B | 21,536 B | 2,117,820 B | -2,644,656 B |
+
+For CPS2, the PRX falls from 3,553,466 B to 901,986 B. The runtime code costs
+only +1,248 B of `.text` and the cache +6,912 B of `.bss` versus the comparable
+R10 build, while `.rodata` falls by 2,652,832 B.
+
+On PS2, matching the R10 CPS2 GUI `SAVE_STATE=ON` + `COMMAND_LIST=ON`
+configuration, total sections fall from 8,654,170 B to 5,985,474 B, a
+2,668,696-byte reduction. The generated font asset is installed with the
+external translation packs rather than being resident in the ELF.
+
+Storage-I/O latency for cold CJK cache misses should still be profiled on
+physical PSP/PS2 hardware. The cache makes repeated UI glyphs resident, but the
+cross-build/unit validation does not substitute for device timing.
 
 ## 3. Static RAM (`.bss`) is the next memory target
 
@@ -135,7 +156,8 @@ startup. That work is independent from compiler `-Os` tuning.
 
 ## 6. Recommended order for future size work
 
-1. Externalize or subset the ~2.65 MiB embedded CJK font payload.
+1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
+   payload without reducing the glyph repertoire.
 2. Audit large `.bss` buffers for mutually-exclusive or lifecycle-scoped use.
 3. Audit embedded PS2 IRX payloads and their post-load lifetime.
 4. Apply selective `-Os` to measured cold translation units.

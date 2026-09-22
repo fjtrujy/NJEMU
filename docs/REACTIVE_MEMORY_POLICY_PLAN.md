@@ -1422,6 +1422,68 @@ in `docs/BINARY_SIZE_AUDIT.md`. The most important finding is that GUI builds
 currently embed roughly 2.65 MiB of CJK font/lookup data, making font
 externalization or subsetting a much larger opportunity than selective `-Os`.
 
+### R11 - External CJK font residency
+
+**Status: completed on 2026-09-22.**
+
+Before changing compiler optimization or large emulator buffers, the R10 size
+audit was followed through to determine which candidate returned the most
+actual runtime RAM without removing functionality. The embedded CJK font was
+the clear first-order win:
+
+- the 24,192 glyphs in `gbk_s14.c` are all fixed 14x14, 4-bpp glyphs, exactly
+  98 bytes each;
+- every position entry is therefore `code * 98`, while width, height and
+  pitch are always 14 and both skip values are always zero;
+- every runtime-valid GBK byte pair maps to the same arithmetic glyph index
+  `(lead - 0x81) * 0xc0 + (trail - 0x40)`, making the 64 KiB
+  `gbk_tbl.c` runtime table unnecessary;
+- the complete 2,370,816-byte bitmap is now generated as
+  `font/gbk_s14.bin` instead of being linked into the executable;
+- the runtime keeps a 64-glyph LRU cache (about 6.9 KiB including metadata)
+  and reads 98-byte glyph records on cache misses;
+- this is deliberately **not** a translation-only subset: all 24,192 original
+  glyph slots remain available for translated UI, legacy GBK filenames/
+  metadata and `COMMAND_LIST`;
+- the build-time generator validates all fixed-size assumptions and validates
+  the arithmetic GBK mapping against the old table before producing the asset;
+- CMake packages the font asset alongside the already-external `.lng`
+  translation packs.
+
+Comparable PSP CPS2 GUI builds (`SAVE_STATE=OFF`, `COMMAND_LIST=OFF`) change
+from:
+
+```text
+R10: text=668396 rodata=2736732 data=17520 bss=1989100 total=6441637
+R11: text=669644 rodata=  83900 data=17520 bss=1996012 total=3796981
+```
+
+That is a **2,644,656-byte reduction in static section footprint** while
+retaining the full font repertoire. MVS shows the same 2,644,656-byte total
+reduction. The CPS2 PRX shrinks from 3,553,466 bytes to 901,986 bytes; the
+2,370,816-byte external bitmap is stored outside the executable and is not
+resident as one monolithic allocation.
+
+With the same `SAVE_STATE=ON` + `COMMAND_LIST=ON` flags as the R10 PS2
+baseline, CPS2 changes from:
+
+```text
+R10: text=810808 rodata=2780320 data=402256 bss=2666440 total=8654170
+R11: text=812120 rodata= 103296 data=402256 bss=2673352 total=5985474
+```
+
+Validation performed:
+
+- Desktop CPS2 GUI with `SAVE_STATE` + `COMMAND_LIST`: 10/10 CTest;
+- the runtime-font unit test loads known glyphs, crosses the 64-entry cache
+  capacity, verifies eviction/reload, and rejects an out-of-range glyph;
+- the asset validator checks all 24,192 glyph records and the complete
+  runtime-valid GBK mapping;
+- PSPSDK CPS2 and MVS GUI builds generate EBOOT/PRX successfully;
+- PS2SDK CPS2 GUI builds link successfully with the R10 feature flags;
+- physical-device/emulator visual/performance validation remains follow-up QA;
+  these build/unit results do not claim storage-latency measurements.
+
 #### Functional
 
 For CPS1/CPS2/MVS/NCDZ:
@@ -1528,7 +1590,9 @@ Recommended implementation sequence:
 7. **R7** PSP single-binary memory exposure;
 8. **R8** delete `LARGE_MEMORY` completely;
 9. **R9** full forced-budget + hardware validation;
-10. **R10** empirical retained allocation-shape probing.
+10. **R10** empirical retained allocation-shape probing;
+11. **R11** externalize the full CJK font after proving it is the largest
+    no-functionality-loss resident-RAM opportunity.
 
 The most important architectural rule is to complete R1/R2 **before** deleting
 `LARGE_MEMORY`. That gives every later conversion a single tested decision
