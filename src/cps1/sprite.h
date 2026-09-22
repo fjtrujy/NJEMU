@@ -12,6 +12,8 @@
 void blit_clear_all_sprite(void);
 void blit_palette_mark_dirty(int palno);
 void blit_scrollh_clear_sprite(uint16_t tpens);
+int blit_stars_init(int enabled);
+void blit_stars_exit(void);
 
 void blit_reset(int bank_scroll1, int bank_scroll2, int bank_scroll3, uint8_t *pen_usage16);
 void blit_start(int high_layer);

@@ -3,7 +3,7 @@
 Date: 2026-09-22
 
 This audit was started while closing R10 of the reactive-memory migration and
-is now updated through R15. R11 removed the largest immutable payload; R12-R15
+is now updated through R16. R11 removed the largest immutable payload; R12-R16
 continue with static/lifetime RAM savings that do not add work to emulation hot
 paths. Selective `-Os` and PS2 IRX externalization are explicitly deferred.
 
@@ -226,7 +226,47 @@ Validation performed:
   open-entry -> read -> close-entry -> close-ZIP with the dynamic scratch;
 - PSP cross-build remains unavailable in the current local shell environment.
 
-## 7. Static RAM (`.bss`) follow-up audit
+## 7. R16 result: allocate the CPS1 stars vertex buffer only when supported
+
+CPS1 kept a 4,096-point stars vertex buffer permanently in every build even
+though the driver table enables stars only for the `GFX_FORGOTTN` and
+`GFX_STRIDER` profiles. On PS2 `GSPRIMPOINT` is 32 bytes, so that unused buffer
+cost 131,072 bytes for the large majority of CPS1 games. PSP/Desktop use the
+8-byte common point vertex, for a 32,768-byte buffer.
+
+R16 makes this buffer feature-scoped. `cps1_video_init()` allocates the exact
+same capacity only when `driver->has_stars` is true, preserving 64-byte
+alignment on PSP/PS2, and `cps1_video_exit()` releases it before returning to
+the ROM browser. The stars render loop itself is unchanged: it still writes a
+contiguous array and submits the same point count, so there is no added per-star
+or per-frame work.
+
+Measured CPS1 PS2 GUI result:
+
+| Section | R15 | R16 | Delta |
+| --- | ---: | ---: | ---: |
+| `.text` | 899,240 B | 898,904 B | -336 B |
+| `.rodata` | 110,120 B | 110,120 B | 0 B |
+| `.data` | 673,632 B | 673,632 B | 0 B |
+| `.bss` | 2,601,160 B | 2,470,088 B | **-131,072 B** |
+| total sections | 6,333,383 B | 6,202,039 B | **-131,344 B** |
+
+For non-stars games the full 128 KiB PS2 / 32 KiB PSP payload remains available
+to the rest of the process. Stars games allocate that payload during video
+initialization and therefore retain the original rendering capacity and runtime
+memory requirement (apart from negligible allocator metadata).
+
+Validation performed:
+
+- Desktop CPS1 application build succeeds and the focused translation/font/
+  palette tests pass;
+- PS2 CPS1 GUI cross-build succeeds and `vertices_stars` is now only a 4-byte
+  pointer in the ELF;
+- PSP source keeps the original 64-byte alignment through `memalign(64, ...)`,
+  but the current shell still lacks a runnable PSP cross-toolchain for a fresh
+  link validation.
+
+## 8. Static RAM (`.bss`) follow-up audit
 
 Representative large PSP symbols include. `gulist` remains in this list because
 it is genuinely required by PSP; R12 only removes its accidental cost on the
@@ -276,7 +316,7 @@ whereas compact storage would require reconstructing/tagging every vertex in a
 loop on the renderer hot path. The RAM saving does not justify that performance
 regression without profiling evidence to the contrary.
 
-## 8. Selective `-Os`: deferred
+## 9. Selective `-Os`: deferred
 
 Selective `-Os` is outside the scope of the current memory work. If revisited in
 a future optimization phase, the existing measurements below remain useful for
@@ -311,7 +351,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 9. PS2 IRX observations: deferred to `ps2_drivers`
+## 10. PS2 IRX observations: deferred to `ps2_drivers`
 
 Representative no-GUI PS2 builds currently contain approximately:
 
@@ -327,7 +367,7 @@ runtime IRX-loading/externalization layer as part of this work. If that saving i
 pursued later, the preferred design is to expose it cleanly from `ps2_drivers`
 first so applications can opt into the behavior through a simple shared API.
 
-## 10. Current status / future work
+## 11. Current status / future work
 
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
@@ -335,7 +375,9 @@ first so applications can opt into the behavior through a simple shared API.
    300 KiB PSP GU list from PS2/Desktop; R13 removes 64 KiB from MVS/NCDZ and
    127.75 KiB from CPS1/CPS2 color conversion storage; R14 returns 75,776 bytes
    of ROM-browser metadata before emulation on CPS1/CPS2/MVS; R15 removes a
-   further 16,512 bytes of permanent ZIP decompression scratch on all cores.
+   further 16,512 bytes of permanent ZIP decompression scratch on all cores;
+   R16 makes the CPS1 stars vertex buffer conditional, saving 128 KiB on PS2
+   (32 KiB on PSP) for games that do not implement the stars layer.
 3. Continue only with buffers whose lifetime can be shortened without adding
    work to CPU/render/audio hot paths.
 4. **Deferred:** PS2 IRX externalization/runtime loading, preferably as a future

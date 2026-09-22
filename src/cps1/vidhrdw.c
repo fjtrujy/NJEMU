@@ -465,7 +465,16 @@ int cps1_video_init(void)
 
 	cps1_init_tables();
 
-	return cps1_gfx_decode();
+	if (!blit_stars_init(cps1_has_stars))
+		return 0;
+
+	if (!cps1_gfx_decode())
+	{
+		blit_stars_exit();
+		return 0;
+	}
+
+	return 1;
 }
 
 
@@ -475,9 +484,12 @@ int cps1_video_init(void)
 
 void cps1_video_exit(void)
 {
+	blit_stars_exit();
+
 	if (cps1_object_pen_usage)
 	{
 		free(cps1_object_pen_usage);
+		cps1_object_pen_usage = NULL;
 	}
 }
 

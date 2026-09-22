@@ -18,6 +18,7 @@
 #include "cps1.h"
 #include "sprite_common.h"
 
+#include <malloc.h>
 
 /******************************************************************************
 	Constants/Macros
@@ -96,8 +97,8 @@ static uint16_t scroll3_clut1_num;
 /* SCROLLH vertex array (high priority layer) */
 static struct Vertex __attribute__((aligned(64))) vertices_scrollh[SCROLLH_MAX_SPRITES * 2];
 
-/* STARS vertex array (0x1000 = 4096 potential stars) */
-static struct PointVertex __attribute__((aligned(64))) vertices_stars[0x1000];
+/* STARS are only present in a small subset of CPS1 games. */
+static struct PointVertex *vertices_stars;
 
 
 /*------------------------------------------------------------------------
@@ -116,6 +117,25 @@ static const int ALIGN16_DATA swizzle_table_8bit[32] =
 /******************************************************************************
 	Sprite Drawing Interface Functions
 ******************************************************************************/
+
+int blit_stars_init(int enabled)
+{
+	free(vertices_stars);
+	vertices_stars = NULL;
+
+	if (!enabled)
+		return 1;
+
+	vertices_stars = (struct PointVertex *)memalign(64,
+		STARS_MAX_POINTS * sizeof(*vertices_stars));
+	return vertices_stars != NULL;
+}
+
+void blit_stars_exit(void)
+{
+	free(vertices_stars);
+	vertices_stars = NULL;
+}
 
 /*------------------------------------------------------------------------
 	Reset sprite processing
@@ -921,7 +941,7 @@ void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col, uint16_t 
 	uint16_t offs;
 	int stars_num = 0;
 
-	for (offs = 0; offs < 0x1000; offs++, col += 8)
+	for (offs = 0; offs < STARS_MAX_POINTS; offs++, col += 8)
 	{
 		if (*col != 0x0f)
 		{
