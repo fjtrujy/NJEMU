@@ -50,10 +50,9 @@ add_definitions(-D${PLATFORM})
 add_definitions(-DPLATFORM_STR="${PLATFORM}")
 
 # Different options availables
-# (LARGE_MEMORY removed: was never wired through to the C preprocessor in
-# CMake builds, so the #ifdef LARGE_MEMORY paths were always inactive here.
-# Memory tier selection is now runtime via memory_profile_t. The legacy
-# Makefile still wires -DLARGE_MEMORY=1 for Makefile-based PSP Slim builds.)
+# Memory sizing is runtime-driven. PSP packaging explicitly requests the
+# largest user-memory partition and the planner adapts to what the device
+# actually exposes.
 option(KERNEL_MODE "Kernel Mode" OFF)
 option(COMMAND_LIST "Command List" OFF)
 option(ADHOC "Ad Hoc" OFF)
@@ -750,6 +749,7 @@ if(PLATFORM STREQUAL "PSP")
         BACKGROUND_PATH NULL
         PREVIEW_PATH NULL
         TITLE "${TARGET}"
+        MEMSIZE 1
     )
 endif()
 

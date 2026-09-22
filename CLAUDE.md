@@ -62,7 +62,8 @@ make -j4
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording
 
-The previous `LARGE_MEMORY` option has been removed. Platforms now expose a
+The previous `LARGE_MEMORY` option has been removed. PSP packages explicitly
+request the largest user-memory partition (`MEMSIZE=1`) and platforms expose a
 normalized `queryMemoryInfo()` snapshot (free bytes, largest contiguous block,
 budget cap, reliability flags). `memory_plan_t` owns runtime GFX/C-ROM/PCM
 residency and cache sizing. A legacy startup profile/tier label is still

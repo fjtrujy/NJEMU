@@ -217,11 +217,8 @@ static bool psp_getWlanSwitchState(void *data) {
 }
 
 static int psp_getHardwareModel(void *data) {
-#ifdef LARGE_MEMORY
-	return kuKernelGetModel();
-#else
+	(void)data;
 	return 0;
-#endif
 }
 
 static bool psp_queryMemoryInfo(void *data, platform_memory_info_t *out) {

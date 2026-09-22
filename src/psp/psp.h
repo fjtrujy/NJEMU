@@ -22,9 +22,6 @@
 #include <psppower.h>
 #include <psprtc.h>
 #include <pspsdk.h>
-#ifdef LARGE_MEMORY
-#include <kubridge.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,12 +47,6 @@
 #include "psp/adhoc.h"
 #endif
 #include "SystemButtons.h"
-
-#ifdef LARGE_MEMORY
-#define PSP2K_MEM_TOP		0xa000000//0xa000000
-#define PSP2K_MEM_BOTTOM	0xbffffff//0xbffffff
-#define PSP2K_MEM_SIZE		0x2000000//0x2000000
-#endif
 
 /******************************************************************************
 	PSPの定数

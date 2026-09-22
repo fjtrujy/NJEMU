@@ -1203,6 +1203,38 @@ old large-memory build mode.
 
 ### R7 - PSP single-binary memory exposure
 
+**Status: implementation completed on 2026-09-22; physical PSP model/suspend
+matrix deferred to R9 because no psplink target was reachable in this session.**
+
+Implemented:
+
+- CMake PSP packaging now passes `MEMSIZE 1` explicitly to `create_pbp_file()`;
+  the build no longer relies on the current PSPSDK helper default;
+- the legacy Makefile sets `PSP_LARGE_MEMORY=1` explicitly before including
+  PSPSDK `build.mak`, producing the same `MEMSIZE=1` SFO policy;
+- removed the separate `LARGE_MEMORY` Makefile switch and the `for PSP Slim`
+  EBOOT title variant: one PSP binary now owns both low- and high-memory cases;
+- removed `kubridge`, `kuKernelGetModel()` and the obsolete PSP2K raw-memory
+  constants from PSP production code;
+- PSP memory telemetry remains based on `pspSdkTotalFreeUserMemSize()` and
+  `sceKernelMaxFreeMemSize()`, so the same executable naturally selects a lower
+  or higher memory plan according to what the runtime actually exposes.
+
+Validation performed:
+
+- fresh PSPSDK CMake builds for MVS and CPS2 succeed and generate `EBOOT.PBP`;
+- parsing the embedded PARAM.SFO in both EBOOTs confirms `MEMSIZE=1` exactly;
+- a forced Makefile dry-run emits `mksfoex -d MEMSIZE=1`, contains no
+  `-DLARGE_MEMORY` compiler flag and no `-lpspkubridge` link dependency;
+- `src/psp/` contains no `LARGE_MEMORY`, PSP2K, `resume.bin`, `kubridge` or
+  `kuKernelGetModel()` production references;
+- a physical psplink probe returned `Connection refused`, so PSP-1000 versus
+  PSP-2000/3000 boot/memory reporting and suspend/resume remain explicit R9
+  hardware validation items rather than inferred results.
+
+R8 can therefore remove the remaining repository-wide `LARGE_MEMORY` build/
+CI compatibility surface; the PSP runtime itself no longer consumes it.
+
 Preferred path:
 
 - configure PSP packaging with explicit `MEMSIZE=1` to request maximum supported

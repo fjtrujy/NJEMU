@@ -13,7 +13,6 @@ BUILD_CPS2 = 0
 BUILD_MVS = 0
 BUILD_NCDZ = 0
 
-LARGE_MEMORY = 0
 KERNEL_MODE = 0
 COMMAND_LIST = 0
 ADHOC = 0
@@ -82,11 +81,7 @@ endif
 
 TRANSLATION_STAMP = lang/.translations.stamp
 EXTRA_TARGETS = EBOOT.PBP $(TRANSLATION_STAMP)
-ifeq ($(LARGE_MEMORY), 1)
-PSP_EBOOT_TITLE = $(TARGET) $(VERSION_STR) for PSP Slim
-else
 PSP_EBOOT_TITLE = $(TARGET) $(VERSION_STR) for PSP
-endif
 
 #------------------------------------------------------------------------------
 # Utilities
@@ -215,10 +210,6 @@ CDEFS = \
 	-DVERSION_BUILD=$(VERSION_BUILD) \
 	-DPSP
 
-ifeq ($(LARGE_MEMORY), 1)
-CDEFS += -DLARGE_MEMORY=1
-endif
-
 ifeq ($(KERNEL_MODE), 1)
 CDEFS += -DKERNEL_MODE=1
 endif
@@ -257,10 +248,6 @@ LDFLAGS = -L$(shell psp-config --psp-prefix)
 
 LIBS = -lpspaudio -lpspgu -lpsppower -lz
 
-ifeq ($(LARGE_MEMORY), 1)
-LIBS += -lpspkubridge
-endif
-
 ifeq ($(ADHOC), 1)
 LIBS += -lpspwlan -lpspnet_adhoc -lpspnet_adhocctl -lpspnet_adhocmatching
 endif
@@ -282,4 +269,5 @@ $(TRANSLATION_STAMP): tools/build_translations.py translations/messages.def tran
 	@touch $@
 
 PSPSDK=$(shell psp-config --pspsdk-path)
+PSP_LARGE_MEMORY=1
 include $(PSPSDK)/lib/build.mak
