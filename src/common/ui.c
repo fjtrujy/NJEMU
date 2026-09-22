@@ -39,7 +39,14 @@ void load_background(int number)
 	hline_alpha(0, ui_layout_right(0), 24, UI_COLOR(UI_PAL_FRAME), 10);
 #endif
 
-	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
+	/* PSP/Desktop still cache the legacy background in SCREEN_BITMAP.  PS2 uses
+	 * a native 640x448/640x512 logical UI, while SCREEN_BITMAP is intentionally
+	 * only the old 480x272 render surface.  Caching through full_rect there would
+	 * preserve only the top-left PSP-sized portion of the background. */
+#if !defined(PS2)
+	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+		COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
+#endif
 	video_driver->endFrame(video_data);
 }
 
@@ -52,13 +59,26 @@ void show_background(void)
 {
 	int output_width;
 	int output_height;
+
+#if !defined(PS2)
 	const ui_layout_metrics_t *layout;
 	RECT viewport;
 	const uint32_t black = 0xff000000;
+#endif
 
 	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
 	ui_layout_init_responsive(output_width, output_height);
+
+#if !defined(PS2)
 	layout = ui_layout_get();
+#endif
+
+#if defined(PS2)
+	/* PS2 renders UI at native GS resolution.  Rebuild the inexpensive solid
+	 * background directly in the physical draw buffer instead of scaling or
+	 * clipping the legacy 480x272 SCREEN_BITMAP cache. */
+	ui_fill_frame(UI_PAL_BG2);
+#else
 	viewport.left = layout->viewport_x;
 	viewport.top = layout->viewport_y;
 	viewport.right = layout->viewport_x + layout->viewport_width;
@@ -83,6 +103,7 @@ void show_background(void)
 			ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
 				layout->output_width - viewport.right, layout->viewport_height, black);
 	}
+#endif
 
 #if !defined(PSP)
 	/* Native-size backends can resize or use a non-identity viewport, so their
