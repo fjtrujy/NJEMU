@@ -10,57 +10,19 @@ Mod Update by phoe-nix
 #include "mvs.h"
 #include "common/memory_sizes.h"
 
-/* ---------------------------------------------------------------------------
- * Phase 3: scratch buffer helpers.
- *
- * Each decrypt routine needs a temporary scratch buffer the size of the
- * region being decrypted. Historically this was an inline #ifdef
- * LARGE_MEMORY ... #else ... #endif: PSP-Slim builds use the PSP2K kernel
- * region without touching psp2k_mem_offset (treating it as a non-advancing
- * scratchpad), other builds malloc a temporary and free it at the end.
- *
- * The decrypt logic itself is identical between modes, so we abstract just
- * the allocation strategy. neocrypt_scratch_free() inspects the returned
- * address: PSP2K-region pointers are ignored (no free), heap pointers go
- * through free().
- *
- * Note: the PSP2K path does NOT advance psp2k_mem_offset, so two scratch
- * buffers cannot co-exist. This matches the long-standing pre-Phase-3
- * behaviour (the old #ifdef code had the same property).
- * --------------------------------------------------------------------------- */
+/* Decrypt scratch is transient process memory. Keeping it on the normal heap
+ * gives every call one ownership rule and lets the platform allocator expose
+ * the real fragmentation constraints to the runtime memory planner. */
 
 static void *neocrypt_scratch_alloc(uint32_t size)
 {
-#ifdef LARGE_MEMORY
-	const memory_profile_t *profile = memory_profile_current();
-	if (profile != NULL && profile->preload_crypto)
-	{
-		return (void *)psp2k_mem_offset;
-	}
-#endif
 	return malloc(size);
 }
 
 static void neocrypt_scratch_free(void *buf)
 {
-	if (buf == NULL) return;
-#ifdef LARGE_MEMORY
-	if ((uintptr_t)buf >= (uintptr_t)PSP2K_MEM_TOP &&
-	    (uintptr_t)buf <  (uintptr_t)PSP2K_MEM_TOP + PSP2K_MEM_SIZE)
-	{
-		return;  /* PSP2K-region scratch: not heap-allocated */
-	}
-#endif
 	free(buf);
 }
-
-#ifdef LARGE_MEMORY
-static int neocrypt_scratch_is_psp2k(const void *buf)
-{
-	return ((uintptr_t)buf >= (uintptr_t)PSP2K_MEM_TOP &&
-	        (uintptr_t)buf <  (uintptr_t)PSP2K_MEM_TOP + PSP2K_MEM_SIZE);
-}
-#endif
 
 /***************************************************************************
 
@@ -887,12 +849,12 @@ int kf2k3pcb_sp1_decrypt(void)
 		0x04,0x00,0x04,0x00,0x0e,0x0a,0x0e,0x0a
 	};
 	uint16_t *rom = (uint16_t *)memory_region_user1;
-	uint16_t *buf = (uint16_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_1MB/2);
+	uint16_t *buf = (uint16_t *)neocrypt_scratch_alloc(DECRYPT_BUFFER_1MB / 2);
 	uint32_t i, addr;
 
 	if (buf)
 	{
-		for (i = 0; i < DECRYPT_BUFFER_1MB/2; i++)
+		for (i = 0; i < (DECRYPT_BUFFER_1MB / 2) / sizeof(*buf); i++)
 		{
 		//address xor
 		addr = i ^ 0x0020;
@@ -911,14 +873,7 @@ int kf2k3pcb_sp1_decrypt(void)
 		if (buf[i] & 0x0010) buf[i] ^= 0x0002;
 		if (buf[i] & 0x0020) buf[i] ^= 0x0008;
 		}
-		/* Preserved historical quirk: the PSP2K-region path copies
-		 * twice as many bytes as the malloc path. Detect by address. */
-#ifdef LARGE_MEMORY
-		if (neocrypt_scratch_is_psp2k(buf))
-			memcpy(rom, buf, 0x80000);
-		else
-#endif
-			memcpy(rom, buf, 0x80000/2);
+		memcpy(rom, buf, DECRYPT_BUFFER_1MB / 2);
 
 		neocrypt_scratch_free(buf);
 

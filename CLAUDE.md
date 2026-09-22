@@ -64,9 +64,10 @@ make -j4
 
 The previous `LARGE_MEMORY` option has been removed. Platforms now expose a
 normalized `queryMemoryInfo()` snapshot (free bytes, largest contiguous block,
-budget cap, reliability flags). The legacy memory profile is still selected at
-startup from that snapshot for remaining preload/PSP2K toggles, while
-`memory_plan_t` now owns runtime GFX/C-ROM/PCM cache sizing.
+budget cap, reliability flags). `memory_plan_t` owns runtime GFX/C-ROM/PCM
+residency and cache sizing. A legacy startup profile/tier label is still
+selected temporarily for compatibility and debug overrides, but it no longer
+controls preload or PSP2K ownership.
 Use `NJEMU_MEM_TIER=tiny|small|medium|large` for the legacy tier override, or
 `NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` for deterministic
 memory-policy testing.

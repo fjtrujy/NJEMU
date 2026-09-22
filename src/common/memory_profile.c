@@ -13,30 +13,18 @@ static const memory_profile_t profile_table[MEMORY_PROFILE_TIER_COUNT] = {
 	[MEMORY_PROFILE_TIER_TINY] = {
 		.name                 = "tiny",
 		.min_ram_mb           = 0,
-		.preload_sound        = false,
-		.preload_crypto       = false,
-		.use_psp2k_region     = false,
 	},
 	[MEMORY_PROFILE_TIER_SMALL] = {
 		.name                 = "small",
 		.min_ram_mb           = 16,  /* PSP base ~20 MB free lands here */
-		.preload_sound        = false,
-		.preload_crypto       = false,
-		.use_psp2k_region     = false,
 	},
 	[MEMORY_PROFILE_TIER_MEDIUM] = {
 		.name                 = "medium",
 		.min_ram_mb           = 48,
-		.preload_sound        = true,
-		.preload_crypto       = false,
-		.use_psp2k_region     = true,
 	},
 	[MEMORY_PROFILE_TIER_LARGE] = {
 		.name                 = "large",
 		.min_ram_mb           = 96,
-		.preload_sound        = true,
-		.preload_crypto       = true,
-		.use_psp2k_region     = true,
 	},
 };
 

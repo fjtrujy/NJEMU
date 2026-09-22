@@ -117,11 +117,6 @@ int use_parent_vrom;
 static memory_plan_t mvs_memory_plan;
 static int mvs_memory_plan_valid;
 
-#ifdef LARGE_MEMORY
-uint32_t psp2k_mem_offset = PSP2K_MEM_TOP;
-int32_t psp2k_mem_left = PSP2K_MEM_SIZE;
-#endif
-
 
 /******************************************************************************
 	Local Structures/Variables
@@ -455,68 +450,6 @@ static int build_zoom_tables(void)
 
 	return 1;
 }
-
-
-/******************************************************************************
-	PSP-2000 Memory Management
-******************************************************************************/
-
-#ifdef LARGE_MEMORY
-
-#define MEMORY_IS_PSP2K(mem)	((uint32_t)mem >= PSP2K_MEM_TOP)
-
-/*--------------------------------------------------------
-	Allocate Memory from Extended Region
---------------------------------------------------------*/
-
-static void *psp2k_mem_alloc(int32_t size)
-{
-	uint8_t *mem = NULL;
-
-	if (size <= psp2k_mem_left)
-	{
-		mem = (uint8_t *)psp2k_mem_offset;
-		psp2k_mem_offset += size;
-		psp2k_mem_left -= size;
-	}
-	return mem;
-}
-
-
-/*--------------------------------------------------------
-	Move Memory to Extended Region
---------------------------------------------------------*/
-
-static void *psp2k_mem_move(void *mem, int32_t size)
-{
-	if (!mem) return NULL;
-
-	if (size <= psp2k_mem_left)
-	{
-		memcpy((uint8_t *)psp2k_mem_offset, mem, size);
-		free(mem);
-
-		mem = (uint8_t *)psp2k_mem_offset;
-		psp2k_mem_offset += size;
-		psp2k_mem_left   -= size;
-	}
-	return mem;
-}
-
-
-/*--------------------------------------------------------
-	Check Memory Range and free()
---------------------------------------------------------*/
-
-static void psp2k_mem_free(void *mem)
-{
-	if (!mem || MEMORY_IS_PSP2K(mem))
-		return;	// Do not free extended memory (will freeze)
-
-	free(mem);
-}
-
-#endif
 
 
 /******************************************************************************
@@ -881,22 +814,13 @@ static int load_rom_gfx2(void)
 
 static int load_rom_gfx3(void)
 {
-	if (!encrypt_gfx3)
+	int use_streaming = encrypt_gfx3 || (option_sound_enable && disable_sound);
+
+	if (!use_streaming && mvs_memory_plan_valid &&
+		mvs_memory_plan.gfx_fully_resident &&
+		mvs_memory_plan.gfx_cache_bytes == memory_length_gfx3)
 	{
-		memory_region_gfx3 = NULL;
-#ifdef LARGE_MEMORY
-		{
-			const memory_profile_t *profile = memory_profile_current();
-			if (profile != NULL && profile->use_psp2k_region)
-			{
-				memory_region_gfx3 = psp2k_mem_alloc(memory_length_gfx3);
-			}
-		}
-#endif
-		if (memory_region_gfx3 == NULL)
-		{
-			memory_region_gfx3 = malloc(memory_length_gfx3);
-		}
+		memory_region_gfx3 = malloc(memory_length_gfx3);
 
 		if (memory_region_gfx3 != NULL)
 		{
@@ -928,23 +852,21 @@ static int load_rom_gfx3(void)
 			}
 
 			neogeo_decode_spr(memory_region_gfx3, memory_length_gfx3, gfx_pen_usage[2]);
+			msg_printf(TEXT(CACHE_USAGE_CROM),
+				memory_length_gfx3 / 1024, memory_length_gfx3 / 1024);
+			return 1;
 		}
-		else
-		{
-			msg_printf(TEXT(COULD_NOT_ALLOCATE_MEMORY_FOR_SPRITE_DATA));
-			msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
-		}
+
+		msg_printf(TEXT(COULD_NOT_ALLOCATE_MEMORY_FOR_SPRITE_DATA));
+		msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
 	}
 
-	if (memory_region_gfx3 == NULL)
+	if (!mvs_memory_plan_valid || cache_start(&mvs_memory_plan) == 0)
 	{
-		if (!mvs_memory_plan_valid || cache_start(&mvs_memory_plan) == 0)
-		{
-			msg_printf(TEXT(PRESS_ANY_BUTTON2));
-			pad_wait_press(PAD_WAIT_INFINITY);
-			Loop = LOOP_BROWSER;
-			return 0;
-		}
+		msg_printf(TEXT(PRESS_ANY_BUTTON2));
+		pad_wait_press(PAD_WAIT_INFINITY);
+		Loop = LOOP_BROWSER;
+		return 0;
 	}
 
 	return 1;
@@ -990,51 +912,38 @@ static int load_rom_gfx4(void)
 
 static int load_rom_sound1(void)
 {
+	int cache_candidate;
+
 	if (!option_sound_enable)
 	{
 		memory_length_sound1 = 0;
 		return 1;
 	}
 
-	/* SOUND_DISABLE sets are the PCM-cache path. Once the runtime planner has
-	 * produced a target, defer SOUND1 ownership to cache_start() even on hosts
-	 * where the legacy memory profile would otherwise preload it eagerly. */
-	if (disable_sound && mvs_memory_plan_valid)
-		return 1;
-
-	const memory_profile_t *profile = memory_profile_current();
-	bool use_psp2k = (profile != NULL && profile->use_psp2k_region);
-
-	/* Without a PSP2K backup region, an earlier disable_sound decision
-	 * means we let the PCM-cache path (in cache_start) handle sound1
-	 * instead of preloading. */
-	if (!use_psp2k && disable_sound)
+	cache_candidate = disable_sound;
+	if (cache_candidate && (!mvs_memory_plan_valid ||
+		!mvs_memory_plan.pcm_fully_resident ||
+		mvs_memory_plan.pcm_cache_bytes != memory_length_sound1))
 	{
 		return 1;
 	}
 
 	if ((memory_region_sound1 = malloc(memory_length_sound1)) == NULL)
 	{
-#ifdef LARGE_MEMORY
-		if (use_psp2k && disable_sound)
+		if (cache_candidate)
 		{
-			if ((memory_region_sound1 = psp2k_mem_alloc(memory_length_sound1)) == NULL)
-			{
-				return 1;
-			}
+			/* A full-resident target is an optimization. Fragmentation may still
+			 * make it unavailable; leave disable_sound set so cache_start() falls
+			 * back to the planned streaming PCM allocation. */
+			return 1;
 		}
-		else
-#endif
-		{
-			error_memory("REGION_SOUND1");
-			return 0;
-		}
+
+		error_memory("REGION_SOUND1");
+		return 0;
 	}
 
-	if (use_psp2k)
-	{
+	if (cache_candidate)
 		disable_sound = 0;
-	}
 
 	memset(memory_region_sound1, 0, memory_length_sound1);
 
@@ -1089,6 +998,10 @@ static int load_rom_sound1(void)
 			file_close();
 		}
 	}
+
+	if (cache_candidate)
+		msg_printf(TEXT(CACHE_USAGE_PCM),
+			memory_length_sound1 / 1024, memory_length_sound1 / 1024);
 
 	return 1;
 }
@@ -1681,12 +1594,7 @@ int memory_init(void)
 	gfx_pen_usage[1] = NULL;
 	gfx_pen_usage[2] = NULL;
 
-#ifdef LARGE_MEMORY
-	psp2k_mem_offset = PSP2K_MEM_TOP;
-	psp2k_mem_left   = PSP2K_MEM_SIZE;
-#endif
-
-#ifdef ADHOC
+	#ifdef ADHOC
 	if (adhoc_enable)
 	{
 		bios_select(2);
@@ -1863,33 +1771,6 @@ int memory_init(void)
 		}
 
 		if (load_rom_sound1() == 0) return 0;
-
-#ifdef LARGE_MEMORY
-	{
-		const memory_profile_t *profile = memory_profile_current();
-		if ((profile == NULL || profile->use_psp2k_region) &&
-		    psp2k_mem_left != PSP2K_MEM_SIZE)
-	{
-		// If sound1 was allocated in extended memory
-
-		// To maximize cache area, move movable memory that has been allocated so far
-		// to extended memory.
-		// Move in reverse order of allocation to create the largest contiguous free area.
-
-		memory_region_user3 = psp2k_mem_move(memory_region_user3, memory_length_user3);
-		memory_region_gfx4  = psp2k_mem_move(memory_region_gfx4,  memory_length_gfx4);
-		memory_region_gfx2  = psp2k_mem_move(memory_region_gfx2,  memory_length_gfx2);
-		memory_region_gfx1  = psp2k_mem_move(memory_region_gfx1,  memory_length_gfx1);
-		memory_region_cpu2  = psp2k_mem_move(memory_region_cpu2,  memory_length_cpu2);
-		memory_region_user1 = psp2k_mem_move(memory_region_user1, memory_length_user1);
-		memory_region_cpu1  = psp2k_mem_move(memory_region_cpu1,  memory_length_cpu1);
-
-		gfx_pen_usage[2] = psp2k_mem_move(gfx_pen_usage[2], memory_length_gfx3 / 128);
-		gfx_pen_usage[1] = psp2k_mem_move(gfx_pen_usage[1], memory_length_gfx2 / 32);
-		gfx_pen_usage[0] = psp2k_mem_move(gfx_pen_usage[0], memory_length_gfx1 / 32);
-	}
-	}
-#endif
 
 	if (load_rom_sound2() == 0) return 0;
 	if (load_rom_gfx3() == 0) return 0;
@@ -2126,27 +2007,6 @@ void memory_shutdown(void)
 
 	cache_shutdown();
 
-#ifdef LARGE_MEMORY
-	for (i = 0; i < 3; i++)
-		psp2k_mem_free(gfx_pen_usage[i]);
-
-	psp2k_mem_free(memory_region_cpu1);
-	psp2k_mem_free(memory_region_cpu2);
-	psp2k_mem_free(memory_region_gfx1);
-	psp2k_mem_free(memory_region_gfx2);
-	psp2k_mem_free(memory_region_gfx3);
-	psp2k_mem_free(memory_region_gfx4);
-	psp2k_mem_free(memory_region_sound1);
-	psp2k_mem_free(memory_region_sound2);
-	psp2k_mem_free(memory_region_user1);
-#if !RELEASE
-	psp2k_mem_free(memory_region_user2);
-#endif
-	psp2k_mem_free(memory_region_user3);
-
-	psp2k_mem_offset = PSP2K_MEM_TOP + PSP2K_MEM_SIZE;
-	psp2k_mem_left   = PSP2K_MEM_SIZE;
-#else
 	for (i = 0; i < 3; i++)
 	{
 		if (gfx_pen_usage[i])
@@ -2164,9 +2024,8 @@ void memory_shutdown(void)
 	if (memory_region_user1)  free(memory_region_user1);
 #if !RELEASE
 	if (memory_region_user2)  free(memory_region_user2);
-#endif
+	#endif
 	if (memory_region_user3)  free(memory_region_user3);
-#endif
 }
 
 

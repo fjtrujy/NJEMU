@@ -54,45 +54,10 @@ static SceKernelCallbackFunction PowerCallback(int unknown, int pwrflags, void *
 
 	if (pwrflags & PSP_POWER_CB_POWER_SWITCH)
 	{
-	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
-		extern int32_t psp2k_mem_left;
-
-		if (psp2k_mem_left < 0x400000)
-		{
-			char path[PATH_MAX];
-			SceUID fd;
-
-			sprintf(path, "%sresume.bin", launchDir);
-
-			if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
-			{
-				write(fd, (void *)(PSP2K_MEM_TOP + 0x1c00000), 0x400000);
-				close(fd);
-			}
-		}
-#endif
 		Sleep = 1;
 	}
 	else if (pwrflags & PSP_POWER_CB_RESUME_COMPLETE)
 	{
-	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
-		extern int32_t psp2k_mem_left;
-
-		if (psp2k_mem_left < 0x400000)
-		{
-			char path[PATH_MAX];
-			SceUID fd;
-
-			sprintf(path, "%sresume.bin", launchDir);
-
-			if ((fd = open(path, O_RDONLY, 0777)) >= 0)
-			{
-				read(fd, (void *)(PSP2K_MEM_TOP + 0x1c00000), 0x400000);
-				close(fd);
-			}
-			remove(path);
-		}
-#endif
 		Sleep = 0;
 	}
 

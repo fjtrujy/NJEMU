@@ -98,10 +98,8 @@ static void cache_rotate_head_to_tail(cache_t **list_head, cache_t **list_tail)
 }
 
 #if (EMU_SYSTEM == MVS)
-/* Phase 2b.1: PCM cache infrastructure is always compiled. pcm_cache_enable
- * is the runtime gate; LARGE_MEMORY (or large tier with preload_sound) keeps
- * it at 0 so the streaming paths are inert.
- */
+/* PCM cache infrastructure is always compiled; pcm_cache_enable is the
+ * runtime gate selected by the game-specific memory plan. */
 int pcm_cache_enable;
 
 static cache_t *pcm_data;
@@ -1164,20 +1162,6 @@ int cache_start(const memory_plan_t *plan)
 	GFX_MEMORY = NULL;
 	i = requested_cache_blocks;
 
-	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
-	{
-		const memory_profile_t *profile = memory_profile_current();
-		int psp2k_blocks = PSP2K_MEM_SIZE >> BLOCK_SHIFT;
-		if ((profile == NULL || profile->use_psp2k_region) &&
-			psp2k_mem_left == PSP2K_MEM_SIZE &&
-			i <= psp2k_blocks)
-		{
-			GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;
-			size = (uint32_t)i << BLOCK_SHIFT;
-		}
-	}
-#endif
-
 	if (GFX_MEMORY == NULL)
 	{
 		for (; i >= minimum_cache_blocks; --i)
@@ -1188,7 +1172,7 @@ int cache_start(const memory_plan_t *plan)
 				break;
 		}
 
-		if (GFX_MEMORY == NULL)
+	if (GFX_MEMORY == NULL)
 		{
 			msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
 			return 0;
@@ -1430,40 +1414,20 @@ void cache_sleep(int flag)
 	Temporarily Allocate State Save Area
 ------------------------------------------------------*/
 
-	/* Phase 2b.6: cache_alloc_type is always declared. 1 = state-save was
-	 * staged into the MVS PSP2K kernel region; 0 = staged into a file.
-	 */
-static int cache_alloc_type = 0;
-
 uint8_t *cache_alloc_state_buffer(int32_t size)
 {
-	cache_alloc_type = 0;
+	int32_t fd;
+	char path[PATH_MAX];
 
-	#if defined(LARGE_MEMORY) && (EMU_SYSTEM == MVS)
+	sprintf(path, "%sstate/cache.tmp", launchDir);
+
+	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{
-		const memory_profile_t *profile = memory_profile_current();
-		if ((profile == NULL || profile->use_psp2k_region) &&
-		    size < psp2k_mem_left)
-		{
-			cache_alloc_type = 1;
-			return (uint8_t *)psp2k_mem_offset;
-		}
+		write(fd, GFX_MEMORY, size);
+		close(fd);
+		return GFX_MEMORY;
 	}
-#endif
-	{
-		int32_t fd;
-		char path[PATH_MAX];
-
-		sprintf(path, "%sstate/cache.tmp", launchDir);
-
-		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
-		{
-			write(fd, GFX_MEMORY, size);
-			close(fd);
-			return GFX_MEMORY;
-		}
-		return NULL;
-	}
+	return NULL;
 }
 
 /*------------------------------------------------------
@@ -1472,22 +1436,17 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 
 void cache_free_state_buffer(int32_t size)
 {
-	if (!cache_alloc_type)
+	uint32_t fd;
+	char path[PATH_MAX];
+
+	sprintf(path, "%sstate/cache.tmp", launchDir);
+
+	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
-		uint32_t fd;
-		char path[PATH_MAX];
-
-		sprintf(path, "%sstate/cache.tmp", launchDir);
-
-		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
-		{
-			read(fd, GFX_MEMORY, size);
-			close(fd);
-		}
-		remove(path);
+		read(fd, GFX_MEMORY, size);
+		close(fd);
 	}
-
-	cache_alloc_type = 0;
+	remove(path);
 }
 
 #endif /* STATE_SAVE */

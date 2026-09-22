@@ -1100,6 +1100,60 @@ Validation performed:
 
 ### R5 - MVS C-ROM/PCM distribution + crypto + ownership cleanup
 
+**Status: completed on 2026-09-22.**
+
+Implemented:
+
+- the MVS tier table now owns both C-ROM and PCM/V-ROM residency decisions;
+  the old 3 MiB PCM working set survives only as the LOW/MEDIUM/HIGH policy
+  cap, while `VERY_HIGH` may grow PCM to the complete source region;
+- unencrypted C-ROM is loaded directly only when the planner marks the complete
+  region resident; partial targets use the cache even when a host `malloc` of
+  the full ROM would happen to succeed;
+- encrypted C-ROM continues through the cache representation, including the
+  fully-resident case, so encrypted and streaming address semantics remain one
+  path;
+- `SOUND_DISABLE` PCM/V-ROM is loaded directly when the runtime target exactly
+  covers the source region. A failed full allocation is an optimization failure,
+  not a load failure: the same plan falls back to the streaming PCM cache;
+- when PCM is partial, C-ROM and PCM enter `cache_start()` together so their
+  weighted runtime budget is applied simultaneously and C-ROM keeps primary
+  allocation priority;
+- removed the raw PSP2K bump allocator, move/free helpers, special MVS cache
+  allocation, extended-memory shutdown rules and PSP `resume.bin` workaround;
+  MVS regions now have normal heap ownership and one matching `free()` path;
+- state-cache staging no longer depends on PSP2K memory; it uses its existing
+  file backup path until R6 replaces that policy with runtime capability data;
+- all `neocrypt` scratch buffers now use temporary heap ownership;
+- fixed the historical `kf2k3pcb_sp1_decrypt()` scratch-size mismatch: the
+  512 KiB BIOS transformation now iterates over the actual 16-bit element count
+  of its 512 KiB scratch and copies the complete 512 KiB result, eliminating the
+  heap overflow and the former PSP2K-vs-heap output split;
+- the now-unused `preload_sound`, `preload_crypto` and `use_psp2k_region`
+  feature switches were removed from the legacy `memory_profile_t`.
+
+Validation performed:
+
+- Desktop MVS passes 8/8 CTest tests;
+- `mslug5` at the default high budget selects 64 MiB C-ROM + 16 MiB fully
+  resident PCM, while a forced 20 MiB budget selects 15 MiB C-ROM + 3 MiB PCM;
+  temporary post-decrypt hashes of CPU1, CPU2, USER1, GFX1 and GFX2 are
+  byte-identical between both plans and match the pre-R5 baseline;
+- `kf2k3pcb` likewise produces identical post-decrypt hashes at high and 20 MiB
+  budgets. Its USER1 hash intentionally differs from the pre-R5 baseline because
+  R5 fixes the out-of-bounds/partial-copy behavior described above;
+- unencrypted `mslug` exercises direct C-ROM residency (`16384KB / 16384KB`);
+  unencrypted `kof96` forced to 20 MiB exercises V24 streaming cache
+  (`8192KB / 32768KB`);
+- a temporary AddressSanitizer + UndefinedBehaviorSanitizer Desktop build ran
+  `kf2k3pcb` for four seconds with zero bytes written to sanitizer stderr;
+- PS2SDK MVS cross-build passes;
+- PSPSDK MVS cross-build passes and generates `EBOOT.PBP`;
+- a PSP MVS build compiled with historical `-DLARGE_MEMORY=1` links when the
+  Makefile-equivalent `-lpspkubridge` is supplied, and has no unresolved PSP2K
+  symbols. `LARGE_MEMORY` remains only in the legacy platform/profile bridge for
+  later R7/R8 removal.
+
 - apply the tier table to C-ROM + PCM/V-ROM simultaneously;
 - make the legacy 3 MiB PCM size a tier policy cap rather than a compile-time
   active cache size;

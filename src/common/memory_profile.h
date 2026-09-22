@@ -4,9 +4,9 @@
 
 	Runtime memory tier selection.
 
-		Legacy startup profile retained temporarily for preload/PSP2K feature
-		toggles. Cache sizing is no longer owned here: memory_plan_t computes the
-		game-specific runtime budget after mandatory allocations are known.
+		Legacy startup tier label retained temporarily for compatibility and debug
+		overrides. Runtime allocation policy is owned by memory_plan_t; this profile
+		no longer controls cache sizing, preloads or PSP2K ownership.
 
 ******************************************************************************/
 
@@ -14,7 +14,6 @@
 #define MEMORY_PROFILE_H
 
 #include <stdint.h>
-#include <stdbool.h>
 
 typedef enum {
 	MEMORY_PROFILE_TIER_TINY = 0,
@@ -27,13 +26,6 @@ typedef enum {
 typedef struct {
 	const char *name;              /* "tiny", "small", "medium", "large" */
 	uint32_t   min_ram_mb;         /* selection threshold (lower bound) */
-
-	/* Feature toggles -- which preloads are eligible at this tier. The
-	 * target may still skip a preload if it doesn't fit for the loaded game.
-	 */
-	bool       preload_sound;      /* MVS ADPCM, CPS2 QSound */
-	bool       preload_crypto;     /* MVS neocrypt buffers */
-	bool       use_psp2k_region;   /* PSP Slim 32 MB kernel region */
 
 } memory_profile_t;
 
