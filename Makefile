@@ -120,6 +120,8 @@ MAINOBJS = \
 	common/ui_text_driver.o \
 	common/ui_text_catalog.o \
 	common/platform_driver.o \
+	common/platform_memory_info.o \
+	common/memory_plan.o \
 	common/sound.o \
 
 ifeq ($(ADHOC), 1)

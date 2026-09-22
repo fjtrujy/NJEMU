@@ -239,9 +239,7 @@ set(COMMON_SRC
 	common/platform_memory_info.c
 	common/memory_plan.h
 	common/memory_plan.c
-    common/memory_profile.h
-    common/memory_profile.c
-    common/sound.h
+	common/sound.h
     common/sound.c
 )
 

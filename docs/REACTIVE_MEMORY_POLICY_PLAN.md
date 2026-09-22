@@ -1247,6 +1247,46 @@ Preferred path:
 
 ### R8 - Delete `LARGE_MEMORY`
 
+**Status: completed on 2026-09-22.**
+
+Implemented:
+
+- removed the obsolete large-memory dimension from PSP, PS2 and Desktop CI
+  matrices, build names, configure arguments and artifact names;
+- removed the last production-source reference and replaced the README's raw
+  PSP2K allocator documentation with the current single-binary runtime policy;
+- deleted the now-unused `memory_profile_t` implementation entirely. Its
+  startup selector had no remaining consumers, so `NJEMU_MEM_TIER` only changed
+  a diagnostic label and was removed rather than retained as a misleading
+  control;
+- startup now logs normalized platform memory directly, while the game-specific
+  `memory_plan_t` is the sole tier/cache/residency policy;
+- deterministic testing remains available through `NJEMU_MEMORY_BUDGET_MB` and
+  `NJEMU_MEMORY_LARGEST_BLOCK_MB`;
+- added `platform_memory_info.o` and `memory_plan.o` to the legacy PSP Makefile
+  object list so that build surface follows the same runtime policy as CMake.
+
+Validation performed:
+
+- the three GitHub workflow YAML files parse successfully;
+- Desktop MVS/CPS2 with `SAVE_STATE=ON`: 8/8 CTest tests pass for each;
+- PS2 GUI + save-state MVS/CPS2 builds both link successfully;
+- PSP MVS/CPS2 builds both generate `EBOOT.PBP`;
+- production/build acceptance is clean:
+
+  ```sh
+  rg '\bLARGE_MEMORY\b' src Makefile CMakeLists.txt .github README.md
+  ```
+
+  returns no matches;
+- production/build docs also contain no `memory_profile` or `NJEMU_MEM_TIER`
+  references. Historical migration documents intentionally retain the old term
+  where it describes previous behavior.
+
+The compile-time memory-mode migration is complete. R9 is now validation only:
+synthetic budgets plus the physical/emulator matrix, including PSP model and
+suspend/resume coverage that could not be exercised while psplink was offline.
+
 Only after R3-R7 are validated:
 
 - remove `LARGE_MEMORY` from `Makefile`;

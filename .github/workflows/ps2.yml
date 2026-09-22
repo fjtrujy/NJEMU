@@ -13,12 +13,11 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} LARGE_MEMORY=${{ matrix.large_memory }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [MVS, NCDZ, CPS1, CPS2] 
-        large_memory: [OFF] #TODO: ON
         command_list: [OFF] #TODO: ON
         adhoc: [OFF] #TODO: ON
         save_state: [OFF] #TODO: OFF
@@ -30,25 +29,21 @@ jobs:
             save_state: FALSE
         include:
           - target: CPS1
-            large_memory: OFF
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
           - target: CPS2
-            large_memory: OFF
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
           - target: MVS
-            large_memory: OFF
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
           - target: NCDZ
-            large_memory: OFF
             command_list: ON
             adhoc: OFF
             save_state: ON
@@ -70,7 +65,6 @@ jobs:
         cmake -DPLATFORM="PS2" \
           -DCMAKE_TOOLCHAIN_FILE=$PS2DEV/share/ps2dev.cmake \
           -DTARGET="${{ matrix.target }}" \
-          -DLARGE_MEMORY=${{ matrix.large_memory }} \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
@@ -87,5 +81,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v4
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-large_memory_${{ matrix.large_memory }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/

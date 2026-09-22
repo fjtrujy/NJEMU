@@ -3422,10 +3422,9 @@ STATE_LOAD( ym2610 )
 			YM2610.adpcma[ch].now_data = 0;
 	}
 
-	/* When pcm_cache_enable=0 (preload mode) the ADPCMB block field is
-	 * left at its memset-zero default by YM2610Reset, so this branch
-	 * always runs and refreshes now_data from the preloaded buffer —
-	 * matching the old LARGE_MEMORY behaviour. */
+		/* When pcm_cache_enable=0 (preload mode) the ADPCMB block field is
+		 * left at its memset-zero default by YM2610Reset, so this branch
+		 * always runs and refreshes now_data from the preloaded buffer. */
 	if (YM2610.adpcmb.block != 0xffff)
 	{
 		YM2610.adpcmb.buf = NULL;

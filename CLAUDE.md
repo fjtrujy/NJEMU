@@ -62,14 +62,10 @@ make -j4
 - `SAVE_STATE=ON` - Enable save states
 - `COMMAND_LIST=ON` - Command list recording
 
-The previous `LARGE_MEMORY` option has been removed. PSP packages explicitly
-request the largest user-memory partition (`MEMSIZE=1`) and platforms expose a
-normalized `queryMemoryInfo()` snapshot (free bytes, largest contiguous block,
-budget cap, reliability flags). `memory_plan_t` owns runtime GFX/C-ROM/PCM
-residency and cache sizing. A legacy startup profile/tier label is still
-selected temporarily for compatibility and debug overrides, but it no longer
-controls preload or PSP2K ownership.
-Use `NJEMU_MEM_TIER=tiny|small|medium|large` for the legacy tier override, or
+PSP packages explicitly request the largest user-memory partition (`MEMSIZE=1`)
+and platforms expose a normalized `queryMemoryInfo()` snapshot (free bytes,
+largest contiguous block, budget cap, reliability flags). `memory_plan_t` owns
+runtime GFX/C-ROM/PCM residency and cache sizing. Use
 `NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` for deterministic
 memory-policy testing.
 

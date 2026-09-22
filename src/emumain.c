@@ -508,10 +508,7 @@ int main(int argc, char *argv[]) {
 			if (platform_driver->queryMemoryInfo(platform_data, &memory_info)) {
 				platform_memory_info_apply_env_overrides(&memory_info);
 				platform_memory_info_log(&memory_info);
-				memory_profile_select(platform_memory_info_available_u32(&memory_info));
 			}
-		} else if (platform_driver->availableRam != NULL) {
-			memory_profile_select(platform_driver->availableRam(platform_data));
 		}
 		ticker_data = ticker_driver->init();
 		if (ticker_data == NULL) {

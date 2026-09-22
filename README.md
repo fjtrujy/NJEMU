@@ -26,7 +26,7 @@
   - [NCDZ-Specific Setup](#ncdz-specific-setup)
 - [ROM Conversion Tool (romcnv)](#rom-conversion-tool-romcnv)
 - [Memory Requirements](#memory-requirements)
-  - [PSP Extended Memory (LARGE_MEMORY)](#psp-extended-memory-large_memory---slim2000)
+  - [PSP Runtime Memory Policy](#psp-runtime-memory-policy)
 - [Project Structure](#project-structure)
 - [Technical Architecture](#technical-architecture---emulator-targets)
   - [MVS (Neo-Geo) Target](#mvs-neo-geo-target)
@@ -117,7 +117,7 @@ Each target has specific setup requirements. See the linked README files for:
 |------------|-------------------|-----------------|
 | **FW 3.xx** | CFW 3.03+ | PSP-1000/2000/3000 |
 | **FW 1.50 Kernel** | FW 1.50 | PSP-1000 only |
-| **PSP Slim (LARGE_MEMORY)** | CFW 3.71 M33+ | PSP-2000/3000 |
+| **Standard package** | Modern PSP CFW/homebrew runtime | PSP-1000/2000/3000 |
 
 > **Note:** The 1.50 Kernel build does NOT work on PSP-2000 or later models.
 
@@ -380,7 +380,6 @@ cmake --build build_psp_cps1
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `LARGE_MEMORY` | Enable large memory mode (PSP-2000+) | OFF |
 | `KERNEL_MODE` | Enable kernel mode (PSP) | OFF |
 | `COMMAND_LIST` | Enable command list display | OFF |
 | `ADHOC` | Enable Ad Hoc multiplayer | OFF |
@@ -438,7 +437,6 @@ Before compiling, edit the Makefile to configure build targets. Lines starting w
 
 | Option | Description |
 |--------|-------------|
-| `LARGE_MEMORY = 1` | Compile for PSP-2000+ with CFW 3.71 M33 or higher (user mode) |
 | `KERNEL_MODE = 1` | Compile for FW 1.5 kernel |
 | `ADHOC = 1` | Enable AdHoc multiplayer (not supported by NCDZPSP) |
 | `SAVE_STATE = 1` | Enable save state/load functionality |
@@ -989,7 +987,7 @@ Understanding memory allocation is crucial for PSP and PS2 platforms where RAM i
 | Platform | Available RAM | Notes |
 |----------|--------------|-------|
 | PSP (Fat) | ~24 MB | User memory only |
-| PSP (Slim/2000+) | ~64 MB | With LARGE_MEMORY builds |
+| PSP (Slim/2000+) | ~64 MB | Same EBOOT requests the expanded user-memory partition |
 | PS2 | ~32 MB | Main RAM |
 | Desktop | Unlimited | System dependent |
 
@@ -1011,118 +1009,32 @@ Many arcade games have graphics data larger than available RAM:
 
 The cache system streams graphics from storage in 64 KB blocks, allowing large games to run on memory-constrained platforms.
 
-### Cache Configuration
+### PSP Runtime Memory Policy
 
-| Constant | Normal Memory | LARGE_MEMORY |
-|----------|---------------|--------------|
-| MAX_CACHE_SIZE | 20 MB | 32 MB |
-| MIN_CACHE_SIZE | 2 MB | 4 MB |
-| BLOCK_SIZE | 64 KB | 64 KB |
+NJEMU ships a single PSP binary. Its PARAM.SFO explicitly requests the largest
+user-memory partition with `MEMSIZE=1`; the same EBOOT therefore runs on
+PSP-1000 and PSP-2000/3000-class hardware without a model-specific build.
 
-### PSP Extended Memory (LARGE_MEMORY - Slim/2000+)
+At startup NJEMU measures the memory actually available to the process with
+`pspSdkTotalFreeUserMemSize()` and the largest contiguous allocation with
+`sceKernelMaxFreeMemSize()`. The game-specific memory planner then chooses the
+cache/residency targets from those runtime measurements.
 
-PSP Slim (2000/3000) models have 32 MB of additional memory that's not accessible to standard PSP applications. NJEMU can use this extended memory when built with `-DLARGE_MEMORY=ON`.
+The important consequences are:
 
-#### Memory Address Space
-
-```c
-#define PSP2K_MEM_TOP    0xa000000   // Start of extended memory
-#define PSP2K_MEM_BOTTOM 0xbffffff   // End of extended memory
-#define PSP2K_MEM_SIZE   0x2000000   // 32 MB total
-```
-
-#### Custom Allocator
-
-A custom allocator manages this extended memory region:
-
-```c
-static void *psp2k_mem_alloc(int32_t size);   // Allocate from extended memory
-static void *psp2k_mem_move(void *mem, int32_t size);  // Move data to extended memory
-static void psp2k_mem_free(void *mem);        // Free (only works for standard memory)
-```
-
-**Important Limitations:**
-- Memory allocated in the extended region **cannot be freed** (causes system freeze)
-- Allocations are linear - no fragmentation management
-- Once a game uses extended memory, system must restart to reclaim it
-
-#### Concrete Usage in Code
-
-**Direct Allocation with `psp2k_mem_alloc()`:**
-
-| Location | Region | Purpose | Size |
-|----------|--------|---------|------|
-| `src/mvs/memintrf.c:847` | `memory_region_gfx3` | Sprite ROM data (unencrypted games) | 8-64 MB |
-| `src/mvs/memintrf.c:966` | `memory_region_sound1` | YM2610 ADPCM samples (fallback when malloc fails) | 1-8 MB |
-
-**Memory Migration with `psp2k_mem_move()`:**
-
-When SOUND1 allocation triggers extended memory use (`psp2k_mem_left != PSP2K_MEM_SIZE`), regions are moved to free main RAM for cache (`src/mvs/memintrf.c:1775-1785`):
-
-| Region | Data Type | Typical Size |
-|--------|-----------|--------------|
-| `memory_region_user3` | Protection/banking data | Variable |
-| `memory_region_gfx4` | Fixed layer sprites (FIX) | 128 KB - 1 MB |
-| `memory_region_gfx2` | Zoom table data | 128 KB |
-| `memory_region_gfx1` | Fixed layer ROM | 128 KB - 512 KB |
-| `memory_region_cpu2` | Z80 program ROM | 128 KB - 512 KB |
-| `memory_region_user1` | BIOS ROM | 128 KB |
-| `memory_region_cpu1` | M68000 program ROM | 1-4 MB |
-| `gfx_pen_usage[0-2]` | Sprite transparency tables | Variable |
-
-**Cache Buffer Direct Assignment (`src/common/cache.c:710`):**
-
-When no extended memory has been used yet, the cache buffer is placed directly at the start of extended memory:
-```c
-if (psp2k_mem_left == PSP2K_MEM_SIZE) {
-    GFX_MEMORY = (uint8_t *)PSP2K_MEM_TOP;  // Direct pointer, up to 32 MB
-}
-```
-
-**Safe Deallocation with `psp2k_mem_free()`:**
-
-At shutdown (`src/mvs/memintrf.c:2025-2039`), all regions are passed through `psp2k_mem_free()` which only calls `free()` for standard memory addresses:
-```c
-// Only frees if address < PSP2K_MEM_TOP (0xa000000)
-// Extended memory regions are silently ignored to prevent freeze
-```
-
-#### What Gets Placed in Extended Memory
-
-**MVS (Priority order):**
-1. **GFX3 (Sprite ROMs)** - Large sprite data (8-64 MB) goes directly to extended memory
-2. **Cache buffer** - If GFX3 uses cache, the cache buffer uses extended memory (up to 32 MB)
-3. **SOUND1 (ADPCM)** - If normal malloc fails, ADPCM data moves to extended memory
-4. **Other regions** - CPU1, CPU2, GFX1, GFX2, GFX4, USER1, USER3 can be moved to free main RAM
-
-**CPS2:**
-- Disables the cache system entirely (`USE_CACHE=0`)
-- Graphics data loaded directly into memory
-- Only suitable for games with smaller graphics data
-
-#### Impact on Cache System
-
-| Setting | Normal (PSP Fat) | LARGE_MEMORY (PSP Slim) |
-|---------|------------------|-------------------------|
-| USE_CACHE (CPS2) | Enabled | **Disabled** |
-| USE_CACHE (MVS) | Enabled | Enabled |
-| MIN_CACHE_SIZE | 2 MB (0x20 blocks) | 4 MB (0x40 blocks) |
-| MAX_CACHE_SIZE | 20 MB (0x140 blocks) | 32 MB (0x200 blocks) |
-| Cache location | Main RAM | Extended memory (if available) |
-
-#### Memory Optimization Strategy
-
-When MVS detects that SOUND1 had to use extended memory (indicating main RAM pressure), it automatically moves previously allocated regions to extended memory in reverse allocation order:
-
-```
-USER3 → GFX4 → GFX2 → GFX1 → CPU2 → USER1 → CPU1 → pen_usage tables
-```
-
-This frees contiguous blocks in main RAM for the cache system.
-
-#### Power Management
-
-Extended memory state is preserved during PSP sleep/resume cycles. The system stores the last 4 MB of extended memory (`PSP2K_MEM_TOP + 0x1c00000`) to handle sleep mode properly.
+- PSP-1000 naturally receives a smaller cache budget;
+- PSP-2000/3000 can use the expanded user heap exposed by the same EBOOT;
+- GFX/C-ROM gets allocation priority, with MVS PCM using the remaining planned
+  share;
+- cache targets are dynamic and aligned to the 64 KB streaming block size;
+- CPS2 uses full GFX residency only when the complete region fits the selected
+  plan, otherwise it uses the streaming cache;
+- MVS applies the same runtime policy to C-ROM and PCM/V-ROM;
+- allocation retry-down handles fragmentation without a second build mode;
+- the loading log reports the effective allocation, for example
+  `C-ROM cache: 15360KB / 65536KB`;
+- all PSP allocations use normal heap ownership; there is no raw model-specific
+  memory allocator or suspend/resume memory-copy workaround.
 
 ### Static RAM Allocations (per system)
 
