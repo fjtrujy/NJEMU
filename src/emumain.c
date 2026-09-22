@@ -97,7 +97,9 @@ static int show_frames_each_second = 0;
 	Global Variables/Structures
 ******************************************************************************/
 
+#ifdef PSP
 uint8_t ALIGN16_DATA gulist[GULIST_SIZE];
+#endif
 RECT full_rect = { 0, 0, SCR_WIDTH, SCR_HEIGHT };
 
 /******************************************************************************

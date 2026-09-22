@@ -3,8 +3,9 @@
 Date: 2026-09-22
 
 This audit was started while closing R10 of the reactive-memory migration and
-updated after R11 implemented the largest measured resident-RAM opportunity.
-Selective `-Os` and large-buffer changes remain intentionally deferred.
+is now updated through R12. R11 implemented the largest measured resident-RAM
+opportunity; R12 begins the static-buffer audit with a zero-cost platform
+ownership fix. Selective `-Os` remains intentionally deferred.
 
 ## 1. PSP section footprint
 
@@ -69,9 +70,44 @@ Storage-I/O latency for cold CJK cache misses should still be profiled on
 physical PSP/PS2 hardware. The cache makes repeated UI glyphs resident, but the
 cross-build/unit validation does not substitute for device timing.
 
-## 3. Static RAM (`.bss`) is the next memory target
+## 3. R12 result: remove the PSP GU list from non-PSP builds
 
-Representative large PSP symbols include:
+The first `.bss` audit found a platform-ownership bug rather than a buffer that
+needed a more complicated lifetime change. `gulist` is the 300 KiB command-list
+buffer passed to `sceGuStart()` by `src/psp/psp_video.c`; there are no PS2 or
+Desktop users. It was nevertheless defined unconditionally in `emumain.c`, so
+every platform paid for it for the entire process lifetime.
+
+R12 keeps the exact same static buffer on PSP and compiles it out everywhere
+else. This does not replace static memory with heap memory: PS2/Desktop simply
+stop reserving the unused 307,200 bytes.
+
+Measured on the MVS PS2 GUI build with `SAVE_STATE=ON` and
+`COMMAND_LIST=ON`:
+
+| Section | Before R12 | R12 | Delta |
+| --- | ---: | ---: | ---: |
+| `.text` | 913,416 B | 913,416 B | 0 B |
+| `.rodata` | 101,992 B | 101,992 B | 0 B |
+| `.data` | 406,432 B | 406,432 B | 0 B |
+| `.bss` | 2,735,944 B | 2,428,744 B | **-307,200 B** |
+| total sections | 6,205,501 B | 5,898,301 B | **-307,200 B** |
+
+Validation performed:
+
+- Desktop MVS GUI build succeeds and all 10 CTest tests pass;
+- PS2 MVS GUI cross-build succeeds and the linked ELF no longer contains a
+  `gulist` symbol;
+- the `PSP` preprocessor path retains the original declaration unchanged. The
+  local PSP compiler/toolchain installation is not currently available on this
+  shell's configured paths, so this small platform-guard change was not
+  re-cross-built for PSP in this R12 pass.
+
+## 4. Static RAM (`.bss`) remains the next memory target
+
+Representative large PSP symbols include. `gulist` remains in this list because
+it is genuinely required by PSP; R12 only removes its accidental cost on the
+other platforms.
 
 ### CPS2
 
@@ -103,7 +139,7 @@ are not required simultaneously could potentially become lifecycle-scoped heap
 allocations or share storage, but only after proving their ownership and hot-
 path requirements.
 
-## 4. Selective `-Os`: useful, but secondary
+## 5. Selective `-Os`: useful, but secondary
 
 The user's proposed split between `-O3` hot paths and `-Os` cold/menu code is
 technically reasonable. The measurements show, however, that it is not the
@@ -138,7 +174,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 5. PS2 observations
+## 6. PS2 observations
 
 Representative no-GUI PS2 builds currently contain approximately:
 
@@ -154,11 +190,13 @@ should determine which modules are actually required for each storage/runtime
 configuration and whether their embedded images remain resident after module
 startup. That work is independent from compiler `-Os` tuning.
 
-## 6. Recommended order for future size work
+## 7. Recommended order for future size work
 
 1. **Completed in R11:** externalize the ~2.65 MiB embedded CJK font/lookup
    payload without reducing the glyph repertoire.
-2. Audit large `.bss` buffers for mutually-exclusive or lifecycle-scoped use.
+2. **In progress:** audit large `.bss` buffers for platform ownership,
+   mutually-exclusive use or lifecycle-scoped use. R12 already removes the
+   unused 300 KiB PSP GU list from PS2/Desktop.
 3. Audit embedded PS2 IRX payloads and their post-load lifetime.
 4. Apply selective `-Os` to measured cold translation units.
 5. Re-measure performance and memory after every step; keep emulation/rendering
