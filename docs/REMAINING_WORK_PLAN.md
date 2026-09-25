@@ -142,6 +142,21 @@ The normal no-GUI CPS1 diagnostic build has additionally completed a successful
 cross-core sanitizer sweep should continue when the sanitizer runtime is usable;
 do not add emulator workarounds for the host ASan startup stall.
 
+The normal Desktop harness has now completed another 100 consecutive MVS
+init/teardown cycles, and CPS1, CPS2, MVS and NCDZ all pass deterministic
+init/teardown plus short-run smoke tests. The four corresponding Desktop CTest
+suites also pass (10/10 each).
+
+A cross-core UBSan pass is practical by leaving the macro-expanded C68K
+interpreter itself uninstrumented; AppleClang otherwise spends many minutes on
+that single translation unit for every target. The CPU wrapper, target cores and
+the rest of NJEMU remain instrumented. This pass found and fixed signed-shift
+undefined behavior in the CPS1/CPS2 graphics decoders and CPS2 key expansion.
+CPS1, CPS2, MVS and NCDZ then completed both deterministic init/teardown and a
+30-frame run with `halt_on_error=1` and no further UBSan finding. C68K should be
+treated as a separate sanitizer audit target rather than silently assuming this
+cross-core pass covers its macro-expanded interpreter.
+
 ---
 
 ## Phase B - PS2 MVS cache-I/O performance
