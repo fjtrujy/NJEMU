@@ -208,6 +208,8 @@ include_directories(
 set(COMMON_SRC
     emumain.h
     emumain.c
+    zip/zip_archive.h
+    zip/zip_archive_internal.h
     zip/zfile.h
     sound/sndintrf.h
     sound/sndintrf.c
@@ -291,7 +293,10 @@ endif()
 if (NOT MINIZ_COMPILE_DEFINITIONS)
     set(MINIZ_COMPILE_DEFINITIONS "")
 endif()
-list(APPEND COMMON_SRC zip/zfile.c)
+list(APPEND COMMON_SRC
+    zip/zip_archive.c
+    zip/zfile.c
+)
 
 # Additional source files based on options
 if (ADHOC)
@@ -595,10 +600,13 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
-# Keep miniz's usage requirements local to the one translation unit that
-# includes its headers. Propagating them through the executable would add
-# MINIZ_STATIC_DEFINE and miniz include paths to every NJEMU source file.
-set_source_files_properties(src/zip/zfile.c PROPERTIES
+# Keep miniz's usage requirements local to the ZIP implementation translation
+# units. Propagating them through the executable would add MINIZ_STATIC_DEFINE
+# and miniz include paths to every NJEMU source file.
+set_source_files_properties(
+    src/zip/zip_archive.c
+    src/zip/zfile.c
+    PROPERTIES
     INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
 )
@@ -851,6 +859,28 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_executable(zip_archive_tests
+        tests/zip_archive_tests.c
+        src/zip/zip_archive.c
+    )
+    target_include_directories(zip_archive_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${MINIZ_INCLUDE_DIRS}
+    )
+    if(MINIZ_COMPILE_DEFINITIONS)
+        target_compile_definitions(zip_archive_tests PRIVATE
+            ${MINIZ_COMPILE_DEFINITIONS}
+        )
+    endif()
+    target_compile_definitions(zip_archive_tests PRIVATE
+        TEST_ZIP_ARCHIVE_PATH="${CMAKE_CURRENT_BINARY_DIR}/zip_archive_tests.zip"
+        TEST_ZIP_DIRECTORY="${CMAKE_CURRENT_BINARY_DIR}"
+    )
+    target_link_libraries(zip_archive_tests PRIVATE
+        "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
+    )
+    add_test(NAME zip_archive_tests COMMAND zip_archive_tests)
+
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c
         src/common/ui_layout.c

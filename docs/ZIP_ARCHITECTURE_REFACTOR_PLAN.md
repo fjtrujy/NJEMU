@@ -1,7 +1,7 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Planned
+Status: Z0-Z1 complete; Z2 next
 
 ## Purpose
 
@@ -304,6 +304,65 @@ Exit criteria:
 - ZIP implementation itself contains no process-global archive/entry/iterator state;
 - metadata lookup does not create an extraction iterator;
 - ZIP code has no directory fallback.
+
+#### Z1 implementation result
+
+Z1 introduces `src/zip/zip_archive.h/.c` with explicit `zip_archive_t`,
+`zip_entry_t` and metadata-only `zip_entry_info_t` values. The public ZIP-only
+operations are `zip_archive_open()`, `zip_archive_close()`,
+`zip_archive_stat()`, `zip_archive_find_crc()`, `zip_entry_open()`,
+`zip_entry_read()`, `zip_entry_getc()` and `zip_entry_close()`.
+
+The ZIP core now has no process-global archive, entry or enumeration state.
+The former global `mz_zip_archive`, extraction iterator,
+`mz_zip_archive_file_stat`, streamed-length counter and ZIP byte-cache state
+have moved into explicit owner objects. CRC lookup enumerates the central
+directory privately, filename lookup remains case-insensitive through miniz
+flags `0`, stream reads remain incremental, and fully consumed entries retain
+the miniz close-time CRC result.
+
+`src/zip/zfile.c` remains as an explicitly transitional Z2-Z5 adapter. It owns
+one `legacy_archive`, one `legacy_entry`, one `legacy_find_index` and the
+legacy `basedir` state so existing callers keep their observable behavior.
+Only this adapter still implements the ambiguous ZIP-or-directory fallback,
+the integer success pseudo-handle and `zip_findfirst()` / `zip_findnext()`.
+For NCDZ ZIP sources, `zlength()` now uses `zip_archive_stat()` and therefore
+does not create an extraction iterator just to obtain the entry size.
+
+`zip_archive_tests` generates its archive in the build directory and verifies
+case-insensitive metadata lookup, CRC lookup, rejection of directory paths,
+two simultaneous entry iterators, sequential entry reuse, streaming reads and
+the per-entry `getc` cache. The final validation matrix is:
+
+- Desktop Release builds: CPS1, CPS2, MVS and NCDZ pass;
+- Desktop CTest: 10/10 pass when excluding only the previously documented
+  Release/NDEBUG `memory_plan_tests` abort; the ZIP test itself passes;
+- real 30-frame smokes: `ghoulsu`, `mpangu`, `pbobbl2n` and NCDZ
+  `Windjammers` directory source all exit successfully;
+- PS2 MVS Release cross-build passes;
+- PSP MVS Release cross-build passes and produces `EBOOT.PBP`.
+
+Final size deltas versus the Z0 baseline are small and explained by the extra
+explicit API code. The adapter reuses `zip_entry_t`'s 4 KiB byte cache for the
+legacy directory path instead of retaining a second buffer, so console BSS is
+slightly smaller than before Z1.
+
+| Build | Z0 | Z1 | Delta |
+| --- | ---: | ---: | ---: |
+| Desktop CPS1 executable | 990,008 B | 990,552 B | +544 B |
+| Desktop CPS2 executable | 367,656 B | 368,200 B | +544 B |
+| Desktop MVS executable | 474,768 B | 475,344 B | +576 B |
+| Desktop NCDZ executable | 402,856 B | 403,400 B | +544 B |
+| PS2 MVS `.text` | 891,040 B | 892,672 B | +1,632 B |
+| PS2 MVS `.bss` | 2,251,848 B | 2,250,760 B | -1,088 B |
+| PS2 MVS `text+data+bss` | 3,533,948 B | 3,534,492 B | +544 B |
+| PS2 MVS ELF file | 3,277,680 B | 3,279,432 B | +1,752 B |
+| PSP MVS `.text` | 768,904 B | 770,640 B | +1,736 B |
+| PSP MVS `.bss` | 1,944,080 B | 1,943,040 B | -1,040 B |
+| PSP MVS `text+data+bss` | 2,726,188 B | 2,726,884 B | +696 B |
+| PSP MVS ELF file | 2,444,212 B | 2,446,068 B | +1,856 B |
+| PSP MVS PRX | 914,874 B | 916,938 B | +2,064 B |
+| PSP MVS EBOOT.PBP | 915,250 B | 917,314 B | +2,064 B |
 
 ### Z2 — ROM loader migration
 
