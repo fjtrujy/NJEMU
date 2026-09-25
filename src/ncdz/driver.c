@@ -8,6 +8,7 @@
 
 #include <limits.h>
 #include "ncdz.h"
+#include "ncdz/resource_source.h"
 #include "common/palette_convert.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
@@ -101,7 +102,8 @@ int neogeo_check_game(void)
 	int posix_fd;
 	char fname[16], path[PATH_MAX], linebuf[128];
 	int i, found = 0, NGH_number;
-	int64_t fd;
+	resource_file_t file = {0};
+	resource_file_info_t info;
 
 	neogeo_ngh = 0;
 	hack_irq = 0;
@@ -118,18 +120,16 @@ int neogeo_check_game(void)
 
 		sprintf(path, "%sIPL.TMP", launchDir);
 
-		zip_open(game_dir);
-
-		i = zlength("IPL.TXT");
-
-		if ((fd = zopen("IPL.TXT")) == -1)
-		{
-			zip_close();
+		if (!resource_source_stat(&ncdz_game_source, "IPL.TXT", &info) ||
+			info.size > memory_length_cpu1)
 			return 0;
-		}
-		zread(fd, memory_region_cpu1, i);
-		zclose(fd);
-		zip_close();
+		i = (int)info.size;
+
+		if (!resource_file_open(&ncdz_game_source, "IPL.TXT", &file))
+			return 0;
+		if (resource_file_read(&file, memory_region_cpu1, (size_t)i) != (size_t)i ||
+			!resource_file_close(&file))
+			return 0;
 
 		posix_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (posix_fd < 0)
@@ -189,16 +189,11 @@ int neogeo_check_game(void)
 
 		if (!found) return 0;
 
-		zip_open(game_dir);
-		if ((fd = zopen(fname)) == -1)
-		{
-			zip_close();
+		if (!resource_file_open(&ncdz_game_source, fname, &file))
 			return 0;
-		}
-
-		zread(fd, memory_region_cpu1, 0x110);
-		zclose(fd);
-		zip_close();
+		if (resource_file_read(&file, memory_region_cpu1, 0x110) != 0x110 ||
+			!resource_file_close(&file))
+			return 0;
 
 		swab(memory_region_cpu1, memory_region_cpu1, 0x110);
 		memcpy(neogeo_game_vectors, memory_region_cpu1, 0x100);

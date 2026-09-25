@@ -9,6 +9,10 @@
 #include "psp.h"
 #include "emumain.h"
 #include "stdarg.h"
+#if (EMU_SYSTEM == NCDZ)
+#include <strings.h>
+#include "ncdz/resource_source.h"
+#endif
 
 
 UI_PALETTE ui_palette[UI_PAL_MAX] =
@@ -104,12 +108,36 @@ void file_browser(void) {
 		}
 	}
 #if (EMU_SYSTEM == NCDZ)
+	{
+		const char *ext;
+		char *slash;
+
 	strcat(game_dir, "/");
 	strcat(game_dir, game_name);
 
-	sprintf(mp3_dir, "%s/mp3", game_dir);
+		resource_source_close(&ncdz_game_source);
+		ext = strrchr(game_dir, '.');
+		if (ext != NULL && strcasecmp(ext, ".zip") == 0)
+		{
+			if (!resource_source_open_zip(&ncdz_game_source, game_dir))
+				return;
+			strcpy(mp3_dir, game_dir);
+			slash = strrchr(mp3_dir, '/');
+			if (slash != NULL)
+				strcpy(slash + 1, "mp3");
+		}
+		else
+		{
+			if (!resource_source_open_directory(&ncdz_game_source, game_dir))
+				return;
+			sprintf(mp3_dir, "%s/mp3", game_dir);
+		}
+	}
 #endif
 	emu_main();
+#if (EMU_SYSTEM == NCDZ)
+	resource_source_close(&ncdz_game_source);
+#endif
 }
 
 void small_font_print(int sx, int sy, const char *s, int bg) {

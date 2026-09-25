@@ -1,7 +1,7 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z3 complete; Z4 next
+Status: Z0-Z4 complete; Z5 next
 
 ## Purpose
 
@@ -541,6 +541,62 @@ Exit criteria:
 - `zlength()` is gone;
 - NCDZ `Windjammers` directory smoke passes;
 - at least one ZIP-packaged NCDZ path is validated if a suitable test asset is available without modifying resources.
+
+#### Z4 implementation result
+
+NCDZ now owns an explicit `resource_source_t` in
+`src/ncdz/resource_source.h/.c`. A source is opened explicitly as either
+`RESOURCE_SOURCE_DIRECTORY` or `RESOURCE_SOURCE_ZIP`; a failed ZIP open never
+selects the directory backend. Directory metadata uses `stat()`, ZIP metadata
+uses `zip_archive_stat()`, and `resource_file_t` owns either an ordinary POSIX
+descriptor or an explicit `zip_entry_t`.
+
+`src/ncdz/cdrom.c` and `src/ncdz/driver.c` no longer use the legacy `zopen`,
+`zread`, `zclose` or `zlength` paths. `src/common/filer.c` now probes NCDZ ZIP
+contents with `resource_source_stat()` and selects the source type explicitly
+when launching. The Desktop, PS2 and PSP no-GUI launchers do the same from the
+selected `game_name.ini` path. Title-system reads also use a local explicit
+resource source.
+
+The GUI build exposed one miniz/zlib compatibility-header collision because
+`filer.c` included system `zlib.h` while the NCDZ resource source exposes
+`zip_archive_t`. The only zlib use there was the Neo Geo CD BIOS CRC, so it now
+uses `mz_crc32()` from the already-required miniz API instead of mixing the two
+zlib-compatible headers.
+
+`resource_source_tests` generates a directory and ZIP under the build
+directory and verifies directory stat/read, case-insensitive ZIP stat/read,
+and that neither explicit open operation falls back to the other backend.
+
+Validation after Z4:
+
+- Desktop NCDZ Release/no-GUI builds and CTest passes 11/11 when excluding only
+  the pre-existing Release/NDEBUG `memory_plan_tests` abort;
+- Desktop NCDZ GUI + `COMMAND_LIST=ON` + `SAVE_STATE=ON` builds successfully;
+- PS2 NCDZ Release/no-GUI cross-build passes;
+- PSP NCDZ Release/no-GUI cross-build passes and produces `EBOOT.PBP`;
+- `Windjammers` directory source completes a 30-frame Desktop smoke;
+- a temporary `Windjammers.zip` generated only inside the Desktop build
+  directory passes `unzip -t` and also completes a 30-frame smoke.
+
+For an exact size comparison, `89dd903` (Z3) was exported to `/tmp` and built
+with matching NCDZ Release/no-GUI options. Z4 adds a small amount of code and
+one 1 KiB-class global source owner while the legacy `zfile` globals still
+coexist. Z5 will remove that duplicate legacy state.
+
+| Build | Z3 | Z4 | Delta |
+| --- | ---: | ---: | ---: |
+| Desktop NCDZ executable | 403,112 B | 403,640 B | +528 B |
+| PS2 NCDZ `.text` | 859,040 B | 860,552 B | +1,512 B |
+| PS2 NCDZ `.bss` | 2,168,840 B | 2,169,864 B | +1,024 B |
+| PS2 NCDZ `text+data+bss` | 3,419,916 B | 3,422,452 B | +2,536 B |
+| PS2 NCDZ ELF file | 3,365,004 B | 3,366,788 B | +1,784 B |
+| PSP NCDZ `.text` | 779,156 B | 780,100 B | +944 B |
+| PSP NCDZ `.bss` | 1,861,148 B | 1,862,172 B | +1,024 B |
+| PSP NCDZ `text+data+bss` | 2,647,848 B | 2,649,816 B | +1,968 B |
+| PSP NCDZ ELF file | 2,413,636 B | 2,415,380 B | +1,744 B |
+| PSP NCDZ PRX | 906,414 B | 907,774 B | +1,360 B |
+| PSP NCDZ EBOOT.PBP | 906,794 B | 908,154 B | +1,360 B |
 
 ### Z5 — Remaining runtime callers and API deletion
 

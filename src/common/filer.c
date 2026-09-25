@@ -18,6 +18,9 @@
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/config.h"
+#if (EMU_SYSTEM == NCDZ)
+#include "ncdz/resource_source.h"
+#endif
 
 
 /******************************************************************************
@@ -162,7 +165,6 @@ void find_state_file(uint8_t *slot)
 
 #ifdef GUI
 
-#include <zlib.h>
 #include <ctype.h>
 #include "common/memory_sizes.h"
 
@@ -321,22 +323,35 @@ static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int 
 	Load title_x.sys
 --------------------------------------------------------*/
 
-static int load_title(const char *path, int number)
+static int load_title(const char *path, resource_source_type_t source_type, int number)
 {
 	int i, region, tileno, x, y, found = 0;
-	int64_t fd;
+	resource_source_t source = {0};
+	resource_file_t file = {0};
 	uint8_t  title_spr[0x1680];
 	uint16_t palette[0x5a0 >> 1];
 	char title_path[PATH_MAX], region_chr[3] = {'j','u','e'};
 
-	zip_open(path);
+	if (source_type == RESOURCE_SOURCE_ZIP)
+	{
+		if (!resource_source_open_zip(&source, path))
+			return 0;
+	}
+	else if (source_type == RESOURCE_SOURCE_DIRECTORY)
+	{
+		if (!resource_source_open_directory(&source, path))
+			return 0;
+	}
+	else
+	{
+		return 0;
+	}
 
-	fd = -1;
 	for (region = neogeo_region & 0x03; region >= 0; region--)
 	{
 		sprintf(title_path, "title_%c.sys", region_chr[region]);
 
-		if ((fd = zopen(title_path)) != -1)
+		if (resource_file_open(&source, title_path, &file))
 		{
 			found = 1;
 			break;
@@ -345,15 +360,18 @@ static int load_title(const char *path, int number)
 
 	if (!found)
 	{
-		zip_close();
+		resource_source_close(&source);
 		return 0;
 	}
 
-	zread(fd, palette, 0x5a0);
-	zread(fd, title_spr, 0x1680);
-	zclose(fd);
-
-	zip_close();
+	if (resource_file_read(&file, palette, 0x5a0) != 0x5a0 ||
+		resource_file_read(&file, title_spr, 0x1680) != 0x1680 ||
+		!resource_file_close(&file))
+	{
+		resource_source_close(&source);
+		return 0;
+	}
+	resource_source_close(&source);
 
 	swab((uint8_t *)palette, (uint8_t *)palette, 0x5a0);
 
@@ -430,7 +448,7 @@ static void check_neocd_bios(void)
 		read(fd, temp_mem, 0x80000);
 		close(fd);
 
-		if (crc32(0, temp_mem, 0x80000) != 0xdf9de490)
+		if (mz_crc32(MZ_CRC32_INIT, temp_mem, 0x80000) != 0xdf9de490)
 			bios_error = 2;
 	}
 	else bios_error = 1;
@@ -699,19 +717,19 @@ static int set_file_flags(const char *path, int number)
 #if (EMU_SYSTEM == NCDZ)
 	if (files[number]->type == FTYPE_ZIP)
 	{
-		int64_t fd;
 		char zipname[PATH_MAX];
+		resource_source_t source = {0};
+		resource_file_info_t info;
 
 		sprintf(zipname, "%s/%s", path, files[number]->name);
-		zip_open(zipname);
 
-		if ((fd = zopen("ipl.txt")) != -1)
+		if (resource_source_open_zip(&source, zipname) &&
+			resource_source_stat(&source, "ipl.txt", &info))
 		{
-			zclose(fd);
 			strcpy(zipped_rom, files[number]->name);
 			neocddir = 2;
 		}
-		zip_close();
+		resource_source_close(&source);
 		return 0;
 	}
 	else
@@ -1132,8 +1150,11 @@ void file_browser(void)
 				files[i] = NULL;
 			}
 
-			emu_main();
-			power_driver->setLowestCpuClock(power_data);
+				emu_main();
+#if (EMU_SYSTEM == NCDZ)
+				resource_source_close(&ncdz_game_source);
+#endif
+				power_driver->setLowestCpuClock(power_data);
 
 #ifdef ADHOC
 			if (adhoc_enable)
@@ -1222,7 +1243,9 @@ void file_browser(void)
 								else
 									sprintf(path, "%s/%s", curr_dir, files[sel]->name);
 
-								if (!load_title(path, sel))
+									if (!load_title(path,
+										flag == 2 ? RESOURCE_SOURCE_ZIP : RESOURCE_SOURCE_DIRECTORY,
+										sel))
 								{
 									files[sel]->flag &= ~GAME_HAS_TITLE;
 									title_image = -1;
@@ -1436,19 +1459,27 @@ void file_browser(void)
 
 					if (launch)
 					{
-						if (neocddir == 1)
-						{
-							strcpy(game_dir, curr_dir);
-						}
-						else
-						{
-							sprintf(game_dir, "%s/%s", curr_dir, zipped_rom);
-						}
+							if (neocddir == 1)
+							{
+								strcpy(game_dir, curr_dir);
+								resource_source_close(&ncdz_game_source);
+								if (!resource_source_open_directory(&ncdz_game_source, game_dir))
+									launch = 0;
+							}
+							else
+							{
+								sprintf(game_dir, "%s/%s", curr_dir, zipped_rom);
+								resource_source_close(&ncdz_game_source);
+								if (!resource_source_open_zip(&ncdz_game_source, game_dir))
+									launch = 0;
+							}
 
-						sprintf(mp3_dir, "%s/mp3", curr_dir);
-
-						run_emulation = 1;
-						neogeo_boot_bios = 0;
+							if (launch)
+							{
+								sprintf(mp3_dir, "%s/mp3", curr_dir);
+								run_emulation = 1;
+								neogeo_boot_bios = 0;
+							}
 					}
 
 					*strrchr(curr_dir, '/') = '\0';
@@ -1526,19 +1557,21 @@ void file_browser(void)
 #if (EMU_SYSTEM == MVS)
 		else if (pad_pressed(PLATFORM_PAD_R))
 		{
-			strcpy(game_dir, curr_dir);
-			bios_select(0);
-			update = 1;
+					strcpy(game_dir, curr_dir);
+					resource_source_close(&ncdz_game_source);
+					bios_select(0);
+					update = 1;
 		}
 #elif (EMU_SYSTEM == NCDZ)
 		else if (pad_pressed(PLATFORM_PAD_R))
 		{
 			if (!bios_error)
 			{
-				if (messagebox(MB_BOOTBIOS))
-				{
-					strcpy(game_dir, curr_dir);
-					sprintf(mp3_dir, "%s/mp3", curr_dir);
+					if (messagebox(MB_BOOTBIOS))
+					{
+						strcpy(game_dir, curr_dir);
+						resource_source_close(&ncdz_game_source);
+						sprintf(mp3_dir, "%s/mp3", curr_dir);
 					run_emulation = 1;
 					neogeo_boot_bios = 1;
 				}

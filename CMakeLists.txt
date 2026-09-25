@@ -536,6 +536,8 @@ if (${TARGET} STREQUAL "NCDZ")
         ncdz/memintrf.h
         ncdz/ncdz.c
         ncdz/ncdz.h
+        ncdz/resource_source.c
+        ncdz/resource_source.h
         ncdz/sprite_common.h
         ncdz/sprite_common.c
         ncdz/${PLATFORM_LOWER}_sprite.c
@@ -611,6 +613,19 @@ set_source_files_properties(
     INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
 )
+
+if (${TARGET} STREQUAL "NCDZ")
+    set_source_files_properties(
+        src/common/filer.c
+        src/ncdz/cdrom.c
+        src/ncdz/driver.c
+        src/ncdz/resource_source.c
+        src/${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
+        PROPERTIES
+        INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
+        COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
+    )
+endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
@@ -860,6 +875,30 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    if(${TARGET} STREQUAL "NCDZ")
+        add_executable(resource_source_tests
+            tests/resource_source_tests.c
+            src/ncdz/resource_source.c
+            src/zip/zip_archive.c
+        )
+        target_include_directories(resource_source_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+            ${MINIZ_INCLUDE_DIRS}
+        )
+        if(MINIZ_COMPILE_DEFINITIONS)
+            target_compile_definitions(resource_source_tests PRIVATE
+                ${MINIZ_COMPILE_DEFINITIONS}
+            )
+        endif()
+        target_compile_definitions(resource_source_tests PRIVATE
+            TEST_RESOURCE_ROOT="${CMAKE_CURRENT_BINARY_DIR}"
+        )
+        target_link_libraries(resource_source_tests PRIVATE
+            "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
+        )
+        add_test(NAME resource_source_tests COMMAND resource_source_tests)
+    endif()
+
     add_executable(zip_archive_tests
         tests/zip_archive_tests.c
         src/zip/zip_archive.c
