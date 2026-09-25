@@ -556,7 +556,7 @@ static void expand_subkey(uint32_t* subkey, uint16_t seed)
 	subkey[1] = 0;
 
 	for (i = 0; i < 64; ++i)
-		subkey[i / 32] |= BIT(seed, bits[i]) << (i % 32);
+		subkey[i / 32] |= (uint32_t)BIT(seed, bits[i]) << (i % 32);
 }
 
 

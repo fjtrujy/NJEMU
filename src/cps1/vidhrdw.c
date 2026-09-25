@@ -197,7 +197,10 @@ static int cps1_gfx_decode(void)
 
 	for (; i < size >> 2; i++)
 	{
-		uint32_t src = gfx[4 * i] + (gfx[4 * i + 1] << 8) + (gfx[4 * i + 2] << 16) + (gfx[4 * i + 3] << 24);
+		uint32_t src = (uint32_t)gfx[4 * i]
+		             | ((uint32_t)gfx[4 * i + 1] << 8)
+		             | ((uint32_t)gfx[4 * i + 2] << 16)
+		             | ((uint32_t)gfx[4 * i + 3] << 24);
 		uint32_t dw = 0;
 
 		for (j = 0; j < 8; j++)
@@ -210,7 +213,7 @@ static int cps1_gfx_decode(void)
 			if (mask & 0x00ff0000) n |= 4;
 			if (mask & 0xff000000) n |= 8;
 
-			dw |= n << (j * 4);
+			dw |= (uint32_t)n << (j * 4);
 		}
 
 		data = ((dw & 0x0000000f) >>  0) | ((dw & 0x000000f0) <<  4)

@@ -623,6 +623,15 @@ if (USE_ASAN)
 endif()
 if (USE_UBSAN)
     list(APPEND SANITIZER_OPTIONS -fsanitize=undefined)
+
+    # c68k.c is a small source file built around macros that expand into a very
+    # large interpreter.  Instrumenting that expansion with UBSan takes many
+    # minutes per target with AppleClang and makes a cross-core diagnostic sweep
+    # impractical.  Keep the surrounding CPU interface and the rest of NJEMU
+    # instrumented; c68k can still be audited separately when required.
+    set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
+        COMPILE_OPTIONS "-fno-sanitize=undefined"
+    )
 endif()
 
 
