@@ -34,6 +34,14 @@ If `zip_open()` cannot open the path as a ZIP, NJEMU keeps the existing
 directory backend based on `open()`, `read()`, `lseek()` and `close()`. This is
 required by NCDZ and cache/resource paths.
 
+The legacy wrapper also no longer needs its pointer/integer warning
+suppression. `zip_open()` and archive-mode `zopen()` historically returned the
+`unzFile` pointer cast to `int`/`long`, even though every caller only tests the
+result against `-1` and the archive read/close paths ignore that pseudo-handle.
+They now return `0` as the success sentinel instead. Desktop, PSP and PS2 all
+compile that legacy path with the project's `-Werror` settings without
+`-Wpointer-to-int-cast`/`-Wvoid-pointer-to-int-cast` pragmas.
+
 `mz_zip_reader_locate_file(..., 0)` was verified to retain the case-insensitive
 lookup behavior expected by the previous `unzLocateFile()` path.
 
@@ -44,9 +52,10 @@ lookup behavior expected by the previous `unzLocateFile()` path.
 - Desktop/macOS: Homebrew miniz 3.1.2 is available and the backend builds and
   runs against it.
 - PSP: `psp-packages` now contains a miniz 3.1.2 package built from the same
-  upstream release, with no `MINIZ_NO_*` configuration. The PSP compiler is not
-  exposed in the current NJEMU shell, so the package recipe was inspected but
-  the NJEMU PSP build/runtime path could not be exercised here.
+  upstream release, with no `MINIZ_NO_*` configuration. The local PSPDEV
+  installation exposes that package through its normal CMake config and NJEMU
+  builds against it using the same `src/zip/zfile_miniz.c` backend as PS2 and
+  Desktop.
 
 The CMake integration keeps miniz's include directories and compile definitions
 local to `src/zip/zfile_miniz.c`; they are not propagated to the CPU cores or
@@ -79,6 +88,19 @@ fatal error or exception during the smoke window. PCSX2's normal log does not
 capture NJEMU EE stdout, so this is a PS2 boot/runtime smoke rather than a full
 ROM-load trace on real hardware.
 
+The PSP MVS `Release`, `GUI=OFF`, `COMMAND_LIST=OFF`, `SAVE_STATE=ON`,
+`ADHOC=OFF` cross-build also succeeds with the installed miniz package. This
+configuration uses the same miniz reader implementation as PS2; there is no
+PSP-specific ZIP backend.
+
+The resulting `EBOOT.PBP` was also booted with PPSSPP 1.20.2 using the build
+directory as the application directory. PPSSPP loaded the relocatable MVS
+module, its import tables and module metadata, reached the NJEMU module entry
+and reported the application as booted without a fatal error during the smoke
+window. As with the PS2 smoke, PPSSPP's normal log does not capture NJEMU's
+ROM-loader stdout, so the real-ROM equivalence evidence still comes primarily
+from the Desktop smokes until a PSP stdout/psplink run is recorded.
+
 ## PS2 size measurements
 
 All rows use the same MVS configuration and GCC 15.2.0 toolchain.
@@ -109,6 +131,42 @@ The optimized final ELF contains the reader path (`mz_zip_reader_*`),
 `mz_crc32`, and `tinfl_decompress`. It contains no `mz_zip_writer_*` or
 `tdefl_*` symbols.
 
+## PSP size and linker behavior
+
+For an apples-to-apples MVS `Release`, `GUI=OFF`, `COMMAND_LIST=OFF`,
+`SAVE_STATE=ON`, `ADHOC=OFF` build, the legacy ZIP backend produces 711,468
+bytes of text, 13,188 bytes of data and 1,942,976 bytes of BSS. The installed
+full miniz package produces 768,904 bytes of text, 13,204 bytes of data and
+1,944,080 bytes of BSS before any linker garbage collection, an increase of
+57,436 bytes of text and 1,104 bytes of BSS.
+
+The installed PSP `libminiz.a` is also built as four monolithic text objects
+(`miniz.c`, `miniz_zip.c`, `miniz_tinfl.c`, `miniz_tdef.c`), so unused writer
+and deflate functions are retained once `miniz_zip.c` is selected. Their text
+sizes are approximately 7.2 KiB, 54.6 KiB, 10.8 KiB and 24.6 KiB respectively;
+the final NJEMU ELF confirms that `mz_zip_writer_*`, `mz_deflate*` and `tdefl_*`
+symbols are present even though NJEMU only calls the reader API.
+
+A temporary evaluation build of the same upstream 3.1.2 sources using only
+official feature switches (`MINIZ_NO_DEFLATE_APIS`, `MINIZ_NO_ZLIB_APIS` and
+`MINIZ_NO_TIME`) reduces that same NJEMU ELF to 708,964 bytes of text, 13,196
+bytes of data and 1,944,080 bytes of BSS. No `mz_zip_writer_*`, `mz_deflate*` or
+`tdefl_*` symbols remain. Compared with the equivalent legacy build, the
+reader-only miniz ELF uses 2,504 fewer bytes of text and 1,392 fewer bytes in
+the combined loaded sections (the miniz reader still accounts for 1,104 bytes
+more BSS). This makes a separate reader-only package/target worthwhile on PSP;
+the general-purpose full miniz package does not need to be weakened for other
+users.
+
+Unlike PS2, enabling `-Wl,--gc-sections` globally is not currently safe for a
+PSP PRX. The PSP SDK `linkfile.prx` does not `KEEP` the module-info/import-stub
+sections that must survive section GC. A normal GC link loses
+`.rodata.sceModuleInfo` and `psp-fixup-imports` reports `no sceModuleInfo section
+found`. Forcing `module_info` back into the link is not sufficient when miniz
+itself is built with function/data sections: `psp-fixup-imports` then reports a
+stub/NID size mismatch because additional PSP import metadata has been
+discarded. NJEMU therefore does not enable `--gc-sections` for PSP.
+
 ## Runtime memory
 
 The reader remains streaming and never allocates an entire ROM entry. On the
@@ -128,18 +186,31 @@ budget.
 
 ## Decision
 
-There is no size justification for a separate read-only `MINIZ_NO_*` variant at
-this point. Full upstream miniz 3.1.2 is suitable for NJEMU when the PS2 port is
-built with `-ffunction-sections -fdata-sections` and the final application uses
-`--gc-sections`.
+The same `src/zip/zfile_miniz.c` reader implementation is suitable for Desktop,
+PS2 and PSP; there is no reason to keep platform-specific ZIP code. The package
+and linker strategy does need to differ between the consoles, however.
 
-NJEMU therefore keeps the miniz backend behind `USE_MINIZ=ON` and adds
-`--gc-sections` for PS2 and PSP miniz builds, but leaves the option disabled by default for
-now. Before making it the default backend:
+On PS2, full upstream miniz 3.1.2 is suitable when the port is built with
+`-ffunction-sections -fdata-sections` and the final application uses
+`--gc-sections`: the linker then removes the writer/deflate path and the final
+ELF is slightly smaller than the legacy MiniZip build.
+
+On PSP, the installed full upstream archive is appreciably larger than the
+legacy backend and the PRX linker cannot currently use `--gc-sections` safely.
+The measured reader-only build using miniz's official `MINIZ_NO_*` switches is
+smaller than the legacy backend, so a separate read-only package/target is
+justified there.
+
+NJEMU therefore keeps the miniz backend behind `USE_MINIZ=ON` and uses
+`--gc-sections` only for PS2 miniz builds. PSP and PS2 otherwise share the same
+reader implementation. The option remains disabled by default for now. Before
+making it the default backend:
 
 1. update/reinstall the `ps2sdk-ports` miniz package with function/data sections;
-2. build/verify the existing `psp-packages` miniz package with the same section
-   granularity and validate NJEMU on PSP/PPSSPP;
+2. add a PSP reader-only miniz package/target configured through the official
+   `MINIZ_NO_*` switches above; the measured result is smaller than the legacy
+   backend and avoids relying on unsafe PRX section GC. Fixing the PSP SDK
+   linker script can remain a separate toolchain improvement;
 3. decide how Desktop CI should obtain miniz on Linux before making Desktop
    builds depend on it by default.
 
