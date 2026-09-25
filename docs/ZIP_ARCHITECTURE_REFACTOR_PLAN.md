@@ -1,7 +1,7 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z1 complete; Z2 next
+Status: Z0-Z2 complete; Z3 next
 
 ## Purpose
 
@@ -392,6 +392,44 @@ Exit criteria:
 - ROM loading never uses `zopen`/`zread`/`zgetc`/`zclose`;
 - `zip_findfirst`/`zip_findnext` no longer have a consumer;
 - CPS1/CPS2/MVS real-ROM smokes pass.
+
+#### Z2 implementation result
+
+`src/common/loadrom.c` now owns a dedicated `zip_archive_t` and `zip_entry_t`
+for ROM loading. `file_open()` preserves the historical search order (current
+set, parent beside the current set, then the launch `roms/` parent path), but
+uses `zip_archive_find_crc()` directly instead of generic archive enumeration.
+If no CRC match exists, `zip_archive_stat()` performs the metadata-only
+filename check that distinguishes a CRC mismatch from a missing ROM.
+
+`file_open()` now returns `rom_file_open_result_t` with the existing numeric
+semantics preserved as named values: `ROM_FILE_OPEN_OK` (0),
+`ROM_FILE_OPEN_NOT_FOUND` (-1) and `ROM_FILE_OPEN_CRC_MISMATCH` (-2). CPS1,
+CPS2 and MVS callers use those names where they distinguish the error cases.
+`file_read()` and `file_getc()` are thin semantic helpers over the owned
+`zip_entry_t`, and `file_close()` explicitly closes the entry and archive.
+
+The runtime `zip_findfirst()` / `zip_findnext()` API, `struct zip_find_t`,
+`legacy_find_index`, and the private indexed-stat/count helpers were deleted
+because they have no remaining runtime consumer. The similarly named
+converter API under `romcnv/` is separate and remains deferred to Z6.
+
+Validation after Z2:
+
+- Desktop Release builds pass for CPS1, CPS2 and MVS;
+- real 30-frame smokes pass for `ghoulsu`, `mpangu` and `pbobbl2n`;
+- PS2 MVS and PSP MVS Release cross-builds pass;
+- Desktop CTest is 10/10 when excluding only the previously documented
+  Release/NDEBUG `memory_plan_tests` abort;
+- `git diff --check` passes and no runtime `zip_findfirst`/`zip_findnext`
+  references remain.
+
+Z2 temporarily adds roughly 4 KiB of static entry state while the explicit ROM
+entry and the legacy cache/NCDZ adapter coexist. Compared with the Z1 build,
+PS2 MVS `text+data+bss` grows from 3,534,492 B to 3,538,444 B (+3,952 B),
+and PSP MVS grows from 2,726,884 B to 2,730,824 B (+3,940 B). This is expected
+to be reclaimed as Z3-Z5 remove `legacy_entry`; it is not new decompression
+working memory.
 
 ### Z3 — MVS/CPS2 cache migration
 

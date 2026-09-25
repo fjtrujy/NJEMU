@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <sys/unistd.h>
 #include "emumain.h"
+#include "zip/zip_archive.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -19,7 +20,8 @@ void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 	Local Variables
 ******************************************************************************/
 
-static int64_t rom_fd = -1;
+static zip_archive_t rom_archive;
+static zip_entry_t rom_entry;
 
 #if defined(GUI)
 #define ROM_LOAD_PROGRESS_MIN_SIZE (128 * 1024)
@@ -92,11 +94,13 @@ static void file_read_with_progress(uint8_t *buf, size_t length)
 	Search and Open File from ZIP File
 --------------------------------------------------------*/
 
-int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
+rom_file_open_result_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
 {
-	int i, found = 0;
-	struct zip_find_t file;
+	int i;
+	zip_entry_info_t info;
 	char path[PATH_MAX];
+
+	file_close();
 
 	for (i = 0; i < 3; i++)
 	{
@@ -107,61 +111,34 @@ int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, ch
 		case 2: sprintf(path, "%sroms/%s.zip", launchDir, fname2); break;
 		}
 
-		if (zip_open(path) != -1)
+		if (zip_archive_open(&rom_archive, path))
 		{
-			if (zip_findfirst(&file))
-			{
-				if (file.crc32 == crc)
-				{
-					found = 1;
-				}
-				else
-				{
-					if (!found)
-					{
-						while (zip_findnext(&file))
-						{
-							if (file.crc32 == crc)
-							{
-								found = 1;
-								break;
-							}
-						}
-					}
-				}
-			}
-
-			if (!found)
+			if (zip_archive_find_crc(&rom_archive, crc, &info))
 			{
 				if (fname)
+					strcpy(fname, info.name);
+				if (zip_entry_open(&rom_archive, info.name, &rom_entry))
 				{
-					int64_t fd;
-
-					if ((fd = zopen(fname)) != -1)
-					{
-						zclose(fd);
-						found = 2;
-					}
+					return ROM_FILE_OPEN_OK;
 				}
-				zip_close();
+				zip_archive_close(&rom_archive);
+				return ROM_FILE_OPEN_NOT_FOUND;
 			}
+
+			if (fname && zip_archive_stat(&rom_archive, fname, &info))
+			{
+				zip_archive_close(&rom_archive);
+				return ROM_FILE_OPEN_CRC_MISMATCH;
+			}
+
+			zip_archive_close(&rom_archive);
 		}
 
-		if (found || fname2 == NULL) break;
+		if (fname2 == NULL)
+			break;
 	}
 
-	if (found == 1)
-	{
-		if (fname) strcpy(fname, file.name);
-		rom_fd = zopen(file.name);
-		return rom_fd;
-	}
-	else if (found == 2)
-	{
-		return -2;	// CRC error
-	}
-
-	return -1;	// not found
+	return ROM_FILE_OPEN_NOT_FOUND;
 }
 
 
@@ -171,12 +148,8 @@ int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, ch
 
 void file_close(void)
 {
-	if (rom_fd != -1)
-	{
-		zclose(rom_fd);
-		zip_close();
-		rom_fd = -1;
-	}
+	zip_entry_close(&rom_entry);
+	zip_archive_close(&rom_archive);
 }
 
 
@@ -186,9 +159,9 @@ void file_close(void)
 
 size_t file_read(void *buf, size_t length)
 {
-	if (rom_fd != -1)
-		return zread(rom_fd, buf, length);
-	return -1;
+	if (rom_entry.reader != NULL)
+		return zip_entry_read(&rom_entry, buf, length);
+	return (size_t)-1;
 }
 
 
@@ -198,8 +171,8 @@ size_t file_read(void *buf, size_t length)
 
 int file_getc(void)
 {
-	if (rom_fd != -1)
-		return zgetc(rom_fd);
+	if (rom_entry.reader != NULL)
+		return zip_entry_getc(&rom_entry);
 	return -1;
 }
 

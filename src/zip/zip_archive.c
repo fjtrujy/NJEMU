@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "zip/zip_archive.h"
-#include "zip/zip_archive_internal.h"
 
 static bool zip_entry_info_from_stat(const mz_zip_archive_file_stat *stat,
                                      zip_entry_info_t *info)
@@ -47,30 +46,6 @@ void zip_archive_close(zip_archive_t *archive)
         mz_zip_reader_end(&archive->archive);
 
     memset(archive, 0, sizeof(*archive));
-}
-
-bool zip_archive_stat_index(zip_archive_t *archive,
-                            size_t index,
-                            zip_entry_info_t *info)
-{
-    mz_zip_archive_file_stat stat;
-
-    if (archive == NULL || !archive->is_open || info == NULL)
-        return false;
-    if (index >= mz_zip_reader_get_num_files(&archive->archive))
-        return false;
-    if (!mz_zip_reader_file_stat(&archive->archive, (mz_uint)index, &stat))
-        return false;
-
-    return zip_entry_info_from_stat(&stat, info);
-}
-
-size_t zip_archive_entry_count(zip_archive_t *archive)
-{
-    if (archive == NULL || !archive->is_open)
-        return 0;
-
-    return (size_t)mz_zip_reader_get_num_files(&archive->archive);
 }
 
 bool zip_archive_stat(zip_archive_t *archive,

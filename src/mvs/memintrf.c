@@ -496,7 +496,7 @@ static int load_rom_cpu1(void)
 
 		if (res < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -615,7 +615,7 @@ static int load_rom_cpu2(void)
 		strcpy(fname, cpu2rom[i].name);
 		if ((res = file_open(game_name, parent, cpu2rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -711,7 +711,7 @@ static int load_rom_gfx1(void)
 	strcpy(fname, sfix_name);
 	if ((res = file_open(game_name, bios_zip, sfix_crc, fname)) < 0)
 	{
-		if (res == -1)
+		if (res == ROM_FILE_OPEN_NOT_FOUND)
 			error_file(fname);
 		else
 			error_crc(fname);
@@ -777,7 +777,7 @@ static int load_rom_gfx2(void)
 			strcpy(fname, gfx2rom[i].name);
 			if ((res = file_open(game_name, parent, gfx2rom[i].crc, fname)) < 0)
 			{
-				if (res == -1)
+				if (res == ROM_FILE_OPEN_NOT_FOUND)
 					error_file(fname);
 				else
 					error_crc(fname);
@@ -840,7 +840,7 @@ static int load_rom_gfx3(void)
 				strcpy(fname, gfx3rom[i].name);
 				if ((res = file_open(game_name, parent, gfx3rom[i].crc, fname)) < 0)
 				{
-					if (res == -1)
+					if (res == ROM_FILE_OPEN_NOT_FOUND)
 						error_file(fname);
 					else
 						error_crc(fname);
@@ -909,7 +909,7 @@ static int load_rom_gfx4(void)
 	strcpy(fname, lorom_name);
 	if ((res = file_open(game_name, bios_zip, lorom_crc, fname)) < 0)
 	{
-		if (res == -1)
+		if (res == ROM_FILE_OPEN_NOT_FOUND)
 			error_file(fname);
 		else
 			error_crc(fname);
@@ -1015,7 +1015,7 @@ static int load_rom_sound1(void)
 			strcpy(fname, snd1rom[i].name);
 			if ((res = file_open(game_name, parent, snd1rom[i].crc, fname)) < 0)
 			{
-				if (res == -1)
+				if (res == ROM_FILE_OPEN_NOT_FOUND)
 					error_file(fname);
 				else
 					error_crc(fname);
@@ -1067,7 +1067,7 @@ static int load_rom_sound2(void)
 		strcpy(fname, snd2rom[i].name);
 		if ((res = file_open(game_name, parent, snd2rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -1114,7 +1114,7 @@ static int load_rom_user1(int reload)
 		strcpy(fname, bios_name[neogeo_bios]);
 		if ((res = file_open(game_name, bios_zip, bios_crc[neogeo_bios], fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -1132,7 +1132,7 @@ static int load_rom_user1(int reload)
 		strcpy(fname, usr1rom[0].name);
 		if ((res = file_open(game_name, parent, usr1rom[0].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -1215,7 +1215,7 @@ static int load_rom_user2(void)
 		strcpy(fname, usr2rom[i].name);
 		if ((res = file_open(game_name, parent, usr2rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);

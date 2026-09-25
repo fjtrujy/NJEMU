@@ -16,33 +16,17 @@
 
 #include "emumain.h"
 #include "zip/zip_archive.h"
-#include "zip/zip_archive_internal.h"
 #include "zip/zfile.h"
 
 /*
  * Transitional compatibility state. New code must use zip_archive_t and
- * zip_entry_t directly. Z2-Z5 will remove this adapter with the legacy API.
+ * zip_entry_t directly. Z3-Z5 will remove this adapter with the legacy API.
  */
 static zip_archive_t legacy_archive;
 static zip_entry_t legacy_entry;
-static size_t legacy_find_index;
 
 static char basedir[PATH_MAX];
 static char *basedirend;
-
-static int legacy_zip_stat(size_t index, struct zip_find_t *file)
-{
-    zip_entry_info_t info;
-
-    if (!zip_archive_stat_index(&legacy_archive, index, &info))
-        return 0;
-
-    strncpy(file->name, info.name, sizeof(file->name) - 1);
-    file->name[sizeof(file->name) - 1] = '\0';
-    file->length = (size_t)info.size;
-    file->crc32 = info.crc32;
-    return 1;
-}
 
 int zip_open(const char *path)
 {
@@ -70,27 +54,6 @@ void zip_close(void)
     zip_entry_close(&legacy_entry);
 
     zip_archive_close(&legacy_archive);
-}
-
-int zip_findfirst(struct zip_find_t *file)
-{
-    if (!legacy_archive.is_open || zip_archive_entry_count(&legacy_archive) == 0)
-        return 0;
-
-    legacy_find_index = 0;
-    return legacy_zip_stat(legacy_find_index, file);
-}
-
-int zip_findnext(struct zip_find_t *file)
-{
-    if (!legacy_archive.is_open)
-        return 0;
-
-    legacy_find_index++;
-    if (legacy_find_index >= zip_archive_entry_count(&legacy_archive))
-        return 0;
-
-    return legacy_zip_stat(legacy_find_index, file);
 }
 
 int64_t zopen(const char *filename)

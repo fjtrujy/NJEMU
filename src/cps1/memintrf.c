@@ -128,7 +128,7 @@ static int load_rom_cpu1(void)
 		strcpy(fname, cpu1rom[i].name);
 		if ((res = file_open(game_name, parent, cpu1rom[i].crc, fname)) < 0)
 		{
-			if (res == -2)
+			if (res == ROM_FILE_OPEN_CRC_MISMATCH)
 				error_crc(fname);
 			else
 				error_file(fname);
@@ -169,7 +169,7 @@ static int load_rom_cpu2(void)
 		strcpy(fname, cpu2rom[i].name);
 		if ((res = file_open(game_name, parent, cpu2rom[i].crc, fname)) < 0)
 		{
-			if (res == -2)
+			if (res == ROM_FILE_OPEN_CRC_MISMATCH)
 				error_crc(fname);
 			else
 				error_file(fname);
@@ -210,7 +210,7 @@ static int load_rom_gfx1(void)
 		strcpy(fname, gfx1rom[i].name);
 		if ((res = file_open(game_name, parent, gfx1rom[i].crc, fname)) < 0)
 		{
-			if (res == -2)
+			if (res == ROM_FILE_OPEN_CRC_MISMATCH)
 				error_crc(fname);
 			else
 				error_file(fname);
@@ -253,7 +253,7 @@ static int load_rom_sound1(void)
 		strcpy(fname, snd1rom[i].name);
 		if ((res = file_open(game_name, parent, snd1rom[i].crc, fname)) < 0)
 		{
-			if (res == -2)
+			if (res == ROM_FILE_OPEN_CRC_MISMATCH)
 				error_crc(fname);
 			else
 				error_file(fname);

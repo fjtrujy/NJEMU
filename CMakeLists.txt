@@ -209,7 +209,6 @@ set(COMMON_SRC
     emumain.h
     emumain.c
     zip/zip_archive.h
-    zip/zip_archive_internal.h
     zip/zfile.h
     sound/sndintrf.h
     sound/sndintrf.c
@@ -600,10 +599,11 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
-# Keep miniz's usage requirements local to the ZIP implementation translation
-# units. Propagating them through the executable would add MINIZ_STATIC_DEFINE
-# and miniz include paths to every NJEMU source file.
+# Keep miniz's usage requirements local to translation units that use the
+# explicit ZIP API. Propagating them through the executable would add
+# MINIZ_STATIC_DEFINE and miniz include paths to every NJEMU source file.
 set_source_files_properties(
+    src/common/loadrom.c
     src/zip/zip_archive.c
     src/zip/zfile.c
     PROPERTIES

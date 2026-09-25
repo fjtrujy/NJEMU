@@ -32,7 +32,14 @@ struct rom_t
 };
 
 #if (EMU_SYSTEM != NCDZ)
-int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname);
+typedef enum rom_file_open_result_t
+{
+	ROM_FILE_OPEN_CRC_MISMATCH = -2,
+	ROM_FILE_OPEN_NOT_FOUND = -1,
+	ROM_FILE_OPEN_OK = 0
+} rom_file_open_result_t;
+
+rom_file_open_result_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname);
 void file_close(void);
 size_t file_read(void *buf, size_t length);
 int file_getc(void);
