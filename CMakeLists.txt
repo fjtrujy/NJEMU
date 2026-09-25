@@ -61,6 +61,7 @@ option(SAVE_STATE "Save State" OFF)
 option(RELEASE "Release" OFF)
 option(SYSTEM_BUTTONS "System Buttons" OFF)
 option(USE_ASAN "Use ASAN" OFF)
+option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
@@ -132,10 +133,21 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
 
 # Common Flags options
-set(COMMON_FLAGS
-    -O3 
-    -ffast-math
-)
+if (USE_ASAN OR USE_UBSAN)
+    # Sanitizer builds are diagnostic builds.  Keep enough optimization to
+    # exercise realistic code paths while preserving useful stack traces and
+    # avoiding the very expensive sanitizer instrumentation generated for the
+    # large CPU cores at -O3.
+    set(COMMON_FLAGS
+        -O1
+        -fno-omit-frame-pointer
+    )
+else()
+    set(COMMON_FLAGS
+        -O3
+        -ffast-math
+    )
+endif()
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND COMMON_FLAGS
         -fsingle-precision-constant
@@ -601,12 +613,16 @@ if(GUI)
     add_dependencies(${TARGET} font_assets)
 endif()
 
-# Add the warning flags
+# Sanitizers are intentionally selectable independently. AddressSanitizer is
+# useful for lifecycle/ownership testing, while UndefinedBehaviorSanitizer can
+# make the large emulated CPU translation units substantially more expensive to
+# compile and is better run as a separate diagnostic pass.
+set(SANITIZER_OPTIONS)
 if (USE_ASAN)
-    set(ASAN_OPTIONS
-        -fsanitize=address
-        -fsanitize=undefined
-    )
+    list(APPEND SANITIZER_OPTIONS -fsanitize=address)
+endif()
+if (USE_UBSAN)
+    list(APPEND SANITIZER_OPTIONS -fsanitize=undefined)
 endif()
 
 
@@ -677,8 +693,8 @@ else()
     message(STATUS "Resources staged from ${RESOURCE_DIR} into: ${DESTINATION_DIR}")
 endif()
 
-target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${ASAN_OPTIONS})
-target_link_options(${TARGET} PUBLIC ${ASAN_OPTIONS})
+target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${SANITIZER_OPTIONS})
+target_link_options(${TARGET} PUBLIC ${SANITIZER_OPTIONS})
 
 # Add platform specific libraries
 if (PLATFORM STREQUAL "DESKTOP")

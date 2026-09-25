@@ -188,6 +188,45 @@ void emu_main(void)
 #endif
 }
 
+bool emu_test_exit_after_init(void)
+{
+#if defined(DESKTOP)
+	const char *value = getenv("NJEMU_TEARDOWN_TEST");
+	return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+#else
+	return false;
+#endif
+}
+
+static uint32_t emu_test_frame_limit(void)
+{
+#if defined(DESKTOP)
+	static bool initialized;
+	static uint32_t frame_limit;
+
+	if (!initialized)
+	{
+		const char *value = getenv("NJEMU_TEST_FRAME_LIMIT");
+		char *end = NULL;
+		unsigned long parsed = 0;
+
+		if (value != NULL && value[0] != '\0')
+		{
+			parsed = strtoul(value, &end, 10);
+			if (end == value || *end != '\0' || parsed > UINT32_MAX)
+				parsed = 0;
+		}
+
+		frame_limit = (uint32_t)parsed;
+		initialized = true;
+	}
+
+	return frame_limit;
+#else
+	return 0;
+#endif
+}
+
 
 /*--------------------------------------------------------
 	Initialize Frameskip
@@ -258,6 +297,11 @@ void update_screen(void)
 
 	frames_displayed++;
 	frames_since_last_fps++;
+	{
+		uint32_t test_frame_limit = emu_test_frame_limit();
+		if (test_frame_limit != 0 && frames_displayed >= test_frame_limit)
+			Loop = LOOP_EXIT;
+	}
 
 	if (!skipped_it)
 	{

@@ -97,6 +97,38 @@ Acceptance criteria:
 Deliverable: one focused bug-fix commit plus any reusable regression harness that
 is suitable for the repository.
 
+### Phase A investigation status
+
+The historical SIGSEGV is no longer reproducible on the current branch. Repeated
+MVS init/teardown testing completed 70 normal processes and 104 AddressSanitizer
+processes across titles that had previously appeared in the failing sweep, with
+no crash or sanitizer ownership/lifetime report. This is evidence that the
+original defect has already been removed, not evidence for a new speculative
+fix.
+
+The strongest historical candidate is `84d7721 Fix Desktop teardown ordering`.
+That change made the Desktop thread driver wait for the worker before destroying
+its semaphores and made video teardown destroy renderer-owned textures before the
+renderer/window. Both changes directly address the lifetime classes implicated by
+the old nondeterministic exit crash, but the old failure was not captured with a
+backtrace, so this should remain a likely explanation rather than a proven root
+cause.
+
+Reusable diagnostics are retained for future regressions:
+
+- `NJEMU_TEARDOWN_TEST=1` exits immediately after successful core init and then
+  exercises the normal target cleanup path;
+- `NJEMU_TEST_FRAME_LIMIT=<frames>` exercises a short real emulation run before
+  cleanup;
+- `USE_ASAN` and `USE_UBSAN` are independently selectable, and sanitizer builds
+  use `-O1 -fno-omit-frame-pointer` so the large CPU cores remain practical to
+  instrument and backtraces remain useful.
+
+The deterministic init/teardown hook is shared by CPS1, CPS2, MVS and NCDZ so the
+same lifecycle audit can be applied to all Desktop cores. A no-GUI Desktop build
+also supplies the otherwise GUI-owned output-update stub, which keeps
+`COMMAND_LIST=ON` linkable for this diagnostic configuration.
+
 ---
 
 ## Phase B - PS2 MVS cache-I/O performance

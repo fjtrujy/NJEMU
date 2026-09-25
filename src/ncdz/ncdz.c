@@ -329,7 +329,10 @@ void neogeo_main(void)
 
 						if (neogeo_init())
 						{
-							neogeo_run();
+							if (emu_test_exit_after_init())
+								Loop = LOOP_EXIT;
+							else
+								neogeo_run();
 						}
 						neogeo_exit();
 					}

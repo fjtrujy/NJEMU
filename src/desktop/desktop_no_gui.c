@@ -82,6 +82,10 @@ int ui_show_popup(int draw) {
 	return 0;
 }
 
+int ui_output_update(void) {
+	return 0;
+}
+
 void file_browser(void) {
 	Loop = LOOP_EXEC;
 	strcpy(game_dir, "roms");

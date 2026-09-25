@@ -255,6 +255,7 @@ extern volatile int Loop;
 extern volatile int Sleep;
 
 void emu_main(void);
+bool emu_test_exit_after_init(void);
 
 void autoframeskip_reset(void);
 

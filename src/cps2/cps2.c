@@ -262,7 +262,10 @@ void cps2_main(void)
 				{
 					if (cps2_init())
 					{
-						cps2_run();
+						if (emu_test_exit_after_init())
+							Loop = LOOP_EXIT;
+						else
+							cps2_run();
 					}
 					cps2_exit();
 				}
