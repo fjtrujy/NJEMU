@@ -35,16 +35,12 @@ static int  zip_filepos;
 /*------------------------------------------------------
 	Open ZIP File
 ------------------------------------------------------*/
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wvoid-pointer-to-int-cast"
 int zip_open(const char *path)
 {
 	if (unzfile != NULL) zip_close();
 
 	if ((unzfile = unzOpen(path)) != NULL)
-		return (int)unzfile;
+		return 0;
 
 	strcpy(basedir, path);
 	strcat(basedir, "/");
@@ -52,8 +48,6 @@ int zip_open(const char *path)
 
 	return -1;
 }
-#pragma clang diagnostic pop
-#pragma GCC diagnostic pop
 
 /*------------------------------------------------------
 	Close ZIP File
@@ -116,10 +110,6 @@ int zip_findnext(struct zip_find_t *file)
 /*------------------------------------------------------
 	Open File in ZIP Archive
 ------------------------------------------------------*/
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wvoid-pointer-to-int-cast"
 int64_t zopen(const char *filename)
 {
 	zip_cached_len = 0;
@@ -135,12 +125,10 @@ int64_t zopen(const char *filename)
 
 	if (unzLocateFile(unzfile, filename) == UNZ_OK)
 		if (unzOpenCurrentFile(unzfile) == UNZ_OK)
-			return (long)unzfile;
+			return 0;
 
 	return -1;
 }
-#pragma clang diagnostic pop
-#pragma GCC diagnostic pop
 
 
 /*------------------------------------------------------

@@ -65,9 +65,10 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
-# Keep the new backend opt-in until the console packages are built with
-# per-function/data sections. Without that granularity the linker cannot drop
-# unused writer/deflate code from upstream miniz's static archive.
+# Keep the new backend opt-in while the console size/link strategy is being
+# finalized. PS2 can discard unused miniz functions when the port is built
+# with per-function/data sections; PSP's current PRX linker script cannot use
+# --gc-sections safely (it drops required module/import metadata).
 option(USE_MINIZ "Use miniz for ZIP archive reading" OFF)
 
 # Add options to compiler definitions
@@ -785,10 +786,10 @@ if (USE_MINIZ)
     # Link the imported archive by path so its public compile definitions and
     # include directories do not leak into every NJEMU translation unit.
     target_link_libraries(${TARGET} PRIVATE "$<TARGET_FILE:miniz::miniz>")
-    if (PLATFORM STREQUAL "PS2" OR PLATFORM STREQUAL "PSP")
-        # Console miniz packages should be compiled with -ffunction-sections
-        # and -fdata-sections so this can discard unused writer/deflate APIs
-        # while keeping the upstream library otherwise unmodified.
+    if (PLATFORM STREQUAL "PS2")
+        # The PS2 miniz package should be compiled with -ffunction-sections and
+        # -fdata-sections so this can discard unused writer/deflate APIs while
+        # keeping the upstream library otherwise unmodified.
         target_link_options(${TARGET} PRIVATE -Wl,--gc-sections)
     endif()
 endif()
