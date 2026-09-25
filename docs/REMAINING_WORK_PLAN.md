@@ -129,6 +129,19 @@ same lifecycle audit can be applied to all Desktop cores. A no-GUI Desktop build
 also supplies the otherwise GUI-owned output-update stub, which keeps
 `COMMAND_LIST=ON` linkable for this diagnostic configuration.
 
+Current macOS sanitizer limitation: the AppleClang 17 AddressSanitizer runtime
+can stall before `main()` while initializing its shadow memory. A sampled hung
+process is entirely inside `libclang_rt.asan_osx_dynamic.dylib`, reached from
+`libsystem_malloc`/dyld while `InitializeShadowMemory()` is walking the dyld
+shared cache. This is a host/runtime limitation rather than an NJEMU teardown
+failure, so sanitizer coverage on this host must not be reported as a core
+regression. LeakSanitizer is also unsupported by this macOS ASan runtime.
+
+The normal no-GUI CPS1 diagnostic build has additionally completed a successful
+`ghoulsu` init/teardown smoke run through the shared harness. The remaining
+cross-core sanitizer sweep should continue when the sanitizer runtime is usable;
+do not add emulator workarounds for the host ASan startup stall.
+
 ---
 
 ## Phase B - PS2 MVS cache-I/O performance
