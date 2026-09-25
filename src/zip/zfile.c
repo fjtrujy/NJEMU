@@ -1,227 +1,230 @@
 /******************************************************************************
 
-	zfile.c
+    zfile.c
 
-	ZIP File Operation Functions
+    ZIP File Operation Functions backed by miniz
 
 ******************************************************************************/
 
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <miniz.h>
+
 #include "emumain.h"
-#include "zip/unzip.h"
+#include "zip/zfile.h"
 
-
-/******************************************************************************
-	Local Variables
-******************************************************************************/
-
-static unzFile unzfile = NULL;
+static mz_zip_archive zip_archive;
+static mz_zip_reader_extract_iter_state *zip_reader;
+static mz_zip_archive_file_stat zip_file_stat;
+static mz_uint zip_find_index;
+static int zip_archive_open;
 
 static char basedir[PATH_MAX];
 static char *basedirend;
-static char zip_cache[4096];
-static size_t  zip_cached_len;
-static int  zip_filepos;
+static unsigned char zip_cache[4096];
+static size_t zip_cached_len;
+static size_t zip_filepos;
+static mz_uint64 zip_streamed_len;
 
-// TODO: FJTRUJY The scope of this functions are wrong as they are mixing the zip and file operations.
-// Additionally we have required to use int64_t as file descriptor, to be compatible with 64-bit systems.
-
-
-/******************************************************************************
-	Global Functions
-******************************************************************************/
-
-/*------------------------------------------------------
-	Open ZIP File
-------------------------------------------------------*/
-int zip_open(const char *path)
+static int zip_close_reader(void)
 {
-	if (unzfile != NULL) zip_close();
+    mz_bool complete;
+    mz_bool ok;
 
-	if ((unzfile = unzOpen(path)) != NULL)
-		return 0;
+    if (zip_reader == NULL)
+        return 0;
 
-	strcpy(basedir, path);
-	strcat(basedir, "/");
-	basedirend = strrchr(basedir, '/') + 1;
-
-	return -1;
+    /* Legacy MiniZip only reported CRC failure after the whole entry had been
+       consumed; closing a partially-read entry was otherwise successful. */
+    complete = zip_streamed_len >= zip_file_stat.m_uncomp_size;
+    ok = mz_zip_reader_extract_iter_free(zip_reader);
+    zip_reader = NULL;
+    zip_streamed_len = 0;
+    return (!complete || ok) ? 0 : -1;
 }
 
-/*------------------------------------------------------
-	Close ZIP File
-------------------------------------------------------*/
+static int zip_stat(mz_uint index, struct zip_find_t *file)
+{
+    mz_zip_archive_file_stat stat;
+
+    if (!mz_zip_reader_file_stat(&zip_archive, index, &stat))
+        return 0;
+
+    strncpy(file->name, stat.m_filename, sizeof(file->name) - 1);
+    file->name[sizeof(file->name) - 1] = '\0';
+    file->length = (size_t)stat.m_uncomp_size;
+    file->crc32 = stat.m_crc32;
+    return 1;
+}
+
+int zip_open(const char *path)
+{
+    int length;
+
+    if (zip_archive_open)
+        zip_close();
+
+    memset(&zip_archive, 0, sizeof(zip_archive));
+    if (mz_zip_reader_init_file(&zip_archive, path, 0))
+    {
+        zip_archive_open = 1;
+        return 0;
+    }
+
+    /* A non-ZIP path is the legacy directory backend used by NCDZ/cache data. */
+    length = snprintf(basedir, sizeof(basedir), "%s/", path);
+    if (length < 0 || (size_t)length >= sizeof(basedir))
+    {
+        basedir[0] = '\0';
+        basedirend = NULL;
+        return -1;
+    }
+    basedirend = basedir + length;
+    return -1;
+}
 
 void zip_close(void)
 {
-	if (unzfile)
-	{
-		unzClose(unzfile);
-		unzfile = NULL;
-	}
+    zip_close_reader();
+
+    if (zip_archive_open)
+    {
+        mz_zip_reader_end(&zip_archive);
+        memset(&zip_archive, 0, sizeof(zip_archive));
+        zip_archive_open = 0;
+    }
 }
-
-
-/*------------------------------------------------------
-	Search for File in ZIP Archive (First)
-------------------------------------------------------*/
 
 int zip_findfirst(struct zip_find_t *file)
 {
-	if (unzfile)
-	{
-		if (unzGoToFirstFile(unzfile) == UNZ_OK)
-		{
-			unz_file_info info;
+    if (!zip_archive_open || mz_zip_reader_get_num_files(&zip_archive) == 0)
+        return 0;
 
-			unzGetCurrentFileInfo(unzfile, &info, file->name, PATH_MAX);
-			file->length = info.uncompressed_size;
-			file->crc32 = info.crc;
-			return 1;
-		}
-	}
-	return 0;
+    zip_find_index = 0;
+    return zip_stat(zip_find_index, file);
 }
-
-
-/*------------------------------------------------------
-	Search for File in ZIP Archive (Subsequent)
-------------------------------------------------------*/
 
 int zip_findnext(struct zip_find_t *file)
 {
-	if (unzfile)
-	{
-		if (unzGoToNextFile(unzfile) == UNZ_OK)
-		{
-			unz_file_info info;
+    if (!zip_archive_open)
+        return 0;
 
-			unzGetCurrentFileInfo(unzfile, &info, file->name, PATH_MAX);
-			file->length = info.uncompressed_size;
-			file->crc32 = info.crc;
-			return 1;
-		}
-	}
-	return 0;
+    zip_find_index++;
+    if (zip_find_index >= mz_zip_reader_get_num_files(&zip_archive))
+        return 0;
+
+    return zip_stat(zip_find_index, file);
 }
 
-
-/*------------------------------------------------------
-	Open File in ZIP Archive
-------------------------------------------------------*/
 int64_t zopen(const char *filename)
 {
-	zip_cached_len = 0;
+    int file_index;
 
-	if (unzfile == NULL)
-	{
-		int32_t fd;
+    zip_cached_len = 0;
+    zip_filepos = 0;
+    zip_streamed_len = 0;
 
-		strcpy(basedirend, filename);
-		fd = open(basedir, O_RDONLY, 0777);
-		return (fd < 0) ? -1 : (long)fd;
-	}
+    if (!zip_archive_open)
+    {
+        int32_t fd;
+        int length;
+        size_t remaining;
 
-	if (unzLocateFile(unzfile, filename) == UNZ_OK)
-		if (unzOpenCurrentFile(unzfile) == UNZ_OK)
-			return 0;
+        if (basedirend == NULL)
+            return -1;
+        remaining = (size_t)(basedir + sizeof(basedir) - basedirend);
+        length = snprintf(basedirend, remaining, "%s", filename);
+        if (length < 0 || (size_t)length >= remaining)
+            return -1;
+        fd = open(basedir, O_RDONLY, 0777);
+        return (fd < 0) ? -1 : (int64_t)fd;
+    }
 
-	return -1;
+    zip_close_reader();
+
+    file_index = mz_zip_reader_locate_file(&zip_archive, filename, NULL, 0);
+    if (file_index < 0 || !mz_zip_reader_file_stat(&zip_archive, (mz_uint)file_index, &zip_file_stat))
+        return -1;
+
+    zip_reader = mz_zip_reader_extract_iter_new(&zip_archive, (mz_uint)file_index, 0);
+    return (zip_reader != NULL) ? 0 : -1;
 }
-
-
-/*------------------------------------------------------
-	Close File in ZIP Archive
-------------------------------------------------------*/
 
 int zclose(int64_t fd)
 {
-	zip_cached_len = 0;
+    (void)fd;
+    zip_cached_len = 0;
+    zip_filepos = 0;
 
-	if (unzfile == NULL)
-	{
-		if (fd != -1) close((int32_t)fd);
-		return 0;
-	}
-	return unzCloseCurrentFile(unzfile);
+    if (!zip_archive_open)
+    {
+        if (fd != -1)
+            close((int32_t)fd);
+        return 0;
+    }
+
+    return zip_close_reader();
 }
-
-
-/*------------------------------------------------------
-	Read File from ZIP Archive
-------------------------------------------------------*/
 
 size_t zread(int64_t fd, void *buf, size_t size)
 {
-	if (unzfile == NULL)
-		return read((int32_t)fd, buf, size);
+    if (!zip_archive_open)
+    {
+        ssize_t result = read((int32_t)fd, buf, size);
+        return (result < 0) ? 0 : (size_t)result;
+    }
 
-	return unzReadCurrentFile(unzfile, buf, size);
+    if (zip_reader != NULL)
+    {
+        size_t result = mz_zip_reader_extract_iter_read(zip_reader, buf, size);
+        zip_streamed_len += result;
+        return result;
+    }
+    return 0;
 }
-
-
-/*------------------------------------------------------
-	Read 1 Byte from File in ZIP Archive
-------------------------------------------------------*/
 
 int zgetc(int64_t fd)
 {
-	if (zip_cached_len == 0)
-	{
-		if (unzfile == NULL)
-			zip_cached_len = read((int32_t)fd, zip_cache, 4096);
-		else
-			zip_cached_len = unzReadCurrentFile(unzfile, zip_cache, 4096);
-		if (zip_cached_len == 0) return EOF;
-		zip_filepos = 0;
-	}
-	zip_cached_len--;
-	return zip_cache[zip_filepos++] & 0xff;
+    if (zip_cached_len == 0)
+    {
+        zip_cached_len = zread(fd, zip_cache, sizeof(zip_cache));
+        if (zip_cached_len == 0)
+            return EOF;
+        zip_filepos = 0;
+    }
+
+    zip_cached_len--;
+    return zip_cache[zip_filepos++] & 0xff;
 }
-
-
-/*------------------------------------------------------
-	Get File Size in ZIP Archive
-------------------------------------------------------*/
 
 size_t zsize(int64_t fd)
 {
-	unz_file_info info;
+    if (!zip_archive_open)
+    {
+        off_t pos = lseek((int32_t)fd, 0, SEEK_CUR);
+        off_t len = lseek((int32_t)fd, 0, SEEK_END);
+        lseek((int32_t)fd, pos, SEEK_SET);
+        return (len < 0) ? 0 : (size_t)len;
+    }
 
-	if (unzfile == NULL)
-	{
-        off_t len, pos = lseek((int32_t)fd, 0, SEEK_CUR);
-
-		len = lseek((int32_t)fd, 0, SEEK_END);
-		lseek((int32_t)fd, pos, SEEK_CUR);
-
-		return len;
-	}
-
-	unzGetCurrentFileInfo(unzfile, &info, NULL, 0);
-
-	return info.uncompressed_size;
+    return (size_t)zip_file_stat.m_uncomp_size;
 }
-
-
-/*------------------------------------------------------
-	Get File Size in ZIP Archive
-	(By Filename Without Opening ZIP File)
-------------------------------------------------------*/
 
 #if (EMU_SYSTEM == NCDZ)
 int zlength(const char *filename)
 {
-	int64_t fd;
-	int length;
+    int64_t fd = zopen(filename);
+    size_t length;
 
-	if ((fd = zopen(filename)) != -1)
-	{
-		length = zsize(fd);
-		zclose(fd);
-		return length;
-	}
-	return -1;
+    if (fd == -1)
+        return -1;
+
+    length = zsize(fd);
+    zclose(fd);
+    return (int)length;
 }
 #endif

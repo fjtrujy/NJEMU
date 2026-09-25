@@ -77,7 +77,7 @@ jobs:
       if: matrix.os == 'macOS-latest'
       run: |
         brew update
-        brew install cmake sdl2 libzip mad
+        brew install cmake sdl2 mad
 
     - name: Compile project
       run: |

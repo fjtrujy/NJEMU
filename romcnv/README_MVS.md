@@ -152,7 +152,7 @@ The emulator supports reading caches in **folder** and **zip** formats. The tabl
 | Cache miss (block load) | `lseek()` + `read()` — 1 syscall pair, direct offset | `zopen()` → scan zip dir + `zread()` decompress 64 KB + `zclose()` — **slowest** |
 | Cache hit | LRU pointer update only | LRU pointer update only |
 | I/O pattern | Random seek in single `crom` file ✅ | Sequential scan of zip entries + inflate ❌ |
-| Decompression CPU | **None** | zlib `inflate()` per 64 KB block — **significant on PSP/PS2** |
+| Decompression CPU | **None** | miniz inflate per 64 KB block — **significant on PSP/PS2** |
 | Startup (`fill_cache`) | Sequential `lseek`+`read` — fast | Open+decompress+close each block — **slowest** |
 
 ### Disk / Storage

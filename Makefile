@@ -97,6 +97,7 @@ RM = -rm
 INCDIR = \
 	src \
 	src/zip \
+	$(shell psp-config --psp-prefix)/include/miniz \
 
 
 #------------------------------------------------------------------------------
@@ -106,7 +107,6 @@ INCDIR = \
 MAINOBJS = \
 	emumain.o \
 	zip/zfile.o \
-	zip/unzip.o \
 	sound/sndintrf.o \
 	common/cache.o \
 	common/filer.o \
@@ -248,7 +248,7 @@ LDFLAGS = -L$(shell psp-config --psp-prefix)
 # Library
 #------------------------------------------------------------------------------
 
-LIBS = -lpspaudio -lpspgu -lpsppower -lz
+LIBS = -lpspaudio -lpspgu -lpsppower -lminiz -lz
 
 ifeq ($(ADHOC), 1)
 LIBS += -lpspwlan -lpspnet_adhoc -lpspnet_adhocctl -lpspnet_adhocmatching

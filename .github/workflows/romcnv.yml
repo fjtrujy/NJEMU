@@ -39,7 +39,7 @@ jobs:
       if: matrix.os == 'macOS-latest'
       run: |
         brew update
-        brew install cmake libzip
+        brew install cmake
 
     - name: Compile project
       run: |

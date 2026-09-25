@@ -4,15 +4,15 @@ Date: 2026-09-25
 
 ## Scope
 
-NJEMU historically embeds the 1998 MiniZip 0.15 implementation in
+NJEMU historically embedded the 1998 MiniZip 0.15 implementation in
 `src/zip/unzip.c`, with `src/zip/zfile.c` providing the application-facing API
-and a POSIX directory fallback. This pass evaluates an alternative backend
-using unmodified upstream miniz 3.1.2 while preserving that public API and the
-directory behavior.
+and a POSIX directory fallback. That embedded implementation has now been
+removed. `src/zip/zfile.c` uses external upstream miniz 3.1.2 directly while
+preserving that public API and the directory behavior.
 
-The legacy backend remains available through `USE_MINIZ=OFF`. The miniz backend
-is intentionally opt-in until the console packages have the linker-friendly
-build described below.
+The ROM converter had separate copies of the same legacy reader plus the old
+MiniZip writer. Those copies have also been removed: `romcnv/src/zfile.c` now
+uses miniz for both reading source ROM ZIPs and writing cache ZIPs.
 
 ## API actually used by NJEMU
 
@@ -34,13 +34,11 @@ If `zip_open()` cannot open the path as a ZIP, NJEMU keeps the existing
 directory backend based on `open()`, `read()`, `lseek()` and `close()`. This is
 required by NCDZ and cache/resource paths.
 
-The legacy wrapper also no longer needs its pointer/integer warning
-suppression. `zip_open()` and archive-mode `zopen()` historically returned the
-`unzFile` pointer cast to `int`/`long`, even though every caller only tests the
-result against `-1` and the archive read/close paths ignore that pseudo-handle.
-They now return `0` as the success sentinel instead. Desktop, PSP and PS2 all
-compile that legacy path with the project's `-Werror` settings without
-`-Wpointer-to-int-cast`/`-Wvoid-pointer-to-int-cast` pragmas.
+The old wrapper's pointer/integer warning suppression is no longer needed.
+`zip_open()` and archive-mode `zopen()` historically returned the `unzFile`
+pointer cast to `int`/`long`, even though every caller only tested the result
+against `-1`. The miniz implementation returns `0` as the success sentinel and
+does not convert archive pointers to integer pseudo-handles.
 
 `mz_zip_reader_locate_file(..., 0)` was verified to retain the case-insensitive
 lookup behavior expected by the previous `unzLocateFile()` path.
@@ -49,21 +47,21 @@ lookup behavior expected by the previous `unzLocateFile()` path.
 
 - PS2: miniz 3.1.2 is installed under `$PS2SDK/ports` and builds with the EE
   GCC 15.2.0 toolchain.
-- Desktop/macOS: Homebrew miniz 3.1.2 is available and the backend builds and
-  runs against it.
+- Desktop/macOS: an installed miniz 3.1.2 package is used when available. CMake
+  falls back to fetching the pinned upstream 3.1.2 tag when it is absent.
 - PSP: `psp-packages` now contains a miniz 3.1.2 package built from the same
   upstream release, with no `MINIZ_NO_*` configuration. The local PSPDEV
   installation exposes that package through its normal CMake config and NJEMU
-  builds against it using the same `src/zip/zfile_miniz.c` backend as PS2 and
+  builds against it using the same `src/zip/zfile.c` backend as PS2 and
   Desktop.
 
 The CMake integration keeps miniz's include directories and compile definitions
-local to `src/zip/zfile_miniz.c`; they are not propagated to the CPU cores or
+local to `src/zip/zfile.c`; they are not propagated to the CPU cores or
 other NJEMU translation units.
 
 ## Functional validation
 
-Desktop builds with `USE_MINIZ=ON` succeeded for CPS1, CPS2, MVS and NCDZ.
+Desktop miniz builds succeeded for CPS1, CPS2, MVS and NCDZ.
 The Release CTest runs also pass the ZIP-independent tests except for the
 existing `memory_plan_tests` Release/NDEBUG abort; that test does not exercise
 the archive backend.
@@ -100,6 +98,23 @@ and reported the application as booted without a fatal error during the smoke
 window. As with the PS2 smoke, PPSSPP's normal log does not capture NJEMU's
 ROM-loader stdout, so the real-ROM equivalence evidence still comes primarily
 from the Desktop smokes until a PSP stdout/psplink run is recorded.
+
+The final removal pass rebuilt MVS against the miniz-only tree on Desktop, PS2
+and PSP, and rebuilt CPS2 on Desktop. No embedded MiniZip source is required by
+any of those builds.
+
+`romcnv_mvs` and `romcnv_cps2` also build against miniz. Real conversions of
+`pbobbl2n` and `mpangu` using ZIP cache output produced archives that pass a
+full `unzip -t` integrity check. NJEMU then booted both games for 30 frames
+using those newly generated cache ZIPs, validating the converter writer and the
+runtime reader together. The converter keeps its streaming-style `zwrite()` API
+without buffering an entire cache entry in RAM: each output entry is staged in
+a temporary file and passed to `mz_zip_writer_add_cfile()` when closed.
+
+The converter's CMake build uses an installed miniz package when available and
+otherwise fetches the pinned upstream 3.1.2 tag, which also covers its
+Emscripten configuration. Emscripten is not installed on the local validation
+host, so the WASM target was not rebuilt in this pass.
 
 ## PS2 size measurements
 
@@ -186,9 +201,9 @@ budget.
 
 ## Decision
 
-The same `src/zip/zfile_miniz.c` reader implementation is suitable for Desktop,
-PS2 and PSP; there is no reason to keep platform-specific ZIP code. The package
-and linker strategy does need to differ between the consoles, however.
+The same `src/zip/zfile.c` reader implementation is used by Desktop, PS2 and
+PSP; there is no platform-specific ZIP code. The package and linker strategy
+does need to differ between the consoles, however.
 
 On PS2, full upstream miniz 3.1.2 is suitable when the port is built with
 `-ffunction-sections -fdata-sections` and the final application uses
@@ -201,19 +216,22 @@ The measured reader-only build using miniz's official `MINIZ_NO_*` switches is
 smaller than the legacy backend, so a separate read-only package/target is
 justified there.
 
-NJEMU therefore keeps the miniz backend behind `USE_MINIZ=ON` and uses
-`--gc-sections` only for PS2 miniz builds. PSP and PS2 otherwise share the same
-reader implementation. The option remains disabled by default for now. Before
-making it the default backend:
+NJEMU now requires miniz and uses `--gc-sections` only for PS2. Desktop can
+fetch the pinned upstream release when no package is installed; PS2 and PSP use
+their native toolchain packages. The old `src/zip/unzip.c/.h` implementation,
+the optional `USE_MINIZ` switch, and the duplicate MiniZip sources in `romcnv`
+have been removed.
 
-1. update/reinstall the `ps2sdk-ports` miniz package with function/data sections;
-2. add a PSP reader-only miniz package/target configured through the official
-   `MINIZ_NO_*` switches above; the measured result is smaller than the legacy
-   backend and avoids relying on unsafe PRX section GC. Fixing the PSP SDK
-   linker script can remain a separate toolchain improvement;
-3. decide how Desktop CI should obtain miniz on Linux before making Desktop
-   builds depend on it by default.
+The size work is still relevant after the migration. The next packaging
+optimizations are:
 
-The old `src/zip/unzip.c` backend should remain in-tree until those packaging
-steps are complete and the miniz path is the normal validated build on all
-supported platforms.
+1. build the `ps2sdk-ports` miniz package with `-ffunction-sections` and
+   `-fdata-sections`, allowing NJEMU's PS2 `--gc-sections` link to discard the
+   unused writer/deflate implementation;
+2. provide a PSP reader-only miniz target configured with official `MINIZ_NO_*`
+   options, because global section GC is not currently safe for PSP PRX files.
+
+Until those package changes land, the installed full miniz archives retain
+unused code on the consoles and therefore produce larger binaries than the
+historical embedded MiniZip baseline. This is a packaging/link-granularity
+issue, not a reason to keep a second ZIP implementation in NJEMU.

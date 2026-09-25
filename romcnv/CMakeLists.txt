@@ -37,9 +37,6 @@ if(EMSCRIPTEN)
     add_definitions(-DWASM_BUILD)
     
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
-    
-    # USE_ZLIB needed at compile time for headers
-    add_compile_options("-sUSE_ZLIB=1")
 endif()
 
 # Version
@@ -80,16 +77,41 @@ endif()
 # Include directories
 include_directories(
     src
-    src/zip
 )
 
 # Common source files
 set(COMMON_SRC
     common.c
     zfile.c
-    unzip.c
-    zip.c
 )
+
+# Prefer an installed miniz package, but keep the desktop/WASM converter
+# self-contained by fetching the exact upstream release when it is absent.
+find_package(miniz 3.1.2 CONFIG QUIET)
+if(TARGET miniz::miniz)
+    set(ROMCNV_MINIZ_TARGET miniz::miniz)
+else()
+    include(FetchContent)
+    set(BUILD_EXAMPLES OFF CACHE BOOL "Build miniz examples" FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL "Build miniz tests" FORCE)
+    set(INSTALL_PROJECT OFF CACHE BOOL "Install miniz" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build miniz shared" FORCE)
+    FetchContent_Declare(miniz_upstream
+        GIT_REPOSITORY https://github.com/richgel999/miniz.git
+        GIT_TAG 3.1.2
+        GIT_SHALLOW TRUE
+    )
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.14")
+        FetchContent_MakeAvailable(miniz_upstream)
+    else()
+        FetchContent_GetProperties(miniz_upstream)
+        if(NOT miniz_upstream_POPULATED)
+            FetchContent_Populate(miniz_upstream)
+            add_subdirectory(${miniz_upstream_SOURCE_DIR} ${miniz_upstream_BINARY_DIR} EXCLUDE_FROM_ALL)
+        endif()
+    endif()
+    set(ROMCNV_MINIZ_TARGET miniz)
+endif()
 
 # Add specific target source files
 if (${TARGET} STREQUAL "MVS")
@@ -160,16 +182,10 @@ if(EMSCRIPTEN)
         "SHELL:-s ENVIRONMENT='web'"
         "SHELL:-s NO_EXIT_RUNTIME=1"
         "SHELL:-s INVOKE_RUN=0"
-        "SHELL:-s USE_ZLIB=1"
         "SHELL:--preload-file ${ROMINFO_SOURCE}@/rominfo.${TARGET_LOWER}"
     )
 else()
     target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
 endif()
 
-# Add common libraries (zlib handled by Emscripten port for WASM builds)
-if(NOT EMSCRIPTEN)
-    target_link_libraries(${BINARY_TARGET} PUBLIC
-        z
-    )
-endif()
+target_link_libraries(${BINARY_TARGET} PRIVATE ${ROMCNV_MINIZ_TARGET})
