@@ -229,6 +229,58 @@ Exit criteria:
 - baseline documented;
 - tests can distinguish metadata lookup, stream reading and source selection.
 
+#### Z0 recorded baseline
+
+Baseline commit: `0ff1712` (`Plan ZIP architecture refactor`), rebuilt on
+2026-09-26 before the Z1 source changes. All builds below use Release,
+`GUI=OFF`, `COMMAND_LIST=OFF`, `SAVE_STATE=ON` and `ADHOC=OFF`.
+
+Runtime legacy API ownership at this point is:
+
+- `src/common/loadrom.c`: archive open/close, global enumeration,
+  entry open/read/getc/close; this is the only runtime consumer of
+  `zip_findfirst()` / `zip_findnext()`;
+- `src/common/cache.c`: ZIP-cache archive and entry operations;
+- `src/common/filer.c`: NCDZ/title ZIP probing and entry reads;
+- `src/ncdz/cdrom.c` and `src/ncdz/driver.c`: mixed ZIP/directory resource
+  reads and `zlength()`;
+- `src/mvs/memintrf.c` and `src/mvs/biosmenu.c`: residual ZIP/cache entry
+  reads and cleanup;
+- `romcnv/src/zfile.c`: a separate converter compatibility API, intentionally
+  deferred to Z6/Z7.
+
+Cross-build gates pass for Desktop CPS1/CPS2/MVS/NCDZ, PS2 MVS and PSP MVS.
+The established real-data smoke set remains CPS1 `ghoulsu`, CPS2 `mpangu`,
+MVS `pbobbl2n` and NCDZ `Windjammers` (directory source). The miniz
+producer/consumer baseline remains the `pbobbl2n` and `mpangu` conversions
+recorded in `docs/ZIP_MINIZ_EVALUATION.md`.
+
+Pre-Z1 binary measurements:
+
+| Build | Baseline size |
+| --- | ---: |
+| Desktop CPS1 executable | 990,008 B |
+| Desktop CPS2 executable | 367,656 B |
+| Desktop MVS executable | 474,768 B |
+| Desktop NCDZ executable | 402,856 B |
+| PS2 MVS `.text` | 891,040 B |
+| PS2 MVS `.data` | 391,060 B |
+| PS2 MVS `.bss` | 2,251,848 B |
+| PS2 MVS `text+data+bss` | 3,533,948 B |
+| PS2 MVS ELF file | 3,277,680 B |
+| PSP MVS `.text` | 768,904 B |
+| PSP MVS `.data` | 13,204 B |
+| PSP MVS `.bss` | 1,944,080 B |
+| PSP MVS `text+data+bss` | 2,726,188 B |
+| PSP MVS ELF file | 2,444,212 B |
+| PSP MVS PRX | 914,874 B |
+| PSP MVS EBOOT.PBP | 915,250 B |
+
+The Release CTest baseline has the pre-existing `memory_plan_tests`
+NDEBUG abort documented by the miniz/memory work; it is unrelated to ZIP.
+Z1 adds a focused ZIP test using a generated archive under the build
+directory, never under `resources/`.
+
 ### Z1 — Explicit ZIP archive and entry objects
 
 Introduce the new ZIP-only API around miniz.
