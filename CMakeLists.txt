@@ -65,6 +65,10 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
+# Keep the new backend opt-in until the console packages are built with
+# per-function/data sections. Without that granularity the linker cannot drop
+# unused writer/deflate code from upstream miniz's static archive.
+option(USE_MINIZ "Use miniz for ZIP archive reading" OFF)
 
 # Add options to compiler definitions
 if (GUI)
@@ -209,9 +213,6 @@ set(COMMON_SRC
     emumain.h
     emumain.c
     zip/zfile.h
-    zip/zfile.c
-    zip/unzip.h
-    zip/unzip.c
     sound/sndintrf.h
     sound/sndintrf.c
     common/cache.h
@@ -254,6 +255,28 @@ set(COMMON_SRC
 	common/sound.h
     common/sound.c
 )
+
+if (NOT USE_MINIZ)
+    # Keep the proven legacy backend available until miniz has been validated
+    # on every toolchain, and as a direct size/behavior comparison during the
+    # migration.
+    list(APPEND COMMON_SRC
+        zip/zfile.c
+        zip/unzip.h
+        zip/unzip.c
+    )
+else()
+    find_package(miniz 3.1.2 CONFIG REQUIRED)
+    get_target_property(MINIZ_INCLUDE_DIRS miniz::miniz INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(MINIZ_COMPILE_DEFINITIONS miniz::miniz INTERFACE_COMPILE_DEFINITIONS)
+    if (NOT MINIZ_INCLUDE_DIRS)
+        set(MINIZ_INCLUDE_DIRS "")
+    endif()
+    if (NOT MINIZ_COMPILE_DEFINITIONS)
+        set(MINIZ_COMPILE_DEFINITIONS "")
+    endif()
+    list(APPEND COMMON_SRC zip/zfile_miniz.c)
+endif()
 
 # Additional source files based on options
 if (ADHOC)
@@ -557,6 +580,16 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
+if (USE_MINIZ)
+    # Keep miniz's usage requirements local to the one translation unit that
+    # includes its headers. Propagating them through the executable would add
+    # MINIZ_STATIC_DEFINE and miniz include paths to every NJEMU source file.
+    set_source_files_properties(src/zip/zfile_miniz.c PROPERTIES
+        INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
+        COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
+    )
+endif()
+
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
 set(UI_UNICODE_GLYPH_SOURCE "${CMAKE_BINARY_DIR}/generated/ui_unicode_glyph.c")
@@ -745,6 +778,18 @@ elseif(PLATFORM STREQUAL "PSP")
             pspnet_adhocctl
             pspnet_adhocmatching
         )
+    endif()
+endif()
+
+if (USE_MINIZ)
+    # Link the imported archive by path so its public compile definitions and
+    # include directories do not leak into every NJEMU translation unit.
+    target_link_libraries(${TARGET} PRIVATE "$<TARGET_FILE:miniz::miniz>")
+    if (PLATFORM STREQUAL "PS2" OR PLATFORM STREQUAL "PSP")
+        # Console miniz packages should be compiled with -ffunction-sections
+        # and -fdata-sections so this can discard unused writer/deflate APIs
+        # while keeping the upstream library otherwise unmodified.
+        target_link_options(${TARGET} PRIVATE -Wl,--gc-sections)
     endif()
 endif()
 
