@@ -28,7 +28,7 @@ typedef struct zip_entry_t
     uint64_t size;
     uint64_t bytes_read;
     uint32_t crc32;
-    unsigned char byte_cache[4096];
+    unsigned char *byte_cache;
     size_t byte_cache_pos;
     size_t byte_cache_len;
 } zip_entry_t;

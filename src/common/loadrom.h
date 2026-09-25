@@ -46,19 +46,6 @@ int file_getc(void);
 int rom_load(struct rom_t *rom, uint8_t *mem, int idx, int max);
 #endif
 
-#if USE_CACHE && (EMU_SYSTEM == MVS)
-enum
-{
-	CACHE_INFO = 0,
-	CACHE_CROM,
-	CACHE_SROM,
-	CACHE_VROM
-};
-
-int cachefile_open(int type);
-int64_t cachefile_zopen(int type, const char *name);
-#endif
-
 void error_memory(const char *mem_name);
 void error_crc(const char *rom_name);
 void error_file(const char *rom_name);

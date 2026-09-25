@@ -10,6 +10,7 @@
 #include <sys/param.h>
 #include "emumain.h"
 #include "common/memory_sizes.h"
+#include "zip/zip_archive.h"
 
 #if USE_CACHE
 #define BLOCK_MASK			0xffff
@@ -55,7 +56,9 @@ static cache_t *tail;
 
 static int num_cache;
 static uint16_t ALIGN16_DATA blocks[MAX_CACHE_BLOCKS];
-static int64_t cache_fd;
+static int32_t cache_fd;
+static zip_archive_t cache_zip_archive;
+static zip_entry_t cache_zip_entry;
 
 int cache_type;
 static char spr_cache_name[PATH_MAX];
@@ -111,6 +114,116 @@ static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
 static int64_t cache_file_pos;
 static int64_t pcm_file_pos;
+
+int cachefile_open(int type)
+{
+	int32_t fd = -1;
+	char path[PATH_MAX];
+
+	switch (type)
+	{
+	case CACHE_INFO:
+		if (use_parent_crom && use_parent_srom && use_parent_vrom)
+		{
+			sprintf(path, "%s/%s_cache/cache_info", cache_dir, parent_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		else
+		{
+			sprintf(path, "%s/%s_cache/cache_info", cache_dir, game_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		break;
+
+	case CACHE_CROM:
+		if (use_parent_crom)
+		{
+			sprintf(path, "%s/%s_cache/crom", cache_dir, parent_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		if (fd < 0)
+		{
+			sprintf(path, "%s/%s_cache/crom", cache_dir, game_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		break;
+
+	case CACHE_SROM:
+		if (use_parent_srom)
+		{
+			sprintf(path, "%s/%s_cache/srom", cache_dir, parent_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		if (fd < 0)
+		{
+			sprintf(path, "%s/%s_cache/srom", cache_dir, game_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		break;
+
+	case CACHE_VROM:
+		if (use_parent_vrom)
+		{
+			sprintf(path, "%s/%s_cache/vrom", cache_dir, parent_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		if (fd < 0)
+		{
+			sprintf(path, "%s/%s_cache/vrom", cache_dir, game_name);
+			fd = open(path, O_RDONLY, 0777);
+		}
+		break;
+	}
+
+	return fd;
+}
+
+size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
+{
+	zip_archive_t archive = {0};
+	zip_entry_t entry = {0};
+	int use_parent = 0;
+	char path[PATH_MAX];
+	size_t bytes = 0;
+
+	switch (type)
+	{
+	case CACHE_CROM: use_parent = use_parent_crom; break;
+	case CACHE_SROM: use_parent = use_parent_srom; break;
+	case CACHE_VROM: use_parent = use_parent_vrom; break;
+	default: break;
+	}
+
+	if (use_parent && parent_name[0])
+	{
+		sprintf(path, "%s/%s_cache.zip", cache_dir, parent_name);
+		if (zip_archive_open(&archive, path))
+		{
+			if (zip_entry_open(&archive, name, &entry))
+			{
+				bytes = zip_entry_read(&entry, buf, size);
+				if (!zip_entry_close(&entry))
+					bytes = 0;
+				zip_archive_close(&archive);
+				return bytes;
+			}
+			zip_archive_close(&archive);
+		}
+	}
+
+	sprintf(path, "%s/%s_cache.zip", cache_dir, game_name);
+	if (!zip_archive_open(&archive, path))
+		return 0;
+
+	if (zip_entry_open(&archive, name, &entry))
+	{
+		bytes = zip_entry_read(&entry, buf, size);
+		if (!zip_entry_close(&entry))
+			bytes = 0;
+	}
+	zip_archive_close(&archive);
+	return bytes;
+}
 
 #ifdef CACHE_IO_PROFILE
 typedef struct cache_io_profile_s
@@ -368,9 +481,8 @@ static int zip_cache_open(int number)
 	fname[2] = cnv_table[ number       & 0x0f];
 	fname[3] = '\0';
 
-	cache_fd = zopen(fname);
-
-	return cache_fd != -1;
+	zip_entry_close(&cache_zip_entry);
+	return zip_entry_open(&cache_zip_archive, fname, &cache_zip_entry);
 }
 
 
@@ -378,10 +490,14 @@ static int zip_cache_open(int number)
 	Read Data File from ZIP Cache File
 ------------------------------------------------------*/
 
-#define zip_cache_load(offs)									\
-	zread(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
-	zclose(cache_fd);											\
-	cache_fd = -1;
+static int zip_cache_load(int offs)
+{
+	size_t bytes = zip_entry_read(&cache_zip_entry,
+		&GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);
+	int close_ok = zip_entry_close(&cache_zip_entry);
+
+	return bytes == CACHE_BLOCK_SIZE && close_ok;
+}
 
 
 /*------------------------------------------------------
@@ -478,7 +594,8 @@ static int fill_cache(void)
 			}
 
 			if (cache_type == CACHE_ZIPFILE) {
-				zip_cache_load(p->idx)
+				if (!zip_cache_load(p->idx))
+					return 0;
 			} else {
 				folder_cache_load(p->idx)
 			}
@@ -559,7 +676,8 @@ static int fill_cache(void)
 				}
 
 				if (cache_type == CACHE_ZIPFILE) {
-					zip_cache_load(p->idx)
+					if (!zip_cache_load(p->idx))
+						return 0;
 				} else {
 					folder_cache_load(p->idx)
 				}
@@ -688,7 +806,8 @@ static uint32_t read_cache_zipfile(uint32_t offset)
 		p->block = new_block;
 		blocks[new_block] = p->idx;
 
-		zip_cache_load(p->idx);
+		if (!zip_cache_load(p->idx))
+			return 0;
 	}
 	else p = &cache_data[idx];
 
@@ -818,6 +937,9 @@ void cache_init(void)
 {
 	int i;
 
+	zip_entry_close(&cache_zip_entry);
+	zip_archive_close(&cache_zip_archive);
+
 	if (cache_data)
 	{
 		free(cache_data);
@@ -921,7 +1043,8 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		requested_pcm_blocks = (int)(((uint64_t)memory_length_sound1 + CACHE_BLOCK_SIZE - 1) >> BLOCK_SHIFT);
 #endif
 
-	zip_close();
+	zip_entry_close(&cache_zip_entry);
+	zip_archive_close(&cache_zip_archive);
 
 #if (EMU_SYSTEM == MVS)
 
@@ -959,36 +1082,37 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		if (use_parent_crom && parent_name[0])
 		{
 			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
-			if (zip_open(spr_cache_name) != -1)
-			{
+			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
-			}
 		}
 
 		if (!found)
 		{
 			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
-			if (zip_open(spr_cache_name) != -1)
+			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
 		}
 
 		if (found)
 		{
-			if ((cache_fd = zopen("cache_info")) != -1)
+			if (zip_entry_open(&cache_zip_archive, "cache_info", &cache_zip_entry))
 			{
 				memset(version_str, 0, 8);
-				zread(cache_fd, version_str, 8);
+				if (zip_entry_read(&cache_zip_entry, version_str, 8) != 8)
+					found = 0;
 
-				if (strcmp(version_str, "MVS_" CACHE_VERSION) == 0)
+				if (found && strcmp(version_str, "MVS_" CACHE_VERSION) == 0)
 				{
-					zread(cache_fd, gfx_pen_usage[2], memory_length_gfx3 / 128);
-					zclose(cache_fd);
+					if (zip_entry_read(&cache_zip_entry, gfx_pen_usage[2],
+						memory_length_gfx3 / 128) != memory_length_gfx3 / 128)
+						found = 0;
 				}
 				else
 				{
-					zclose(cache_fd);
 					found = 0;
 				}
+				if (!zip_entry_close(&cache_zip_entry))
+					found = 0;
 			}
 			else
 			{
@@ -996,7 +1120,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 			}
 			if (!found)
 			{
-				zip_close();
+				zip_archive_close(&cache_zip_archive);
 				msg_printf(TEXT(UNSUPPORTED_VERSION_OF_CACHE_FILE), version_str[5], version_str[6]);
 				msg_printf(TEXT(CURRENT_REQUIRED_VERSION_IS_x));
 				msg_printf(TEXT(PLEASE_REBUILD_CACHE_FILE));
@@ -1056,13 +1180,13 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		cache_type = CACHE_ZIPFILE;
 
 		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
-		if (zip_open(spr_cache_name) == -1)
+		if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 		{
 			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, cache_parent_name);
-			if (zip_open(spr_cache_name) == -1)
+			if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 			{
 				found = 0;
-				zip_close();
+				zip_archive_close(&cache_zip_archive);
 			}
 		}
 	}
@@ -1115,29 +1239,36 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	}
 	else if (cache_type == CACHE_ZIPFILE)
 	{
-		if ((cache_fd = zopen("cache_info")) != -1)
+		if (zip_entry_open(&cache_zip_archive, "cache_info", &cache_zip_entry))
 		{
-			zread(cache_fd, version_str, 8);
+			if (zip_entry_read(&cache_zip_entry, version_str, 8) != 8)
+				found = 0;
 
-			if (strcmp(version_str, "CPS2" CACHE_VERSION) == 0)
+			if (found && strcmp(version_str, "CPS2" CACHE_VERSION) == 0)
 			{
-				zread(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
-				zread(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
-				zread(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
-				zread(cache_fd, block_empty, MAX_CACHE_BLOCKS);
-				zclose(cache_fd);
+				if (zip_entry_read(&cache_zip_entry, gfx_pen_usage[TILE08],
+					gfx_total_elements[TILE08]) != gfx_total_elements[TILE08] ||
+					zip_entry_read(&cache_zip_entry, gfx_pen_usage[TILE16],
+					gfx_total_elements[TILE16]) != gfx_total_elements[TILE16] ||
+					zip_entry_read(&cache_zip_entry, gfx_pen_usage[TILE32],
+					gfx_total_elements[TILE32]) != gfx_total_elements[TILE32] ||
+					zip_entry_read(&cache_zip_entry, block_empty,
+					MAX_CACHE_BLOCKS) != MAX_CACHE_BLOCKS)
+					found = 0;
 			}
 			else
 			{
-				zclose(cache_fd);
 				found = 0;
 			}
+			if (!zip_entry_close(&cache_zip_entry))
+				found = 0;
 		}
 		else
 		{
 			found = 0;
 		}
-		if (!found) zip_close();
+		if (!found)
+			zip_archive_close(&cache_zip_archive);
 	}
 	else /* CACHE_FOLDER */
 	{
@@ -1363,7 +1494,8 @@ void cache_shutdown(void)
 	}
 	else if (cache_type == CACHE_ZIPFILE)
 	{
-		zip_close();
+		zip_entry_close(&cache_zip_entry);
+		zip_archive_close(&cache_zip_archive);
 	}
 		/* CACHE_FOLDER: nothing to close (blocks opened/closed on demand) */
 
@@ -1398,7 +1530,8 @@ void cache_sleep(int flag)
 			}
 			else if (cache_type == CACHE_ZIPFILE)
 			{
-				zip_close();
+				zip_entry_close(&cache_zip_entry);
+				zip_archive_close(&cache_zip_archive);
 			}
 #if (EMU_SYSTEM == MVS)
 			if (pcm_cache_enable)
@@ -1422,7 +1555,7 @@ void cache_sleep(int flag)
 			}
 			else if (cache_type == CACHE_ZIPFILE)
 			{
-				zip_open(spr_cache_name);
+				zip_archive_open(&cache_zip_archive, spr_cache_name);
 			}
 			/* CACHE_FOLDER: nothing to reopen */
 #if (EMU_SYSTEM == MVS)

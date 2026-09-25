@@ -37,6 +37,17 @@ extern uint32_t (*read_cache)(uint32_t offset);
 extern void (*update_cache)(uint32_t offset);
 #if (EMU_SYSTEM == MVS)
 extern int pcm_cache_enable;
+
+enum
+{
+	CACHE_INFO = 0,
+	CACHE_CROM,
+	CACHE_SROM,
+	CACHE_VROM
+};
+
+int cachefile_open(int type);
+size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size);
 #else
 extern uint8_t *block_empty;
 extern uint32_t block_offset[MAX_CACHE_BLOCKS];

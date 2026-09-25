@@ -58,9 +58,6 @@ void zip_close(void)
 
 int64_t zopen(const char *filename)
 {
-    legacy_entry.byte_cache_pos = 0;
-    legacy_entry.byte_cache_len = 0;
-
     if (!legacy_archive.is_open)
     {
         int32_t fd;
@@ -83,9 +80,6 @@ int64_t zopen(const char *filename)
 
 int zclose(int64_t fd)
 {
-    legacy_entry.byte_cache_pos = 0;
-    legacy_entry.byte_cache_len = 0;
-
     if (!legacy_archive.is_open)
     {
         if (fd != -1)
@@ -105,23 +99,6 @@ size_t zread(int64_t fd, void *buf, size_t size)
     }
 
     return zip_entry_read(&legacy_entry, buf, size);
-}
-
-int zgetc(int64_t fd)
-{
-    if (legacy_archive.is_open)
-        return zip_entry_getc(&legacy_entry);
-
-    if (legacy_entry.byte_cache_pos >= legacy_entry.byte_cache_len)
-    {
-        legacy_entry.byte_cache_len =
-            zread(fd, legacy_entry.byte_cache, sizeof(legacy_entry.byte_cache));
-        legacy_entry.byte_cache_pos = 0;
-        if (legacy_entry.byte_cache_len == 0)
-            return EOF;
-    }
-
-    return legacy_entry.byte_cache[legacy_entry.byte_cache_pos++] & 0xff;
 }
 
 size_t zsize(int64_t fd)

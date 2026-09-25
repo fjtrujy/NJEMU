@@ -752,16 +752,13 @@ static int load_rom_gfx2(void)
 		}
 		else
 		{
-			int64_t zfd = cachefile_zopen(CACHE_SROM, "srom");
-			if (zfd == -1)
+			if (cachefile_zip_read(CACHE_SROM, "srom",
+				memory_region_gfx2, memory_length_gfx2) != memory_length_gfx2)
 			{
 				error_file("cache/srom");
 				return 0;
 			}
 			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
-			zread(zfd, memory_region_gfx2, memory_length_gfx2);
-			zclose(zfd);
-			zip_close();
 		}
 	}
 	else
@@ -990,16 +987,13 @@ static int load_rom_sound1(void)
 		}
 		else
 		{
-			int64_t zfd = cachefile_zopen(CACHE_VROM, "vrom");
-			if (zfd == -1)
+			if (cachefile_zip_read(CACHE_VROM, "vrom",
+				memory_region_sound1, memory_length_sound1) != memory_length_sound1)
 			{
 				error_file("cache/vrom");
 				return 0;
 			}
 			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
-			zread(zfd, memory_region_sound1, memory_length_sound1);
-			zclose(zfd);
-			zip_close();
 		}
 	}
 	else

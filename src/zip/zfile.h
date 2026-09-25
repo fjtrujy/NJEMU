@@ -19,7 +19,6 @@ void zip_close(void);
 
 int64_t zopen(const char *filename);
 size_t zread(int64_t fd, void *buf, size_t size);
-int zgetc(int64_t fd);
 int zclose(int64_t fd);
 size_t zsize(int64_t fd);
 #if (EMU_SYSTEM == NCDZ)

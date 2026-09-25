@@ -603,6 +603,7 @@ add_executable(${TARGET}
 # explicit ZIP API. Propagating them through the executable would add
 # MINIZ_STATIC_DEFINE and miniz include paths to every NJEMU source file.
 set_source_files_properties(
+    src/common/cache.c
     src/common/loadrom.c
     src/zip/zip_archive.c
     src/zip/zfile.c

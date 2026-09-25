@@ -7,9 +7,12 @@
  ******************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "zip/zip_archive.h"
+
+#define ZIP_ENTRY_BYTE_CACHE_SIZE 4096
 
 static bool zip_entry_info_from_stat(const mz_zip_archive_file_stat *stat,
                                      zip_entry_info_t *info)
@@ -100,7 +103,7 @@ bool zip_entry_open(zip_archive_t *archive,
 
     if (archive == NULL || !archive->is_open || name == NULL || entry == NULL)
         return false;
-    if (entry->reader != NULL)
+    if (entry->reader != NULL || entry->byte_cache != NULL)
         return false;
 
     memset(entry, 0, sizeof(*entry));
@@ -139,11 +142,21 @@ int zip_entry_getc(zip_entry_t *entry)
     if (entry == NULL || entry->reader == NULL)
         return EOF;
 
+    if (entry->byte_cache == NULL)
+    {
+        entry->byte_cache = malloc(ZIP_ENTRY_BYTE_CACHE_SIZE);
+        if (entry->byte_cache == NULL)
+        {
+            unsigned char value;
+            return zip_entry_read(entry, &value, 1) == 1 ? value : EOF;
+        }
+    }
+
     if (entry->byte_cache_pos >= entry->byte_cache_len)
     {
         entry->byte_cache_len = zip_entry_read(entry,
                                                entry->byte_cache,
-                                               sizeof(entry->byte_cache));
+                                               ZIP_ENTRY_BYTE_CACHE_SIZE);
         entry->byte_cache_pos = 0;
         if (entry->byte_cache_len == 0)
             return EOF;
@@ -161,6 +174,7 @@ bool zip_entry_close(zip_entry_t *entry)
         return false;
     if (entry->reader == NULL)
     {
+        free(entry->byte_cache);
         memset(entry, 0, sizeof(*entry));
         return true;
     }
@@ -169,6 +183,7 @@ bool zip_entry_close(zip_entry_t *entry)
        uncompressed entry has been consumed. */
     complete = entry->bytes_read >= entry->size;
     ok = mz_zip_reader_extract_iter_free(entry->reader);
+    free(entry->byte_cache);
     memset(entry, 0, sizeof(*entry));
     return !complete || ok;
 }
