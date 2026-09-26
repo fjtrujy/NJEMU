@@ -530,6 +530,20 @@ static void *ps2_textureLayer(void *data, uint8_t layerIndex)
 	return ps2->tex_layers[layerIndex].texture->Mem;
 }
 
+static void ps2_getOutputSize(void *data, int *width, int *height)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	int w = SCR_WIDTH;
+	int h = SCR_HEIGHT;
+
+	if (ps2 && ps2->gsGlobal) {
+		w = ps2->gsGlobal->Width;
+		h = ps2->gsGlobal->Height;
+	}
+	if (width) *width = w;
+	if (height) *height = h;
+}
+
 static void ps2_flipScreen(void *data, bool vsync);
 
 static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
@@ -1344,40 +1358,102 @@ static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 		GS_CLUT_PALLETE);
 }
 
-static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	if (!ps2 || textureIndex >= ps2->tex_layers_count ||
-	    !vertices || vertices_count == 0)
-		return;
+static void ps2_writeIndexedTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint8_t *pixels, int srcPitch)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSTEXTURE *tex;
+	uint8_t *dst;
+	int row;
 
-	texture_layer_t *layer = &ps2->tex_layers[textureIndex];
-	GSTEXTURE *tex = layer->texture;
+	if (!ps2 || textureIndex >= ps2->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	tex = ps2->tex_layers[textureIndex].texture;
+	if (!tex || !tex->Mem || tex->PSM != GS_PSM_T8 ||
+	    x < 0 || y < 0 || x + width > tex->Width || y + height > tex->Height)
+		return;
+	dst = (uint8_t *)tex->Mem;
+	for (row = 0; row < height; row++)
+		memcpy(dst + (size_t)(y + row) * tex->Width + x,
+			pixels + row * srcPitch, (size_t)width);
+}
+
+static GSTEXTURE *ps2_prepareSpriteTexture(ps2_video_t *ps2,
+	uint8_t textureIndex, const uint16_t *clut, uint8_t bank_index)
+{
+	GSTEXTURE *tex;
+	bool is_indexed;
+
+	if (!ps2 || textureIndex >= ps2->tex_layers_count)
+		return NULL;
+	tex = ps2->tex_layers[textureIndex].texture;
 	if (!tex || tex->Vram == GSKIT_ALLOC_ERROR)
-		return;
+		return NULL;
+	is_indexed = (tex->PSM == GS_PSM_T8);
 
-	bool is_indexed = (tex->PSM == GS_PSM_T8);
-
-	/* Only set CLUT for indexed (8-bit) textures */
 	if (is_indexed && clut != NULL) {
-		uint16_t *clut16 = (uint16_t *)clut;
-		ptrdiff_t offset = clut16 - ps2->clut_base;
+		ptrdiff_t offset = clut - ps2->clut_base;
 		ptrdiff_t total_entries =
 			(ptrdiff_t)ps2->clut_entries_per_bank * ps2->clut_bank_count;
+		gs_texclut texclut;
+
 		if (bank_index >= ps2->clut_bank_count ||
 		    offset < 0 || offset >= total_entries)
-			return;
+			return NULL;
 
-		tex->VramClut = (u32)ps2_vramClutForBankIndex(data, bank_index);
-		gs_texclut texclut = ps2_textclutForParameters(data, clut16, bank_index);
-
+		tex->VramClut = (u32)ps2_vramClutForBankIndex(ps2, bank_index);
+		texclut = ps2_textclutForParameters(ps2, (uint16_t *)clut, bank_index);
 		if (ps2->currentTexclut.specification.cov != texclut.specification.cov) {
 			ps2->currentTexclut = texclut;
 			gsKit_set_texclut(ps2->gsGlobal, texclut);
 		}
 	} else {
-		/* For non-indexed textures, clear CLUT usage */
 		tex->VramClut = 0;
 	}
+	return tex;
+}
+
+static void ps2_blitSpriteVertices(void *data, uint8_t textureIndex,
+	const uint16_t *clut, uint8_t bank_index,
+	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSTEXTURE *tex = ps2_prepareSpriteTexture(ps2, textureIndex, clut, bank_index);
+	uint32_t base;
+
+	if (!tex || !vertices || vertices_count == 0)
+		return;
+
+	/* The gsKit helper copies native vertices into its command queue, so a
+	 * small stack conversion buffer is safe and avoids target-sized backend
+	 * allocations. Keep chunks even because GU/GS sprites are vertex pairs. */
+	for (base = 0; base < vertices_count; ) {
+		GSPRIMUVPOINTFLAT native_vertices[256];
+		uint32_t count = vertices_count - base;
+		uint32_t i;
+		if (count > 256) count = 256;
+		if (count & 1u) count--;
+		if (count == 0) break;
+
+		for (i = 0; i < count; i++) {
+			const video_sprite_vertex_t *src = &vertices[base + i];
+			native_vertices[i].xyz2 = vertex_to_XYZ2(ps2->gsGlobal,
+				(float)src->x - 0.5f, (float)src->y - 0.5f, src->z);
+			native_vertices[i].uv = vertex_to_UV(tex, src->u, src->v);
+		}
+		gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex,
+			ps2->vertexColor, (int)count, native_vertices);
+		base += count;
+	}
+}
+
+static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
+	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSTEXTURE *tex = ps2_prepareSpriteTexture(ps2, textureIndex,
+		(const uint16_t *)clut, bank_index);
+	if (!tex || !vertices || vertices_count == 0)
+		return;
 
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex, ps2->vertexColor, vertices_count, vertices);
 }
@@ -1835,6 +1911,7 @@ video_driver_t video_ps2 = {
 	ps2_endFrame,
 	ps2_frameAddr,
 	ps2_video_read_frame,
+	ps2_getOutputSize,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,
@@ -1849,6 +1926,8 @@ video_driver_t video_ps2 = {
 	ps2_getNativeObjects,
 	ps2_uploadMem,
 	ps2_uploadClut,
+	ps2_writeIndexedTextureRect,
+	ps2_blitSpriteVertices,
 	ps2_blitTexture,
 	ps2_blitPoints,
 	ps2_flushCache,

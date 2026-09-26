@@ -530,7 +530,7 @@ if (${TARGET} STREQUAL "NCDZ")
         ncdz/resource_source.h
         ncdz/sprite_common.h
         ncdz/sprite_common.c
-        ncdz/${PLATFORM_LOWER}_sprite.c
+        ncdz/sprite.c
         ncdz/sprite.h
         ncdz/startup.c
         ncdz/timer.c

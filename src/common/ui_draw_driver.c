@@ -8,6 +8,7 @@
 
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
+#include "common/video_driver.h"
 #include <stddef.h>
 
 /******************************************************************************
@@ -22,13 +23,6 @@ static void *null_init(void *video_data)
 static void null_term(void *data)
 {
 	(void)data;
-}
-
-static void null_getOutputSize(void *data, int *width, int *height)
-{
-	(void)data;
-	if (width) *width = 0;
-	if (height) *height = 0;
 }
 
 static void null_getLogicalSize(void *data, int output_width, int output_height,
@@ -79,7 +73,6 @@ static void null_finishTextureDraw(void *data, int slot)
 const ui_draw_driver_t null_ui_draw_driver = {
 	null_init,
 	null_term,
-	null_getOutputSize,
 	null_getLogicalSize,
 	0,
 	null_uploadTexture,
@@ -98,7 +91,7 @@ void ui_draw_configure_layout(void)
 	int logical_width = 0;
 	int logical_height = 0;
 
-	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	video_driver->getOutputSize(video_data, &output_width, &output_height);
 	ui_draw_driver->getLogicalSize(ui_draw_data, output_width, output_height,
 		&logical_width, &logical_height);
 	ui_layout_init(logical_width, logical_height, output_width, output_height);

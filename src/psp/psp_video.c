@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /******************************************************************************
 		Local Variables/Structures
@@ -292,6 +293,13 @@ static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 	psp_video_t *psp = (psp_video_t *)data;
 	void *frame = psp_resolveFrame(psp, frameIndex);
 	return (void *)((uintptr_t)frame + ((x + (y << 9)) << 1));
+}
+
+static void psp_getOutputSize(void *data, int *width, int *height)
+{
+	(void)data;
+	if (width) *width = SCR_WIDTH;
+	if (height) *height = SCR_HEIGHT;
 }
 
 static void *psp_textureLayer(void *data, uint8_t layerIndex)
@@ -700,22 +708,89 @@ static void psp_uploadClut(void *data, uint16_t *clut, uint8_t bank_index)
 	sceKernelDcacheWritebackRange(clut, size);
 }
 
+static size_t psp_swizzled8_offset(uint16_t stride, int x, int y)
+{
+	const size_t block_width = 16;
+	const size_t block_height = 8;
+	const size_t block_size = block_width * block_height;
+	return (size_t)(y / (int)block_height) * stride * block_height +
+		(size_t)(x / (int)block_width) * block_size +
+		(size_t)(y % (int)block_height) * block_width +
+		(size_t)(x % (int)block_width);
+}
+
+static void psp_writeIndexedTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint8_t *pixels, int srcPitch)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	texture_layer_t *layer;
+	int row;
+
+	if (!psp || textureIndex >= psp->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	layer = &psp->tex_layers[textureIndex];
+	if (!layer->buffer || layer->bytes_per_pixel != 1 ||
+	    x < 0 || y < 0 || x + width > layer->width || y + height > layer->height)
+		return;
+
+	for (row = 0; row < height; row++) {
+		int column = 0;
+		while (column < width) {
+			int dst_x = x + column;
+			int run = 16 - (dst_x & 15);
+			if (run > width - column) run = width - column;
+			memcpy(layer->buffer + psp_swizzled8_offset(layer->stride,
+					dst_x, y + row),
+				pixels + row * srcPitch + column, (size_t)run);
+			column += run;
+		}
+	}
+}
+
+static void psp_bindSpriteTexture(psp_video_t *psp, uint8_t textureIndex,
+	const uint16_t *clut)
+{
+	texture_layer_t *layer = &psp->tex_layers[textureIndex];
+	if (psp->current_tex_layer != layer) {
+		psp->current_tex_layer = layer;
+		int is_indexed = (layer->bytes_per_pixel == 1);
+		sceGuTexMode(is_indexed ? GU_PSM_T8 : GU_PSM_5551, 0, 0,
+			is_indexed ? GU_TRUE : GU_FALSE);
+		sceGuTexImage(0, layer->width, layer->height, layer->stride, layer->buffer);
+	}
+	if (clut != NULL && psp->current_clut != clut) {
+		psp->current_clut = (uint16_t *)clut;
+		sceGuClutLoad(256 / 8, clut);
+	}
+}
+
+static void psp_blitSpriteVertices(void *data, uint8_t textureIndex,
+	const uint16_t *clut, uint8_t bank_index,
+	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	(void)bank_index;
+	if (!psp || textureIndex >= psp->tex_layers_count || !vertices ||
+	    vertices_count == 0)
+		return;
+
+	sceKernelDcacheWritebackRange(vertices,
+		vertices_count * sizeof(video_sprite_vertex_t));
+	psp_bindSpriteTexture(psp, textureIndex, clut);
+	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
+}
+
 static void psp_blitTexture(void *data, uint8_t textureIndex, void *clut,
 							uint8_t clut_index, uint32_t vertices_count,
 							void *vertices)
 {
 	psp_video_t *psp = (psp_video_t *)data;
-	texture_layer_t *layer = &psp->tex_layers[textureIndex];
-	if (psp->current_tex_layer != layer) {
-		psp->current_tex_layer = layer;
-		int is_indexed = (layer->bytes_per_pixel == 1);
-		sceGuTexMode(is_indexed ? GU_PSM_T8 : GU_PSM_5551, 0, 0, is_indexed ? GU_TRUE : GU_FALSE);
-		sceGuTexImage(0, layer->width, layer->height, layer->stride, layer->buffer);
-	}
-	if (clut != NULL && psp->current_clut != (uint16_t *)clut) {
-		psp->current_clut = (uint16_t *)clut;
-		sceGuClutLoad(256 / 8, clut);
-	}
+	(void)clut_index;
+	if (!psp || textureIndex >= psp->tex_layers_count || !vertices ||
+	    vertices_count == 0)
+		return;
+	psp_bindSpriteTexture(psp, textureIndex, (const uint16_t *)clut);
 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
 }
 
@@ -1060,6 +1135,7 @@ video_driver_t video_psp = {
 	psp_endFrame,
 	psp_frameAddr,
 	NULL, // readFrame: PSP surfaces are directly CPU-addressable
+	psp_getOutputSize,
 	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,
@@ -1074,6 +1150,8 @@ video_driver_t video_psp = {
 	psp_getNativeObjects,
 	psp_uploadMem,
 	psp_uploadClut,
+	psp_writeIndexedTextureRect,
+	psp_blitSpriteVertices,
 	psp_blitTexture,
 	psp_blitPoints,
 	psp_flushCache,

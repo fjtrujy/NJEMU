@@ -585,6 +585,40 @@ Acceptance per target:
 - visual/screenshot and runtime tests preserved;
 - binary/memory impact measured on PSP and PS2.
 
+#### D7a - NCDZ portable sprite renderer [COMPLETE]
+
+Result (2026-09-26):
+- replaced `ncdz/{psp,ps2,desktop}_sprite.c` with one platform-neutral
+  `ncdz/sprite.c` that owns tile decoding, atlas placement, clipping, palette
+  grouping, sprite batching, flip semantics, and presentation rectangles;
+- added portable indexed-atlas updates and sprite-vertex batches to
+  `video_driver_t`. PSP owns swizzled T8 writes and GU submission, PS2 owns
+  linear T8 writes and conversion to gsKit vertices, and Desktop owns indexed
+  expansion plus SDL submission;
+- removed all NCDZ access to `getNativeObjects()` and all PSP/PS2/SDL SDK types
+  from the target renderer; the only remaining `getNativeObjects()` consumers
+  are the not-yet-migrated MVS/CPS1/CPS2 PS2 renderers;
+- moved physical output-size reporting to `video_driver_t`, where it belongs,
+  and removed the duplicate output-size callback from the UI texture adapter;
+- unified `StretchScreen` indices with the common NCDZ menu. This also repairs
+  Desktop's historical extra leading clip entry, which shifted every configured
+  preset and made the final 16:9 preset unreachable with the configured `0..5`
+  range;
+- while exercising NCDZ GUI configurations, made `common/filer.c` and
+  `common/config.c` explicitly include the geometry/NCDZ/CDDA declarations they
+  consume instead of inheriting them transitively.
+
+Validation (2026-09-26):
+- NCDZ GUI OFF and GUI ON builds pass on Desktop, PSP, and PS2;
+- Desktop NCDZ passes 14/14 CTests and a 30-frame Windjammers runtime smoke;
+- PSP Release GUI-OFF baseline vs D7a: `.text` +1,400 B, `.data` -32 B,
+  `.bss` unchanged, ELF +1,416 B, PRX +1,384 B;
+- PS2 Release GUI-OFF baseline vs D7a: `.text` +1,768 B, `.data` +8 B,
+  `.bss` -539,536 B, total runtime image -537,760 B, ELF +1,624 B. The large
+  BSS reduction comes from replacing target-owned `GSPRIMUVPOINTFLAT` vertex
+  arrays with the compact portable vertex representation;
+- `git diff --check` is clean and no resource file is part of the change.
+
 ### D8 - Remove remaining platform conditionals from common behaviour
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
@@ -630,9 +664,8 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D7 one target at a time, beginning with NCDZ as planned. Define the
-smallest portable sprite/draw-batch contract that can represent the current PSP,
-PS2, and Desktop NCDZ paths without exposing native SDK objects. Preserve atlas,
-palette, clipping, and batching policy in target-common code, then remove
-`ncdz/{psp,ps2,desktop}_sprite.c` only after cross-platform equivalence is
-validated.
+Continue D7 with MVS. Reuse the portable indexed-atlas and sprite-batch contract
+proven by NCDZ, extending it only for behaviour that MVS genuinely needs. Keep
+MVS sprite decoding, cache/atlas ownership, palette selection, clipping, and
+batching in target-common code; remove the three MVS platform sprite files and
+their PS2 `getNativeObjects()` dependency only after cross-platform validation.

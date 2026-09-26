@@ -218,6 +218,18 @@ static void *desktop_frameAddr(void *data, int frameIndex, int x, int y)
 	return NULL;
 }
 
+static void desktop_getOutputSize(void *data, int *width, int *height)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	int w = SCR_WIDTH;
+	int h = SCR_HEIGHT;
+
+	if (desktop && desktop->renderer)
+		SDL_GetRendererOutputSize(desktop->renderer, &w, &h);
+	if (width) *width = w;
+	if (height) *height = h;
+}
+
 static void *desktop_textureLayer(void *data, uint8_t layerIndex)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
@@ -436,66 +448,115 @@ static void *desktop_getNativeObjects(void *data, int index) {
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-static void desktop_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
-	// We need to transform the texutres saved that uses clut into a SDL texture compatible format
-	SDL_Point size;
+static void desktop_writeIndexedTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint8_t *pixels, int srcPitch)
+{
 	desktop_video_t *desktop = (desktop_video_t *)data;
-	struct Vertex *vertexs = (struct Vertex *)vertices;
-	uint16_t *clut_texture = (uint16_t *)clut;
-	uint8_t *tex = desktop->tex_layers[textureIndex].buffer;
-	SDL_Texture *texture = desktop->tex_layers[textureIndex].texture;
-	SDL_QueryTexture(texture, NULL, NULL, &size.x, &size.y);
+	texture_layer_t *layer;
+	int texture_width, texture_height;
+	int row;
 
-	// Lock texture
+	if (!desktop || textureIndex >= desktop->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	layer = &desktop->tex_layers[textureIndex];
+	if (layer->bytes_per_pixel != 1 || !layer->buffer || !layer->texture)
+		return;
+	if (SDL_QueryTexture(layer->texture, NULL, NULL, &texture_width, &texture_height) != 0)
+		return;
+	if (x < 0 || y < 0 || x + width > texture_width || y + height > texture_height)
+		return;
+
+	for (row = 0; row < height; row++)
+		memcpy(layer->buffer + (y + row) * texture_width + x,
+			pixels + row * srcPitch, (size_t)width);
+}
+
+static SDL_Texture *desktop_prepareBlitTexture(desktop_video_t *desktop,
+	uint8_t textureIndex, const uint16_t *clut)
+{
+	SDL_Point size;
+	texture_layer_t *layer;
 	void *pixels;
 	int pitch;
-	SDL_LockTexture(texture, NULL, &pixels, &pitch);
 
-	if (desktop->tex_layers[textureIndex].bytes_per_pixel == 1) {
-		// Obtain the color from the clut using the index and copy it to the pixels array
-		for (int i = 0; i < size.y; ++i) {
-			for (int j = 0; j < size.x; ++j) {
-				int index = i * size.x + j;
-				uint8_t pixelValue = tex[index];
-				uint16_t color = clut_texture[pixelValue];
+	if (!desktop || textureIndex >= desktop->tex_layers_count)
+		return NULL;
+	layer = &desktop->tex_layers[textureIndex];
+	if (!layer->texture || !layer->buffer)
+		return NULL;
+	if (SDL_QueryTexture(layer->texture, NULL, NULL, &size.x, &size.y) != 0)
+		return NULL;
+	if (SDL_LockTexture(layer->texture, NULL, &pixels, &pitch) != 0)
+		return NULL;
 
-				uint16_t *pixel = (uint16_t*)pixels + index;
-				*pixel = color;
+	if (layer->bytes_per_pixel == 1) {
+		int i, j;
+		if (!clut) {
+			SDL_UnlockTexture(layer->texture);
+			return NULL;
+		}
+		for (i = 0; i < size.y; ++i) {
+			uint16_t *dst_row = (uint16_t *)((uint8_t *)pixels + i * pitch);
+			for (j = 0; j < size.x; ++j) {
+				uint8_t pixel_value = layer->buffer[i * size.x + j];
+				dst_row[j] = clut[pixel_value];
 			}
 		}
 	} else {
-		// Direct copy for 2 bytes per pixel (memcpy)
-		memcpy(pixels, tex, size.x * size.y * 2);
+		int row;
+		for (row = 0; row < size.y; row++)
+			memcpy((uint8_t *)pixels + row * pitch,
+				layer->buffer + (size_t)row * size.x * 2,
+				(size_t)size.x * 2);
 	}
 
-	// Unlock texture
-	SDL_UnlockTexture(texture);
+	SDL_UnlockTexture(layer->texture);
+	return layer->texture;
+}
 
-    SDL_Rect dst_rect, src_rect;
-    SDL_RendererFlip horizontalFlip, verticalFlip;
-	// Render Geometry expect to receive a SDL_Vertex array and it is using triangles
-	// however desktop_blitTexture receives a SDL_Vertex array using 2 vertex per sprite
-	// so we are going to use SDL_RenderCopy to render all the sprites
-	for (int i = 0; i < vertices_count; i += 2) {
-		struct Vertex *vertex1 = &vertexs[i];
-		struct Vertex *vertex2 = &vertexs[i + 1];
+static void desktop_blitSpriteVertices(void *data, uint8_t textureIndex,
+	const uint16_t *clut, uint8_t bank_index,
+	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	SDL_Texture *texture;
+	uint32_t i;
 
-        dst_rect.x = vertex1->x;
-        dst_rect.y = vertex1->y;
-        dst_rect.w = abs(vertex2->x - vertex1->x);
-        dst_rect.h = abs(vertex2->y - vertex1->y);
-        
-        src_rect.x = MIN(vertex1->u, vertex2->u);
-        src_rect.y = MIN(vertex1->v, vertex2->v);
-        src_rect.w = abs(vertex2->u - vertex1->u);
-        src_rect.h = abs(vertex2->v - vertex1->v);
-        
-        horizontalFlip = vertex1->u > vertex2->u ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
-        verticalFlip = vertex1->v > vertex2->v ? SDL_FLIP_VERTICAL : SDL_FLIP_NONE;
-        
-		// Render the sprite
-        SDL_RenderCopyEx(desktop->renderer, texture, &src_rect, &dst_rect, 0, NULL, horizontalFlip | verticalFlip);
+	(void)bank_index;
+	if (!vertices || vertices_count < 2)
+		return;
+	texture = desktop_prepareBlitTexture(desktop, textureIndex, clut);
+	if (!texture)
+		return;
+
+	for (i = 0; i + 1 < vertices_count; i += 2) {
+		const video_sprite_vertex_t *vertex1 = &vertices[i];
+		const video_sprite_vertex_t *vertex2 = &vertices[i + 1];
+		SDL_Rect dst_rect = {
+			vertex1->x,
+			vertex1->y,
+			abs(vertex2->x - vertex1->x),
+			abs(vertex2->y - vertex1->y)
+		};
+		SDL_Rect src_rect = {
+			MIN(vertex1->u, vertex2->u),
+			MIN(vertex1->v, vertex2->v),
+			abs((int)vertex2->u - (int)vertex1->u),
+			abs((int)vertex2->v - (int)vertex1->v)
+		};
+		SDL_RendererFlip flip = SDL_FLIP_NONE;
+
+		if (vertex1->u > vertex2->u) flip |= SDL_FLIP_HORIZONTAL;
+		if (vertex1->v > vertex2->v) flip |= SDL_FLIP_VERTICAL;
+		SDL_RenderCopyEx(desktop->renderer, texture, &src_rect, &dst_rect,
+			0, NULL, flip);
 	}
+}
+
+static void desktop_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
+	desktop_blitSpriteVertices(data, textureIndex, (const uint16_t *)clut,
+		clut_index, vertices_count, (const video_sprite_vertex_t *)vertices);
 }
 
 static void desktop_uploadMem(void *data, uint8_t textureIndex) {
@@ -707,6 +768,7 @@ video_driver_t video_desktop = {
 	desktop_endFrame,
 	desktop_frameAddr,
 	NULL, // readFrame: Desktop state thumbnails use CPU-side UI scratch
+	desktop_getOutputSize,
 	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,
@@ -721,6 +783,8 @@ video_driver_t video_desktop = {
 	desktop_getNativeObjects,
 	desktop_uploadMem,
 	desktop_uploadClut,
+	desktop_writeIndexedTextureRect,
+	desktop_blitSpriteVertices,
 	desktop_blitTexture,
 	desktop_blitPoints,
 	desktop_flushCache,

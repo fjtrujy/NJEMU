@@ -25,6 +25,7 @@
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
+#include "common/video_geometry.h"
 #include "main_ui_draw.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
@@ -45,6 +46,8 @@
 #include "mvs/biosmenu.h"
 #endif
 #if (EMU_SYSTEM == NCDZ)
+#include "ncdz/cdrom.h"
+#include "ncdz/ncdz.h"
 #include "ncdz/resource_source.h"
 #endif
 
@@ -1332,7 +1335,7 @@ void file_browser(void)
 			int new_row = sel - top;
 			RECT screen_rect;
 
-			ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+			video_driver->getOutputSize(video_data, &output_width, &output_height);
 			screen_rect.left = 0;
 			screen_rect.top = 0;
 			screen_rect.right = output_width;

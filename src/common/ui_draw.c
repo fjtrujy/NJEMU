@@ -225,8 +225,6 @@ static void ui_driver_set_scissor(int x, int y, int w, int h)
 int ui_init(void)
 {
 	int code, x, y, alpha;
-	int output_width = SCR_WIDTH;
-	int output_height = SCR_HEIGHT;
 	uint16_t *dst;
 	uint16_t color[8] = {
 		MAKECOL15(248,248,248),
@@ -250,7 +248,6 @@ int ui_init(void)
 		return 0;
 	}
 
-	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
 	ui_draw_configure_layout();
 
 	/* Get CPU-writable base pointer for the font scratch texture */
@@ -1427,7 +1424,7 @@ int ui_output_update(void)
 	int output_height = 0;
 	const ui_layout_metrics_t *layout = ui_layout_get();
 
-	ui_draw_driver->getOutputSize(ui_draw_data, &output_width, &output_height);
+	video_driver->getOutputSize(video_data, &output_width, &output_height);
 	if (output_width <= 0 || output_height <= 0)
 		return 0;
 

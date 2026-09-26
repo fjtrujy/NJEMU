@@ -341,16 +341,6 @@ static void ps2_ui_draw_term(void *data)
 	/* VRAM cleanup is handled by gsKit */
 }
 
-static void ps2_ui_draw_getOutputSize(void *data, int *width, int *height)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-
-	if (width)
-		*width = d && d->gsGlobal ? d->gsGlobal->Width : SCR_WIDTH;
-	if (height)
-		*height = d && d->gsGlobal ? d->gsGlobal->Height : SCR_HEIGHT;
-}
-
 static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_height,
 	int *logical_width, int *logical_height)
 {
@@ -569,7 +559,6 @@ static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_init,
 	ps2_ui_draw_term,
-	ps2_ui_draw_getOutputSize,
 	ps2_ui_draw_getLogicalSize,
 	0,
 	ps2_ui_draw_uploadTexture,

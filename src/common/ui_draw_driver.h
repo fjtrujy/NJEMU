@@ -75,13 +75,6 @@ typedef struct ui_draw_driver
 	 */
 	void (*term)(void *data);
 
-	/*
-	 * getOutputSize — Return the physical presentation size in pixels.
-	 * The common UI owns its logical coordinate space and uses this data to
-	 * derive a platform-independent viewport.
-	 */
-	void (*getOutputSize)(void *data, int *width, int *height);
-
 	/* getLogicalSize — Select the logical UI canvas for a physical output.
 	 * Backends can choose native 1:1 coordinates or a scaled logical canvas
 	 * without leaking platform checks into common UI code. */

@@ -36,6 +36,7 @@
 #elif (EMU_SYSTEM == MVS)
 #include "mvs/mvs.h"
 #elif (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
 #include "ncdz/ncdz.h"
 #endif
 

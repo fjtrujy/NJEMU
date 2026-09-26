@@ -63,6 +63,10 @@ struct Vertex
 	int16_t x, y, z;
 };
 
+/* Portable sprite vertex used by target-common renderers.  `struct Vertex`
+ * remains as the legacy spelling while MVS/CPS1/CPS2 are migrated. */
+typedef struct Vertex video_sprite_vertex_t;
+
 struct PointVertex
 {
 	uint16_t color;
@@ -142,6 +146,8 @@ typedef struct video_driver
 	/* Optional CPU readback for surfaces that are not directly addressable. */
 	int (*readFrame)(void *data, int frameIndex,
 		int x, int y, int width, int height, uint16_t *dst, int dstPitch);
+	/* Physical presentation size owned by the backend. */
+	void (*getOutputSize)(void *data, int *width, int *height);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
@@ -156,6 +162,17 @@ typedef struct video_driver
 	void *(*getNativeObjects)(void *data, int index);
 	void (*uploadMem)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);
+	/* Portable indexed-atlas update used by target-common renderers.  x/y/w/h
+	 * use logical texture coordinates; the backend owns native/swizzled layout. */
+	void (*writeIndexedTextureRect)(void *data, uint8_t textureIndex,
+		int x, int y, int width, int height,
+		const uint8_t *pixels, int srcPitch);
+	/* Portable sprite batch. Backends translate these stable common vertices
+	 * into native GPU commands/vertices where necessary. */
+	void (*blitSpriteVertices)(void *data, uint8_t textureIndex,
+		const uint16_t *clut, uint8_t bank_index,
+		uint32_t vertices_count, const video_sprite_vertex_t *vertices);
+	/* Legacy native-vertex entry points retained until MVS/CPS1/CPS2 migrate. */
 	void (*blitTexture)(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
 	void (*blitPoints)(void *data, uint32_t points_count, void *vertices);
 	void (*flushCache)(void *data, void *addr, size_t size);

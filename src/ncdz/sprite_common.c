@@ -16,24 +16,17 @@
 SPRITE ALIGN16_DATA *fix_head[FIX_HASH_SIZE];
 SPRITE ALIGN16_DATA fix_data[FIX_TEXTURE_SIZE];
 SPRITE *fix_free_head;
-uint16_t fix_num;
 uint16_t fix_texture_num;
 
 SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
 SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
 SPRITE *spr_free_head;
-uint16_t spr_num;
 uint16_t spr_texture_num;
-uint16_t spr_index;
 
 int clip_min_y;
 int clip_max_y;
 int clear_spr_texture;
 int clear_fix_texture;
-
-uint8_t *tex_fix;
-uint8_t *tex_spr[3];
-uint16_t *clut;
 
 /*
  * Color table for palette index encoding
