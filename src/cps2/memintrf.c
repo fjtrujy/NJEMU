@@ -849,7 +849,7 @@ int memory_init(void)
 #if ENABLE_RASTER_OPTION
 		cps_raster_enable    = 1;
 #endif
-		platform_cpuclock    = power_driver->getHighestCpuClock(power_data);
+		platform_performance_level    = power_get_highest_performance_level();
 		option_vsync         = 0;
 		option_autoframeskip = 0;
 		option_frameskip     = 0;
@@ -868,7 +868,7 @@ int memory_init(void)
 #endif
 	}
 
-	power_driver->setCpuClock(power_data, platform_cpuclock);
+	power_set_performance_level(platform_performance_level);
 
 	if (load_rom_cpu1() == 0) return 0;
 	if (load_rom_user1() == 0) return 0;

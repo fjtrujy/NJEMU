@@ -391,7 +391,7 @@ int memory_init(void)
 	load_commandlist(game_name, NULL);
 #endif
 
-	power_driver->setCpuClock(power_data, platform_cpuclock);
+	power_set_performance_level(platform_performance_level);
 
 	{
 		uint32_t fd;

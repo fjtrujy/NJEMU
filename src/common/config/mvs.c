@@ -30,7 +30,7 @@ static const char *inifile_name = "mvspsp.ini";
 static cfg_type gamecfg_mvs[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",			&neogeo_region,			0,	3	},
@@ -102,7 +102,7 @@ static cfg_type gamecfg_mvs[] =
 static cfg_type gamecfg_irrmaze[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",			&neogeo_region,			0,	3	},
@@ -175,7 +175,7 @@ static cfg_type gamecfg_irrmaze[] =
 static cfg_type gamecfg_popbounc[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",			&neogeo_region,			0,	3	},
@@ -248,7 +248,7 @@ static cfg_type gamecfg_popbounc[] =
 static cfg_type gamecfg_vliner[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",			&neogeo_region,			0,	3	},
@@ -323,7 +323,7 @@ static cfg_type gamecfg_vliner[] =
 static cfg_type gamecfg_jockeygp[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"NeogeoRegion",			&neogeo_region,			0,	3	},

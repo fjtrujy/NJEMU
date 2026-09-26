@@ -454,7 +454,7 @@ Validation (2026-09-26):
 - PS2 CPS1/CPS2/MVS/NCDZ Release builds pass and PS2 MVS GUI build passes;
 - `git diff --check` is clean and no resource file is part of the change.
 
-### D5 - Replace PSP-shaped power semantics with capabilities
+### D5 - Replace PSP-shaped power semantics with capabilities [COMPLETE]
 
 Separate battery telemetry from performance control. Add explicit capability
 semantics instead of fake Desktop/PS2 implementations.
@@ -473,6 +473,42 @@ Acceptance:
 - no fake 100% charging battery on non-battery platforms;
 - PSP clock behaviour remains identical;
 - platform-specific menu visibility is capability-driven, not `#if PSP`.
+
+Result (2026-09-26):
+- replaced the stateful PSP-shaped power vtable with two explicit optional
+  capabilities: `POWER_CAP_BATTERY` and `POWER_CAP_PERFORMANCE`;
+- removed power-driver init/free state entirely: the service is stateless, PSP
+  exposes the real implementation, and Desktop/PS2 bind the common
+  `power_unsupported` descriptor instead of allocating empty objects or returning
+  invented battery/clock values;
+- introduced common battery/performance helpers and renamed the shared setting to
+  `platform_performance_level`; common call sites no longer know PSP clock enum
+  names or invoke platform callbacks directly;
+- retained `PSPClock` only as a legacy on-disk INI key. PSP accepts both the
+  historical level values (`0..3`) and MHz-style values (`222/266/300/333`),
+  while platforms without `POWER_CAP_PERFORMANCE` neither consume nor serialize
+  the setting;
+- removed `#if PSP` from the game-configuration menu. Capability-tagged menu
+  entries are compacted by the common menu layer, so the CPU-clock option and its
+  spacer appear only when the selected backend supports performance control;
+- common menu code now uses the generic `CPU_CLOCK` alias while the stable V2
+  translation schema deliberately retains historical key `PSP_CLOCK` at text ID
+  117, avoiding an unnecessary language-pack compatibility break;
+- removed `desktop_power.c`, `ps2_power.c`, and `psp_power.h`; PSP's backend now
+  directly owns the only remaining `<psppower.h>` dependency needed for clock and
+  battery operations (the platform callback code keeps its own direct SDK include);
+- added `power_driver_tests` covering capability queries, battery telemetry,
+  performance-level clamping, lowest-level selection, and highest-level reporting.
+
+Validation (2026-09-26):
+- Desktop CPS1/CPS2/MVS/NCDZ builds pass; CPS1 passes the 12-test non-memory-plan
+  suite including translation/font validation, and focused portable suites pass
+  9/9 for CPS2/MVS and 10/10 for NCDZ;
+- Desktop MVS 30-frame runtime smoke passes;
+- PSP MVS GUI OFF and GUI ON builds pass and generate EBOOT.PBP;
+- PS2 MVS GUI OFF and GUI ON builds pass;
+- translation source/pack validation passes with the existing V2 schema hash;
+- `git diff --check` is clean and no resource file is part of the change.
 
 ### D6 - Collapse overlapping UI drawing abstractions
 
@@ -558,7 +594,7 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D5. Input now has a stable target-independent contract, so the next
-largest PSP-shaped generic service is power management: replace fake Desktop/PS2
-battery/clock implementations with explicit optional battery and performance
-capabilities while preserving the PSP configuration behaviour.
+Proceed with D6. Platform selection, platform services, input, and power now have
+stable capability-oriented contracts. The next duplicated boundary is UI drawing:
+collapse the overlapping `ui_draw_driver_t`/`video_driver_t` primitive APIs while
+preserving each backend's texture-lifetime and batching semantics.

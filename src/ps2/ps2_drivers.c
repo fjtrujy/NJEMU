@@ -10,7 +10,6 @@
 extern audio_driver_t audio_ps2;
 extern input_driver_t input_ps2;
 extern platform_driver_t platform_ps2;
-extern power_driver_t power_ps2;
 extern thread_driver_t thread_ps2;
 extern ticker_driver_t ticker_ps2;
 extern video_driver_t video_ps2;
@@ -20,7 +19,7 @@ extern const ui_draw_driver_t null_ui_draw_driver;
 audio_driver_t *const audio_driver = &audio_ps2;
 input_driver_t *const input_driver = &input_ps2;
 platform_driver_t *const platform_driver = &platform_ps2;
-power_driver_t *const power_driver = &power_ps2;
+const power_driver_t *const power_driver = &power_unsupported;
 thread_driver_t *const thread_driver = &thread_ps2;
 ticker_driver_t *const ticker_driver = &ticker_ps2;
 video_driver_t *const video_driver = &video_ps2;

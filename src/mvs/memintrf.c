@@ -1668,7 +1668,7 @@ int memory_init(void)
 	{
 		/* Use fixed settings for some options during AdHoc communication */
 		neogeo_raster_enable = 0;
-		platform_cpuclock    = power_driver->getHighestCpuClock(power_data);
+		platform_performance_level    = power_get_highest_performance_level();
 		option_vsync         = 0;
 		option_autoframeskip = 0;
 		option_frameskip     = 0;
@@ -1680,7 +1680,7 @@ int memory_init(void)
 	}
 #endif
 
-	power_driver->setCpuClock(power_data, platform_cpuclock);
+	power_set_performance_level(platform_performance_level);
 
 	msg_printf(TEXT(CHECKING_BIOS));
 

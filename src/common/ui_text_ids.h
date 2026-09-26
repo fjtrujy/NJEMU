@@ -19,4 +19,8 @@ typedef enum ui_text_id
 	UI_TEXT_MAX
 } ui_text_id_t;
 
+/* Generic code uses a platform-neutral name while the stable translation
+ * schema keeps its historical PSP_CLOCK key for V2 pack compatibility. */
+#define CPU_CLOCK PSP_CLOCK
+
 #endif /* UI_TEXT_IDS_H */

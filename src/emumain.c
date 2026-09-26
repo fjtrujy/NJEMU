@@ -92,7 +92,6 @@ int fatal_error;
 char launchDir[PATH_MAX] = {0};
 char screenshotDir[PATH_MAX] = {0};
 void *platform_data = NULL;
-void *power_data = NULL;
 
 /******************************************************************************
 	Local Variables
@@ -180,9 +179,11 @@ static void show_fps(void)
 
 static void show_battery_warning(void)
 {
-	if (!power_driver->isBatteryCharging(power_data))
+	power_battery_status_t battery;
+
+	if (power_query_battery_status(&battery) && !battery.charging)
 	{
-		int bat = power_driver->batteryLifePercent(power_data);
+		int bat = battery.percent;
 
 		if (bat < 10)
 		{
@@ -597,16 +598,11 @@ int main(int argc, char *argv[]) {
 			printf("Failed to initialize ticker driver\n");
 			goto cleanup_platform;
 		}
-		power_data = power_driver->init();
-		if (power_data == NULL) {
-			printf("Failed to initialize power driver\n");
-			goto cleanup_ticker;
-		}
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 		if (getcwd(launchDir, sizeof(launchDir)) == NULL) {
 			printf("Failed to determine launch directory\n");
-			goto cleanup_power;
+			goto cleanup_ticker;
 		}
 		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		{
@@ -614,7 +610,7 @@ int main(int argc, char *argv[]) {
 			if (launch_len == 0 || launchDir[launch_len - 1] != '/') {
 				if (launch_len + 1 >= sizeof(launchDir)) {
 					printf("Launch directory path is too long\n");
-					goto cleanup_power;
+					goto cleanup_ticker;
 				}
 				launchDir[launch_len++] = '/';
 				launchDir[launch_len] = '\0';
@@ -631,12 +627,12 @@ int main(int argc, char *argv[]) {
 	mkdir(screenshotDir,0777); // Create screenshot folder
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-		power_driver->setLowestCpuClock(power_data);
+		power_set_lowest_performance_level();
 		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		ui_text_data = ui_text_driver->init();
 		if (ui_text_data == NULL) {
 			printf("Failed to initialize UI text driver\n");
-			goto cleanup_power;
+			goto cleanup_ticker;
 		}
 		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		if (!pad_init()) {
@@ -682,7 +678,6 @@ int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 
 	// Platform exit
-	power_driver->free(power_data);
 	ticker_driver->free(ticker_data);
 		platform_driver->free(platform_data);
 	
@@ -694,8 +689,6 @@ cleanup_input:
 		pad_exit();
 cleanup_ui_text:
 		ui_text_driver->free(ui_text_data);
-cleanup_power:
-		power_driver->free(power_data);
 cleanup_ticker:
 		ticker_driver->free(ticker_data);
 cleanup_platform:

@@ -1180,7 +1180,7 @@ void file_browser(void)
 #if (EMU_SYSTEM == NCDZ)
 				resource_source_close(&ncdz_game_source);
 #endif
-				power_driver->setLowestCpuClock(power_data);
+				power_set_lowest_performance_level();
 
 #ifdef ADHOC
 			if (adhoc_enable)

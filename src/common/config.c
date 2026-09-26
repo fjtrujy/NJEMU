@@ -74,13 +74,9 @@ enum
 	CFG_INT,
 	CFG_BOOL,
 	CFG_PAD,
-	CFG_STR
+	CFG_STR,
+	CFG_PERFORMANCE
 };
-
-/* PSP clock constants (fallback for non-PSP platforms) */
-#ifndef PSPCLOCK_333
-#define PSPCLOCK_333		333
-#endif
 
 enum
 {
@@ -107,6 +103,7 @@ typedef struct cfg_t
 	int *value;
 	int def;
 	int max;
+	uint32_t required_power_capabilities;
 } cfg_type;
 
 typedef struct cfg2_t
@@ -225,6 +222,26 @@ static int get_config_int(char *str, int maxval)
 	return value;
 }
 
+static int get_config_performance_level(char *str)
+{
+	int value = atoi(str);
+
+	/* Accept both NJEMU's historical level indices and old MHz-style values. */
+	switch (value)
+	{
+	case 222: return PLATFORM_PERFORMANCE_LEVEL_LOWEST;
+	case 266: return PLATFORM_PERFORMANCE_LEVEL_1;
+	case 300: return PLATFORM_PERFORMANCE_LEVEL_2;
+	case 333: return PLATFORM_PERFORMANCE_LEVEL_HIGHEST;
+	default:
+		if (value < PLATFORM_PERFORMANCE_LEVEL_LOWEST)
+			return PLATFORM_PERFORMANCE_LEVEL_LOWEST;
+		if (value > power_get_highest_performance_level())
+			return power_get_highest_performance_level();
+		return value;
+	}
+}
+
 
 /*------------------------------------------------------
 	CFG_PADの値を読み込む
@@ -328,6 +345,10 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 			/* check name and value */
 			for (i = 0; cfg[i].name; i++)
 			{
+				if (cfg[i].required_power_capabilities != 0 &&
+					!power_has_capability(cfg[i].required_power_capabilities))
+					continue;
+
 				if (!strcmp(name, cfg[i].name))
 				{
 					switch (cfg[i].type)
@@ -335,9 +356,11 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 					case CFG_INT:  *cfg[i].value = get_config_int(value, cfg[i].max); break;
 					case CFG_BOOL: *cfg[i].value = get_config_bool(value); break;
 					case CFG_PAD:  *cfg[i].value = get_config_pad(value); break;
+					case CFG_PERFORMANCE: *cfg[i].value = get_config_performance_level(value); break;
 					}
 				}
 			}
+
 		}
 
 		if (cfg2)
@@ -420,12 +443,18 @@ static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 
 		for (i = 0; cfg[i].name; i++)
 		{
+			if (cfg[i].required_power_capabilities != 0 &&
+				!power_has_capability(cfg[i].required_power_capabilities))
+				continue;
+
 			switch (cfg[i].type)
 			{
 			case CFG_NONE: if (cfg[i].name) fd_printf(fd, "\r\n%s\r\n", cfg[i].name); break;
 			case CFG_INT:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_int(*cfg[i].value, cfg[i].max)); break;
 			case CFG_BOOL: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_bool(*cfg[i].value)); break;
 			case CFG_PAD:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_pad(*cfg[i].value)); break;
+			case CFG_PERFORMANCE: fd_printf(fd, "%s = %s\r\n", cfg[i].name,
+				set_config_int(*cfg[i].value, power_get_highest_performance_level())); break;
 			}
 		}
 

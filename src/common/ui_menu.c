@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include <limits.h>
+#include <stdint.h>
 #include "emucfg.h"
 #include "common/cache.h"
 #ifdef COMMAND_LIST
@@ -53,6 +54,7 @@
 #endif
 
 #define MENU_BLANK	{ LF, }
+#define MENU_BLANK_POWER(capability)	{ LF, NULL, 0, 0, { 0 }, capability }
 #define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
 #define MENU_END	{ EOM, }
 
@@ -202,6 +204,7 @@ typedef struct {
 	int flag;
 	int value_max;
 	int values_label[12];
+	uint32_t required_power_capabilities;
 } gamecfg2_t;
 
 
@@ -227,6 +230,7 @@ static int menu_gamecfg(void)
 	int i, arrowl, arrowr, prev_sel, update = 1;
 	gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
 	gamecfg2_t *gamecfg2;
+	int source_enable[GAMECFG_MAX_ITEMS];
 	int gamecfg_num;
 
 	for (i = 0; i < GAMECFG_MAX_ITEMS; i++)
@@ -244,31 +248,49 @@ static int menu_gamecfg(void)
 
 #undef INCLUDE_GAMECFG_MENU
 
-	i = 0;
-	while (gamecfg2[i].label)
+	for (i = 0; i < GAMECFG_MAX_ITEMS; i++)
+		source_enable[i] = gamecfg[i].enable;
+
 	{
-		int j;
+		int source = 0;
+		int dest = 0;
 
-		gamecfg[i].label     = TEXT(gamecfg2[i].label);
-		gamecfg[i].value     = gamecfg2[i].value;
-		gamecfg[i].flag      = gamecfg2[i].flag;
-		gamecfg[i].value_max = gamecfg2[i].value_max;
-
-		for (j = 0; j <= gamecfg2[i].value_max; j++)
-			gamecfg[i].values_label[j] = TEXT(gamecfg2[i].values_label[j]);
-
-		if (gamecfg[i].value)
+		while (gamecfg2[source].label)
 		{
-			if (*gamecfg[i].value < 0)
-				*gamecfg[i].value = 0;
-			if (*gamecfg[i].value > gamecfg[i].value_max)
-				*gamecfg[i].value = gamecfg[i].value_max;
+			int j;
 
-			gamecfg[i].old_value = *gamecfg[i].value;
+			if (gamecfg2[source].required_power_capabilities != 0 &&
+				!power_has_capability(gamecfg2[source].required_power_capabilities))
+			{
+				source++;
+				continue;
+			}
+
+			gamecfg[dest].label     = TEXT(gamecfg2[source].label);
+			gamecfg[dest].value     = gamecfg2[source].value;
+			gamecfg[dest].enable    = source_enable[source];
+			gamecfg[dest].flag      = gamecfg2[source].flag;
+			gamecfg[dest].value_max = gamecfg2[source].value_max;
+
+			for (j = 0; j <= gamecfg2[source].value_max; j++)
+				gamecfg[dest].values_label[j] = TEXT(gamecfg2[source].values_label[j]);
+
+			if (gamecfg[dest].value)
+			{
+				if (*gamecfg[dest].value < 0)
+					*gamecfg[dest].value = 0;
+				if (*gamecfg[dest].value > gamecfg[dest].value_max)
+					*gamecfg[dest].value = gamecfg[dest].value_max;
+
+				gamecfg[dest].old_value = *gamecfg[dest].value;
+			}
+
+			source++;
+			dest++;
 		}
-		i++;
+
+		gamecfg_num = dest;
 	}
-	gamecfg_num = i;
 
 	pad_wait_clear();
 	load_background(WP_GAMECFG);
@@ -2282,9 +2304,9 @@ static int state_save_slot(void)
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
-		power_driver->setCpuClock(power_data, platform_cpuclock);
+		power_set_performance_level(platform_performance_level);
 		res = state_save(state_sel);
-		power_driver->setLowestCpuClock(power_data);
+		power_set_lowest_performance_level();
 
 		load_background(WP_STATE);
 
@@ -2313,9 +2335,9 @@ static int state_load_slot(void)
 		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &full_rect, &full_rect);
 		video_driver->endFrame(video_data);
 
-		power_driver->setCpuClock(power_data, platform_cpuclock);
+		power_set_performance_level(platform_performance_level);
 		res = state_load(state_sel);
-		power_driver->setLowestCpuClock(power_data);
+		power_set_lowest_performance_level();
 
 		if (res)
 		{
@@ -2595,7 +2617,7 @@ void showmenu(void)
 	}
 	mainmenu_num = i;
 
-	power_driver->setLowestCpuClock(power_data);
+	power_set_lowest_performance_level();
 	video_driver->beginFrame(video_data);
 	video_driver->clearScreen(video_data);
 	video_driver->endFrame(video_data);
@@ -2769,7 +2791,7 @@ void showmenu(void)
 #if (EMU_SYSTEM != CPS2)
 	sound_set_samplerate();
 #endif
-	power_driver->setCpuClock(power_data, platform_cpuclock);
+	power_set_performance_level(platform_performance_level);
 
 #if USE_CACHE
 	cache_sleep(0);

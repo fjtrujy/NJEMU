@@ -19,7 +19,6 @@
 #include <pspgu.h>
 #include <pspiofilemgr.h>
 #include <pspkernel.h>
-#include <psppower.h>
 #include <psprtc.h>
 #include <pspsdk.h>
 #include <stdio.h>
@@ -30,7 +29,6 @@
 
 #include "common/ticker_driver.h"
 #include "common/input_driver.h"
-#include "common/power_driver.h"
 #include "common/video_driver.h"
 #include "common/ui_text_driver.h"
 #include "common/platform_driver.h"
@@ -42,7 +40,6 @@
 #include "psp/ui_menu.h"
 #include "psp/psp_video.h"
 #include "psp/png.h"
-#include "psp/psp_power.h"
 #ifdef ADHOC
 #include "common/adhoc_transport.h"
 #endif

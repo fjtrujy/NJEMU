@@ -594,7 +594,7 @@ void commandlist(int flag)
 		}
 #endif
 		sound_thread_enable(0);
-		power_driver->setLowestCpuClock(power_data);
+		power_set_lowest_performance_level();
 	}
 
 	pad_wait_clear();
@@ -836,7 +836,7 @@ void commandlist(int flag)
 	{
 		ui_popup_reset();
 
-		power_driver->setCpuClock(power_data, platform_cpuclock);
+		power_set_performance_level(platform_performance_level);
 
 		autoframeskip_reset();
 		blit_clear_all_sprite();

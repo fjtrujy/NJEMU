@@ -30,7 +30,7 @@ static const char *inifile_name = "ncdzpsp.ini";
 static cfg_type gamecfg_ncdz[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"PSPClock",				&platform_cpuclock,	PSPCLOCK_333,	PSPCLOCK_333 },
+	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	},

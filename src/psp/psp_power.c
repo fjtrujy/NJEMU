@@ -1,54 +1,26 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <psppower.h>
-#include "psp_power.h"
 #include "common/power_driver.h"
 
-typedef struct psp_power {
-} psp_power_t;
-
-static void *psp_init(void) {
-	psp_power_t *psp = (psp_power_t*)calloc(1, sizeof(psp_power_t));
-	return psp;
+static bool psp_queryBatteryStatus(power_battery_status_t *status) {
+	status->percent = scePowerGetBatteryLifePercent();
+	status->charging = scePowerIsBatteryCharging() != 0;
+	return true;
 }
 
-static void psp_free(void *data) {
-	psp_power_t *psp = (psp_power_t*)data;
-	free(psp);
-}
-
-static int32_t psp_batteryLifePercent(void *data) {
-	return scePowerGetBatteryLifePercent();
-}
-
-static bool psp_IsBatteryCharging(void *data) {
-	return scePowerIsBatteryCharging();
-}
-
-static void psp_setCpuClock(void *data, int32_t clock) {
-	switch (clock) {
-	case PSPCLOCK_266: scePowerSetClockFrequency(266, 266, 133); break;
-	case PSPCLOCK_300: scePowerSetClockFrequency(300, 300, 150); break;
-	case PSPCLOCK_333: scePowerSetClockFrequency(333, 333, 166); break;
+static void psp_setPerformanceLevel(int32_t level) {
+	switch (level) {
+	case PLATFORM_PERFORMANCE_LEVEL_1: scePowerSetClockFrequency(266, 266, 133); break;
+	case PLATFORM_PERFORMANCE_LEVEL_2: scePowerSetClockFrequency(300, 300, 150); break;
+	case PLATFORM_PERFORMANCE_LEVEL_HIGHEST: scePowerSetClockFrequency(333, 333, 166); break;
 	default: scePowerSetClockFrequency(222, 222, 111); break;
 	}
 }
 
-static void psp_setLowestCpuClock(void *data) {
-	psp_setCpuClock(data, PSPCLOCK_222);
-}
-
-static int32_t psp_getHighestCpuClock(void *data) {
-	return PSPCLOCK_333;
-}
-
-power_driver_t power_psp = {
-	"psp",
-	psp_init,
-	psp_free,
-	psp_batteryLifePercent,
-	psp_IsBatteryCharging,
-	psp_setCpuClock,
-	psp_setLowestCpuClock,
-	psp_getHighestCpuClock,
+const power_driver_t power_psp = {
+	.ident = "psp",
+	.capabilities = POWER_CAP_BATTERY | POWER_CAP_PERFORMANCE,
+	.lowest_performance_level = PLATFORM_PERFORMANCE_LEVEL_LOWEST,
+	.highest_performance_level = PLATFORM_PERFORMANCE_LEVEL_HIGHEST,
+	.queryBatteryStatus = psp_queryBatteryStatus,
+	.setPerformanceLevel = psp_setPerformanceLevel,
 };

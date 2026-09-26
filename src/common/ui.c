@@ -135,19 +135,19 @@ void show_background(void)
 
 int draw_battery_status(int draw)
 {
-#if !defined(PSP)
-	/* Battery status is a PSP-only UI feature. Other platforms use power
-	 * driver shims for common clock/config code, but should not render a fake
-	 * battery indicator from those placeholder values. */
-	(void)draw;
-	return 0;
-#else
 	static uint32_t counter = 0;
 	static int prev_bat = 0, prev_charging = 0;
 	int width, icon, update = 0;
-	int bat = power_driver->batteryLifePercent(power_data);
-	int charging = power_driver->isBatteryCharging(power_data);
+	power_battery_status_t battery;
+	int bat;
+	int charging;
 	char bat_left[4];
+
+	if (!power_query_battery_status(&battery))
+		return 0;
+
+	bat = battery.percent;
+	charging = battery.charging;
 
 	counter++;
 
@@ -203,7 +203,6 @@ int draw_battery_status(int draw)
 	prev_charging = charging;
 
 	return update;
-#endif
 }
 
 

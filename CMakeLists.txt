@@ -386,12 +386,15 @@ set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_drivers.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_platform.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ticker.c
-    ${PLATFORM_LOWER}/${PLATFORM_LOWER}_power.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_input.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_video.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_audio.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_thread.c
 )
+
+if (PLATFORM STREQUAL "PSP")
+    list(APPEND OS_SRC psp/psp_power.c)
+endif()
 
 if (ADHOC AND PLATFORM STREQUAL "PSP")
     set(OS_SRC ${OS_SRC}
@@ -995,6 +998,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 	add_test(NAME input_state_tests COMMAND input_state_tests)
+
+	add_executable(power_driver_tests
+		tests/power_driver_tests.c
+		src/common/power_driver.c
+	)
+	target_include_directories(power_driver_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME power_driver_tests COMMAND power_driver_tests)
 
 	if(Python3_Interpreter_FOUND)
         add_test(

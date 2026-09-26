@@ -10,7 +10,6 @@
 extern audio_driver_t audio_desktop;
 extern input_driver_t input_desktop;
 extern platform_driver_t platform_desktop;
-extern power_driver_t power_desktop;
 extern thread_driver_t thread_desktop;
 extern ticker_driver_t ticker_desktop;
 extern video_driver_t video_desktop;
@@ -20,7 +19,7 @@ extern const ui_draw_driver_t null_ui_draw_driver;
 audio_driver_t *const audio_driver = &audio_desktop;
 input_driver_t *const input_driver = &input_desktop;
 platform_driver_t *const platform_driver = &platform_desktop;
-power_driver_t *const power_driver = &power_desktop;
+const power_driver_t *const power_driver = &power_unsupported;
 thread_driver_t *const thread_driver = &thread_desktop;
 ticker_driver_t *const ticker_driver = &ticker_desktop;
 video_driver_t *const video_driver = &video_desktop;
