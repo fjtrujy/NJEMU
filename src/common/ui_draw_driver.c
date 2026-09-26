@@ -142,24 +142,6 @@ const ui_draw_driver_t null_ui_draw_driver = {
 	null_setScissor,
 };
 
-/******************************************************************************
-	Driver selection — compile-time array, same pattern as video_driver
-******************************************************************************/
-
-const ui_draw_driver_t *ui_draw_drivers[] = {
-#if defined(GUI)
-#  if defined(PSP)
-	&psp_ui_draw_driver,
-#  elif defined(PS2)
-	&ps2_ui_draw_driver,
-#  elif defined(DESKTOP)
-	&desktop_ui_draw_driver,
-#  endif
-#endif
-	&null_ui_draw_driver,
-	NULL,
-};
-
 void *ui_draw_data = NULL;
 
 void ui_draw_configure_layout(void)

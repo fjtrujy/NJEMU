@@ -185,21 +185,7 @@ typedef struct ui_draw_driver
 } ui_draw_driver_t;
 
 
-/*------------------------------------------------------
-	Platform driver instances
-------------------------------------------------------*/
-
-extern const ui_draw_driver_t psp_ui_draw_driver;
-extern const ui_draw_driver_t ps2_ui_draw_driver;
-extern const ui_draw_driver_t desktop_ui_draw_driver;
-extern const ui_draw_driver_t null_ui_draw_driver;
-
-/*------------------------------------------------------
-	Global driver array + data (compile-time selected)
-------------------------------------------------------*/
-
-extern const ui_draw_driver_t *ui_draw_drivers[];
-#define ui_draw_driver ui_draw_drivers[0]
+extern const ui_draw_driver_t *const ui_draw_driver;
 
 extern void *ui_draw_data;
 

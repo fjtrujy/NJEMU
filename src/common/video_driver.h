@@ -172,16 +172,7 @@ typedef struct video_driver
 
 } video_driver_t;
 
-extern int platform_cpuclock;
-
-extern video_driver_t video_psp;
-extern video_driver_t video_ps2;
-extern video_driver_t video_desktop;
-extern video_driver_t video_null;
-
-extern video_driver_t *video_drivers[];
-
-#define video_driver video_drivers[0]
+extern video_driver_t *const video_driver;
 
 extern RECT full_rect;
 

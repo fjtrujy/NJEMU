@@ -70,13 +70,6 @@ typedef struct input_driver
 } input_driver_t;
 
 
-extern input_driver_t input_psp;
-extern input_driver_t input_ps2;
-extern input_driver_t input_desktop;
-extern input_driver_t input_null;
-
-extern input_driver_t *input_drivers[];
-
-#define input_driver input_drivers[0]
+extern input_driver_t *const input_driver;
 
 #endif /* INPUT_DRIVER_H */

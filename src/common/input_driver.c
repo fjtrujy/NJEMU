@@ -259,29 +259,3 @@ void pad_wait_press(int msec)
 
 	pad_wait_clear();
 }
-
-input_driver_t input_null = {
-	"null",
-	NULL,
-	NULL,
-	NULL,
-	NULL,
-#if (EMU_SYSTEM == MVS)
-	NULL,
-	NULL,
-#endif
-};
-
-input_driver_t *input_drivers[] = {
-#ifdef PSP
-	&input_psp,
-#endif
-#ifdef PS2
-	&input_ps2,
-#endif
-#ifdef DESKTOP
-	&input_desktop,
-#endif
-	&input_null,
-	NULL,
-};

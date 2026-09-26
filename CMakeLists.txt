@@ -222,9 +222,7 @@ set(COMMON_SRC
     common/loadrom.h
     common/loadrom.c
     common/thread_driver.h
-    common/thread_driver.c
     common/audio_driver.h
-    common/audio_driver.c
     common/power_driver.h
     common/power_driver.c
     common/ticker_driver.h
@@ -247,7 +245,6 @@ set(COMMON_SRC
 	    common/ui_unicode_glyph.h
     common/font_t.h
     common/platform_driver.h
-    common/platform_driver.c
 	common/platform_memory_info.h
 	common/platform_memory_info.c
 	common/memory_plan.h
@@ -382,6 +379,7 @@ endif()
 
 set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}.h
+    ${PLATFORM_LOWER}/${PLATFORM_LOWER}_drivers.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_platform.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ticker.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_power.c

@@ -27,14 +27,7 @@ typedef struct ticker_driver
 
 } ticker_driver_t;
 
-extern ticker_driver_t ticker_psp;
-extern ticker_driver_t ticker_ps2;
-extern ticker_driver_t ticker_desktop;
-extern ticker_driver_t ticker_null;
-
-extern ticker_driver_t *ticker_drivers[];
+extern ticker_driver_t *const ticker_driver;
 extern void *ticker_data;
-
-#define ticker_driver ticker_drivers[0]
 
 #endif /* TICKER_DRIVER_H */

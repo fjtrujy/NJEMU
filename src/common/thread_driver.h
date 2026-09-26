@@ -33,13 +33,6 @@ typedef struct thread_driver
 } thread_driver_t;
 
 
-extern thread_driver_t thread_psp;
-extern thread_driver_t thread_ps2;
-extern thread_driver_t thread_desktop;
-extern thread_driver_t thread_null;
-
-extern thread_driver_t *thread_drivers[];
-
-#define thread_driver thread_drivers[0]
+extern thread_driver_t *const thread_driver;
 
 #endif /* THREAD_DRIVER_H */

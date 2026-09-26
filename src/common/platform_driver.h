@@ -38,14 +38,7 @@ typedef struct platform_driver
 } platform_driver_t;
 
 
-extern platform_driver_t platform_psp;
-extern platform_driver_t platform_ps2;
-extern platform_driver_t platform_desktop;
-extern platform_driver_t platform_null;
-
-extern platform_driver_t *platform_drivers[];
-
-#define platform_driver platform_drivers[0]
+extern platform_driver_t *const platform_driver;
 
 extern void *platform_data;
 
