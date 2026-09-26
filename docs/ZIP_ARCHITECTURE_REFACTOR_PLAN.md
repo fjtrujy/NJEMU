@@ -1,7 +1,7 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z8 complete; Z9 next
+Status: Z0-Z9 complete
 
 ## Purpose
 
@@ -944,6 +944,45 @@ Exit criteria:
 - no functional regressions;
 - no material unexplained binary-size increase;
 - no legacy ZIP/file API remains.
+
+#### Z9 implementation result
+
+Z9 closes the refactor with the complete validation matrix on the final Z8
+layout. All builds use the established Release configuration; runtime targets
+use `GUI=OFF`, `COMMAND_LIST=OFF`, `SAVE_STATE=ON` and `ADHOC=OFF`.
+
+Final validation:
+
+- Desktop CPS1, CPS2, MVS and NCDZ builds pass;
+- Release `romcnv_mvs` and `romcnv_cps2` builds pass;
+- CPS1, CPS2 and MVS CTest each pass 10/10 when excluding only the known
+  Release/NDEBUG `memory_plan_tests` abort; NCDZ passes 11/11 with the same
+  exclusion, including `resource_source_tests` and `zip_archive_tests`;
+- real 30-frame Desktop smokes pass for CPS1 `ghoulsu`, CPS2 `mpangu`, MVS
+  `pbobbl2n`, NCDZ `Windjammers` directory input and NCDZ `Windjammers.zip`;
+- fresh `romcnv_mvs` and `romcnv_cps2` conversions of `pbobbl2n` and `mpangu`
+  generate ZIP caches that pass complete `unzip -t` checks and are consumed by
+  the corresponding MVS/CPS2 30-frame smokes;
+- PS2 MVS and PSP MVS cross-build successfully from the final common ZIP source
+  layout, with PSP producing both PRX and `EBOOT.PBP`;
+- the final legacy-API grep over `src/` and `romcnv/` returns no active
+  `zopen`, `zread`, `zgetc`, `zclose`, `zsize`, `zlength`, `zip_findfirst` or
+  `zip_findnext` references, and no `zfile.c/.h` remains;
+- all generated converter output lives under `/tmp` or build directories and
+  `resources/` remains untouched.
+
+Final representative binary sizes are recorded in
+`docs/ZIP_MINIZ_EVALUATION.md`. Relative to the Z0 architectural baseline, the
+Desktop executables are effectively flat (+16 to +528 bytes), while the final
+PS2 and PSP MVS loaded-section totals are 5,168 bytes and 5,252 bytes smaller,
+respectively. The public-owner opacity introduced in Z8 moves small archive and
+entry owner state out of static BSS into bounded dynamic allocations; the miniz
+streaming extractor lifetime and decompression strategy are unchanged.
+
+Both console ELFs still retain unused `mz_zip_writer_*` and `tdefl_*` symbols
+from the installed full miniz archives. This is the already-documented package
+granularity issue, not a runtime dependency introduced by this refactor. The
+runtime source calls only the reader path.
 
 ## Expected end state
 

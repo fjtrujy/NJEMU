@@ -108,14 +108,66 @@ any of those builds.
 `pbobbl2n` and `mpangu` using ZIP cache output produced archives that pass a
 full `unzip -t` integrity check. NJEMU then booted both games for 30 frames
 using those newly generated cache ZIPs, validating the converter writer and the
-runtime reader together. The converter keeps its streaming-style `zwrite()` API
-without buffering an entire cache entry in RAM: each output entry is staged in
-a temporary file and passed to `mz_zip_writer_add_cfile()` when closed.
+runtime reader together. The final converter writer uses an explicit
+`zip_writer_t`: already-materialized cache blocks are passed directly to miniz,
+while `cache_info` is written through a small segmented callback without a
+temporary aggregate buffer or the removed `zwrite()`/`tmpfile()` compatibility
+path.
 
 The converter's CMake build uses an installed miniz package when available and
 otherwise fetches the pinned upstream 3.1.2 tag, which also covers its
 Emscripten configuration. Emscripten is not installed on the local validation
 host, so the WASM target was not rebuilt in this pass.
+
+## Final post-refactor measurements (Z9)
+
+The full architecture refactor was revalidated on 2026-09-26 after Z8 made the
+runtime and converter miniz state private to their implementation translation
+units. The final Desktop executable sizes are:
+
+| Target | Z0 baseline | Z9 final | Delta |
+| --- | ---: | ---: | ---: |
+| CPS1 | 990,008 B | 990,056 B | +48 B |
+| CPS2 | 367,656 B | 367,720 B | +64 B |
+| MVS | 474,768 B | 474,784 B | +16 B |
+| NCDZ | 402,856 B | 403,384 B | +528 B |
+
+The final converter files are 90,392 bytes for MVS and 87,752 bytes for CPS2.
+Their Mach-O `__text` / `__bss` sections are 28,976 / 9,928 bytes and
+26,592 / 2,384 bytes respectively. File-size changes between converter phases
+can include 16 KiB Mach-O segment-alignment steps, so section sizes remain the
+more useful code/data comparison.
+
+For the same MVS Release/no-GUI configuration used by the Z0 architecture
+baseline, the console results are:
+
+| Build | Z0 | Z9 | Delta |
+| --- | ---: | ---: | ---: |
+| PS2 `.text` | 891,040 B | 892,208 B | +1,168 B |
+| PS2 `.data` | 391,060 B | 391,060 B | 0 B |
+| PS2 `.bss` | 2,251,848 B | 2,245,512 B | -6,336 B |
+| PS2 `text+data+bss` | 3,533,948 B | 3,528,780 B | -5,168 B |
+| PS2 ELF file | 3,277,680 B | 3,278,688 B | +1,008 B |
+| PSP `.text` | 768,904 B | 769,956 B | +1,052 B |
+| PSP `.data` | 13,204 B | 13,188 B | -16 B |
+| PSP `.bss` | 1,944,080 B | 1,937,792 B | -6,288 B |
+| PSP `text+data+bss` | 2,726,188 B | 2,720,936 B | -5,252 B |
+| PSP ELF file | 2,444,212 B | 2,444,968 B | +756 B |
+| PSP PRX | 914,874 B | 916,050 B | +1,176 B |
+| PSP `EBOOT.PBP` | 915,250 B | 916,426 B | +1,176 B |
+
+The loaded-section totals therefore shrink slightly despite the explicit owner
+API. Z8's opaque public owners allocate their small archive/entry state on open
+instead of reserving it in static BSS. Entry extraction remains streaming and
+the optional 4 KiB byte cache is still allocated lazily only for byte-oriented
+reads, so there is no new whole-entry buffering behavior.
+
+Symbol inspection of the final installed-package links finds 34
+`mz_zip_reader_*`, 24 `mz_zip_writer_*`, 6 `tinfl_*` and 24 `tdefl_*` symbols in
+both the PS2 and PSP MVS ELFs. NJEMU runtime code calls only reader operations;
+the writer/deflate retention is the same full-package/link-granularity issue
+described below. It remains packaging work rather than an architectural reason
+to expose miniz or restore a second ZIP backend.
 
 ## PS2 size measurements
 
