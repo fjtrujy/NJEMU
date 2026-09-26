@@ -47,7 +47,7 @@ struct png_info
 	uint8_t  *image;
 	uint32_t rowbytes;
 	uint8_t  *zimage;
-	uint32_t zlength;
+	uint32_t compressed_length;
 
 #if (EMU_SYSTEM == NCDZ)
 	uint32_t xres;
@@ -308,7 +308,7 @@ static int png_inflate_image(struct png_info *p)
 	}
 
 	stream.next_in   = p->zimage;
-	stream.avail_in  = (uInt)p->zlength;
+	stream.avail_in  = (uInt)p->compressed_length;
 	stream.next_out  = (Bytef *)p->fimage;
 	stream.avail_out = (uInt)&fbuff_size;
 	stream.zalloc    = (alloc_func)png_zcalloc;
@@ -445,7 +445,7 @@ static int png_read_file(int fd, struct png_info *p)
 				return 0;
 			pidat = pidat->next;
 			pidat->next = 0;
-			p->zlength += chunk_length;
+			p->compressed_length += chunk_length;
 			break;
 
 		case PNG_CN_tEXt:
@@ -489,7 +489,7 @@ static int png_read_file(int fd, struct png_info *p)
 		return 0;
 	}
 
-	if ((p->zimage = (uint8_t *)png_alloc(p->zlength)) == NULL)
+	if ((p->zimage = (uint8_t *)png_alloc(p->compressed_length)) == NULL)
 	{
 		errormsg(0);
 		return 0;
@@ -708,7 +708,7 @@ static int png_write_datastream(int fd, struct png_info *p)
 		return 0;
 
 	/* IDAT */
-	if (write_chunk(fd, PNG_CN_IDAT, p->zimage, p->zlength) == 0)
+	if (write_chunk(fd, PNG_CN_IDAT, p->zimage, p->compressed_length) == 0)
 		return 0;
 
 	/* tEXt */
@@ -756,7 +756,7 @@ static int png_deflate_image(struct png_info *p)
 		if (deflate(&stream, Z_FINISH) == Z_STREAM_END)
 		{
 			deflateEnd(&stream);
-			p->zlength = stream.total_out;
+			p->compressed_length = stream.total_out;
 			return 1;
 		}
 		deflateEnd(&stream);

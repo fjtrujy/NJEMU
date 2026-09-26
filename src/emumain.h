@@ -176,7 +176,6 @@ extern UI_PALETTE ui_palette[UI_PAL_MAX];
 #include "include/osd_cpu.h"
 #include "include/cpuintrf.h"
 #include "include/memory.h"
-#include "zip/zfile.h"
 #include "common/filer.h"
 #include "common/loadrom.h"
 #include "common/state.h"

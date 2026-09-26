@@ -135,13 +135,13 @@ static uint8_t bios_exist[BIOS_MAX];
 	Display Error Message
 ------------------------------------------------------*/
 
-static void bios_error(const char *rom_name, int64_t error, int flag)
+static void bios_error(const char *rom_name, rom_file_open_result_t error, int flag)
 {
 	char mes[128];
 
-	zip_close();
+	file_close();
 
-	if (error == -2)
+	if (error == ROM_FILE_OPEN_CRC_MISMATCH)
 		sprintf(mes, TEXT(CRC32_NOT_CORRECT_x), rom_name);
 	else
 		sprintf(mes, TEXT(FILE_NOT_FOUND_x), rom_name);
@@ -160,7 +160,7 @@ static void bios_error(const char *rom_name, int64_t error, int flag)
 static int bios_check(int flag)
 {
 	int i, count = 0, check_max = DEBUG_BIOS;
-    int64_t err;
+	rom_file_open_result_t err;
 	char *fname;
 
 	if (!flag) ui_popup_reset();

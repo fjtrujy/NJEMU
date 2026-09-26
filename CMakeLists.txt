@@ -209,7 +209,6 @@ set(COMMON_SRC
     emumain.h
     emumain.c
     zip/zip_archive.h
-    zip/zfile.h
     sound/sndintrf.h
     sound/sndintrf.c
     common/cache.h
@@ -294,7 +293,6 @@ if (NOT MINIZ_COMPILE_DEFINITIONS)
 endif()
 list(APPEND COMMON_SRC
     zip/zip_archive.c
-    zip/zfile.c
 )
 
 # Additional source files based on options
@@ -608,7 +606,6 @@ set_source_files_properties(
     src/common/cache.c
     src/common/loadrom.c
     src/zip/zip_archive.c
-    src/zip/zfile.c
     PROPERTIES
     INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"

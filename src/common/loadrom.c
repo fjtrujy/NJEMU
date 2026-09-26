@@ -6,7 +6,6 @@
 
 ******************************************************************************/
 
-#include <fcntl.h>
 #include <limits.h>
 #include <sys/unistd.h>
 #include "emumain.h"
@@ -267,7 +266,9 @@ _continue:
 
 void error_memory(const char *mem_name)
 {
-	zip_close();
+#if (EMU_SYSTEM != NCDZ)
+	file_close();
+#endif
 	msg_printf(TEXT(COULD_NOT_ALLOCATE_x_MEMORY), mem_name);
 	msg_printf(TEXT(PRESS_ANY_BUTTON2));
 	pad_wait_press(PAD_WAIT_INFINITY);
@@ -281,7 +282,9 @@ void error_memory(const char *mem_name)
 
 void error_crc(const char *rom_name)
 {
-	zip_close();
+#if (EMU_SYSTEM != NCDZ)
+	file_close();
+#endif
 	msg_printf(TEXT(CRC32_NOT_CORRECT_x), rom_name);
 	msg_printf(TEXT(PRESS_ANY_BUTTON2));
 	pad_wait_press(PAD_WAIT_INFINITY);
@@ -295,7 +298,9 @@ void error_crc(const char *rom_name)
 
 void error_file(const char *rom_name)
 {
-	zip_close();
+#if (EMU_SYSTEM != NCDZ)
+	file_close();
+#endif
 	msg_printf(TEXT(FILE_NOT_FOUND_x), rom_name);
 	msg_printf(TEXT(PRESS_ANY_BUTTON2));
 	pad_wait_press(PAD_WAIT_INFINITY);

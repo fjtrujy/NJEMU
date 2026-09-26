@@ -1555,13 +1555,12 @@ void file_browser(void)
 			pad_wait_clear();
 		}
 #if (EMU_SYSTEM == MVS)
-		else if (pad_pressed(PLATFORM_PAD_R))
-		{
-					strcpy(game_dir, curr_dir);
-					resource_source_close(&ncdz_game_source);
-					bios_select(0);
-					update = 1;
-		}
+			else if (pad_pressed(PLATFORM_PAD_R))
+			{
+				strcpy(game_dir, curr_dir);
+				bios_select(0);
+				update = 1;
+			}
 #elif (EMU_SYSTEM == NCDZ)
 		else if (pad_pressed(PLATFORM_PAD_R))
 		{

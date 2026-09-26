@@ -1,13 +1,13 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z4 complete; Z5 next
+Status: Z0-Z5 complete; Z6 next
 
 ## Purpose
 
 NJEMU now uses external upstream miniz 3.1.2 for ZIP support on Desktop, PS2 and PSP, and the old embedded MiniZip sources have been removed. The remaining technical debt is no longer the ZIP library itself: it is the historical `zfile` abstraction built around it.
 
-The current API intentionally makes ZIP entries and normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`, `zsize()` and `zlength()`. This works, but it encodes backend selection in global state and gives integer pseudo-handles semantics that differ depending on whether the active source is a ZIP archive or a directory.
+At the start of this plan, the runtime API intentionally made ZIP entries and normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`, `zsize()` and `zlength()`. Z5 removes that runtime compatibility layer; similarly named converter APIs remain isolated under `romcnv/` until Z6-Z7.
 
 This plan replaces that implicit model with small explicit C abstractions while preserving all current supported input formats and runtime behavior.
 
@@ -626,6 +626,71 @@ $ git grep -E '\b(zopen|zread|zgetc|zclose|zsize|zlength|zip_findfirst|zip_findn
 ```
 
 returns no active runtime code references.
+
+#### Z5 implementation result
+
+The runtime compatibility layer is now deleted completely. `src/zip/zfile.c`
+and `src/zip/zfile.h` are gone, they are no longer part of `COMMON_SRC`, and
+`emumain.h` no longer exposes the historical header transitively. The last
+process-global adapter state (`legacy_archive`, `legacy_entry`, `basedir` and
+`basedirend`) therefore no longer exists.
+
+Residual cleanup callers now use their real owner directly. ROM-loader error
+paths call `file_close()` instead of the removed global `zip_close()`, and the
+MVS BIOS menu uses `rom_file_open_result_t` rather than the old `int64_t`
+pseudo-handle-derived result type. The unrelated PNG member previously named
+`zlength` was renamed to `compressed_length` on Desktop, PS2 and PSP so the
+runtime legacy-API grep has no false-positive identifier matches.
+
+During the Z5 GUI audit, the MVS file-browser branch was also found to contain
+an accidental Z4 `resource_source_close(&ncdz_game_source)` call. That symbol
+is NCDZ-only and would break an MVS GUI build; Z5 removes the stray call and
+the MVS GUI + command-list configuration builds successfully.
+
+Runtime validation after Z5:
+
+- `git grep` over `src/` finds no `zopen`, `zread`, `zgetc`, `zclose`,
+  `zsize`, `zlength`, legacy `zip_open`/`zip_close`, or
+  `zip_findfirst`/`zip_findnext` references;
+- Desktop Release/no-GUI builds pass for CPS1, CPS2, MVS and NCDZ;
+- Desktop MVS GUI + `COMMAND_LIST=ON` + `SAVE_STATE=ON` builds successfully;
+- MVS CTest passes 10/10 and NCDZ CTest passes 11/11 when excluding only the
+  pre-existing Release/NDEBUG `memory_plan_tests` abort;
+- real 30-frame smokes pass for CPS1 `ghoulsu`, CPS2 `mpangu`, MVS
+  `pbobbl2n`, NCDZ `Windjammers.zip`, and NCDZ `Windjammers` directory source;
+- PS2 and PSP Release/no-GUI cross-builds pass for both MVS and NCDZ, with
+  PSP producing `EBOOT.PBP` for both targets;
+- `git diff --check` passes.
+
+Removing the final adapter recovers the duplicated global archive/entry state.
+For MVS, Z4 was rebuilt from commit `8a18c03` in `/tmp` with matching options
+to provide an exact comparison. NCDZ uses the Z4 measurements already recorded
+above.
+
+| Build | Z4 | Z5 | Delta |
+| --- | ---: | ---: | ---: |
+| Desktop MVS executable | 475,040 B | 474,736 B | -304 B |
+| PS2 MVS `.text` | 892,632 B | 891,936 B | -696 B |
+| PS2 MVS `.bss` | 2,246,920 B | 2,245,768 B | -1,152 B |
+| PS2 MVS `text+data+bss` | 3,530,612 B | 3,528,764 B | -1,848 B |
+| PS2 MVS ELF file | 3,279,576 B | 3,278,400 B | -1,176 B |
+| PSP MVS `.text` | 770,512 B | 769,824 B | -688 B |
+| PSP MVS `.bss` | 1,939,184 B | 1,938,032 B | -1,152 B |
+| PSP MVS `text+data+bss` | 2,722,884 B | 2,721,044 B | -1,840 B |
+| PSP MVS ELF file | 2,446,268 B | 2,444,928 B | -1,340 B |
+| PSP MVS PRX | 917,618 B | 916,610 B | -1,008 B |
+| PSP MVS EBOOT.PBP | 917,994 B | 916,986 B | -1,008 B |
+| Desktop NCDZ executable | 403,640 B | 403,336 B | -304 B |
+| PS2 NCDZ `.text` | 860,552 B | 859,408 B | -1,144 B |
+| PS2 NCDZ `.bss` | 2,169,864 B | 2,168,712 B | -1,152 B |
+| PS2 NCDZ `text+data+bss` | 3,422,452 B | 3,420,156 B | -2,296 B |
+| PS2 NCDZ ELF file | 3,366,788 B | 3,365,208 B | -1,580 B |
+| PSP NCDZ `.text` | 780,100 B | 779,012 B | -1,088 B |
+| PSP NCDZ `.bss` | 1,862,172 B | 1,861,020 B | -1,152 B |
+| PSP NCDZ `text+data+bss` | 2,649,816 B | 2,647,576 B | -2,240 B |
+| PSP NCDZ ELF file | 2,415,380 B | 2,413,304 B | -2,076 B |
+| PSP NCDZ PRX | 907,774 B | 906,062 B | -1,712 B |
+| PSP NCDZ EBOOT.PBP | 908,154 B | 906,442 B | -1,712 B |
 
 ### Z6 — ROM converter reader cleanup
 
