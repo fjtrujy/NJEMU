@@ -82,7 +82,10 @@ include_directories(
 # Common source files
 set(COMMON_SRC
     common.c
+    zip_reader.c
+    zip_reader.h
     zfile.c
+    zfile.h
 )
 
 # Prefer an installed miniz package, but keep the desktop/WASM converter

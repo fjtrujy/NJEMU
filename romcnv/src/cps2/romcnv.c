@@ -694,7 +694,7 @@ static int calc_pen_usage(void)
 static int load_rom_gfx1(void)
 {
 	int i;
-	int64_t res;
+	rom_file_open_result_t res;
 	char fname[32], *parent;
 
 	if ((memory_region_gfx1 = calloc(1, memory_length_gfx1)) == NULL)
@@ -710,7 +710,7 @@ static int load_rom_gfx1(void)
 		strcpy(fname, gfx1rom[i].name);
 		if ((res = file_open(game_name, parent_name, gfx1rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);

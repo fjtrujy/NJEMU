@@ -9,7 +9,7 @@
 #include <limits.h>
 
 #include "common.h"
-#include "zfile.h"
+#include "zip_reader.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -28,8 +28,10 @@ enum
 
 int lsb_first;
 
-int64_t rom_fd;
 char delimiter = '/';
+
+static zip_reader_archive_t rom_archive;
+static zip_reader_entry_t rom_entry;
 
 char game_dir[PATH_MAX];
 char zip_dir[PATH_MAX];
@@ -50,7 +52,7 @@ char cache_name[16];
 
 void error_memory(const char *mem_name)
 {
-	zip_close();
+	file_close();
 #ifdef CHINESE
 	printf("错误: 无法分配%s内存.\n", mem_name);
 #else
@@ -61,7 +63,7 @@ void error_memory(const char *mem_name)
 
 void error_file(const char *rom_name)
 {
-	zip_close();
+	file_close();
 #ifdef CHINESE
 	printf("错误: 没有找到文件. \"%s\"\n", rom_name);
 #else
@@ -72,7 +74,7 @@ void error_file(const char *rom_name)
 
 void error_crc(const char *rom_name)
 {
-	zip_close();
+	file_close();
 #ifdef CHINESE
 	printf("错误: CRC32不正确. \"%s\"\n", rom_name);
 #else
@@ -87,12 +89,8 @@ void error_crc(const char *rom_name)
 
 void file_close(void)
 {
-	if (rom_fd != -1)
-	{
-		zclose(rom_fd);
-		zip_close();
-		rom_fd = -1;
-	}
+	zip_reader_entry_close(&rom_entry);
+	zip_reader_archive_close(&rom_archive);
 }
 
 
@@ -100,91 +98,43 @@ void file_close(void)
 	Open ROM File
 --------------------------------------------------------*/
 
-int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
+rom_file_open_result_t file_open(const char *fname1, const char *fname2, const uint32_t crc, char *fname)
 {
-	int found = 0, res = -1;
-	struct zip_find_t file;
+	const char *set_name[2] = { fname1, fname2 };
+	rom_file_open_result_t result = ROM_FILE_OPEN_NOT_FOUND;
+	zip_reader_entry_info_t info;
 	char path[PATH_MAX];
+	int i;
 
 	file_close();
 
-	sprintf(path, "%s%c%s.zip", zip_dir, delimiter, fname1);
-
-	if (zip_open(path, "rb") != -1)
+	for (i = 0; i < 2; ++i)
 	{
-		if (zip_findfirst(&file))
+		if (set_name[i] == NULL)
+			break;
+
+		sprintf(path, "%s%c%s.zip", zip_dir, delimiter, set_name[i]);
+		if (!zip_reader_archive_open(&rom_archive, path))
+			continue;
+
+		if (zip_reader_archive_find_crc(&rom_archive, crc, &info))
 		{
-			if (file.crc32 == crc)
-			{
-				found = 1;
-			}
-			else
-			{
-				while (zip_findnext(&file))
-				{
-					if (file.crc32 == crc)
-					{
-						found = 1;
-						break;
-					}
-				}
-			}
+			if (fname != NULL)
+				strcpy(fname, info.name);
+			if (zip_reader_entry_open(&rom_archive, info.name, &rom_entry))
+				return ROM_FILE_OPEN_OK;
+
+			zip_reader_archive_close(&rom_archive);
+			return ROM_FILE_OPEN_NOT_FOUND;
 		}
-		if (!found)
-		{
-			if ((rom_fd = zopen(fname)) != -1)
-			{
-				file_close();
-				res = -2;
-			}
-			zip_close();
-		}
+
+		if (fname != NULL && zip_reader_archive_stat(&rom_archive, fname, &info))
+			result = ROM_FILE_OPEN_CRC_MISMATCH;
+
+		zip_reader_archive_close(&rom_archive);
 	}
 
-	if (!found && fname2 != NULL)
-	{
-		sprintf(path, "%s%c%s.zip", zip_dir, delimiter, fname2);
-
-		if (zip_open(path, "rb") != -1)
-		{
-			if (zip_findfirst(&file))
-			{
-				if (file.crc32 == crc)
-				{
-					found = 2;
-				}
-				else
-				{
-					while (zip_findnext(&file))
-					{
-						if (file.crc32 == crc)
-						{
-							found = 2;
-							break;
-						}
-					}
-				}
-			}
-			if (!found)
-			{
-				if ((rom_fd = zopen(fname)) != -1)
-				{
-					file_close();
-					res = -2;
-				}
-				zip_close();
-			}
-		}
-	}
-
-	if (found)
-	{
-		if (fname) strcpy(fname, file.name);
-		rom_fd = zopen(file.name);
-		return rom_fd;
-	}
-
-	return res;
+	return result;
 }
 
 
@@ -194,8 +144,8 @@ int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, ch
 
 int file_read(void *buf, size_t length)
 {
-	if (rom_fd != -1)
-		return zread(rom_fd, buf, length);
+	if (rom_entry.reader != NULL)
+		return (int)zip_reader_entry_read(&rom_entry, buf, length);
 	return -1;
 }
 
@@ -206,8 +156,8 @@ int file_read(void *buf, size_t length)
 
 int file_getc(void)
 {
-	if (rom_fd != -1)
-		return zgetc(rom_fd);
+	if (rom_entry.reader != NULL)
+		return zip_reader_entry_getc(&rom_entry);
 	return -1;
 }
 

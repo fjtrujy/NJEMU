@@ -337,12 +337,12 @@ static int load_rom_gfx2(void)
 
 		for (i = 0; i < num_gfx2rom; )
 		{
-			int64_t res;
+			rom_file_open_result_t res;
 
 			strcpy(fname, gfx2rom[i].name);
 			if ((res = file_open(game_name, parent, gfx2rom[i].crc, fname)) < 0)
 			{
-				if (res == -1)
+				if (res == ROM_FILE_OPEN_NOT_FOUND)
 					error_file(fname);
 				else
 					error_crc(fname);
@@ -385,12 +385,12 @@ static int load_rom_gfx3(void)
 
 	for (i = 0; i < num_gfx3rom; )
 	{
-		int64_t res;
+		rom_file_open_result_t res;
 
 		strcpy(fname, gfx3rom[i].name);
 		if ((res = file_open(game_name, parent, gfx3rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);
@@ -425,12 +425,12 @@ static int load_rom_sound1(void)
 
 	for (i = 0; i < num_snd1rom; )
 	{
-		int64_t res;
+		rom_file_open_result_t res;
 
 		strcpy(fname, snd1rom[i].name);
 		if ((res = file_open(game_name, parent, snd1rom[i].crc, fname)) < 0)
 		{
-			if (res == -1)
+			if (res == ROM_FILE_OPEN_NOT_FOUND)
 				error_file(fname);
 			else
 				error_crc(fname);

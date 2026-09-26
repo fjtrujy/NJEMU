@@ -1,13 +1,13 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z5 complete; Z6 next
+Status: Z0-Z6 complete; Z7 next
 
 ## Purpose
 
 NJEMU now uses external upstream miniz 3.1.2 for ZIP support on Desktop, PS2 and PSP, and the old embedded MiniZip sources have been removed. The remaining technical debt is no longer the ZIP library itself: it is the historical `zfile` abstraction built around it.
 
-At the start of this plan, the runtime API intentionally made ZIP entries and normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`, `zsize()` and `zlength()`. Z5 removes that runtime compatibility layer; similarly named converter APIs remain isolated under `romcnv/` until Z6-Z7.
+At the start of this plan, the runtime API intentionally made ZIP entries and normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`, `zsize()` and `zlength()`. Z5 removes that runtime compatibility layer. Z6 also removes the converter read-side compatibility API; only the temporary converter writer names remain until Z7.
 
 This plan replaces that implicit model with small explicit C abstractions while preserving all current supported input formats and runtime behavior.
 
@@ -708,6 +708,63 @@ Tasks:
 Exit criteria:
 
 - converter read side contains no `zopen`/`zread` fake descriptor API.
+
+#### Z6 implementation result
+
+`romcnv` now has a dedicated explicit reader in
+`romcnv/src/zip_reader.c/.h`. `zip_reader_archive_t` owns the miniz reader
+archive and `zip_reader_entry_t` owns the extraction iterator, size/CRC,
+streamed byte count and byte-oriented read cache. The converter reader is
+ZIP-only: the undocumented historical directory fallback has been removed.
+
+`romcnv/src/common.c` now owns one explicit ROM archive/entry pair. CRC lookup
+uses `zip_reader_archive_find_crc()` directly, filename metadata lookup is
+used only to preserve the existing CRC-mismatch result, and the set search
+order remains current set followed by parent set. Case-insensitive filename
+lookup, streaming extraction and close-time CRC validation are preserved.
+`rom_fd`, `zip_findfirst()`, `zip_findnext()`, `zread()`, `zgetc()`,
+`zsize()` and `zcrc()` are gone from the converter reader.
+
+The reader result is now the explicit `rom_file_open_result_t`, and the MVS
+and CPS2 callers use `ROM_FILE_OPEN_NOT_FOUND` rather than magic
+pseudo-handle-era values. Error cleanup closes the reader owner directly and
+does not interact with the output ZIP writer.
+
+`romcnv/src/zfile.c/.h` is deliberately retained only as the temporary Z7
+writer compatibility layer. It now contains only writer archive state,
+`tmpfile()` staging and the writer-facing `zip_open()`, `zopen()`,
+`zwrite()`, `zclose()` and `zip_close()` names. No reader state or reader
+operation remains there.
+
+Validation after Z6:
+
+- Release builds pass for `romcnv_mvs` and `romcnv_cps2` using the installed
+  miniz 3.1.2 package;
+- the MVS Release build also passes with `find_package(miniz)` disabled,
+  exercising the pinned FetchContent fallback;
+- a real `pbobbl2n` conversion generates `pbobbl2n_cache.zip`, which passes
+  a complete `unzip -t` and is consumed successfully by NJEMU for a 30-frame
+  MVS smoke;
+- a real `mpangu` conversion generates `mpangu_cache.zip`, which likewise
+  passes `unzip -t` and is consumed successfully by a 30-frame CPS2 smoke;
+- all generated caches and temporary binaries used for this validation live
+  under `/tmp` or build directories; `resources/` is not modified;
+- `git diff --check` passes.
+
+For size comparison, pre-Z6 commit `a1ef499` and the Z6 tree were both built
+fresh in `/tmp` with Release and the same installed miniz package. Both
+targets reduce real code and zero-fill state. CPS2 also crosses a 16 KiB Mach-O
+`__TEXT` alignment boundary, so its file-size drop is much larger than the
+actual code reduction.
+
+| Build | Z5 | Z6 | Delta |
+| --- | ---: | ---: | ---: |
+| MVS converter `__text` | 29,268 B | 28,888 B | -380 B |
+| MVS converter `__bss` | 17,344 B | 15,328 B | -2,016 B |
+| MVS converter file | 90,424 B | 90,616 B | +192 B |
+| CPS2 converter `__text` | 26,796 B | 26,416 B | -380 B |
+| CPS2 converter `__bss` | 9,808 B | 7,792 B | -2,016 B |
+| CPS2 converter file | 87,784 B | 71,400 B | -16,384 B |
 
 ### Z7 — ROM converter writer cleanup
 
