@@ -1,7 +1,7 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z6 complete; Z7 next
+Status: Z0-Z7 complete; Z8 next
 
 ## Purpose
 
@@ -787,6 +787,48 @@ Exit criteria:
 - `tmpfile()` is gone from ZIP generation unless a specific large-data case proves it is still the lowest-memory solution;
 - real MVS and CPS2 cache ZIP generation passes `unzip -t`;
 - NJEMU consumes those generated ZIPs successfully.
+
+#### Z7 implementation result
+
+Z7 removes the converter writer compatibility layer completely. The historical
+`romcnv/src/zfile.c/.h` files are deleted and `romcnv` now owns ZIP output
+through `zip_writer_t`, a concrete owner around `mz_zip_archive`.
+
+MVS and CPS2 cache generation now write already-materialized cache blocks
+directly with `mz_zip_writer_add_mem()`. `cache_info` is emitted through a
+small segmented read callback so the existing pieces can be compressed as one
+entry without recreating the old `tmpfile()` staging step or allocating a new
+aggregate buffer. Writer failures are propagated to the converter, and archive
+finalization/end failures cause the partial output ZIP to be removed.
+
+Validation after Z7:
+
+- Release `romcnv_mvs` and `romcnv_cps2` builds pass with miniz 3.1.2;
+- no `zopen()`, `zwrite()`, `zclose()`, converter `zip_open()/zip_close()`,
+  `tmpfile()` or `zfile` source remains under `romcnv/src`;
+- a real `pbobbl2n` MVS conversion produces `pbobbl2n_cache.zip`; a complete
+  `unzip -t` passes and NJEMU consumes that exact generated cache successfully
+  for a 30-frame Desktop smoke;
+- a real `mpangu` CPS2 conversion produces `mpangu_cache.zip`; a complete
+  `unzip -t` passes and NJEMU consumes that exact generated cache successfully
+  for a 30-frame Desktop smoke;
+- the non-`memory_plan_tests` Desktop CTest set passes 10/10 for both MVS and
+  CPS2 validation builds;
+- all generated caches and smoke artifacts remain in build directories;
+  `resources/` is not modified;
+- `git diff --check` passes.
+
+Using the same Release configuration and installed miniz package as the Z6
+measurements above, Z7 also reduces the converter binaries slightly:
+
+| Build | Z6 | Z7 | Delta |
+| --- | ---: | ---: | ---: |
+| MVS converter `__text` | 28,888 B | 28,760 B | -128 B |
+| MVS converter `__bss` | 15,328 B | 14,176 B | -1,152 B |
+| MVS converter file | 90,616 B | 90,408 B | -208 B |
+| CPS2 converter `__text` | 26,416 B | 26,376 B | -40 B |
+| CPS2 converter `__bss` | 7,792 B | 6,640 B | -1,152 B |
+| CPS2 converter file | 71,400 B | 71,208 B | -192 B |
 
 ### Z8 — Naming and source layout cleanup
 

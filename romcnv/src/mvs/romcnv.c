@@ -18,7 +18,7 @@
 #include "romcnv.h"
 #include "common.h"
 #include "neogeo.h"
-#include "zfile.h"
+#include "zip_writer.h"
 
 #define MAX_GAMES			512
 
@@ -1147,8 +1147,9 @@ error:
 
 static int create_zip_cache(char *game_name)
 {
-	int64_t fd;
-	uint32_t block, total = 0, count = 0, num_blocks;
+	zip_writer_t writer = {0};
+	zip_writer_segment_t cache_info[2];
+	uint32_t block, num_blocks;
 	char version[8], zipname[PATH_MAX];
 	int res = 0;
 
@@ -1167,7 +1168,7 @@ static int create_zip_cache(char *game_name)
 	printf("Create cache file...\n");
 #endif
 
-	if (zip_open(zipname, "wb") < 0)
+	if (!zip_writer_open(&writer, zipname))
 	{
 #ifdef CHINESE
 		printf("错误: 无法创建zip文件 \"cache%c%s_cache.zip\".\n", delimiter, game_name);
@@ -1202,19 +1203,10 @@ static int create_zip_cache(char *game_name)
 			fname[2] = cnv_table[ block       & 0x0f];
 			fname[3] = '\0';
 
-			if ((fd = zopen(fname)) < 0)
-			{
-				printf("ERROR: Could not open cache block %s for writing.\n", fname);
-				goto error;
-			}
-			if (zwrite(fd, &memory_region_gfx3[block << 16], 0x10000) != 0)
+			if (!zip_writer_add_mem(&writer, fname,
+			                        &memory_region_gfx3[block << 16], 0x10000))
 			{
 				printf("ERROR: Could not write cache block %s.\n", fname);
-				goto error;
-			}
-			if (zclose(fd) != 0)
-			{
-				printf("ERROR: Could not close cache block %s.\n", fname);
 				goto error;
 			}
 		}
@@ -1223,29 +1215,35 @@ static int create_zip_cache(char *game_name)
 	/* Write srom */
 	if (convert_srom && encrypt_gfx2)
 	{
-		if ((fd = zopen("srom")) < 0) goto error;
-		zwrite(fd, memory_region_gfx2, memory_length_gfx2);
-		zclose(fd);
+		if (!zip_writer_add_mem(&writer, "srom", memory_region_gfx2, memory_length_gfx2))
+			goto error;
 	}
 
 	/* Write vrom */
 	if (convert_vrom && (encrypt_snd1 || disable_sound))
 	{
-		if ((fd = zopen("vrom")) < 0) goto error;
-		zwrite(fd, memory_region_sound1, memory_length_sound1);
-		zclose(fd);
+		if (!zip_writer_add_mem(&writer, "vrom", memory_region_sound1, memory_length_sound1))
+			goto error;
 	}
 
-	/* Write cache_info (version + pen_usage) */
-	if ((fd = zopen("cache_info")) < 0) goto error;
-	zwrite(fd, version, 8);
-	zwrite(fd, gfx_pen_usage[TILE_SPR], gfx_total_elements[TILE_SPR]);
-	zclose(fd);
+	/* Write cache_info (version + pen_usage) without staging a combined buffer. */
+	cache_info[0].data = version;
+	cache_info[0].size = 8;
+	cache_info[1].data = gfx_pen_usage[TILE_SPR];
+	cache_info[1].size = gfx_total_elements[TILE_SPR];
+	if (!zip_writer_add_segments(&writer, "cache_info", cache_info, 2))
+		goto error;
 
+	if (!zip_writer_close(&writer))
+		goto error;
 	res = 1;
+	goto done;
 
 error:
-	zip_close();
+	zip_writer_abort(&writer);
+	remove(zipname);
+
+done:
 
 #ifdef CHINESE
 	if (!res) printf("错误: 无法创建文件.\n");

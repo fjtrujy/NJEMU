@@ -84,8 +84,8 @@ set(COMMON_SRC
     common.c
     zip_reader.c
     zip_reader.h
-    zfile.c
-    zfile.h
+    zip_writer.c
+    zip_writer.h
 )
 
 # Prefer an installed miniz package, but keep the desktop/WASM converter

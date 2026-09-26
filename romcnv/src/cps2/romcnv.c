@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 #include "romcnv.h"
-#include "zfile.h"
+#include "zip_writer.h"
 
 #define SPRITE_BLANK		0x00
 #define SPRITE_TRANSPARENT	0x02
@@ -1095,7 +1095,8 @@ static void print_progress(int count, int total)
 
 static int create_zip_cache(char *game_name)
 {
-	int64_t fd;
+	zip_writer_t writer = {0};
+	zip_writer_segment_t cache_info[5];
 	uint32_t block, res = 0, total = 0, count = 0;
 	char version[8], fname[PATH_MAX], zipname[PATH_MAX];
 
@@ -1113,7 +1114,7 @@ static int create_zip_cache(char *game_name)
 	printf("cache name: cache%c%s_cache.zip\n", delimiter, game_name);
 	printf("Create cache file...\n");
 #endif
-	if (zip_open(zipname, "wb") < 0)
+	if (!zip_writer_open(&writer, zipname))
 	{
 #ifdef CHINESE
 		printf("错误: 无法创建zip文件 \"cache%c%s_cache.zip\".\n", delimiter, game_name);
@@ -1140,27 +1141,38 @@ static int create_zip_cache(char *game_name)
 		if (block_empty[block]) continue;
 
 		sprintf(fname, "%03x", block);
-		if ((fd = zopen(fname)) < 0) goto error;
-		zwrite(fd, &memory_region_gfx1[block << 16], 0x10000);
-		zclose(fd);
+		if (!zip_writer_add_mem(&writer, fname,
+		                        &memory_region_gfx1[block << 16], 0x10000))
+			goto error;
 		print_progress(++count, total);
 	}
 
-	if ((fd = zopen("cache_info")) < 0) goto error;
-	zwrite(fd, version, 8);
-	zwrite(fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
-	zwrite(fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
-	zwrite(fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
-	zwrite(fd, block_empty, 0x200);
-	zclose(fd);
+	cache_info[0].data = version;
+	cache_info[0].size = 8;
+	cache_info[1].data = gfx_pen_usage[TILE08];
+	cache_info[1].size = gfx_total_elements[TILE08];
+	cache_info[2].data = gfx_pen_usage[TILE16];
+	cache_info[2].size = gfx_total_elements[TILE16];
+	cache_info[3].data = gfx_pen_usage[TILE32];
+	cache_info[3].size = gfx_total_elements[TILE32];
+	cache_info[4].data = block_empty;
+	cache_info[4].size = 0x200;
+	if (!zip_writer_add_segments(&writer, "cache_info", cache_info, 5))
+		goto error;
 
 	print_progress(++count, total);
 	printf("\n");
 
+	if (!zip_writer_close(&writer))
+		goto error;
 	res = 1;
+	goto done;
 
 error:
-	zip_close();
+	zip_writer_abort(&writer);
+	remove(zipname);
+
+done:
 
 #ifdef CHINESE
 	if (!res) printf("错误: 无法创建文件.\n");
