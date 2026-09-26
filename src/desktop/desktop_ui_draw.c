@@ -15,8 +15,6 @@
 #include "common/ui_layout.h"
 #include "common/video_driver.h"
 
-#define SCR_WIDTH 480
-#define SCR_HEIGHT 272
 #define UI_TEXTURE_SIZE 512
 
 /*------------------------------------------------------

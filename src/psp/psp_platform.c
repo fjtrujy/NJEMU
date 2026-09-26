@@ -15,6 +15,7 @@
 #include <pspwlan.h>
 #include <string.h>
 
+#include "emumain.h"
 #include "psp.h"
 
 

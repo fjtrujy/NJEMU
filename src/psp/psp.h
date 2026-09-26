@@ -37,7 +37,7 @@
 #include "common/config.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
-#include "emumain.h"
+#include "common/video_geometry.h"
 
 #include "psp/ui_menu.h"
 #include "psp/psp_video.h"
@@ -49,7 +49,5 @@
 /******************************************************************************
 	PSPの定数
 ******************************************************************************/
-
-#define REFRESH_RATE		(59.940059)		// (9000000Hz * 1) / (525 * 286)
 
 #endif /* PSP_MAIN_H */

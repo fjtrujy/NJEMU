@@ -542,6 +542,7 @@ video_driver_t video_desktop = {
 	desktop_beginFrame,
 	desktop_endFrame,
 	desktop_frameAddr,
+	NULL, // readFrame: Desktop state thumbnails use CPU-side UI scratch
 	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,

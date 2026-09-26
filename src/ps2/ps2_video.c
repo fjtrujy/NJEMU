@@ -1813,6 +1813,7 @@ video_driver_t video_ps2 = {
 	ps2_beginFrame,
 	ps2_endFrame,
 	ps2_frameAddr,
+	ps2_video_read_frame,
 	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,

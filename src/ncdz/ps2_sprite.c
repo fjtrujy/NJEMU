@@ -51,7 +51,7 @@ static RECT ps2_centered_clip(const ps2_clip_size_t *size, bool scale_logical)
 	RECT clip;
 
 	if (scale_logical)
-		ps2_scale_logical_size(output_width, output_height,
+		video_scale_logical_size(output_width, output_height,
 			size->width, size->height, &width, &height);
 
 	clip.left = (output_width - width) / 2;

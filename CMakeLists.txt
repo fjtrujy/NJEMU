@@ -231,6 +231,7 @@ set(COMMON_SRC
     common/input_driver.c
     common/video_driver.h
     common/video_driver.c
+	common/video_geometry.h
 	    common/ui_draw_driver.h
 	    common/ui_draw_driver.c
 	    common/ui_layout.h

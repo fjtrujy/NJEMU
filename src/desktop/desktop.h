@@ -10,12 +10,7 @@
 
 #include <stdbool.h>
 #include <SDL.h>
-
-#define SCR_WIDTH			480
-#define SCR_HEIGHT			272
-#define BUF_WIDTH			512
-
-#define REFRESH_RATE		(59.940059)		// (9000000Hz * 1) / (525 * 286)
+#include "common/video_geometry.h"
 
 #define FONTSIZE			14
 

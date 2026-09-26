@@ -254,7 +254,7 @@ Result (2026-09-26):
 - validated Desktop CPS1/CPS2/MVS/NCDZ builds, MVS 10/10 focused CTests, and a
   30-frame MVS runtime smoke.
 
-### D2 - Establish include ownership and common geometry
+### D2 - Establish include ownership and common geometry [IN PROGRESS]
 
 Introduce narrow common headers for:
 
@@ -270,6 +270,38 @@ Then:
 - make each `.c` include its own public header first where practical;
 - stop relying on transitive SDK includes;
 - replace global `include_directories()` growth with target-scoped include paths.
+
+#### D2a - Common geometry and first transitive-dependency break [COMPLETE]
+
+- added `common/video_geometry.h` as the single owner of the 480x272 logical
+  presentation space, 512-pixel logical texture pitch, and nominal refresh rate;
+- moved the output-fit scaling helper from `ps2.h` to the common geometry layer;
+- removed PSP/PS2/Desktop umbrella includes from `emumain.h`;
+- broke the `emumain.h` <-> `psp.h` include cycle;
+- made `psp_video.h` depend directly on the video contract/PSP GU API rather than
+  importing all of `psp.h`;
+- made `video_driver.h` self-contained for `size_t`;
+- exposed optional `video_driver_t::readFrame` capability so `common/state.c` no
+  longer calls the PS2 readback function directly;
+- repaired newly exposed direct dependencies in PSP video and PS2 PNG code.
+
+Validation (2026-09-26):
+- MVS GUI ON/OFF builds on Desktop, PS2, and PSP;
+- Desktop focused CTests 10/10;
+- 30-frame Desktop MVS smoke passes.
+
+#### D2b - Decompose `emumain.h` and remove transitive platform/SDK imports
+
+Next, introduce narrow runtime/path/state headers and replace `emumain.h` includes
+where a translation unit only needs a small contract. Platform implementation
+files must include the SDK headers they actually use. Keep this mechanical and
+behaviour-preserving.
+
+#### D2c - CMake include-scope cleanup
+
+After source/header ownership is explicit, replace directory-wide
+`include_directories()` calls with target-scoped include directories and remove
+platform-directory search paths that are no longer needed.
 
 Acceptance:
 - common headers include no PSP/PS2/Desktop umbrella header;

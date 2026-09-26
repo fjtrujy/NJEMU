@@ -9,11 +9,12 @@
 #ifndef PSP_VIDEO_H
 #define PSP_VIDEO_H
 
-#include "psp.h"
+#include <stdint.h>
+#include <pspgu.h>
+#include "emucfg.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
 
-#define SCR_WIDTH			480
-#define SCR_HEIGHT			272
-#define BUF_WIDTH			512
 #define	FRAMESIZE			(BUF_WIDTH * SCR_HEIGHT * sizeof(uint16_t))
 #define	FRAMESIZE32			(BUF_WIDTH * SCR_HEIGHT * sizeof(uint32_t))
 

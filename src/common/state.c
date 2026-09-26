@@ -83,9 +83,8 @@ static void save_thumbnail(void)
 {
 	int x, y, w, h;
 	uint16_t *src;
-#if defined(PS2)
 	uint16_t *readback = NULL;
-#endif
+	int src_pitch = BUF_WIDTH;
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
@@ -100,23 +99,27 @@ static void save_thumbnail(void)
 		h = 112;
 	}
 
-#if defined(PS2)
-	/* state_make_thumbnail() renders the preview into the GS-backed scratch,
-	 * so its CPU staging copy is stale here.  Read back exactly the generated
-	 * rectangle before serializing it into the state file. */
-	readback = (uint16_t *)calloc((size_t)w * h, sizeof(uint16_t));
-	if (readback) {
-		/* A failed readback leaves the zero-filled thumbnail in place.  Keeping
-		 * the fixed thumbnail payload is more important than the preview itself:
-		 * the rest of the state file uses fixed offsets past this block. */
-		ps2_video_read_frame(video_data,
-			COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
-			152, 0, w, h, readback, w);
+	if (video_driver->readFrame != NULL)
+	{
+		/* Backends with non-CPU-addressable render surfaces can provide explicit
+		 * readback.  PS2 uses this for its GS-backed thumbnail scratch. */
+		readback = (uint16_t *)calloc((size_t)w * h, sizeof(uint16_t));
+		if (readback)
+		{
+			/* A failed readback leaves the zero-filled thumbnail in place.  Keeping
+			 * the fixed thumbnail payload is more important than the preview itself:
+			 * the rest of the state file uses fixed offsets past this block. */
+			video_driver->readFrame(video_data,
+				COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER,
+				152, 0, w, h, readback, w);
+		}
+		src = readback;
+		src_pitch = w;
 	}
-	src = readback;
-#else
-	src = state_thumbnail_addr(152);
-#endif
+	else
+	{
+		src = state_thumbnail_addr(152);
+	}
 
 	for (y = 0; y < h; y++)
 	{
@@ -126,18 +129,10 @@ static void save_thumbnail(void)
 			state_save_word(src ? &src[x] : &empty, 1);
 		}
 		if (src)
-		{
-#if defined(PS2)
-			src += w;
-#else
-			src += BUF_WIDTH;
-#endif
-		}
+			src += src_pitch;
 	}
 
-#if defined(PS2)
 	free(readback);
-#endif
 }
 
 

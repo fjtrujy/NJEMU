@@ -12,6 +12,7 @@
 #include <malloc.h>
 #include <zlib.h>
 #include "emumain.h"
+#include "ps2/ps2.h"
 
 
 #define PNG_Signature       "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"

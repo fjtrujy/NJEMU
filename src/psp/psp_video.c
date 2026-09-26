@@ -8,8 +8,12 @@
 
 #include "psp_video.h"
 #include <pspge.h> // for sceGeEdramGetAddr
+#include <pspdisplay.h>
+#include <pspkernel.h>
 #include <stdint.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 /******************************************************************************
 		Local Variables/Structures
@@ -1045,6 +1049,7 @@ video_driver_t video_psp = {
 	psp_beginFrame,
 	psp_endFrame,
 	psp_frameAddr,
+	NULL, // readFrame: PSP surfaces are directly CPU-addressable
 	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,

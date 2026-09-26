@@ -9,6 +9,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define MAKECOL15(r, g, b)	(((b & 0xf8) << 7) | ((g & 0xf8) << 2) | ((r & 0xf8) >> 3))
 #define GETR15(col)			(((col << 3) & 0xf8) | ((col >>  2) & 0x07))
@@ -133,6 +134,9 @@ typedef struct video_driver
 	/* End the current rendering frame (e.g. finish and sync GPU command list). */
 	void (*endFrame)(void *data);
 	void *(*frameAddr)(void *data, int frameIndex, int x, int y);
+	/* Optional CPU readback for surfaces that are not directly addressable. */
+	int (*readFrame)(void *data, int frameIndex,
+		int x, int y, int width, int height, uint16_t *dst, int dstPitch);
 	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);

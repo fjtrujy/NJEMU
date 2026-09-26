@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include "emucfg.h"
 #include "main_ui_draw.h"
+#include "common/video_geometry.h"
 
 enum
 {
@@ -162,16 +163,6 @@ typedef struct ui_palette_t
 
 extern UI_PALETTE ui_palette[UI_PAL_MAX];
 #define UI_COLOR(no)	ui_palette[no].r,ui_palette[no].g,ui_palette[no].b
-
-#if defined(PSP)
-#include "psp/psp.h"
-#endif
-#if defined(PS2)
-#include "ps2/ps2.h"
-#endif
-#if defined(DESKTOP)
-#include "desktop/desktop.h"
-#endif
 
 #include "include/osd_cpu.h"
 #include "include/cpuintrf.h"
