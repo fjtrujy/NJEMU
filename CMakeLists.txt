@@ -148,6 +148,16 @@ else()
         -ffast-math
     )
 endif()
+
+# Keep functions and data in independent sections on every platform.  Linkers
+# that support dead-section elimination can then discard unused code/data, while
+# platforms that do not currently enable it still keep the objects ready for
+# that optimization without changing runtime semantics.
+list(APPEND COMMON_FLAGS
+    -ffunction-sections
+    -fdata-sections
+)
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND COMMON_FLAGS
         -fsingle-precision-constant
