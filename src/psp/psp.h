@@ -44,7 +44,7 @@
 #include "psp/png.h"
 #include "psp/psp_power.h"
 #ifdef ADHOC
-#include "psp/adhoc.h"
+#include "common/adhoc_transport.h"
 #endif
 /******************************************************************************
 	PSPの定数

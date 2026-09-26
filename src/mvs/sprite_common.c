@@ -7,6 +7,8 @@
 ******************************************************************************/
 
 #include "sprite_common.h"
+#include "common/cache.h"
+#include "common/emulator_runtime.h"
 
 /******************************************************************************
 	Shared variable definitions

@@ -9,6 +9,10 @@
 #ifndef PD4990A_H
 #define PD4990A_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 struct pd4990a_s
 {
 	int seconds;

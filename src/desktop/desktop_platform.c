@@ -1,6 +1,13 @@
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/platform_driver.h"
+#include "common/runtime_paths.h"
+
 #include <SDL.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #if defined(__APPLE__)
 #include <mach/mach.h>

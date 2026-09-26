@@ -107,9 +107,17 @@
 #include <stdarg.h>
 #include <math.h>
 
-#include "emumain.h"
 #include "2610intf.h"
 #include "ym2610.h"
+#include "common/cache.h"
+#include "common/emulator_options.h"
+#include "common/sound.h"
+
+#if (EMU_SYSTEM == MVS)
+#include "mvs/timer.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/timer.h"
+#endif
 
 
 #ifndef PI

@@ -12,11 +12,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <mad.h>
+#include "common/mp3.h"
 #include "thread_driver.h"
 #include "audio_driver.h"
-
-// TODO: remove this import
-#include "emumain.h"
+#include "common/emulator_runtime.h"
+#include "common/ui_text_driver.h"
+#include "main_ui_draw.h"
+#include "ncdz/cdda.h"
 
 #define MP3_SAMPLES			(736 * 2)
 #define MP3_BUFFER_SIZE		(MP3_SAMPLES * 4)

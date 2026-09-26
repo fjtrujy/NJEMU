@@ -7,10 +7,50 @@
 ******************************************************************************/
 
 #include <limits.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/cache.h"
+#ifdef COMMAND_LIST
+#include "common/cmdlist.h"
+#endif
+#include "common/config.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/filer.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/sound.h"
+#include "common/state.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#include "sound/sndintrf.h"
+#if (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
+#include "ncdz/cdda.h"
+#endif
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
+
+/* The menu definitions below are target-domain code compiled into this common
+ * UI shell.  Depend on the selected target explicitly instead of inheriting
+ * its declarations transitively through emumain.h. */
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/cps1.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/cps2.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/mvs.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/ncdz.h"
+#endif
 
 #define MENU_BLANK	{ LF, }
 #define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
@@ -2052,17 +2092,6 @@ static int state_info_x(void)
 
 static void state_draw_thumbnail(void)
 {
-#if defined(PSP)
-	const uint32_t state_src_fmt = GU_PSM_5551;
-	const uint32_t state_dst_fmt = VRAM_FMT;
-#else
-	/* Non-PSP backends resolve the actual source/destination formats from
-	 * their native texture objects; these legacy GU format arguments are not
-	 * meaningful outside the PSP renderer. */
-	const uint32_t state_src_fmt = 0;
-	const uint32_t state_dst_fmt = 0;
-#endif
-
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
 	{
@@ -2076,7 +2105,7 @@ static void state_draw_thumbnail(void)
 		clip2.top = dy;
 		clip2.right = dx + dw;
 		clip2.bottom = dy + dh;
-		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		video_driver->drawTexture(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 	else
 #endif
@@ -2091,7 +2120,7 @@ static void state_draw_thumbnail(void)
 		clip2.top = dy;
 		clip2.right = dx + dw;
 		clip2.bottom = dy + dh;
-		video_driver->drawTexture(video_data, state_src_fmt, state_dst_fmt, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
+		video_driver->drawTexture(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip1, &clip2);
 	}
 }
 

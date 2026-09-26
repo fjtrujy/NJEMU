@@ -16,7 +16,11 @@
 #include "common/ui.h"
 #include "common/ui_unicode_glyph.h"
 #include "common/ui_utf8.h"
-#include "stdarg.h"
+#include "common/runtime_paths.h"
+#include "common/video_geometry.h"
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
 
 
 /******************************************************************************

@@ -8,8 +8,21 @@
 
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
 #include <zlib.h>
 #include "ncdz.h"
+#include "common/emulator_runtime.h"
+#include "common/loadrom.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
 #include "common/memory_sizes.h"
 
 #define M68K_AMASK M68K_ADDR_MASK

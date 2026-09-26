@@ -9,6 +9,8 @@
 #ifndef SOUND_INTERFACE_H
 #define SOUND_INTERFACE_H
 
+#include "emucfg.h"
+
 enum
 {
 	SOUND_YM2151_MONO = 0,

@@ -6,11 +6,19 @@
 
 ******************************************************************************/
 
-// #include "psp.h"
-#include "emumain.h"
-#include "stdarg.h"
+#include "emucfg.h"
+#include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+
+#include <fcntl.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #if (EMU_SYSTEM == NCDZ)
 #include <strings.h>
+#include "common/mp3.h"
 #include "ncdz/resource_source.h"
 #endif
 
@@ -79,6 +87,10 @@ void load_background(int number)
 }
 
 int ui_show_popup(int draw) {
+	return 0;
+}
+
+int ui_output_update(void) {
 	return 0;
 }
 

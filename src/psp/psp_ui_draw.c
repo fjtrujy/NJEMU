@@ -7,8 +7,16 @@
 
 ******************************************************************************/
 
-#include "psp/psp.h"
 #include "common/ui_draw_driver.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#include "psp/psp_video.h"
+
+#include <malloc.h>
+#include <pspgu.h>
+#include <pspkernel.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 
 /******************************************************************************

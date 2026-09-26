@@ -17,6 +17,8 @@
 
 #include "cps1.h"
 #include "sprite_common.h"
+#include "common/emulator_options.h"
+#include "common/video_driver.h"
 
 
 /******************************************************************************

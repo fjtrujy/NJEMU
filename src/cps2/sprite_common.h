@@ -10,6 +10,7 @@
 #define CPS2_SPRITE_COMMON_H
 
 #include "cps2.h"
+#include "common/video_geometry.h"
 
 /******************************************************************************
 	Constants/Macros

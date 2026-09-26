@@ -26,6 +26,12 @@
 #include "ncdz.h"
 #include "common/palette_convert.h"
 #include "common/memory_sizes.h"
+#include "common/input_driver.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "common/ticker_driver.h"
+#include "main_ui_draw.h"
+#include <string.h>
 #include <unistd.h>
 
 

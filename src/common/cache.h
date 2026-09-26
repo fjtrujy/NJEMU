@@ -63,7 +63,7 @@ uint8_t *pcm_cache_read(uint16_t new_block);
 void pcm_cache_update(uint16_t block);
 #endif
 
-#ifdef STATE_SAVE
+#ifdef SAVE_STATE
 uint8_t *cache_alloc_state_buffer(int32_t size);
 void cache_free_state_buffer(int32_t size);
 #endif

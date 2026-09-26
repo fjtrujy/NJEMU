@@ -8,7 +8,20 @@
 
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
+#include <unistd.h>
 #include "mvs.h"
+#include "common/cache.h"
+#ifdef COMMAND_LIST
+#include "common/cmdlist.h"
+#endif
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 

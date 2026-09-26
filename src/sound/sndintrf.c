@@ -6,7 +6,21 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "common/emulator_options.h"
+#include "common/sound.h"
+#include <string.h>
+#include "sound/sndintrf.h"
+
+#if (EMU_SYSTEM == CPS1)
+#include "sound/2151intf.h"
+#include "sound/ym2151.h"
+#include "sound/qsound.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "sound/qsound.h"
+#elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
+#include "sound/2610intf.h"
+#include "sound/ym2610.h"
+#endif
 
 
 #define FRAC_BITS	14

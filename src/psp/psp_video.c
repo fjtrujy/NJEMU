@@ -621,9 +621,8 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 		Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
-							int srcIndex, int dstIndex, RECT *src_rect,
-							RECT *dst_rect)
+static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
+							RECT *src_rect, RECT *dst_rect)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 	void *src = psp_resolveFrame(psp, srcIndex);
@@ -636,10 +635,10 @@ static void psp_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt,
 	sh = src_rect->bottom - src_rect->top;
 	dh = dst_rect->bottom - dst_rect->top;
 
-	sceGuDrawBufferList(dst_fmt, dst, BUF_WIDTH);
+	sceGuDrawBufferList(pixel_format, dst, BUF_WIDTH);
 	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 
-	sceGuTexMode(src_fmt, 0, 0, GU_FALSE);
+	sceGuTexMode(GU_PSM_5551, 0, 0, GU_FALSE);
 	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);

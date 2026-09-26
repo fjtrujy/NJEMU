@@ -10,6 +10,7 @@
 #define COMMON_MP3_H
 
 #include <limits.h>
+#include <stdint.h>
 
 enum
 {

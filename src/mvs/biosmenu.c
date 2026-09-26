@@ -7,6 +7,14 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/loadrom.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
 #include "common/ui.h"
 #include "common/ui_layout.h"
 

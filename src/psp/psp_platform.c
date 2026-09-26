@@ -6,17 +6,19 @@
 
 ******************************************************************************/
 
-#include <fcntl.h>
-#include <limits.h>
+#include <pspkernel.h>
+#include <psppower.h>
 #include <pspsdk.h>
-#include <pspctrl.h>
-#include <pspimpose_driver.h>
 #include <psputility_sysparam.h>
 #include <pspwlan.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "emumain.h"
-#include "psp.h"
+#include "emucfg.h"
+#include "common/emulator_runtime.h"
+#include "common/platform_driver.h"
+#include "common/runtime_paths.h"
 
 
 #ifdef KERNEL_MODE

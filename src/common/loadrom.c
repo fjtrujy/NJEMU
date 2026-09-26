@@ -8,7 +8,16 @@
 
 #include <limits.h>
 #include <sys/unistd.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/loadrom.h"
+#include "common/runtime_paths.h"
+#include "common/ui_text_driver.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "common/zip_archive.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);

@@ -9,6 +9,10 @@
 #ifndef YM2151_H
 #define YM2151_H
 
+#include <stdint.h>
+#include "emucfg.h"
+#include "common/state.h"
+
 typedef int16_t FMSAMPLE;
 typedef int32_t FMSAMPLE_MIX;
 

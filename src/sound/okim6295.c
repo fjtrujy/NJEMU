@@ -17,7 +17,10 @@
 ***********************************************************************************************/
 
 #include <math.h>
-#include "emumain.h"
+#include "sound/okim6295.h"
+#include "common/emulator_options.h"
+#include "common/sound.h"
+#include "cps1/memintrf.h"
 
 #define OKIM6295_VOICES		4
 

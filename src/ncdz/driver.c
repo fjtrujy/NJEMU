@@ -7,7 +7,13 @@
 ******************************************************************************/
 
 #include <limits.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include "ncdz.h"
+#include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
 #include "ncdz/resource_source.h"
 #include "common/palette_convert.h"
 

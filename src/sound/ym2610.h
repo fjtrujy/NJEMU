@@ -9,6 +9,10 @@
 #ifndef _YM2610_H_
 #define _YM2610_H_
 
+#include <stdint.h>
+#include "emucfg.h"
+#include "common/state.h"
+
 /* for busy flag emulation , function FM_GET_TIME_NOW() should be */
 /* return the present time in second unit with (double) value     */
 /* in timer.c */

@@ -1,4 +1,5 @@
 #include "cps1.h"
+#include "common/emulator_runtime.h"
 
 
 #define SERIAL_BUFFER_LENGTH	40

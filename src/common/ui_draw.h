@@ -9,7 +9,8 @@
 #ifndef COMMON_UI_DRAW_H
 #define COMMON_UI_DRAW_H
 
-#include "emumain.h"
+#include "common/ui_defs.h"
+#include "common/video_driver.h"
 #include "common/font_t.h"
 #include "common/font/gbk_s14_runtime.h"
 
@@ -18,8 +19,6 @@
 #define CHARSET_LATIN1		1
 #define CHARSET_SHIFTJIS	2
 #define CHARSET_GBK			2
-
-#define UI_COLOR(no)	ui_palette[no].r,ui_palette[no].g,ui_palette[no].b
 
 #define ui_fill_frame(no)		video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, MAKECOL32(ui_palette[no].r,ui_palette[no].g,ui_palette[no].b))
 

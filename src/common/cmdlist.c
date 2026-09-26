@@ -8,10 +8,39 @@
 
 #include <limits.h>
 #include <stdarg.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/cmdlist.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/sound.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#if (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
+#endif
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
+
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/sprite.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/sprite.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/sprite.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/sprite.h"
+#endif
 
 static void fd_printf(int fd, const char *fmt, ...)
 {

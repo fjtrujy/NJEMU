@@ -8,7 +8,26 @@
 
 #include <fcntl.h>
 #include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <unistd.h>
 #include "mvs.h"
+#include "common/cache.h"
+#ifdef COMMAND_LIST
+#include "common/cmdlist.h"
+#endif
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/loadrom.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
 #include "common/memory_plan.h"
 #include "common/memory_sizes.h"
 

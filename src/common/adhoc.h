@@ -9,6 +9,9 @@
 #ifndef ADHOC_THREAD_H
 #define ADHOC_THREAD_H
 
+#include <stdint.h>
+#include "emucfg.h"
+
 #ifdef ADHOC
 
 typedef struct

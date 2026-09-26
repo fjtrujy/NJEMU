@@ -1,15 +1,19 @@
 #define NEWLIB_PORT_AWARE 1
 
-#include "emumain.h"
+#include "emucfg.h"
 #include "common/memory_sizes.h"
+#include "common/platform_driver.h"
+#include "common/runtime_paths.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
 #include <iopcontrol.h>
 #include <sbv_patches.h>
 #include <osd_config.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
 

@@ -12,9 +12,74 @@
 #include <limits.h>
 #include <time.h>
 #include <zlib.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/runtime_paths.h"
+#include "common/state.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#include "main_ui_draw.h"
+#if USE_CACHE
+#include "common/cache.h"
+#endif
+#ifdef ADHOC
+#include "common/adhoc.h"
+#include "common/adhoc_transport.h"
+#endif
+#if (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
+#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "common/ui.h"
 #include "common/ui_draw_driver.h"
+#include "cpu/m68000/m68000.h"
+#include "cpu/z80/z80.h"
+
+#if (EMU_SYSTEM == CPS1)
+#include "common/coin.h"
+#include "cps1/eeprom.h"
+#include "cps1/inptport.h"
+#include "cps1/memintrf.h"
+#include "cps1/timer.h"
+#include "cps1/driver.h"
+#include "cps1/vidhrdw.h"
+#include "sound/2151intf.h"
+#include "sound/okim6295.h"
+#include "sound/qsound.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "common/coin.h"
+#include "cps2/eeprom.h"
+#include "cps2/inptport.h"
+#include "cps2/memintrf.h"
+#include "cps2/timer.h"
+#include "cps2/driver.h"
+#include "cps2/vidhrdw.h"
+#include "sound/qsound.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/inptport.h"
+#include "mvs/memintrf.h"
+#include "mvs/pd4990a.h"
+#include "mvs/timer.h"
+#include "mvs/driver.h"
+#include "mvs/vidhrdw.h"
+#include "sound/ym2610.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/cdda.h"
+#include "ncdz/cdrom.h"
+#include "ncdz/inptport.h"
+#include "ncdz/memintrf.h"
+#include "ncdz/timer.h"
+#include "ncdz/driver.h"
+#include "ncdz/vidhrdw.h"
+#include "sound/ym2610.h"
+#endif
 
 typedef struct {
 	uint16_t year;

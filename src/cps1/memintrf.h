@@ -9,6 +9,10 @@
 #ifndef CPS1_MEMORY_INTERFACE_H
 #define CPS1_MEMORY_INTERFACE_H
 
+#include <stdint.h>
+#include "emucfg.h"
+#include "common/state.h"
+
 extern uint8_t *memory_region_cpu1;
 extern uint8_t *memory_region_cpu2;
 extern uint8_t *memory_region_gfx1;

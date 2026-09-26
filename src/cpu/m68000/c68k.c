@@ -10,7 +10,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "emumain.h"
 #include "c68k.h"
 
 

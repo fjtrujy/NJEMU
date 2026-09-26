@@ -10,6 +10,7 @@
 #define NCDZ_SPRITE_COMMON_H
 
 #include "ncdz.h"
+#include "common/video_geometry.h"
 
 /******************************************************************************
 	Constants/Macros

@@ -8,7 +8,9 @@ Mod Update by phoe-nix
 #include <stdlib.h>
 #include <string.h>
 #include "mvs.h"
+#include "common/emulator_options.h"
 #include "common/memory_sizes.h"
+#include "include/osd_cpu.h"
 
 /* Decrypt scratch is transient process memory. Keeping it on the normal heap
  * gives every call one ownership rule and lets the platform allocator expose

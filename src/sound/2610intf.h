@@ -9,6 +9,7 @@
 #ifndef _2610INTF_H
 #define _2610INTF_H
 
+#include "include/memory.h"
 #include "ym2610.h"
 
 #define YM2610UpdateRequest()

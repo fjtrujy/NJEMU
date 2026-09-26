@@ -9,6 +9,10 @@
 #ifndef MVS_DRIVER_H
 #define MVS_DRIVER_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 #define NEOGEO_MASTER_CLOCK					(24000000)
 #define NEOGEO_PIXEL_CLOCK					(NEOGEO_MASTER_CLOCK / 4)
 #define NEOGEO_HTOTAL						(0x180)
@@ -371,12 +375,6 @@ READ16_HANDLER( neogeo_memcard16_r );
 WRITE16_HANDLER( neogeo_memcard16_w );
 
 WRITE16_HANDLER( neogeo_sram16_w );
-
-uint8_t neogeo_z80_port_r(uint16_t port);
-void neogeo_z80_port_w(uint16_t port, uint8_t value);
-
-void neogeo_sound_irq(int irq);
-
 
 //--------------------------------------------------------------
 // protection

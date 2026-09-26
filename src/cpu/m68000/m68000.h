@@ -9,6 +9,8 @@
 #ifndef M68000_H
 #define M68000_H
 
+#include "emucfg.h"
+#include "common/state.h"
 #include "c68k.h"
 
 // MAME compatible register numbers (some not supported)

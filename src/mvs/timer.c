@@ -11,6 +11,8 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#include "common/emulator_runtime.h"
+#include "include/cpuintrf.h"
 
 
 #define CPU_NOTACTIVE	-1

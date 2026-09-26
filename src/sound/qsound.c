@@ -6,7 +6,15 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include <string.h>
+#include "sound/qsound.h"
+#include "common/capcom_driver_info.h"
+#include "common/sound.h"
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/memintrf.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/memintrf.h"
+#endif
 
 #define QSOUND_CHANNELS 16
 
@@ -137,28 +145,28 @@ void qsound_sh_start(void)
 	qsound_volume_shift = 6;
 
 #if (EMU_SYSTEM == CPS2)
-	if (!strcmp(driver->name, "csclub"))
+	if (!strcmp(capcom_driver_name(), "csclub"))
 	{
 		qsound_volume_shift = 4;
 	}
 	else
-	if (!strcmp(driver->name, "ddsom")
-	||	!strcmp(driver->name, "vsav")
-	||	!strcmp(driver->name, "vsav2"))
+	if (!strcmp(capcom_driver_name(), "ddsom")
+	||	!strcmp(capcom_driver_name(), "vsav")
+	||	!strcmp(capcom_driver_name(), "vsav2"))
 	{
 		qsound_volume_shift = 5;
 	}
 	else
-	if (!strcmp(driver->name, "batcir")
-	||	!strcmp(driver->name, "spf2t")
-	||	!strcmp(driver->name, "gigawing")
-	||	!strcmp(driver->name, "mpangj")
-	||	!strcmp(driver->name, "puzloop2"))
+	if (!strcmp(capcom_driver_name(), "batcir")
+	||	!strcmp(capcom_driver_name(), "spf2t")
+	||	!strcmp(capcom_driver_name(), "gigawing")
+	||	!strcmp(capcom_driver_name(), "mpangj")
+	||	!strcmp(capcom_driver_name(), "puzloop2"))
 	{
 		qsound_volume_shift = 7;
 	}
 #else
-	if (!strncmp(driver->name, "punish", 6))
+	if (!strncmp(capcom_driver_name(), "punish", 6))
 	{
 		qsound_volume_shift = 4;
 	}

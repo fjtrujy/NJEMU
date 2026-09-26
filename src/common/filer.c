@@ -12,13 +12,38 @@
 #include <strings.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <zlib.h>
-#include "emumain.h"
+#include <sys/stat.h>
+#include "emucfg.h"
+#include "common/emulator_runtime.h"
+#include "common/filer.h"
+#include "common/input_driver.h"
+#include "common/platform_driver.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#include "common/adhoc_transport.h"
+#endif
+#if (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
+#endif
+#ifdef COMMAND_LIST
+#include "common/cmdlist.h"
+#endif
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/config.h"
+#if (EMU_SYSTEM == MVS)
+#include "mvs/biosmenu.h"
+#endif
 #if (EMU_SYSTEM == NCDZ)
 #include "ncdz/resource_source.h"
 #endif

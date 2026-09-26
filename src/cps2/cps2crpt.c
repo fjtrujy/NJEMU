@@ -111,6 +111,10 @@ the decryption keys.
 *******************************************************************************/
 
 #include "cps2.h"
+#include "common/runtime_paths.h"
+#include "common/ui_text_driver.h"
+#include "main_ui_draw.h"
+#include <string.h>
 
 
 /* Useful macros to deal with bit shuffling encryptions */

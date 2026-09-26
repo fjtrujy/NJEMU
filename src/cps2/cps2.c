@@ -7,6 +7,13 @@
 ******************************************************************************/
 
 #include "cps2.h"
+#include "common/cache.h"
+#include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
 
 
 /* Per-target texture atlas descriptions required by the video driver.

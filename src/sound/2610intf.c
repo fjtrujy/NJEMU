@@ -6,7 +6,16 @@
 
 ***************************************************************************/
 
-#include "emumain.h"
+#include "sound/2610intf.h"
+#include "common/neogeo_sound_io.h"
+
+#if (EMU_SYSTEM == MVS)
+#include "mvs/memintrf.h"
+#include "mvs/timer.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/memintrf.h"
+#include "ncdz/timer.h"
+#endif
 
 
 /***************************************************************************

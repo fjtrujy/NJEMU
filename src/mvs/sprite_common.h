@@ -10,6 +10,7 @@
 #define MVS_SPRITE_COMMON_H
 
 #include "mvs.h"
+#include "common/video_geometry.h"
 
 /******************************************************************************
 	Constants/Macros

@@ -8,6 +8,7 @@
 
 #include "cps2.h"
 #include "common/palette_convert.h"
+#include <string.h>
 
 
 /******************************************************************************

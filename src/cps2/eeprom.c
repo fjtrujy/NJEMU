@@ -7,6 +7,8 @@
 ******************************************************************************/
 
 #include "cps2.h"
+#include <string.h>
+#include <unistd.h>
 
 
 #define SERIAL_BUFFER_LENGTH	40

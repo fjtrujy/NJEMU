@@ -9,6 +9,10 @@
 #ifndef STATE_H
 #define STATE_H
 
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+
 #ifdef SAVE_STATE
 
 #if (EMU_SYSTEM == CPS1)

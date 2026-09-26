@@ -210,7 +210,6 @@ include_directories(
 
 # Common source files
 set(COMMON_SRC
-    emumain.h
     emumain.c
     common/zip_archive.h
     sound/sndintrf.h
@@ -232,6 +231,13 @@ set(COMMON_SRC
     common/video_driver.h
     common/video_driver.c
 	common/video_geometry.h
+	common/runtime_paths.h
+	common/emulator_runtime.h
+	common/emulator_options.h
+	common/emulator_video.h
+	common/capcom_driver_info.h
+	common/neogeo_sound_io.h
+	common/ui_defs.h
 	    common/ui_draw_driver.h
 	    common/ui_draw_driver.c
 	    common/ui_layout.h
@@ -308,6 +314,7 @@ list(APPEND COMMON_SRC
 if (ADHOC)
     set(COMMON_SRC ${COMMON_SRC}
         common/adhoc.h
+        common/adhoc_transport.h
         common/adhoc.c
     )
 endif()
@@ -327,8 +334,8 @@ if (SAVE_STATE)
 endif()
 
 if (NOT GUI)
-    set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
+    set(COMMON_SRC ${COMMON_SRC}
+        common/no_gui.c
     )
 else()
     # Font data files (shared across all platforms)
@@ -392,7 +399,6 @@ set(OS_SRC ${OS_SRC}
 
 if (ADHOC AND PLATFORM STREQUAL "PSP")
     set(OS_SRC ${OS_SRC}
-        psp/adhoc.h
         psp/adhoc.c
     )
 endif()
@@ -462,6 +468,7 @@ if (${TARGET} STREQUAL "CPS1")
         common/coin.h
         common/coin.c
         cps1/cps1.h
+        cps1/sound_io.h
         cps1/cps1.c
         cps1/driver.h
         cps1/driver.c

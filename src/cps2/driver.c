@@ -7,7 +7,16 @@
 ******************************************************************************/
 
 #include <limits.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include "cps2.h"
+#include "common/capcom_driver_info.h"
+#include "common/coin.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
 
 
 /******************************************************************************
@@ -107,6 +116,11 @@ struct driver_t CPS2_driver[] =
 };
 
 struct driver_t *driver;
+
+const char *capcom_driver_name(void)
+{
+	return driver != NULL ? driver->name : NULL;
+}
 
 
 /******************************************************************************

@@ -6,9 +6,50 @@
 
 ******************************************************************************/
 
-#include <unistd.h>
+#include <fcntl.h>
 #include <limits.h>
-#include "emumain.h"
+#include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "emucfg.h"
+#include "main_ui_draw.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/emulator_video.h"
+#include "common/filer.h"
+#include "common/input_driver.h"
+#include "common/platform_driver.h"
+#include "common/platform_memory_info.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/sound.h"
+#include "common/ticker_driver.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
+#if USE_CACHE
+#include "common/cache.h"
+#endif
+#if (EMU_SYSTEM == NCDZ)
+#include "common/mp3.h"
+#endif
+
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/cps1.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/cps2.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/mvs.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/ncdz.h"
+#endif
 
 
 #define FRAMESKIP_LEVELS	12

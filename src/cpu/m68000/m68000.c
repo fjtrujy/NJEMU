@@ -6,7 +6,17 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "cpu/m68000/m68000.h"
+
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/memintrf.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/memintrf.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/memintrf.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/memintrf.h"
+#endif
 
 
 /******************************************************************************

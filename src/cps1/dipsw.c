@@ -7,6 +7,8 @@
 ******************************************************************************/
 
 #include "cps1.h"
+#include "common/emulator_options.h"
+#include "common/ui_text_driver.h"
 
 #define MENU_BLANK		{ "\n", 0, 0x00, 0, 0, { NULL } }
 

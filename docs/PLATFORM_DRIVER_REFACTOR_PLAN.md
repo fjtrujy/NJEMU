@@ -290,12 +290,34 @@ Validation (2026-09-26):
 - Desktop focused CTests 10/10;
 - 30-frame Desktop MVS smoke passes.
 
-#### D2b - Decompose `emumain.h` and remove transitive platform/SDK imports
+#### D2b - Decompose `emumain.h` and remove transitive platform/SDK imports [COMPLETE]
 
 Next, introduce narrow runtime/path/state headers and replace `emumain.h` includes
 where a translation unit only needs a small contract. Platform implementation
 files must include the SDK headers they actually use. Keep this mechanical and
 behaviour-preserving.
+
+Result (2026-09-26):
+- deleted the legacy `emumain.h` umbrella and replaced it with narrow common
+  contracts for runtime state, options, paths, video descriptors, UI definitions,
+  AdHoc transport, and target-specific sound/driver glue;
+- removed all production `#include "emumain.h"` dependencies and the remaining
+  common-to-platform include leakage;
+- made platform implementation dependencies explicit, including PSP video/UI
+  SDK dependencies that had previously arrived transitively;
+- replaced three platform-identical `*_no_gui.c` files with one
+  `common/no_gui.c` implementation;
+- made many target/sound headers self-contained instead of relying on umbrella
+  ordering, while preserving target conditionals where they express emulator
+  semantics rather than host-platform selection.
+
+Validation (2026-09-26):
+- Desktop CPS1/CPS2/MVS/NCDZ GUI-OFF builds pass and Desktop MVS GUI-ON passes;
+- PSP MVS GUI ON/OFF builds pass and still generate `EBOOT.PBP`;
+- PS2 MVS GUI ON/OFF builds pass;
+- Desktop MVS focused CTests pass 10/10 and the 30-frame runtime smoke passes;
+- `src/common/` contains no PSP/PS2/Desktop SDK or umbrella includes;
+- `git diff --check` is clean and no resource file is part of the change.
 
 #### D2c - CMake include-scope cleanup
 
@@ -458,6 +480,6 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D1 first. It removes artificial registry indirection and platform
-preprocessor selection without changing driver behaviour, giving later phases a
-clean binding point and making include/API cleanup substantially easier.
+Proceed with D2c. Source/header ownership is now explicit enough to replace the
+remaining directory-wide CMake include paths with target-scoped include paths
+without masking missing dependencies.

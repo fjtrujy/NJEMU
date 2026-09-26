@@ -6,7 +6,10 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#include <string.h>
 
 #include <stdlib.h>
 #include <assert.h>
@@ -1250,7 +1253,7 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
+static void ps2_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	GSGLOBAL *gsGlobal = ps2->gsGlobal;
@@ -1259,12 +1262,6 @@ static void ps2_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int 
 	GSTEXTURE srcTex;
 	if (!ps2_resolveSourceTexture(ps2, srcIndex, &srcTex))
 		return;
-
-	/* src_fmt/dst_fmt are PSP-format legacy parameters.  PS2 render targets
-	 * carry their actual GS PSM in GSTEXTURE/GSGLOBAL, so reinterpreting the
-	 * source from these values would corrupt indexed surfaces. */
-	(void)src_fmt;
-	(void)dst_fmt;
 
 	int sw = src_rect->right - src_rect->left;
 	int dw = dst_rect->right - dst_rect->left;

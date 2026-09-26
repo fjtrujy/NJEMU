@@ -21,6 +21,7 @@
 #define CPS1_SPRITE_COMMON_H
 
 #include "cps1.h"
+#include "common/video_geometry.h"
 
 /******************************************************************************
 	Constants/Macros

@@ -5,7 +5,12 @@
 ******************************************************************************/
 
 #include <math.h>
-#include "emumain.h"
+#include "sound/ym2151.h"
+#include "sound/sndintrf.h"
+#include "common/emulator_options.h"
+#include "common/sound.h"
+#include "cps1/memintrf.h"
+#include "cps1/timer.h"
 
 #if (EMU_SYSTEM == CPS1)
 #include "okim6295.c"

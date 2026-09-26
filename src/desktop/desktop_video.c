@@ -6,7 +6,11 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#include <stdio.h>
+#include <string.h>
 
 #include <stdlib.h>
 #include <SDL.h>
@@ -416,7 +420,7 @@ static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT 
 	Draw Texture with Specified Rectangular Area
 --------------------------------------------------------*/
 
-static void desktop_drawTexture(void *data, uint32_t src_fmt, uint32_t dst_fmt, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
+static void desktop_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 }
 

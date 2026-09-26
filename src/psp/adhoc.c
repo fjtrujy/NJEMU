@@ -6,7 +6,20 @@
 
 ***************************************************************************/
 
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/adhoc.h"
+#include "common/adhoc_transport.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/platform_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <pspsdk.h>
 #include <pspnet.h>
 #include <pspwlan.h>

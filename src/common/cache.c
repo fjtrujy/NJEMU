@@ -8,9 +8,30 @@
 
 #include <limits.h>
 #include <sys/param.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/cache.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ticker_driver.h"
+#include "common/ui_text_driver.h"
+#include "main_ui_draw.h"
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "common/memory_sizes.h"
 #include "common/zip_archive.h"
+
+#if (EMU_SYSTEM == CPS2)
+#include "cps2/memintrf.h"
+#include "cps2/vidhrdw.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/memintrf.h"
+#include "mvs/vidhrdw.h"
+#endif
 
 #if USE_CACHE
 #define BLOCK_MASK			0xffff
@@ -1570,7 +1591,7 @@ void cache_sleep(int flag)
 }
 
 
-#ifdef STATE_SAVE
+#ifdef SAVE_STATE
 
 /*------------------------------------------------------
 	Temporarily Allocate State Save Area
@@ -1611,6 +1632,6 @@ void cache_free_state_buffer(int32_t size)
 	remove(path);
 }
 
-#endif /* STATE_SAVE */
+#endif /* SAVE_STATE */
 
 #endif /* USE_CACHE */

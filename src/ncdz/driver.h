@@ -9,6 +9,10 @@
 #ifndef NEOCDZ_DRIVER_H
 #define NEOCDZ_DRIVER_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 #define NEOGEO_MASTER_CLOCK					(24000000)
 #define NEOGEO_PIXEL_CLOCK					(NEOGEO_MASTER_CLOCK / 4)
 #define NEOGEO_HTOTAL						(0x180)
@@ -233,11 +237,7 @@ WRITE16_HANDLER( neogeo_externalmem_w );
 READ16_HANDLER( neogeo_hardcontrol_r );
 WRITE16_HANDLER( neogeo_hardcontrol_w );
 
-uint8_t neogeo_z80_port_r(uint16_t port);
-void neogeo_z80_port_w(uint16_t port, uint8_t value);
-
 void neogeo_sound_write(int data);
-void neogeo_sound_irq(int irq);
 
 #ifdef SAVE_STATE
 STATE_SAVE( driver );

@@ -7,8 +7,13 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include <string.h>
+#include <time.h>
 #include "common/memory_sizes.h"
 #include "common/palette_convert.h"
+#include "include/osd_cpu.h"
 
 
 #define IRQ2CTRL_ENABLE				0x10

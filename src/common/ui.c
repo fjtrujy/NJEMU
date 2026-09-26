@@ -6,7 +6,16 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/emulator_runtime.h"
+#include "common/input_driver.h"
+#include "common/power_driver.h"
+#include "common/ui_defs.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
+#include <string.h>
 #include "stdarg.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"

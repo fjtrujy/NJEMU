@@ -9,6 +9,10 @@
 #ifndef CPS1_DRIVER_H
 #define CPS1_DRIVER_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 #define RASTER_LINES	262
 
 #define CPS1_KLUDGE_FORGOTTN	1
@@ -195,8 +199,6 @@ WRITE8_HANDLER( qsound_banksw_w );
 
 TIMER_CALLBACK( cps1_vblank_interrupt );
 TIMER_CALLBACK( cps1_qsound_interrupt );
-
-void cps1_sound_interrupt(int state);
 
 void pang3_decode(void);
 #if !RELEASE

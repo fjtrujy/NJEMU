@@ -7,6 +7,8 @@
 ******************************************************************************/
 
 #include "cps1.h"
+#include "common/emulator_options.h"
+#include "include/cpuintrf.h"
 
 
 #define CPU_NOTACTIVE	-1

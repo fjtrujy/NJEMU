@@ -9,6 +9,9 @@
 #ifndef COMMON_SOUND_H
 #define COMMON_SOUND_H
 
+#include <stdint.h>
+#include "emucfg.h"
+
 #define SOUND_SAMPLES_24000	(400*2)
 #define SOUND_SAMPLES_44100	(736*2)
 #define SOUND_SAMPLES_48000	(800)

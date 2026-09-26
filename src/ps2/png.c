@@ -11,8 +11,23 @@
 #include <stdint.h>
 #include <malloc.h>
 #include <zlib.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/cache.h"
+#include "common/ui_text_driver.h"
+#include "common/video_driver.h"
+#include "common/video_geometry.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include "ps2/ps2.h"
+
+#if (EMU_SYSTEM == CPS2)
+#include "cps2/memintrf.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/memintrf.h"
+#endif
 
 
 #define PNG_Signature       "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"

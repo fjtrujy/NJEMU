@@ -9,6 +9,8 @@
 #ifndef YM2151INTF_H
 #define YM2151INTF_H
 
+#include "include/memory.h"
+
 #include "ym2151.h"
 #include "okim6295.h"
 

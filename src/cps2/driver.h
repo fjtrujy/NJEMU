@@ -9,6 +9,10 @@
 #ifndef CPS2_DRIVER_H
 #define CPS2_DRIVER_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 #define RASTER_LINES	262
 
 /* CPS2 kludge value */

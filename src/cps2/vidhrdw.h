@@ -9,6 +9,10 @@
 #ifndef CPS2_VIDEO_HARDWARE_H
 #define CPS2_VIDEO_HARDWARE_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 #define FIRST_VISIBLE_LINE	16
 #define LAST_VISIBLE_LINE	239
 

@@ -9,6 +9,10 @@
 #ifndef QSOUND_H
 #define QSOUND_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 void qsound_sh_start(void);
 void qsound_sh_stop(void);
 void qsound_sh_reset(void);

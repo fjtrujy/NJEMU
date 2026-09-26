@@ -21,6 +21,7 @@
 #include "mvs.h"
 #include "common/memory_sizes.h"
 #include "common/palette_convert.h"
+#include <string.h>
 
 
 /******************************************************************************

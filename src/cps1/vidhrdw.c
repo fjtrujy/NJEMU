@@ -9,6 +9,8 @@
 #include "cps1.h"
 #include "common/memory_sizes.h"
 #include "common/palette_convert.h"
+#include "common/runtime_paths.h"
+#include <string.h>
 
 
 /******************************************************************************

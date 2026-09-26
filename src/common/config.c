@@ -7,10 +7,34 @@
 ******************************************************************************/
 
 #include <limits.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <strings.h>
-#include "emumain.h"
+#include "emucfg.h"
+#include "common/emulator_options.h"
+#include "common/filer.h"
+#include "common/input_driver.h"
+#include "common/power_driver.h"
+#include "common/runtime_paths.h"
+#include "common/ui_text_driver.h"
+#include "main_ui_draw.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include "common/config.h"
+
+/* Target-specific config fragments below reference target-owned settings and
+ * input enums. Make that dependency explicit instead of relying on
+ * emumain.h to inject the selected core umbrella header. */
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/cps1.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/cps2.h"
+#elif (EMU_SYSTEM == MVS)
+#include "mvs/mvs.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/ncdz.h"
+#endif
 
 #define LINEBUF_SIZE	256
 

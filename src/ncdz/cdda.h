@@ -9,6 +9,9 @@
 #ifndef NCDZ_CDDA_H
 #define NCDZ_CDDA_H
 
+#include "emucfg.h"
+#include "common/state.h"
+
 enum
 {
 	CDDA_STOP = 0,

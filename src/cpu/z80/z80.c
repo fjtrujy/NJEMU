@@ -6,7 +6,19 @@
 
 ******************************************************************************/
 
-#include "emumain.h"
+#include "cpu/z80/z80.h"
+
+#if (EMU_SYSTEM == CPS1)
+#include "cps1/memintrf.h"
+#elif (EMU_SYSTEM == CPS2)
+#include "cps2/memintrf.h"
+#elif (EMU_SYSTEM == MVS)
+#include "common/neogeo_sound_io.h"
+#include "mvs/memintrf.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "common/neogeo_sound_io.h"
+#include "ncdz/memintrf.h"
+#endif
 
 
 /******************************************************************************

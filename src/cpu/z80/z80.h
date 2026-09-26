@@ -9,6 +9,8 @@
 #ifndef Z80_H
 #define Z80_H
 
+#include "emucfg.h"
+#include "common/state.h"
 #include "cz80.h"
 
 // MAME compatible register numbers (some not supported)

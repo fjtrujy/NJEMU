@@ -7,7 +7,12 @@
 ******************************************************************************/
 
 #include <assert.h>
-#include "emumain.h"
+#include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
+#include "common/sound.h"
+#include "common/ui_text_driver.h"
+#include <string.h>
+#include <unistd.h>
 #include "thread_driver.h"
 #include "audio_driver.h"
 

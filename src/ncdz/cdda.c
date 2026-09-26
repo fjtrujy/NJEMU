@@ -8,6 +8,10 @@
 
 #include <limits.h>
 #include "ncdz.h"
+#include "common/emulator_runtime.h"
+#include "common/filer.h"
+#include "common/mp3.h"
+#include <stdio.h>
 
 
 /******************************************************************************

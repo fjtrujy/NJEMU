@@ -3,6 +3,10 @@
 #ifndef OKIM6295_H
 #define OKIM6295_H
 
+#include "emucfg.h"
+#include "common/state.h"
+#include "include/memory.h"
+
 void OKIM6295Init(int clock, int pin7);
 void OKIM6295Reset(void);
 void OKIM6295_set_samplerate(void);
