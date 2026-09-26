@@ -272,6 +272,7 @@ elseif (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP")
         GIT_TAG 3.1.2
         GIT_SHALLOW TRUE
     )
+    set(NJEMU_BUILD_TYPE_BEFORE_MINIZ "${CMAKE_BUILD_TYPE}")
     if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.14")
         FetchContent_MakeAvailable(miniz_upstream)
     else()
@@ -280,6 +281,12 @@ elseif (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP")
             FetchContent_Populate(miniz_upstream)
             add_subdirectory(${miniz_upstream_SOURCE_DIR} ${miniz_upstream_BINARY_DIR} EXCLUDE_FROM_ALL)
         endif()
+    endif()
+    # miniz 3.1.2 forces an unspecified top-level build type to Release.
+    # Restore NJEMU's setting so FetchContent cannot silently add NDEBUG to
+    # our targets/tests or otherwise change the requested configuration.
+    if(NJEMU_BUILD_TYPE_BEFORE_MINIZ STREQUAL "")
+        set(CMAKE_BUILD_TYPE "" CACHE STRING "Choose the type of build." FORCE)
     endif()
     set(NJEMU_MINIZ_TARGET miniz)
     set(NJEMU_MINIZ_FETCHED TRUE)

@@ -43,13 +43,19 @@ jobs:
 
     - name: Compile project
       run: |
+        set -o pipefail
         cd romcnv
         mkdir build
         cd build
         cmake \
           -DTARGET="${{ matrix.target }}" \
           ..
-        make -j $(getconf _NPROCESSORS_ONLN)
+        if ! make -j $(getconf _NPROCESSORS_ONLN) 2>&1 | tee build.log; then
+          grep -E '(^|[[:space:]])(error:|fatal error:)|undefined reference|collect2: error|ld: error' build.log \
+            | tail -40 \
+            | sed 's/^/::error title=ROMCNV build::/' || true
+          exit 2
+        fi
 
     - name: Get short SHA
       id: slug
