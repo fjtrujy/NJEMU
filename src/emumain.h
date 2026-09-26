@@ -217,7 +217,6 @@ extern UI_PALETTE ui_palette[UI_PAL_MAX];
 
 extern char launchDir[PATH_MAX];
 extern char screenshotDir[PATH_MAX];
-extern bool systembuttons_available;
 
 extern char game_name[16];
 extern char parent_name[16];

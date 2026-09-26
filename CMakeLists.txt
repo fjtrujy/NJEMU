@@ -59,7 +59,6 @@ option(ADHOC "Ad Hoc" OFF)
 option(GUI "GUI" OFF)
 option(SAVE_STATE "Save State" OFF)
 option(RELEASE "Release" OFF)
-option(SYSTEM_BUTTONS "System Buttons" OFF)
 option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
@@ -89,11 +88,6 @@ endif()
 
 if (RELEASE)
     add_definitions(-DRELEASE=1)
-endif()
-
-if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
-    enable_language(ASM)
-    add_definitions(-DSYSTEM_BUTTONS=1)
 endif()
 
 if (CACHE_IO_PROFILE)
@@ -397,12 +391,6 @@ if (ADHOC AND PLATFORM STREQUAL "PSP")
     )
 endif()
 
-if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
-    set(OS_SRC ${OS_SRC}
-        psp/SystemButtons.S
-    )
-endif()
-
 # CPU source files
 include_directories(
     src/cpu/m68000
@@ -614,11 +602,6 @@ list(TRANSFORM ALL_SRC PREPEND "src/")
 add_executable(${TARGET}
     ${ALL_SRC}
 )
-
-if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
-    add_subdirectory(systembuttons_prx)
-    add_dependencies(${TARGET} SystemButtons)
-endif()
 
 # Keep miniz's usage requirements local to the ZIP implementation. Public
 # domain headers deliberately do not expose miniz types.

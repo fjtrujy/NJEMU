@@ -72,7 +72,6 @@ static const ps2_ui_buffer_shape_t ps2_ui_buffer_shapes[UI_TEXTURE_MAX] = {
 	[UI_TEXTURE_FONT]      = { BUF_WIDTH, 48 },
 	[UI_TEXTURE_SMALLFONT] = { BUF_WIDTH, 16 },
 	[UI_TEXTURE_BOXSHADOW] = { 72, 8 },
-	[UI_TEXTURE_VOLICON]   = { BUF_WIDTH, 32 },
 };
 
 

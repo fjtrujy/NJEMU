@@ -56,10 +56,6 @@ static void desktop_main(void *data, int argc, char *argv[]) {
 #endif
 }
 
-static bool desktop_startSystemButtons(void *data) {
-return false;
-}
-
 static int32_t desktop_getDevkitVersion(void *data) {
 	return 0;
 }
@@ -140,7 +136,6 @@ platform_driver_t platform_desktop = {
 	desktop_init,
 	desktop_free,
 	desktop_main,
-	desktop_startSystemButtons,
 	desktop_getDevkitVersion,
 	desktop_getWlanSwitchState,
 	desktop_getHardwareModel,

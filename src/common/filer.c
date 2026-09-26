@@ -1293,7 +1293,6 @@ void file_browser(void)
 				ui_layout_bottom(1), rows, nfiles, sel);
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -1329,7 +1328,6 @@ void file_browser(void)
 			video_driver->endFrame(video_data);
 
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->flipScreen(video_data, 1);
 #else
@@ -1368,7 +1366,6 @@ void file_browser(void)
 			video_driver->endFrame(video_data);
 
 			update = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->flipScreen(video_data, 1);
 #endif
@@ -1376,7 +1373,6 @@ void file_browser(void)
 		else
 		{
 			update = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -1541,9 +1537,8 @@ void file_browser(void)
 			}
 			pad_wait_clear();
 		}
-/*PRESS TRIANGLE OR HOME TO EXIT IN FILEBROWSER */
-//		else if (pad_pressed(PLATFORM_PAD_B4))
-		else if (pad_pressed(PLATFORM_PAD_B4) || (readHomeButton()))
+		/* Press Triangle / platform B4 to exit the file browser. */
+		else if (pad_pressed(PLATFORM_PAD_B4))
 		{
 			if (messagebox(MB_EXITEMULATION))
 			{

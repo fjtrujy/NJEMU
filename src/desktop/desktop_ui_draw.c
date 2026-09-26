@@ -135,7 +135,6 @@ static void *desktop_ui_draw_init(void *video_data)
 	d->textures[UI_TEXTURE_FONT].format = UI_PIXFMT_4444;
 	d->textures[UI_TEXTURE_SMALLFONT].format = UI_PIXFMT_5551;
 	d->textures[UI_TEXTURE_BOXSHADOW].format = UI_PIXFMT_4444;
-	d->textures[UI_TEXTURE_VOLICON].format = UI_PIXFMT_4444;
 
 	return d;
 }

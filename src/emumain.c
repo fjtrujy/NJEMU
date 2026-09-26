@@ -50,7 +50,6 @@ int fatal_error;
 
 char launchDir[PATH_MAX] = {0};
 char screenshotDir[PATH_MAX] = {0};
-bool systembuttons_available;
 void *platform_data = NULL;
 void *power_data = NULL;
 
@@ -275,13 +274,11 @@ void update_screen(void)
 	if (!skipped_it)
 	{
 		if (option_showfps) show_fps();
-		draw_volume_status(1);
 		show_battery_warning();
 		ui_show_popup(1);
 	}
 	else
 	{
-		draw_volume_status(0);
 		ui_show_popup(0);
 	}
 
@@ -428,13 +425,11 @@ void show_fatal_error(void)
 				uifont_print_shadow_center(sy, UI_COLOR(UI_PAL_SELECT), fatal_error_message);
 
 				update = draw_battery_status(1);
-				update |= draw_volume_status(1);
 				video_driver->flipScreen(video_data, 1);
 			}
 			else
 			{
 				update = draw_battery_status(0);
-				update |= draw_volume_status(0);
 				video_driver->waitVsync(video_data);
 			}
 
@@ -634,9 +629,6 @@ int main(int argc, char *argv[]) {
 		}
 
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-	// Platform system buttom
-	systembuttons_available = platform_driver->startSystemButtons(platform_data);
-
 		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		file_browser();
 		ui_exit();

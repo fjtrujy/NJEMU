@@ -23,7 +23,6 @@ enum {
 	UI_TEXTURE_FONT = 0,       /* Scratch texture for font glyph rendering (4444) */
 	UI_TEXTURE_SMALLFONT,      /* Pre-baked 8x8 bitmap font (5551) */
 	UI_TEXTURE_BOXSHADOW,      /* 9-slice box shadow tiles (4444) */
-	UI_TEXTURE_VOLICON,        /* Volume speaker + bar icons (4444) */
 	UI_TEXTURE_MAX
 };
 

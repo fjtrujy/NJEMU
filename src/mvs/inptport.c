@@ -205,8 +205,7 @@ static void update_inputport_multi(uint32_t controller_count)
 	service_switch = 0;
 	primary_buttons = (*poll_pad_index)(0);
 
-	if (systembuttons_available ? readHomeButton() :
-	    pad_menu_combo_pressed(primary_buttons))
+	if (pad_menu_combo_pressed(primary_buttons))
 	{
 		showmenu();
 		setup_autofire();
@@ -872,7 +871,7 @@ void update_inputport(void)
 
 			buttons = (*poll_pad)();
 
-			if (systembuttons_available ? readHomeButton() : pad_menu_combo_pressed(buttons))
+			if (pad_menu_combo_pressed(buttons))
 			{
 				buttons = 0;
 				adhoc_paused = adhoc_server + 1;
@@ -922,7 +921,7 @@ void update_inputport(void)
 
 		buttons = (*poll_pad)();
 
-		if (systembuttons_available ? readHomeButton() : pad_menu_combo_pressed(buttons))
+		if (pad_menu_combo_pressed(buttons))
 		{
 			showmenu();
 			setup_autofire();

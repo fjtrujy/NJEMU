@@ -22,7 +22,6 @@ typedef struct psp_ui_data
 	/* The proportional font is mutable scratch storage in system RAM.  The
 	 * remaining static atlases keep the compact historical EDRAM layout. */
 	uint16_t *tex_font;
-	uint16_t *tex_volicon;
 	uint16_t *tex_smallfont;
 	uint16_t *tex_boxshadow;
 } psp_ui_data_t;
@@ -67,7 +66,6 @@ static void *psp_ui_draw_init(void *video_data)
 		BUF_WIDTH * PSP_UI_SCRATCH_ROWS * sizeof(uint16_t));
 	if (!psp_ui.tex_font)
 		return NULL;
-	psp_ui.tex_volicon  = texture16_addr(BUF_WIDTH - 112, 2000);
 	psp_ui.tex_smallfont = texture16_addr(0, 2032);
 	psp_ui.tex_boxshadow = NULL;  /* Set later during upload */
 
@@ -126,7 +124,6 @@ static void psp_ui_draw_clearTexture(void *data, int slot, int w, int h, int pit
 	{
 	case UI_TEXTURE_FONT:     dst = d->tex_font;     break;
 	case UI_TEXTURE_SMALLFONT: dst = d->tex_smallfont; break;
-	case UI_TEXTURE_VOLICON:  dst = d->tex_volicon;  break;
 	case UI_TEXTURE_BOXSHADOW: dst = d->tex_boxshadow; break;
 	}
 
@@ -149,7 +146,6 @@ static uint16_t *psp_ui_draw_getTextureBasePtr(void *data, int slot)
 	{
 	case UI_TEXTURE_FONT:      return d->tex_font;
 	case UI_TEXTURE_SMALLFONT: return d->tex_smallfont;
-	case UI_TEXTURE_VOLICON:   return d->tex_volicon;
 	case UI_TEXTURE_BOXSHADOW: return d->tex_boxshadow;
 	}
 	return NULL;
@@ -191,12 +187,6 @@ static void psp_ui_draw_drawSprite(void *data, int slot,
 		tex_width = 128;
 		tex_height = 8;
 		tex_stride = 128;
-		break;
-	case UI_TEXTURE_VOLICON:
-		tex = d->tex_volicon;
-		tex_format = GU_PSM_4444;
-		swizzled = GU_FALSE;
-		tex_height = 32;
 		break;
 	}
 

@@ -79,18 +79,4 @@ extern input_driver_t *input_drivers[];
 
 #define input_driver input_drivers[0]
 
-#if !defined(SYSTEM_BUTTONS)
-#define initSystemButtons(devkit_version) 
-#define readSystemButtons() 0
-#define readHomeButton() 0
-#define readVolumeButtons() 0
-#define readVolUpButton() 0
-#define readVolDownButton() 0
-#define readNoteButton() 0
-#define readScreenButton() 0
-#define readHoldSwitch() 0
-#define readWLANSwitch() 0
-#define readMainVolume() 0
-#endif
-
 #endif /* INPUT_DRIVER_H */

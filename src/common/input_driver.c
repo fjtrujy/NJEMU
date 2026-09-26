@@ -175,7 +175,7 @@ bool pad_pressed(uint32_t code)
 }
 
 /*--------------------------------------------------------
-	Get edge-triggered fallback menu combo
+	Get edge-triggered menu combo
 --------------------------------------------------------*/
 
 bool pad_menu_combo_pressed(uint32_t buttons)

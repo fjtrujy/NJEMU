@@ -15,7 +15,6 @@
 #include <pspwlan.h>
 #include <string.h>
 
-#include "SystemButtons.h"
 #include "psp.h"
 
 
@@ -28,11 +27,7 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 #endif
 
 typedef struct psp_platform {
-	SceUID modID;
 	int32_t devkit_version;
-#if SYSTEM_BUTTONS
-	char prx_path[PATH_MAX];
-#endif
 } psp_platform_t;
 
 
@@ -190,23 +185,6 @@ static void psp_main(void *data, int argc, char *argv[]) {
 	SetupCallbacks();
 }
 
-static bool psp_startSystemButtons(void *data) {
-	psp_platform_t *psp = (psp_platform_t*)data;
-#if SYSTEM_BUTTONS
-	sprintf(psp->prx_path, "%sSystemButtons.prx", launchDir);
-
-	if ((psp->modID = pspSdkLoadStartModule(psp->prx_path, PSP_MEMORY_PARTITION_KERNEL)) >= 0)
-	{
-			initSystemButtons(psp->devkit_version);
-		return true;
-	}
-	else
-#endif
-	{
-		return false;
-	}
-}
-
 static int32_t psp_getDevkitVersion(void *data) {
 	psp_platform_t *psp = (psp_platform_t*)data;
 	return psp->devkit_version;
@@ -261,7 +239,6 @@ platform_driver_t platform_psp = {
 	psp_init,
 	psp_free,
 	psp_main,
-	psp_startSystemButtons,
 	psp_getDevkitVersion,
 	psp_getWlanSwitchState,
 	psp_getHardwareModel,

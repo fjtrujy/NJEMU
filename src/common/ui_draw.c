@@ -121,7 +121,6 @@ static uint16_t command_font_color[11] =
  * the driver flushes it to the GPU in drawSprite.
  */
 static uint16_t *tex_font;
-static uint16_t *tex_volicon;
 static uint16_t *tex_smallfont;
 static uint16_t *tex_boxshadow;
 
@@ -212,8 +211,6 @@ static void ui_driver_set_scissor(int x, int y, int w, int h)
 	Initialization
 ******************************************************************************/
 
-#include "common/font/volume_icon.c"
-
 int ui_init(void)
 {
 	int code, x, y, alpha;
@@ -257,115 +254,6 @@ int ui_init(void)
 
 	/* Clear the font scratch area */
 	ui_draw_driver->clearTexture(ui_draw_data, UI_TEXTURE_FONT, BUF_WIDTH, 48, BUF_WIDTH);
-
-	/* Volume icons (conditional on platform support) */
-	if (platform_driver->getDevkitVersion(platform_data) >= 0x03050210)
-	{
-		tex_volicon = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_VOLICON);
-
-		if (tex_volicon)
-		{
-			dst = tex_volicon + SPEEKER_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 32; x++)
-				{
-					if (x & 1)
-						alpha = icon_speeker[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_speeker[y][(x >> 1)] & 0x0f;
-
-					dst[x] = (alpha << 12) | 0x0fff;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			dst = tex_volicon + SPEEKER_SHADOW_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 32; x++)
-				{
-					if (x & 1)
-						alpha = icon_speeker_shadow[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_speeker_shadow[y][(x >> 1)] & 0x0f;
-
-					dst[x] = alpha << 12;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			dst = tex_volicon + VOLUME_BAR_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 12; x++)
-				{
-					if (x & 1)
-						alpha = icon_bar[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_bar[y][(x >> 1)] & 0x0f;
-
-					dst[x] = (alpha << 12) | 0x0fff;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			dst = tex_volicon + VOLUME_BAR_SHADOW_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 12; x++)
-				{
-					if (x & 1)
-						alpha = icon_bar_shadow[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_bar_shadow[y][(x >> 1)] & 0x0f;
-
-					dst[x] = alpha << 12;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			dst = tex_volicon + VOLUME_DOT_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 12; x++)
-				{
-					if (x & 1)
-						alpha = icon_dot[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_dot[y][(x >> 1)] & 0x0f;
-
-					dst[x] = (alpha << 12) | 0x0fff;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			dst = tex_volicon + VOLUME_DOT_SHADOW_X;
-			for (y = 0; y < 32; y++)
-			{
-				for (x = 0; x < 12; x++)
-				{
-					if (x & 1)
-						alpha = icon_dot_shadow[y][(x >> 1)] >> 4;
-					else
-						alpha = icon_dot_shadow[y][(x >> 1)] & 0x0f;
-
-					dst[x] = alpha << 12;
-				}
-
-				dst += BUF_WIDTH;
-			}
-
-			/* Tell driver volume icon data is ready */
-			ui_draw_driver->uploadTexture(ui_draw_data, UI_TEXTURE_VOLICON,
-				tex_volicon, BUF_WIDTH, 32, BUF_WIDTH, UI_PIXFMT_4444, 0);
-		}
-	}
 
 	/* Build smallfont atlas */
 	tex_smallfont = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_SMALLFONT);
@@ -434,7 +322,6 @@ void ui_exit(void)
 	}
 	tex_font = NULL;
 	tex_smallfont = NULL;
-	tex_volicon = NULL;
 	tex_boxshadow = NULL;
 	gbk_s14_font_shutdown();
 }
@@ -1539,67 +1426,6 @@ int ui_output_update(void)
 
 	ui_draw_configure_layout();
 	return UI_FULL_REFRESH;
-}
-
-
-/******************************************************************************
-	Volume drawing
-******************************************************************************/
-
-/*------------------------------------------------------
-	Draw volume bar (CFW 3.52+ user mode only)
-------------------------------------------------------*/
-
-void draw_volume(int volume)
-{
-	int i, x;
-	const int y = ui_layout_bottom(41);
-
-	/* Speaker shadow */
-	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-		SPEEKER_SHADOW_X, 0, 32, 32,
-		3 + 24, 3 + y, 32, 32,
-		0xFFFFFFFF, 1);
-
-	/* Speaker icon */
-	ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-		SPEEKER_X, 0, 32, 32,
-		24, y, 32, 32,
-		0xFFFFFFFF, 1);
-
-	x = 64;
-
-	/* Filled bars */
-	for (i = 0; i < volume; i++)
-	{
-		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-			VOLUME_BAR_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + y, 12, 32,
-			0xFFFFFFFF, 1);
-
-		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-			VOLUME_BAR_X, 0, 12, 32,
-			x, y, 12, 32,
-			0xFFFFFFFF, 1);
-
-		x += 12;
-	}
-
-	/* Empty dots */
-	for (; i < 30; i++)
-	{
-		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-			VOLUME_DOT_SHADOW_X, 0, 12, 32,
-			3 + x, 3 + y, 12, 32,
-			0xFFFFFFFF, 1);
-
-		ui_driver_draw_sprite(UI_TEXTURE_VOLICON,
-			VOLUME_DOT_X, 0, 12, 32,
-			x, y, 12, 32,
-			0xFFFFFFFF, 1);
-
-		x += 12;
-	}
 }
 
 

@@ -313,7 +313,6 @@ static int menu_gamecfg(void)
 			}
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -321,7 +320,6 @@ static int menu_gamecfg(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -999,7 +997,6 @@ int menu_cheatcfg(void)
 			}
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -1007,7 +1004,6 @@ int menu_cheatcfg(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -1612,7 +1608,6 @@ static int menu_keycfg(void)
 			}
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -1620,7 +1615,6 @@ static int menu_keycfg(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -1919,7 +1913,6 @@ static int menu_dipswitch(void)
 			}
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -1927,7 +1920,6 @@ static int menu_dipswitch(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -2357,7 +2349,6 @@ static int menu_state(void)
 			state_refresh_screen((prev_sel == state_sel) ? 0 : 1);
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -2392,7 +2383,6 @@ static int menu_state(void)
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
 
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -2400,7 +2390,6 @@ static int menu_state(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}
@@ -2633,7 +2622,6 @@ void showmenu(void)
 			}
 
 			update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -2671,7 +2659,6 @@ void showmenu(void)
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &clip2, &clip1);
 
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -2679,7 +2666,6 @@ void showmenu(void)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}

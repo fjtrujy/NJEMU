@@ -20,7 +20,6 @@ void uifont_print_shadow_center(int sy, int r, int g, int b, const char *s);
 int uifont_get_string_width(const char *s);
 
 void draw_dialog(int sx, int sy, int ex, int ey);
-int draw_volume_status(int draw);
 int draw_battery_status(int draw);
 
 

@@ -135,7 +135,7 @@ Each target has specific setup requirements. See the linked README files for:
 | SELECT + START | Emulator menu (alternative) |
 | R Trigger | BIOS menu (MVS file browser) |
 
-> **Note:** `SystemButtons.prx` is optional and built with `-DSYSTEM_BUTTONS=ON`. On PS Vita or PPSSPP, the HOME/PS button may not work; SELECT+START remains available instead.
+> **Menu shortcut:** press START+SELECT during gameplay to open the emulator menu on every platform.
 
 ### In-Game Controls
 
@@ -263,7 +263,6 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/CPS1PSP/              (or CPS2PSP/)
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # Optional system button handler
 ├── cps1psp.ini                 # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
 ├── zipname.cps1                # English game names (REQUIRED)
@@ -282,7 +281,6 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/MVSPSP/
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # Optional system button handler
 ├── mvspsp.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
 ├── zipname.mvs                 # English game names (REQUIRED)
@@ -303,7 +301,6 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/NCDZPSP/
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # Optional system button handler
 ├── ncdzpsp.ini                 # Settings (auto-created)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # CD-ROM images
@@ -480,10 +477,6 @@ After a successful build, you'll find the following files in the build directory
   - The PBP embeds the target-specific XMB icon from `data/{target}.png`.
   - Its XMB title includes the target and NJEMU version (for example, `MVS 2.4 for PSP`).
 - Resource entries are staged directly in the build root. Large/read-only assets are **linked** back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Set `-DCOPY_RESOURCES=ON` to force a full copy.
-
-#### SystemButtons.prx
-
-Enable `-DSYSTEM_BUTTONS=ON` when configuring a PSP build to build the kernel-mode system-button helper with CMake. The build compiles `SystemButtons.prx`, links the matching import stub into NJEMU, and installs the PRX next to `EBOOT.PBP`. No separate Makefile build is required.
 
 #### Configuring the Game (without GUI)
 

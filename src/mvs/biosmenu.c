@@ -296,7 +296,6 @@ void bios_select(int flag)
 			}
 
 				update  = draw_battery_status(1);
-			update |= draw_volume_status(1);
 			update |= ui_show_popup(1);
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
@@ -304,7 +303,6 @@ void bios_select(int flag)
 		else
 		{
 			update  = draw_battery_status(0);
-			update |= draw_volume_status(0);
 			update |= ui_show_popup(0);
 			video_driver->waitVsync(video_data);
 		}

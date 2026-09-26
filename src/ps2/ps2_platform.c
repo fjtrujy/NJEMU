@@ -110,10 +110,6 @@ static void ps2_main(void *data, int argc, char *argv[]) {
 	}
 }
 
-static bool ps2_startSystemButtons(void *data) {
-return false;
-}
-
 static int32_t ps2_getDevkitVersion(void *data) {
 	return 0;
 }
@@ -192,7 +188,6 @@ platform_driver_t platform_ps2 = {
 	ps2_init,
 	ps2_free,
 	ps2_main,
-	ps2_startSystemButtons,
 	ps2_getDevkitVersion,
 	ps2_getWlanSwitchState,
 	ps2_getHardwareModel,

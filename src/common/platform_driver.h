@@ -24,7 +24,6 @@ typedef struct platform_driver
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
 	void (*main)(void *data, int argc, char *argv[]);
-	bool (*startSystemButtons)(void *data);
 	int32_t (*getDevkitVersion)(void *data);
 	bool (*getWlanSwitchState)(void *data);
 	int (*getHardwareModel)(void *data);

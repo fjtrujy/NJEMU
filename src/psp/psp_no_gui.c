@@ -61,10 +61,6 @@ void showmenu(void)
 {
 }
 
-int draw_volume_status(int draw) {
-	return 0;
-}
-
 int draw_battery_status(int draw) {
 	return 0;	
 }

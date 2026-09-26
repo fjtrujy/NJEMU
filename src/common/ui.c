@@ -199,52 +199,6 @@ int draw_battery_status(int draw)
 
 
 /******************************************************************************
-	メインボリューム表示
-******************************************************************************/
-
-/*------------------------------------------------------
-	メインボリューム表示
-------------------------------------------------------*/
-
-int draw_volume_status(int draw)
-{
-	if (platform_driver->getDevkitVersion(platform_data) >= 0x03050210 && systembuttons_available)
-	{
-		static uint64_t disp_end = 0;
-		int volume = readMainVolume();
-		int update = 0;
-
-		if (volume < 0 || volume > 30)
-			return 0;
-
-		if (readVolumeButtons())
-		{
-			disp_end = ticker_driver->currentUs(ticker_data) + 2 * CLOCKS_PER_SEC;
-			update = UI_FULL_REFRESH;
-			draw = 1;
-		}
-
-		if (disp_end != 0)
-		{
-			if (ticker_driver->currentUs(ticker_data) < disp_end)
-			{
-				if (draw)
-					draw_volume(volume);
-					update = UI_FULL_REFRESH;
-			}
-			else
-			{
-				disp_end = 0;
-				update |= UI_FULL_REFRESH;
-			}
-		}
-		return update;
-	}
-	return 0;
-}
-
-
-/******************************************************************************
 	ダイアログボックス表示
 ******************************************************************************/
 
@@ -628,7 +582,6 @@ void msg_printf(const char *text, ...)
 	uifont_print_shadow(32, 5, UI_COLOR(UI_PAL_TITLE), msg_title);
 	draw_dialog(14, 37, ui_layout_right(14), ui_layout_bottom(12));
 	draw_battery_status(1);
-	draw_volume_status(1);
 
 	for (y = 0; y <= cy && y < visible_lines; y++)
 		uifont_print(MIN_X, MIN_Y + y * 16, msg_r[y], msg_g[y], msg_b[y], msg_lines[y]);
