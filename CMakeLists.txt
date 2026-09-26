@@ -222,6 +222,8 @@ set(COMMON_SRC
     common/ticker_driver.c
     common/input_driver.h
     common/input_driver.c
+    common/input_state.h
+    common/input_state.c
     common/video_driver.h
     common/video_driver.c
 	common/video_geometry.h
@@ -984,6 +986,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 	add_test(NAME palette_convert_tests COMMAND palette_convert_tests)
+
+	add_executable(input_state_tests
+		tests/input_state_tests.c
+		src/common/input_state.c
+	)
+	target_include_directories(input_state_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME input_state_tests COMMAND input_state_tests)
 
 	if(Python3_Interpreter_FOUND)
         add_test(

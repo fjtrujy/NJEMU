@@ -25,10 +25,8 @@ static uint32_t psp_controllerCount(void *data) {
 	return data ? 1 : 0;
 }
 
-static uint32_t basicPoll(SceCtrlData *paddata) {
+static uint32_t mapButtons(const SceCtrlData *paddata) {
 	uint32_t data = 0;
-
-	sceCtrlPeekBufferPositive(paddata, 1);
 
 	data |= (paddata->Buttons & PSP_CTRL_UP) ? PLATFORM_PAD_UP : 0;
 	data |= (paddata->Buttons & PSP_CTRL_DOWN) ? PLATFORM_PAD_DOWN : 0;
@@ -49,65 +47,22 @@ static uint32_t basicPoll(SceCtrlData *paddata) {
 	return data;
 }
 
-static uint32_t psp_poll(void *data, uint32_t controller) {
-	SceCtrlData paddata;
-	uint32_t btnsData = 0;
+static bool psp_sample(void *data, uint32_t controller, input_state_t *state) {
+	SceCtrlData paddata = {0};
 	(void)data;
 
-	if (controller != 0)
-		return 0;
+	if (controller != 0 || state == NULL)
+		return false;
 
-	btnsData = basicPoll(&paddata);
+	if (sceCtrlPeekBufferPositive(&paddata, 1) <= 0)
+		return false;
 
-	if (paddata.Ly >= 0xd0) btnsData |= PLATFORM_PAD_DOWN;
-	if (paddata.Ly <= 0x30) btnsData |= PLATFORM_PAD_UP;
-	if (paddata.Lx <= 0x30) btnsData |= PLATFORM_PAD_LEFT;
-	if (paddata.Lx >= 0xd0) btnsData |= PLATFORM_PAD_RIGHT;
-
-	return btnsData;
+	state->buttons = mapButtons(&paddata);
+	state->lx = paddata.Lx;
+	state->ly = paddata.Ly;
+	state->axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
+	return true;
 }
-
-#if (EMU_SYSTEM == MVS)
-static uint32_t psp_pollFatfursp(void *data, uint32_t controller) {
-	SceCtrlData paddata;
-	uint32_t btnsData = 0;
-	(void)data;
-
-	if (controller != 0)
-		return 0;
-
-	btnsData = basicPoll(&paddata);
-
-	if (!(paddata.Buttons & PSP_CTRL_UP)    && paddata.Ly >= 0xd0) btnsData |= PLATFORM_PAD_DOWN;
-	if (!(paddata.Buttons & PSP_CTRL_DOWN)  && paddata.Ly <= 0x30) btnsData |= PLATFORM_PAD_UP;
-	if (!(paddata.Buttons & PSP_CTRL_RIGHT) && paddata.Lx <= 0x30) btnsData |= PLATFORM_PAD_LEFT;
-	if (!(paddata.Buttons & PSP_CTRL_LEFT)  && paddata.Lx >= 0xd0) btnsData |= PLATFORM_PAD_RIGHT;
-
-	return btnsData;
-}
-
-static uint32_t psp_pollAnalog(void *data, uint32_t controller) {
-	uint32_t btnsData;
-	SceCtrlData paddata;
-	(void)data;
-
-	if (controller != 0)
-		return 0;
-
-	btnsData = basicPoll(&paddata);
-
-	if (paddata.Ly >= 0xd0) btnsData |= PLATFORM_PAD_DOWN;
-	if (paddata.Ly <= 0x30) btnsData |= PLATFORM_PAD_UP;
-	if (paddata.Lx <= 0x30) btnsData |= PLATFORM_PAD_LEFT;
-	if (paddata.Lx >= 0xd0) btnsData |= PLATFORM_PAD_RIGHT;
-
-	btnsData  = paddata.Buttons & 0xffff;
-	btnsData |= paddata.Lx << 16;
-	btnsData |= paddata.Ly << 24;
-
-	return btnsData;
-}
-#endif
 
 
 input_driver_t input_psp = {
@@ -115,9 +70,5 @@ input_driver_t input_psp = {
 	psp_init,
 	psp_free,
 	psp_controllerCount,
-	psp_poll,
-#if (EMU_SYSTEM == MVS)
-	psp_pollFatfursp,
-	psp_pollAnalog,
-#endif
+	psp_sample,
 };

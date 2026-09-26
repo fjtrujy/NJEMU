@@ -73,53 +73,28 @@ uint32_t poll_gamepad(void)
 	return poll_gamepad_index(0);
 }
 
+bool sample_gamepad_index(uint32_t controller, input_state_t *state)
+{
+	if (state == NULL)
+		return false;
+
+	input_state_reset(state);
+
+	if (!input_info || !input_driver->sample)
+		return false;
+
+	return input_driver->sample(input_info, controller, state);
+}
+
 uint32_t poll_gamepad_index(uint32_t controller)
 {
-	if (!input_info || !input_driver->poll)
+	input_state_t state;
+
+	if (!sample_gamepad_index(controller, &state))
 		return 0;
 
-	return input_driver->poll(input_info, controller);
+	return input_state_digital_buttons(&state);
 }
-
-
-/*--------------------------------------------------------
-	Get Pad Press State (MVS / fatfursp only)
---------------------------------------------------------*/
-
-#if (EMU_SYSTEM == MVS)
-uint32_t poll_gamepad_fatfursp(void)
-{
-	return poll_gamepad_fatfursp_index(0);
-}
-
-uint32_t poll_gamepad_fatfursp_index(uint32_t controller)
-{
-	if (!input_info || !input_driver->pollFatfursp)
-		return 0;
-
-	return input_driver->pollFatfursp(input_info, controller);
-}
-#endif
-
-
-/*--------------------------------------------------------
-	Get Pad Press State (Analog)
---------------------------------------------------------*/
-
-#if (EMU_SYSTEM == MVS)
-uint32_t poll_gamepad_analog(void)
-{
-	return poll_gamepad_analog_index(0);
-}
-
-uint32_t poll_gamepad_analog_index(uint32_t controller)
-{
-	if (!input_info || !input_driver->pollAnalog)
-		return 0;
-
-	return input_driver->pollAnalog(input_info, controller);
-}
-#endif
 
 
 /*--------------------------------------------------------

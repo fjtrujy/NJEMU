@@ -399,7 +399,7 @@ Acceptance:
   concepts;
 - no behavioural regression in PSP AdHoc builds.
 
-### D4 - Redesign physical input around a stable state object
+### D4 - Redesign physical input around a stable state object [COMPLETE]
 
 Replace target-conditioned `pollFatfursp` / `pollAnalog` callbacks with a stable
 physical input sample, for example:
@@ -424,6 +424,35 @@ Acceptance:
 - no `EMU_SYSTEM` appears in `input_driver.h` or platform input backends;
 - PSP, PS2 multitap, and Desktop input retain current semantics;
 - menu hotkey remains common (`START+SELECT`).
+
+Result (2026-09-26):
+- added `common/input_state.h/.c` as the platform-neutral owner of physical
+  buttons, optional left-stick axes, neutral/dead-zone constants, reset, and
+  analog-to-digital conversion;
+- replaced the target-shaped `poll`, `pollFatfursp`, and `pollAnalog` input
+  vtable entries with one stable `sample()` callback on PSP, PS2, and Desktop;
+- moved normal analog-direction conversion and the Fatal Fury Special opposite
+  direction rule out of platform backends; MVS now owns its special polling
+  modes while Irritating Maze / Pop 'n Bounce consume raw axes directly;
+- removed all `EMU_SYSTEM` conditionals from `input_driver.h` and the three
+  platform input backends, so target selection no longer changes the platform
+  driver ABI;
+- preserved PS2 controller-index/multitap routing through the common sample
+  contract and kept `START+SELECT` in the common menu-combo path;
+- eliminated the old PSP analog-mode mismatch where portable button bits were
+  overwritten with raw `PSP_CTRL_*` bits before MVS consumed the packed axes;
+- added focused `input_state_tests` for neutral reset, digital preservation,
+  dead-zone thresholds, and absent-axis behaviour.
+
+Validation (2026-09-26):
+- Desktop CPS1/CPS2/MVS/NCDZ builds pass; focused non-memory-plan suites pass
+  11/11, 11/11, 11/11, and 12/12 respectively;
+- Desktop MVS GUI build passes its full 13/13 CTest suite and the 30-frame MVS
+  runtime smoke passes;
+- PSP CPS1/CPS2/MVS/NCDZ Release builds pass and generate EBOOT.PBP;
+- PSP MVS with GUI, AdHoc, save states, and command list enabled passes;
+- PS2 CPS1/CPS2/MVS/NCDZ Release builds pass and PS2 MVS GUI build passes;
+- `git diff --check` is clean and no resource file is part of the change.
 
 ### D5 - Replace PSP-shaped power semantics with capabilities
 
@@ -529,6 +558,7 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D4. The generic platform layer is now small enough that physical
-input can be redesigned around one stable platform-neutral state sample without
-mixing target-specific emulator semantics into the host backends.
+Proceed with D5. Input now has a stable target-independent contract, so the next
+largest PSP-shaped generic service is power management: replace fake Desktop/PS2
+battery/clock implementations with explicit optional battery and performance
+capabilities while preserving the PSP configuration behaviour.

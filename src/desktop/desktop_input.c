@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <SDL.h>
 #include "common/input_driver.h"
 
@@ -28,13 +29,13 @@ static uint32_t desktop_controllerCount(void *data) {
 	return data ? 1 : 0;
 }
 
-static uint32_t desktop_poll(void *data, uint32_t controller) {
+static bool desktop_sample(void *data, uint32_t controller, input_state_t *state) {
 	uint32_t btnsData = 0;
 	SDL_Event event;
 	(void)data;
 
-	if (controller != 0)
-		return 0;
+	if (controller != 0 || state == NULL)
+		return false;
 	
 	/* Process all pending events */
 	while (SDL_PollEvent(&event)) {
@@ -79,24 +80,9 @@ static uint32_t desktop_poll(void *data, uint32_t controller) {
 	btnsData |= key_states[SDL_SCANCODE_RETURN] ? PLATFORM_PAD_START : 0;
 	btnsData |= key_states[SDL_SCANCODE_SPACE] ? PLATFORM_PAD_SELECT : 0;
 
-	return btnsData;
+	state->buttons = btnsData;
+	return true;
 }
-
-#if (EMU_SYSTEM == MVS)
-static uint32_t desktop_pollFatfursp(void *data, uint32_t controller) {
-	uint32_t btnsData = 0;
-	(void)data;
-	(void)controller;
-	return btnsData;
-}
-
-static uint32_t desktop_pollAnalog(void *data, uint32_t controller) {
-	uint32_t btnsData = 0;
-	(void)data;
-	(void)controller;
-	return btnsData;
-}
-#endif
 
 
 input_driver_t input_desktop = {
@@ -104,9 +90,5 @@ input_driver_t input_desktop = {
 	desktop_init,
 	desktop_free,
 	desktop_controllerCount,
-	desktop_poll,
-#if (EMU_SYSTEM == MVS)
-	desktop_pollFatfursp,
-	desktop_pollAnalog,
-#endif
+	desktop_sample,
 };

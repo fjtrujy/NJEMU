@@ -10,34 +10,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Platform Controls
-#define PLATFORM_PAD_UP (1 << 0)
-#define PLATFORM_PAD_DOWN (1 << 1)
-#define PLATFORM_PAD_LEFT (1 << 2)
-#define PLATFORM_PAD_RIGHT (1 << 3)
-#define PLATFORM_PAD_B1 (1 << 4)
-#define PLATFORM_PAD_B2 (1 << 5)
-#define PLATFORM_PAD_B3 (1 << 6)
-#define PLATFORM_PAD_B4 (1 << 7)
-#define PLATFORM_PAD_L (1 << 8)
-#define PLATFORM_PAD_R (1 << 9)
-#define PLATFORM_PAD_SELECT (1 << 10)
-#define PLATFORM_PAD_START (1 << 11)
-
+#include "input_state.h"
 
 #define PAD_WAIT_INFINITY	-1
 
 bool pad_init(void);
 void pad_exit(void);
 uint32_t gamepad_count(void);
+bool sample_gamepad_index(uint32_t controller, input_state_t *state);
 uint32_t poll_gamepad(void);
 uint32_t poll_gamepad_index(uint32_t controller);
-#if (EMU_SYSTEM == MVS)
-uint32_t poll_gamepad_fatfursp(void);
-uint32_t poll_gamepad_analog(void);
-uint32_t poll_gamepad_fatfursp_index(uint32_t controller);
-uint32_t poll_gamepad_analog_index(uint32_t controller);
-#endif
 void pad_update(void);
 bool pad_pressed(uint32_t code);
 bool pad_pressed_any(void);
@@ -58,15 +40,12 @@ typedef struct input_driver
 	**/
 	void *(*init)(void);
 	/* Stops and frees driver data. */
-   	void (*free)(void *data);
+	void (*free)(void *data);
 	/* Number of currently usable physical controllers. */
 	uint32_t (*controllerCount)(void *data);
-	/* Poll a physical controller by logical index. */
-	uint32_t (*poll)(void *data, uint32_t controller);
-	#if (EMU_SYSTEM == MVS)
-	uint32_t (*pollFatfursp)(void *data, uint32_t controller);
-	uint32_t (*pollAnalog)(void *data, uint32_t controller);
-	#endif
+	/* Sample raw physical state by logical controller index. Emulator-specific
+	 * interpretation of analog axes belongs in common/target code. */
+	bool (*sample)(void *data, uint32_t controller, input_state_t *state);
 } input_driver_t;
 
 

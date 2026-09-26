@@ -67,15 +67,80 @@ static int ALIGN16_DATA af_counter[2][MVS_BUTTON_MAX];
 static int input_ui_wait;
 static int service_switch;
 
-static uint32_t (*poll_pad)(void);
-static uint32_t (*poll_pad_index)(uint32_t controller);
+typedef enum mvs_input_poll_mode
+{
+	MVS_INPUT_POLL_NORMAL = 0,
+	MVS_INPUT_POLL_FATFURSP,
+	MVS_INPUT_POLL_ANALOG
+} mvs_input_poll_mode_t;
+
+static mvs_input_poll_mode_t input_poll_mode;
 
 static void update_inputport0(void);
 static void update_inputport1(void);
 static void update_inputport2(void);
 static void update_inputport4(void);
 static void update_inputport5(void);
-static void popbounc_update_analog_port(uint16_t value);
+static void irrmaze_update_analog_port(const input_state_t *state);
+static void popbounc_update_analog_port(const input_state_t *state);
+
+
+static uint32_t mvs_fatfursp_buttons(const input_state_t *state)
+{
+	uint32_t buttons = state->buttons;
+
+	/* Fatal Fury Special uses the analog stick as an alternate direction
+	 * source, but an explicitly pressed opposite D-pad direction wins. */
+	if (state->axis_flags & INPUT_AXIS_LY)
+	{
+		if (state->ly >= INPUT_ANALOG_HIGH_THRESHOLD &&
+			!(buttons & PLATFORM_PAD_UP))
+			buttons |= PLATFORM_PAD_DOWN;
+		if (state->ly <= INPUT_ANALOG_LOW_THRESHOLD &&
+			!(buttons & PLATFORM_PAD_DOWN))
+			buttons |= PLATFORM_PAD_UP;
+	}
+	if (state->axis_flags & INPUT_AXIS_LX)
+	{
+		if (state->lx <= INPUT_ANALOG_LOW_THRESHOLD &&
+			!(buttons & PLATFORM_PAD_RIGHT))
+			buttons |= PLATFORM_PAD_LEFT;
+		if (state->lx >= INPUT_ANALOG_HIGH_THRESHOLD &&
+			!(buttons & PLATFORM_PAD_LEFT))
+			buttons |= PLATFORM_PAD_RIGHT;
+	}
+
+	return buttons;
+}
+
+static uint32_t poll_mvs_pad_index(uint32_t controller, input_state_t *state)
+{
+	if (!sample_gamepad_index(controller, state))
+		return 0;
+
+	switch (input_poll_mode)
+	{
+	case MVS_INPUT_POLL_FATFURSP:
+		state->buttons = mvs_fatfursp_buttons(state);
+		break;
+
+	case MVS_INPUT_POLL_ANALOG:
+		/* Raw axes are consumed separately by the MVS-specific analog games. */
+		break;
+
+	case MVS_INPUT_POLL_NORMAL:
+	default:
+		state->buttons = input_state_digital_buttons(state);
+		break;
+	}
+
+	return state->buttons;
+}
+
+static uint32_t poll_mvs_pad(input_state_t *state)
+{
+	return poll_mvs_pad_index(0, state);
+}
 
 
 /******************************************************************************
@@ -206,6 +271,7 @@ static void update_inputport_multi(uint32_t controller_count)
 	uint8_t combined_port2 = 0xff;
 	uint8_t combined_port4 = 0xff;
 	uint8_t combined_port5 = 0xff;
+	input_state_t primary_state;
 	uint32_t primary_buttons;
 	uint32_t primary_processed = 0;
 	int saved_controller;
@@ -215,7 +281,7 @@ static void update_inputport_multi(uint32_t controller_count)
 		controller_count = 2;
 
 	service_switch = 0;
-	primary_buttons = (*poll_pad_index)(0);
+	primary_buttons = poll_mvs_pad_index(0, &primary_state);
 
 	if (pad_menu_combo_pressed(primary_buttons))
 	{
@@ -227,7 +293,7 @@ static void update_inputport_multi(uint32_t controller_count)
 		else
 			neogeo_port_value[3] = 0xff;
 
-		primary_buttons = (*poll_pad_index)(0);
+		primary_buttons = poll_mvs_pad_index(0, &primary_state);
 	}
 	else if ((primary_buttons & PLATFORM_PAD_L) &&
 	         (primary_buttons & PLATFORM_PAD_R) &&
@@ -242,16 +308,23 @@ static void update_inputport_multi(uint32_t controller_count)
 
 	for (controller = 0; controller < controller_count; controller++)
 	{
-		uint32_t buttons = controller == 0 ? primary_buttons :
-			(*poll_pad_index)(controller);
+		input_state_t state;
+		uint32_t buttons;
+
+		if (controller == 0)
+		{
+			state = primary_state;
+			buttons = primary_buttons;
+		}
+		else
+		{
+			buttons = poll_mvs_pad_index(controller, &state);
+		}
 
 		option_controller = (int)controller;
 
 		if (neogeo_ngh == NGH_popbounc)
-		{
-			popbounc_update_analog_port(buttons >> 16);
-			buttons &= 0xffff;
-		}
+			popbounc_update_analog_port(&state);
 
 		buttons = update_autofire(buttons, (int)controller);
 		set_input_flags(buttons);
@@ -573,13 +646,11 @@ static void update_inputport5(void)
 	irrmaze Analog Input Port
 ------------------------------------------------------*/
 
-static void irrmaze_update_analog_port(uint16_t value)
+static void irrmaze_update_analog_port(const input_state_t *state)
 {
 	int axis, delta;
-	int current, pad_value[2];
-
-	pad_value[0] = value & 0xff;
-	pad_value[1] = value >> 8;
+	int current;
+	int pad_value[2] = { state->lx, state->ly };
 
 	for (axis = 0; axis < 2; axis++)
 	{
@@ -657,12 +728,12 @@ static void irrmaze_update_analog_port(uint16_t value)
 	popbounc Analog Input Port
 ------------------------------------------------------*/
 
-static void popbounc_update_analog_port(uint16_t value)
+static void popbounc_update_analog_port(const input_state_t *state)
 {
 	int delta, current;
 
 	delta = 0;
-	current = value & 0xff;
+	current = state->lx;
 
 	switch (analog_sensitivity)
 	{
@@ -748,31 +819,16 @@ int input_init(void)
 
 	neogeo_dipswitch = 0xff;
 
+	input_poll_mode = MVS_INPUT_POLL_NORMAL;
 	if (neogeo_ngh == NGH_irrmaze || neogeo_ngh == NGH_popbounc)
 	{
 #ifdef ADHOC
-		if (adhoc_enable)
-		{
-			poll_pad = poll_gamepad;
-			poll_pad_index = poll_gamepad_index;
-		}
-		else
+		if (!adhoc_enable)
 #endif
-		{
-			poll_pad = poll_gamepad_analog;
-			poll_pad_index = poll_gamepad_analog_index;
-		}
+			input_poll_mode = MVS_INPUT_POLL_ANALOG;
 	}
 	else if (neogeo_ngh == NGH_fatfursp)
-	{
-		poll_pad = poll_gamepad_fatfursp;
-		poll_pad_index = poll_gamepad_fatfursp_index;
-	}
-	else
-	{
-		poll_pad = poll_gamepad;
-		poll_pad_index = poll_gamepad_index;
-	}
+		input_poll_mode = MVS_INPUT_POLL_FATFURSP;
 
 #ifdef ADHOC
 	if (adhoc_enable)
@@ -844,6 +900,7 @@ void setup_autofire(void)
 void update_inputport(void)
 {
 	int i;
+	input_state_t state;
 	uint32_t buttons;
 
 #ifdef ADHOC
@@ -881,7 +938,7 @@ void update_inputport(void)
 
 			service_switch = 0;
 
-			buttons = (*poll_pad)();
+			buttons = poll_mvs_pad(&state);
 
 			if (pad_menu_combo_pressed(buttons))
 			{
@@ -931,7 +988,7 @@ void update_inputport(void)
 
 		service_switch = 0;
 
-		buttons = (*poll_pad)();
+		buttons = poll_mvs_pad(&state);
 
 		if (pad_menu_combo_pressed(buttons))
 		{
@@ -943,7 +1000,7 @@ void update_inputport(void)
 			else
 				neogeo_port_value[3] = 0xff;
 
-			buttons = (*poll_pad)();
+			buttons = poll_mvs_pad(&state);
 		}
 		else if ((buttons & PLATFORM_PAD_L) && (buttons & PLATFORM_PAD_R))
 		{
@@ -955,15 +1012,9 @@ void update_inputport(void)
 		}
 
 		if (neogeo_ngh == NGH_irrmaze)
-		{
-			irrmaze_update_analog_port(buttons >> 16);
-			buttons &= 0xffff;
-		}
+			irrmaze_update_analog_port(&state);
 		else if (neogeo_ngh == NGH_popbounc)
-		{
-			popbounc_update_analog_port(buttons >> 16);
-			buttons &= 0xffff;
-		}
+			popbounc_update_analog_port(&state);
 
 		buttons = update_autofire(buttons, 0);
 
