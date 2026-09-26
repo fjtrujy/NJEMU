@@ -114,18 +114,6 @@ static void ps2_main(void *data, int argc, char *argv[]) {
 	}
 }
 
-static int32_t ps2_getDevkitVersion(void *data) {
-	return 0;
-}
-
-static bool ps2_getWlanSwitchState(void *data) {
-	return false;
-}
-
-static int ps2_getHardwareModel(void *data) {
-	return 0;
-}
-
 static uint64_t ps2_probe_largest_block(uint64_t limit) {
 	uint32_t low_blocks = 0;
 	uint32_t high_blocks = (uint32_t)(limit / CACHE_BLOCK_SIZE);
@@ -192,9 +180,6 @@ platform_driver_t platform_ps2 = {
 	ps2_init,
 	ps2_free,
 	ps2_main,
-	ps2_getDevkitVersion,
-	ps2_getWlanSwitchState,
-	ps2_getHardwareModel,
 	ps2_queryMemoryInfo,
 	ps2_getSystemLanguage,
 };

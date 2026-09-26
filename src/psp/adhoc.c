@@ -11,8 +11,8 @@
 #include "common/adhoc_transport.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
-#include "common/platform_driver.h"
 #include "common/runtime_paths.h"
+#include "common/ui.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -20,6 +20,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <pspdisplay.h>
+#include <pspkernel.h>
 #include <pspsdk.h>
 #include <pspnet.h>
 #include <pspwlan.h>
@@ -117,6 +120,12 @@ static int pos;
 static int adhoc_initialized = 0;
 static unsigned char adhoc_buffer[ADHOC_BUFFER_SIZE];
 static unsigned char adhoc_work[ADHOC_BUFFER_SIZE];
+
+
+static bool adhoc_net_modules_supported(void)
+{
+	return sceKernelDevkitVersion() >= 0x02000010;
+}
 
 
 /***************************************************************************
@@ -376,7 +385,7 @@ int adhocLoadModules(void)
 #ifdef KERNEL_MODE
 	return adhoc_modules_loaded;
 #else
-	if (platform_driver->getDevkitVersion(platform_data) >= 0x02000010)
+	if (adhoc_net_modules_supported())
 	{
 		int error;
 
@@ -402,7 +411,7 @@ int adhocUnloadModules(void)
 #ifdef KERNEL_MODE
 	return 0;
 #else
-	if (platform_driver->getDevkitVersion(platform_data) >= 0x02000010)
+	if (adhoc_net_modules_supported())
 	{
 		int error;
 
@@ -416,6 +425,12 @@ int adhocUnloadModules(void)
 	}
 	return -1;
 #endif
+}
+
+
+bool adhocNetworkAvailable(void)
+{
+	return sceWlanGetSwitchState() != 0;
 }
 
 

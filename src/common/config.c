@@ -18,6 +18,9 @@
 #include "common/runtime_paths.h"
 #include "common/ui_text_driver.h"
 #include "main_ui_draw.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

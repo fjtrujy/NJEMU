@@ -14,6 +14,9 @@
 #include <strings.h>
 #include <unistd.h>
 #include "cps2.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #include "common/cache.h"
 #include "common/memory_plan.h"
 #include "common/memory_sizes.h"

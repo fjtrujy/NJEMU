@@ -63,18 +63,6 @@ static void desktop_main(void *data, int argc, char *argv[]) {
 #endif
 }
 
-static int32_t desktop_getDevkitVersion(void *data) {
-	return 0;
-}
-
-static bool desktop_getWlanSwitchState(void *data) {
-	return false;
-}
-
-static int desktop_getHardwareModel(void *data) {
-	return 0;
-}
-
 static bool desktop_queryMemoryInfo(void *data, platform_memory_info_t *out) {
 	uint64_t total = 0;
 	uint64_t available = 0;
@@ -143,9 +131,6 @@ platform_driver_t platform_desktop = {
 	desktop_init,
 	desktop_free,
 	desktop_main,
-	desktop_getDevkitVersion,
-	desktop_getWlanSwitchState,
-	desktop_getHardwareModel,
 	desktop_queryMemoryInfo,
 	desktop_getSystemLanguage,
 };

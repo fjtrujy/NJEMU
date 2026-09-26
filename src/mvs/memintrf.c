@@ -14,6 +14,9 @@
 #include <strings.h>
 #include <unistd.h>
 #include "mvs.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #include "common/cache.h"
 #ifdef COMMAND_LIST
 #include "common/cmdlist.h"

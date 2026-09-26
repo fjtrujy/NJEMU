@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "mvs.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#include "common/adhoc_transport.h"
+#endif
 #include "common/cache.h"
 #ifdef COMMAND_LIST
 #include "common/cmdlist.h"

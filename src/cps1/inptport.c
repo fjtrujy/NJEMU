@@ -7,6 +7,9 @@
 ******************************************************************************/
 
 #include "cps1.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"

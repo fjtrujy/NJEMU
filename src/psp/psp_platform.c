@@ -10,7 +10,6 @@
 #include <psppower.h>
 #include <pspsdk.h>
 #include <psputility_sysparam.h>
-#include <pspwlan.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,11 +27,6 @@ PSP_MAIN_THREAD_ATTR(0);
 PSP_MODULE_INFO(TARGET_STR, PSP_MODULE_USER, VERSION_MAJOR, VERSION_MINOR);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 #endif
-
-typedef struct psp_platform {
-	int32_t devkit_version;
-} psp_platform_t;
-
 
 /******************************************************************************
 	�����`�Х��v��
@@ -139,24 +133,21 @@ static int SetupCallbacks(void)
 // #endif
 
 static void *psp_init(void) {
-	psp_platform_t *psp = (psp_platform_t*)calloc(1, sizeof(psp_platform_t));
-	return psp;
+	return calloc(1, 1);
 }
 
 static void psp_free(void *data) {
-	psp_platform_t *psp = (psp_platform_t*)data;
-
 #ifdef KERNEL_MODE
 	sceKernelExitThread(0);
 #else
 	sceKernelExitGame();
 #endif
 
-	free(psp);
+	free(data);
 }
 
 static void psp_main(void *data, int argc, char *argv[]) {
-	psp_platform_t *psp = (psp_platform_t*)data;
+	(void)data;
 
 	// Override launchDir from argv[0] for PPSSPP compatibility.
 	// getcwd() may return "umd0:" which is not browsable, but argv[0]
@@ -183,23 +174,7 @@ static void psp_main(void *data, int argc, char *argv[]) {
 	strcat(screenshotDir, "ms0:/PICTURE/NCDZ");
 #endif
 
-	psp->devkit_version = sceKernelDevkitVersion();
-
 	SetupCallbacks();
-}
-
-static int32_t psp_getDevkitVersion(void *data) {
-	psp_platform_t *psp = (psp_platform_t*)data;
-	return psp->devkit_version;
-}
-
-static bool psp_getWlanSwitchState(void *data) {
-	return sceWlanGetSwitchState() != 0;
-}
-
-static int psp_getHardwareModel(void *data) {
-	(void)data;
-	return 0;
 }
 
 static bool psp_queryMemoryInfo(void *data, platform_memory_info_t *out) {
@@ -242,9 +217,6 @@ platform_driver_t platform_psp = {
 	psp_init,
 	psp_free,
 	psp_main,
-	psp_getDevkitVersion,
-	psp_getWlanSwitchState,
-	psp_getHardwareModel,
 	psp_queryMemoryInfo,
 	psp_getSystemLanguage,
 };

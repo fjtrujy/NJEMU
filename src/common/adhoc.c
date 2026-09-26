@@ -10,6 +10,7 @@
 #include "common/adhoc_transport.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
+#include "common/sound.h"
 #include "common/state.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"

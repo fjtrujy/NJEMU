@@ -349,7 +349,7 @@ Acceptance:
 - `SCR_WIDTH`/`SCR_HEIGHT`/logical pitch have one common definition;
 - include-what-you-use cleanup does not change behaviour.
 
-### D3 - Shrink `platform_driver_t` to real platform services
+### D3 - Shrink `platform_driver_t` to real platform services [COMPLETE]
 
 Remove `getHardwareModel()` (unused). Move firmware/WLAN logic out of the generic
 platform vtable and into the PSP AdHoc backend/service. Keep generic operations
@@ -361,6 +361,37 @@ that really differ by host, currently:
 
 Re-evaluate whether path discovery belongs in the platform vtable or a smaller
 startup service.
+
+Result (2026-09-26):
+- removed `getHardwareModel()`, `getDevkitVersion()`, and
+  `getWlanSwitchState()` from `platform_driver_t` and deleted the fake
+  Desktop/PS2 implementations;
+- moved PSP firmware-version gating for network-module loading directly into
+  the PSP AdHoc transport, where `sceKernelDevkitVersion()` is a real backend
+  implementation detail;
+- moved the PSP WLAN switch query behind the common AdHoc transport contract
+  (`adhocNetworkAvailable()`), so common file-browser code no longer knows
+  about PSP platform services;
+- removed cached firmware state and the WLAN SDK dependency from
+  `psp_platform.c`; the generic platform contract now contains only lifecycle,
+  startup, memory telemetry, and system-language services;
+- audited the remaining startup/path callback and kept it in the platform
+  contract for now because launch-path discovery, screenshot roots, and PSP
+  callback setup genuinely differ by host; this can be split later if those
+  responsibilities diverge further;
+- while exercising the previously under-tested AdHoc configurations, made the
+  remaining AdHoc/UI/sound dependencies explicit in CPS1/CPS2/MVS and the PSP
+  transport instead of relying on the deleted umbrella header.
+
+Validation (2026-09-26):
+- PSP CPS1, CPS2, and MVS builds with `ADHOC=ON`, `GUI=ON`, and
+  `SAVE_STATE=ON` all pass and generate EBOOT.PBP;
+- normal PSP MVS and PS2 MVS builds pass;
+- Desktop MVS build passes, focused CTests pass 10/10, and the 30-frame runtime
+  smoke passes;
+- no production reference to `getHardwareModel`, `getDevkitVersion`, or
+  `getWlanSwitchState` remains; PSP WLAN ownership is confined to
+  `src/psp/adhoc.c`.
 
 Acceptance:
 - Desktop/PS2 no longer implement PSP-specific stubs;
@@ -498,6 +529,6 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D3. With header ownership and CMake include scope explicit, shrink
-`platform_driver_t` to genuine host services and move PSP firmware/WLAN details
-into the PSP AdHoc transport where they belong.
+Proceed with D4. The generic platform layer is now small enough that physical
+input can be redesigned around one stable platform-neutral state sample without
+mixing target-specific emulator semantics into the host backends.

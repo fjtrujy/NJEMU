@@ -7,7 +7,6 @@
 #ifndef PLATFORM_DRIVER_H
 #define PLATFORM_DRIVER_H
 
-#include <stdint.h>
 #include <stdbool.h>
 #include "platform_memory_info.h"
 #include "ui_language.h"
@@ -22,11 +21,8 @@ typedef struct platform_driver
 	**/
 	void *(*init)(void);
 	/* Stops and frees driver data. */
-   	void (*free)(void *data);
+	void (*free)(void *data);
 	void (*main)(void *data, int argc, char *argv[]);
-	int32_t (*getDevkitVersion)(void *data);
-	bool (*getWlanSwitchState)(void *data);
-	int (*getHardwareModel)(void *data);
 	/* Captures normalized platform memory telemetry. Returns false when the
 	 * platform cannot provide any useful memory information. R10 cache capacity
 	 * is established by retained allocation probes; this is diagnostic data.

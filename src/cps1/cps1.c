@@ -6,7 +6,12 @@
 
 ******************************************************************************/
 
+#include <stdio.h>
 #include "cps1.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#include "common/adhoc_transport.h"
+#endif
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
 #include "common/ui_defs.h"

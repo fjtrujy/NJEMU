@@ -12,6 +12,9 @@
 #include <string.h>
 #include <unistd.h>
 #include "cps1.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #include "common/capcom_driver_info.h"
 #include "common/coin.h"
 #include "common/emulator_options.h"

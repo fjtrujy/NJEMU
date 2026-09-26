@@ -7,6 +7,9 @@
 ******************************************************************************/
 
 #include "mvs.h"
+#ifdef ADHOC
+#include "common/adhoc.h"
+#endif
 #ifdef COMMAND_LIST
 #include "common/cmdlist.h"
 #endif

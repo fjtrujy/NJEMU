@@ -1533,7 +1533,7 @@ void file_browser(void)
 #ifdef ADHOC
 					else if (adhoc_enable)
 					{
-						if (!platform_driver->getWlanSwitchState(platform_data))
+						if (!adhocNetworkAvailable())
 						{
 							ui_popup(TEXT(PLEASE_TURN_ON_THE_WLAN_SWITCH));
 							adhoc_enable = 0;

@@ -1,6 +1,7 @@
 #ifndef COMMON_ADHOC_TRANSPORT_H
 #define COMMON_ADHOC_TRANSPORT_H
 
+#include <stdbool.h>
 #include "emucfg.h"
 #include "common/adhoc.h"
 
@@ -25,6 +26,7 @@
 
 int adhocLoadModules(void);
 int adhocUnloadModules(void);
+bool adhocNetworkAvailable(void);
 
 int adhocInit(const char *matchingData);
 int adhocTerm(void);
