@@ -197,7 +197,7 @@ static bool psp_startSystemButtons(void *data) {
 
 	if ((psp->modID = pspSdkLoadStartModule(psp->prx_path, PSP_MEMORY_PARTITION_KERNEL)) >= 0)
 	{
-		initSystemButtons(devkit_version);
+			initSystemButtons(psp->devkit_version);
 		return true;
 	}
 	else

@@ -15,7 +15,6 @@
 - [Building](#building)
   - [Build Commands](#build-commands)
   - [Build Options](#build-options)
-  - [Legacy Build System (Makefile)](#legacy-build-system-makefile)
 - [Platform-Specific Build Instructions](#platform-specific-build-instructions)
   - [PSP (PlayStation Portable)](#psp-playstation-portable)
   - [PS2 (PlayStation 2)](#ps2-playstation-2)
@@ -136,7 +135,7 @@ Each target has specific setup requirements. See the linked README files for:
 | SELECT + START | Emulator menu (alternative) |
 | R Trigger | BIOS menu (MVS file browser) |
 
-> **Note:** On PS Vita or PPSSPP, the HOME/PS button may not work. You can delete `SystemButtons.prx` and use SELECT+START instead.
+> **Note:** `SystemButtons.prx` is optional and built with `-DSYSTEM_BUTTONS=ON`. On PS Vita or PPSSPP, the HOME/PS button may not work; SELECT+START remains available instead.
 
 ### In-Game Controls
 
@@ -264,7 +263,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/CPS1PSP/              (or CPS2PSP/)
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # System button handler
+├── SystemButtons.prx           # Optional system button handler
 ├── cps1psp.ini                 # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
 ├── zipname.cps1                # English game names (REQUIRED)
@@ -283,7 +282,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/MVSPSP/
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # System button handler
+├── SystemButtons.prx           # Optional system button handler
 ├── mvspsp.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
 ├── zipname.mvs                 # English game names (REQUIRED)
@@ -304,7 +303,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/NCDZPSP/
 ├── EBOOT.PBP                   # Main executable
-├── SystemButtons.prx           # System button handler
+├── SystemButtons.prx           # Optional system button handler
 ├── ncdzpsp.ini                 # Settings (auto-created)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # CD-ROM images
@@ -412,58 +411,6 @@ These resource files are automatically copied to the build directory and include
 
 ---
 
-## Legacy Build System (Makefile)
-
-> **Note:** The original NJEMU used Makefile-based builds. The modern CMake system (documented above) is recommended, but this legacy information is preserved for reference.
-
-### Original Build Environment
-
-- **PSPSDK 0.11.2 + MSYS**
-
-### Makefile Configuration
-
-Before compiling, edit the Makefile to configure build targets. Lines starting with `#` are disabled; remove `#` to enable.
-
-#### Build Targets
-
-| Option | Description |
-|--------|-------------|
-| `BUILD_CPS1 = 1` | Compile CPS1PSP |
-| `BUILD_CPS2 = 1` | Compile CPS2PSP |
-| `BUILD_MVS = 1` | Compile MVSPSP |
-| `BUILD_NCDZ = 1` | Compile NCDZPSP |
-
-#### Build Options
-
-| Option | Description |
-|--------|-------------|
-| `KERNEL_MODE = 1` | Compile for FW 1.5 kernel |
-| `ADHOC = 1` | Enable AdHoc multiplayer (not supported by NCDZPSP) |
-| `SAVE_STATE = 1` | Enable save state/load functionality |
-| `COMMAND_LIST = 1` | Enable command list (move list) display |
-| `RELEASE = 1` | Release build (code within `#if RELEASE ~ #endif` is enabled) |
-
-#### Version Settings
-
-| Option | Description |
-|--------|-------------|
-| `VERSION_MAJOR = 2` | Major version number (for large-scale updates) |
-| `VERSION_MINOR = 2` | Minor version number (even = stable, odd = development) |
-| `VERSION_BUILD = 0` | Build number (for minor bug fixes) |
-
-> **Note:** Version numbering follows the pattern where the next release after v1.0 would be v1.2 (even numbers for stable releases).
-
-### SystemButtons.prx
-
-SystemButtons.prx is a PRX module that reads system button input in kernel mode via a dedicated thread.
-
-**Building:**
-1. Navigate to the `systembutton_prx` directory
-2. Run `make`
-3. Copy `systembutton.prx` to the same directory as `EBOOT.PBP`
-
----
-
 ## Platform-Specific Build Instructions
 
 ### PSP (PlayStation Portable)
@@ -507,7 +454,7 @@ Replace `{TARGET}` with one of: `CPS1`, `CPS2`, `MVS`, or `NCDZ`.
 3. Build the project:
 
 ```bash
-make
+cmake --build . --parallel
 ```
 
 #### Example: Building CPS1 for PSP
@@ -523,14 +470,20 @@ cmake -DPLATFORM="PSP" \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       -DTARGET=CPS1 \
       ..
-make
+cmake --build . --parallel
 ```
 
 #### Output
 
 After a successful build, you'll find the following files in the build directory:
 - `EBOOT.PBP` - The main executable for PSP
+  - The PBP embeds the target-specific XMB icon from `data/{target}.png`.
+  - Its XMB title includes the target and NJEMU version (for example, `MVS 2.4 for PSP`).
 - Resource entries are staged directly in the build root. Large/read-only assets are **linked** back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Set `-DCOPY_RESOURCES=ON` to force a full copy.
+
+#### SystemButtons.prx
+
+Enable `-DSYSTEM_BUTTONS=ON` when configuring a PSP build to build the kernel-mode system-button helper with CMake. The build compiles `SystemButtons.prx`, links the matching import stub into NJEMU, and installs the PRX next to `EBOOT.PBP`. No separate Makefile build is required.
 
 #### Configuring the Game (without GUI)
 

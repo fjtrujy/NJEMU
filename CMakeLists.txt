@@ -92,6 +92,7 @@ if (RELEASE)
 endif()
 
 if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
+    enable_language(ASM)
     add_definitions(-DSYSTEM_BUTTONS=1)
 endif()
 
@@ -396,6 +397,12 @@ if (ADHOC AND PLATFORM STREQUAL "PSP")
     )
 endif()
 
+if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
+    set(OS_SRC ${OS_SRC}
+        psp/SystemButtons.S
+    )
+endif()
+
 # CPU source files
 include_directories(
     src/cpu/m68000
@@ -607,6 +614,11 @@ list(TRANSFORM ALL_SRC PREPEND "src/")
 add_executable(${TARGET}
     ${ALL_SRC}
 )
+
+if (SYSTEM_BUTTONS AND PLATFORM STREQUAL "PSP")
+    add_subdirectory(systembuttons_prx)
+    add_dependencies(${TARGET} SystemButtons)
+endif()
 
 # Keep miniz's usage requirements local to the ZIP implementation. Public
 # domain headers deliberately do not expose miniz types.
@@ -854,12 +866,14 @@ endif()
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
     set(BUILD_PRX ON)
+    set(PSP_EBOOT_ICON "${CMAKE_SOURCE_DIR}/data/${TARGET_LOWER}.png")
     create_pbp_file(
         TARGET ${TARGET}
-        ICON_PATH NULL
+        ICON_PATH "${PSP_EBOOT_ICON}"
         BACKGROUND_PATH NULL
         PREVIEW_PATH NULL
-        TITLE "${TARGET}"
+        TITLE "${TARGET} ${VERSION_STR} for PSP"
+        VERSION "${VERSION_STR}"
         MEMSIZE 1
     )
 endif()
