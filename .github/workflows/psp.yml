@@ -66,7 +66,7 @@ jobs:
     # reached the latest stable PSP image.
     container: ghcr.io/pspdev/pspdev:develop
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install dependencies
       run: |
@@ -116,7 +116,7 @@ jobs:
 
     - name: Upload artifacts
       if: ${{ success() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/
