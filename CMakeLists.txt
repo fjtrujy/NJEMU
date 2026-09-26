@@ -259,10 +259,9 @@ set(COMMON_SRC
 find_package(miniz 3.1.2 CONFIG QUIET)
 if (TARGET miniz::miniz)
     set(NJEMU_MINIZ_TARGET miniz::miniz)
-elseif (PLATFORM STREQUAL "DESKTOP")
-    # Desktop development/CI can obtain the pinned dependency directly when
-    # the host does not provide a miniz CMake package. Console toolchains must
-    # provide their native miniz package instead.
+elseif (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP")
+    # Desktop development/CI and PSP builds can obtain the pinned dependency
+    # directly when the host/toolchain package is not available yet.
     include(FetchContent)
     set(BUILD_EXAMPLES OFF CACHE BOOL "Build miniz examples" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "Build miniz tests" FORCE)
@@ -283,6 +282,7 @@ elseif (PLATFORM STREQUAL "DESKTOP")
         endif()
     endif()
     set(NJEMU_MINIZ_TARGET miniz)
+    set(NJEMU_MINIZ_FETCHED TRUE)
 else()
     message(FATAL_ERROR "miniz 3.1.2 is required by NJEMU on ${PLATFORM}")
 endif()
@@ -603,6 +603,10 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
+if(NJEMU_MINIZ_FETCHED)
+    add_dependencies(${TARGET} ${NJEMU_MINIZ_TARGET})
+endif()
+
 # Keep miniz's usage requirements local to the ZIP implementation. Public
 # domain headers deliberately do not expose miniz types.
 set_source_files_properties(
@@ -883,6 +887,9 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         target_link_libraries(resource_source_tests PRIVATE
             "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
         )
+        if(NJEMU_MINIZ_FETCHED)
+            add_dependencies(resource_source_tests ${NJEMU_MINIZ_TARGET})
+        endif()
         add_test(NAME resource_source_tests COMMAND resource_source_tests)
     endif()
 
@@ -906,6 +913,9 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     target_link_libraries(zip_archive_tests PRIVATE
         "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
     )
+    if(NJEMU_MINIZ_FETCHED)
+        add_dependencies(zip_archive_tests ${NJEMU_MINIZ_TARGET})
+    endif()
     add_test(NAME zip_archive_tests COMMAND zip_archive_tests)
 
     add_executable(ui_layout_tests

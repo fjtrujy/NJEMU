@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <zlib.h>
 #include "emumain.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
@@ -448,7 +449,7 @@ static void check_neocd_bios(void)
 		read(fd, temp_mem, 0x80000);
 		close(fd);
 
-		if (mz_crc32(MZ_CRC32_INIT, temp_mem, 0x80000) != 0xdf9de490)
+		if (crc32(0, temp_mem, 0x80000) != 0xdf9de490)
 			bios_error = 2;
 	}
 	else bios_error = 1;

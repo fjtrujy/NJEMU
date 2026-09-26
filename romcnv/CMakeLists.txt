@@ -114,6 +114,7 @@ else()
         endif()
     endif()
     set(ROMCNV_MINIZ_TARGET miniz)
+    set(ROMCNV_MINIZ_FETCHED TRUE)
 endif()
 
 get_target_property(ROMCNV_MINIZ_INCLUDE_DIRS ${ROMCNV_MINIZ_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
@@ -157,6 +158,10 @@ set(BINARY_TARGET "${PROJECT_LOWER}_${TARGET_LOWER}")
 add_executable(${BINARY_TARGET}
     ${ALL_SRC}
 )
+
+if(ROMCNV_MINIZ_FETCHED)
+    add_dependencies(${BINARY_TARGET} ${ROMCNV_MINIZ_TARGET})
+endif()
 
 set_source_files_properties(
     src/zip_reader.c
