@@ -2,18 +2,19 @@
 
 	ui_draw_driver.h
 
-	Cross-platform UI drawing driver interface.
+	Cross-platform UI texture/presentation adapter.
 
-	All 2D GUI rendering (text, icons, lines, rectangles, shadows) goes
-	through this driver so that platform-specific GPU code is isolated.
+	Common UI semantics live in ui_draw.c and low-level drawing is owned by
+	video_driver_t. This adapter only owns platform-specific UI texture storage,
+	presentation policy/capabilities, and texture lifetime synchronization.
 
 ******************************************************************************/
 
 #ifndef COMMON_UI_DRAW_DRIVER_H
 #define COMMON_UI_DRAW_DRIVER_H
 
+#include <stdbool.h>
 #include <stdint.h>
-#include "common/font_t.h"
 
 /*------------------------------------------------------
 	Texture slot identifiers
@@ -35,14 +36,15 @@ enum {
 	UI_PIXFMT_5551             /* 16-bit RGBA 5551 */
 };
 
-/*------------------------------------------------------
-	Gradient direction
-------------------------------------------------------*/
-
-enum {
-	UI_GRADIENT_HORIZONTAL = 0,
-	UI_GRADIENT_VERTICAL
-};
+typedef struct ui_texture_draw
+{
+	void *texture;
+	int format;
+	int swizzled;
+	int width;
+	int height;
+	int stride;
+} ui_texture_draw_t;
 
 /*------------------------------------------------------
 	Backend capabilities
@@ -118,69 +120,14 @@ typedef struct ui_draw_driver
 	 */
 	uint16_t *(*getTextureBasePtr)(void *data, int slot);
 
-	/*
-	 * drawSprite — Draw a textured rectangle from a texture slot.
-	 *   slot:     UI_TEXTURE_* enum
-	 *   su,sv:    source top-left in texture
-	 *   sw,sh:    source size
-	 *   dx,dy:    destination top-left on screen
-	 *   dw,dh:    destination size (usually == sw,sh)
-	 *   color:    tint color (0xRRGGBBAA), 0xFFFFFFFF = no tint
-	 *   blend:    non-zero to enable alpha blending
-	 */
-	void (*drawSprite)(void *data, int slot,
-	                   int su, int sv, int sw, int sh,
-	                   int dx, int dy, int dw, int dh,
-	                   uint32_t color, int blend);
+	/* Resolve a UI texture slot into the native texture consumed by the video
+	 * backend. Backends may upload/flush mutable staging data here. */
+	bool (*prepareTextureDraw)(void *data, int slot,
+		int su, int sv, int sw, int sh, ui_texture_draw_t *draw);
 
-	/*
-	 * drawLine — Draw a single-pixel line.
-	 *   color: 0xRRGGBBAA
-	 */
-	void (*drawLine)(void *data,
-	                 int x1, int y1, int x2, int y2,
-	                 uint32_t color);
-
-	/*
-	 * drawLineGradient — Draw a line with per-endpoint colors.
-	 *   color1, color2: 0xRRGGBBAA
-	 */
-	void (*drawLineGradient)(void *data,
-	                         int x1, int y1, int x2, int y2,
-	                         uint32_t color1, uint32_t color2);
-
-	/*
-	 * drawRect — Draw an unfilled rectangle outline (1px border).
-	 *   color: 0xRRGGBBAA
-	 */
-	void (*drawRect)(void *data,
-	                 int x, int y, int w, int h,
-	                 uint32_t color);
-
-	/*
-	 * fillRect — Draw a filled rectangle.
-	 *   color: 0xRRGGBBAA
-	 */
-	void (*fillRect)(void *data,
-	                 int x, int y, int w, int h,
-	                 uint32_t color);
-
-	/*
-	 * fillRectGradient — Draw a gradient-filled rectangle.
-	 *   color1:    start color (0xRRGGBBAA)
-	 *   color2:    end color
-	 *   direction: UI_GRADIENT_HORIZONTAL or UI_GRADIENT_VERTICAL
-	 */
-	void (*fillRectGradient)(void *data,
-	                         int x, int y, int w, int h,
-	                         uint32_t color1, uint32_t color2,
-	                         int direction);
-
-	/*
-	 * setScissor — Set the clipping rectangle for subsequent draws.
-	 *   Pass full screen dimensions to disable clipping.
-	 */
-	void (*setScissor)(void *data, int x, int y, int w, int h);
+	/* Complete any synchronization required after the video backend enqueues the
+	 * draw (for example PSP mutable scratch or the PS2 glyph ring). */
+	void (*finishTextureDraw)(void *data, int slot);
 
 } ui_draw_driver_t;
 

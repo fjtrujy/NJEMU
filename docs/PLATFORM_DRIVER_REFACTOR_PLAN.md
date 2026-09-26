@@ -510,7 +510,7 @@ Validation (2026-09-26):
 - translation source/pack validation passes with the existing V2 schema hash;
 - `git diff --check` is clean and no resource file is part of the change.
 
-### D6 - Collapse overlapping UI drawing abstractions
+### D6 - Collapse overlapping UI drawing abstractions [COMPLETE]
 
 Define a single ownership model for low-level 2D primitives. Preferred direction:
 
@@ -526,6 +526,42 @@ Acceptance:
 - one primitive API, not two parallel ones;
 - GUI builds pass on PSP/PS2/Desktop;
 - no loss of PS2 full-refresh/sharpness behaviour or PSP batching behaviour.
+
+Result (2026-09-26):
+- made `video_driver_t` the single owner of low-level UI sprite/line/rectangle,
+  gradient, fill, and clipping primitives; common `ui_draw.c` now performs
+  layout/semantic work and submits those primitives directly to the video
+  backend;
+- reduced `ui_draw_driver_t` to UI presentation policy/capabilities plus texture
+  storage, upload, native-texture resolution, and draw-lifetime synchronization;
+  the former parallel primitive API and all PSP/PS2 forwarding wrappers are
+  gone;
+- moved Desktop's SDL primitive implementation into `desktop_video.c`, matching
+  the same ownership model as PSP and PS2 instead of keeping Desktop as a special
+  second renderer;
+- preserved backend-specific texture lifetime behaviour behind
+  `prepareTextureDraw()` / `finishTextureDraw()`: Desktop lazily refreshes SDL
+  textures, PSP flushes/synchronizes its mutable font scratch, and PS2 retains
+  its batched glyph ring plus oversized-scratch synchronization path;
+- moved UI clipping to the video backend with explicit x/y/width/height
+  semantics, while retaining the emulator renderer's existing edge-coordinate
+  scissor callback separately;
+- removed the unused historical UI sprite tint parameter and clarified that the
+  remaining UI driver is a texture/presentation adapter rather than a second
+  low-level renderer;
+- verified a fresh PSP MVS `GUI=OFF` Release build against pre-D6 `HEAD`: PRX
+  size changes from 891242 to 891162 bytes and PBP from 900511 to 900431 bytes,
+  so consolidating primitive ownership does not impose a no-GUI size penalty.
+
+Validation (2026-09-26):
+- Desktop CPS1/CPS2/MVS/NCDZ GUI-OFF builds pass and Desktop MVS GUI-ON passes;
+- Desktop MVS GUI build passes its full 14/14 CTest suite and the 30-frame MVS
+  runtime smoke passes;
+- PSP MVS GUI ON/OFF builds pass and generate EBOOT.PBP;
+- PS2 MVS GUI ON/OFF builds pass;
+- no draw primitive remains in `ui_draw_driver_t` or the three platform UI
+  texture adapters, and `src/common/` remains free of platform SDK includes;
+- `git diff --check` is clean and no resource file is part of the change.
 
 ### D7 - Unify sprite renderers behind portable draw data
 
@@ -594,7 +630,9 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D6. Platform selection, platform services, input, and power now have
-stable capability-oriented contracts. The next duplicated boundary is UI drawing:
-collapse the overlapping `ui_draw_driver_t`/`video_driver_t` primitive APIs while
-preserving each backend's texture-lifetime and batching semantics.
+Proceed with D7 one target at a time, beginning with NCDZ as planned. Define the
+smallest portable sprite/draw-batch contract that can represent the current PSP,
+PS2, and Desktop NCDZ paths without exposing native SDK objects. Preserve atlas,
+palette, clipping, and batching policy in target-common code, then remove
+`ncdz/{psp,ps2,desktop}_sprite.c` only after cross-platform equivalence is
+validated.

@@ -159,10 +159,8 @@ static uint16_t *psp_ui_draw_getTextureBasePtr(void *data, int slot)
 	return NULL;
 }
 
-static void psp_ui_draw_drawSprite(void *data, int slot,
-	int su, int sv, int sw, int sh,
-	int dx, int dy, int dw, int dh,
-	uint32_t color, int blend)
+static bool psp_ui_draw_prepareTextureDraw(void *data, int slot,
+	int su, int sv, int sw, int sh, ui_texture_draw_t *draw)
 {
 	psp_ui_data_t *d = (psp_ui_data_t *)data;
 	uint16_t *tex = NULL;
@@ -172,7 +170,9 @@ static void psp_ui_draw_drawSprite(void *data, int slot,
 	int tex_height = PSP_UI_FONT_TEXTURE_HEIGHT;
 	int tex_stride = BUF_WIDTH;
 
-	(void)color;
+	(void)su; (void)sv; (void)sw; (void)sh;
+	if (!draw)
+		return false;
 
 	switch (slot)
 	{
@@ -204,73 +204,26 @@ static void psp_ui_draw_drawSprite(void *data, int slot,
 		sceGuTexFlush();
 	}
 
-	video_driver->drawUISprite(d->video_data, tex, tex_format, swizzled,
-	                           tex_width, tex_height, tex_stride,
-	                           su, sv, sw, sh, dx, dy, dw, dh, blend);
+	if (!tex)
+		return false;
 
+	draw->texture = tex;
+	draw->format = tex_format;
+	draw->swizzled = swizzled;
+	draw->width = tex_width;
+	draw->height = tex_height;
+	draw->stride = tex_stride;
+	return true;
+}
+
+static void psp_ui_draw_finishTextureDraw(void *data, int slot)
+{
+	psp_ui_data_t *d = (psp_ui_data_t *)data;
 	/* UI_TEXTURE_FONT is a single mutable scratch atlas.  Its pixels are
 	 * overwritten immediately by the next proportional glyph, so the queued GE
 	 * draw must consume them first.  Static UI atlases remain fully batched. */
 	if (slot == UI_TEXTURE_FONT)
 		psp_video_sync_ui_scratch(d->video_data);
-}
-
-static void psp_ui_draw_drawLine(void *data,
-	int x1, int y1, int x2, int y2,
-	uint32_t color)
-{
-	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	video_driver->drawUILine(d->video_data, x1, y1, x2, y2, color);
-}
-
-static void psp_ui_draw_drawLineGradient(void *data,
-	int x1, int y1, int x2, int y2,
-	uint32_t color1, uint32_t color2)
-{
-	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	video_driver->drawUILineGradient(d->video_data, x1, y1, x2, y2, color1, color2);
-}
-
-static void psp_ui_draw_drawRect(void *data,
-	int x, int y, int w, int h,
-	uint32_t color)
-{
-	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	video_driver->drawUIRect(d->video_data, x, y, w, h, color);
-}
-
-static void psp_ui_draw_fillRect(void *data,
-	int x, int y, int w, int h,
-	uint32_t color)
-{
-	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	video_driver->fillUIRect(d->video_data, x, y, w, h, color);
-}
-
-static void psp_ui_draw_fillRectGradient(void *data,
-	int x, int y, int w, int h,
-	uint32_t color1, uint32_t color2,
-	int direction)
-{
-	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	video_driver->fillUIRectGradient(d->video_data, x, y, w, h, color1, color2, direction);
-}
-
-static void psp_ui_draw_setScissor(void *data, int x, int y, int w, int h)
-{
-	(void)data;
-
-	/*
-	 * On PSP, scissor is set per-draw-call in the sceGu command list.
-	 * This driver-level setScissor is a hint; the actual sceGuScissor
-	 * calls happen inside the individual draw functions. For now this
-	 * is a no-op since the PSP draw functions already manage scissor.
-	 *
-	 * TODO: If we want tight clipping (like small_font_print and
-	 * draw_boxshadow), we need to cache the scissor rect and apply
-	 * it in drawSprite. For now, drawSprite wraps its own sceGuScissor.
-	 */
-	(void)x; (void)y; (void)w; (void)h;
 }
 
 
@@ -291,11 +244,6 @@ const ui_draw_driver_t psp_ui_draw_driver = {
 	psp_ui_draw_uploadTexture,
 	psp_ui_draw_clearTexture,
 	psp_ui_draw_getTextureBasePtr,
-	psp_ui_draw_drawSprite,
-	psp_ui_draw_drawLine,
-	psp_ui_draw_drawLineGradient,
-	psp_ui_draw_drawRect,
-	psp_ui_draw_fillRect,
-	psp_ui_draw_fillRectGradient,
-	psp_ui_draw_setScissor,
+	psp_ui_draw_prepareTextureDraw,
+	psp_ui_draw_finishTextureDraw,
 };

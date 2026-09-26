@@ -102,16 +102,16 @@ void show_background(void)
 		if (ui_layout_uses_output_transform())
 		{
 			if (viewport.top > 0)
-				ui_draw_driver->fillRect(ui_draw_data, 0, 0,
+				video_driver->fillUIRect(video_data, 0, 0,
 					layout->output_width, viewport.top, black);
 			if (viewport.bottom < layout->output_height)
-				ui_draw_driver->fillRect(ui_draw_data, 0, viewport.bottom,
+				video_driver->fillUIRect(video_data, 0, viewport.bottom,
 					layout->output_width, layout->output_height - viewport.bottom, black);
 			if (viewport.left > 0)
-				ui_draw_driver->fillRect(ui_draw_data, 0, viewport.top,
+				video_driver->fillUIRect(video_data, 0, viewport.top,
 					viewport.left, layout->viewport_height, black);
 			if (viewport.right < layout->output_width)
-				ui_draw_driver->fillRect(ui_draw_data, viewport.right, viewport.top,
+				video_driver->fillUIRect(video_data, viewport.right, viewport.top,
 					layout->output_width - viewport.right, layout->viewport_height, black);
 		}
 	}

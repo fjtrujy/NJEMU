@@ -56,6 +56,8 @@ typedef struct ps2_ui_data {
 	ps2_ui_texture_t textures[UI_TEXTURE_MAX];
 	ps2_ui_font_ring_entry_t font_ring[PS2_UI_FONT_RING_SIZE];
 	int font_ring_next;
+	int prepared_font_ring;
+	int prepared_font_scratch;
 } ps2_ui_data_t;
 
 static ps2_ui_data_t ps2_ui;
@@ -439,30 +441,29 @@ static uint16_t *ps2_ui_draw_getTextureBasePtr(void *data, int slot)
 	Drawing primitives (delegate to video_driver)
 ------------------------------------------------------*/
 
-static void ps2_ui_draw_drawSprite(void *data, int slot,
-	int su, int sv, int sw, int sh,
-	int dx, int dy, int dw, int dh,
-	uint32_t color, int blend)
+static bool ps2_ui_draw_prepareTextureDraw(void *data, int slot,
+	int su, int sv, int sw, int sh, ui_texture_draw_t *draw)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	ps2_ui_texture_t *tex;
 	GSTEXTURE *gst;
 	GSGLOBAL *gsGlobal = d->gsGlobal;
 
-	if (slot < 0 || slot >= UI_TEXTURE_MAX || !gsGlobal)
-		return;
+	if (!draw || slot < 0 || slot >= UI_TEXTURE_MAX || !gsGlobal)
+		return false;
 
+	d->prepared_font_ring = 0;
+	d->prepared_font_scratch = 0;
 	tex = &d->textures[slot];
 	gst = &tex->texture;
 	if (!gst->Vram || !tex->buffer || !tex->upload_buffer || !gst->Mem)
-		return;
+		return false;
 
 	if (slot == UI_TEXTURE_FONT && su == 0 && sv == 0 &&
 	    sw > 0 && sh > 0 &&
 	    sw <= PS2_UI_FONT_RING_WIDTH && sh <= PS2_UI_FONT_RING_HEIGHT)
 	{
-		ps2_ui_font_ring_entry_t *entry =
-			&d->font_ring[d->font_ring_next];
+		ps2_ui_font_ring_entry_t *entry = &d->font_ring[d->font_ring_next];
 		size_t upload_size = (size_t)sw * sh * sizeof(uint32_t);
 
 		expand_region_to_upload(tex, entry->upload_buffer, sw, sh);
@@ -472,24 +473,14 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 			sw, sh, entry->texture.Vram,
 			entry->texture.PSM, entry->texture.TBW, GS_CLUT_NONE);
 
-		(void)color;
-		video_driver->drawUISprite(d->video_data, &entry->texture,
-			entry->texture.PSM, 0,
-			entry->texture.Width, entry->texture.Height,
-			entry->texture.Width,
-			su, sv, sw, sh, dx, dy, dw, dh, blend);
-
-		d->font_ring_next++;
-		if (d->font_ring_next == PS2_UI_FONT_RING_SIZE) {
-			/* Submit a whole glyph batch at once. gsKit will wait for the
-			 * previous batch's FINISH before these ring slots are reused; only
-			 * the much shorter GIF DMA must complete before CPU buffers can be
-			 * overwritten. */
-			gsKit_queue_exec(gsGlobal);
-			dmaKit_wait_fast();
-			d->font_ring_next = 0;
-		}
-		return;
+		draw->texture = &entry->texture;
+		draw->format = entry->texture.PSM;
+		draw->swizzled = 0;
+		draw->width = entry->texture.Width;
+		draw->height = entry->texture.Height;
+		draw->stride = entry->texture.Width;
+		d->prepared_font_ring = 1;
+		return true;
 	}
 
 	/* Lazy upload: any path that mutates the CPU buffer (uploadTexture,
@@ -497,7 +488,7 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 	 * 16-bit ABGR4444/1555 staging buffer into 32-bit ABGR8888 (PS2 has
 	 * no native 4444 format) and push it over GIF. */
 	/* UI_TEXTURE_FONT is a scratch texture: common/ui_draw.c obtains its CPU
-	 * pointer once and rewrites it directly for every glyph/shadow.  There is
+	 * pointer once and rewrites it directly for every glyph/shadow. There is
 	 * no callback that can invalidate vram_valid after those writes, so it must
 	 * be uploaded on every draw (same policy as the Desktop backend). */
 	if (tex->buffer_valid && (!tex->vram_valid || slot == UI_TEXTURE_FONT))
@@ -515,9 +506,9 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 		}
 		else
 		{
+			size_t upload_size;
 			expand_buffer_to_upload(tex);
-			size_t upload_size =
-				gsKit_texture_size_ee(gst->Width, gst->Height, gst->PSM);
+			upload_size = gsKit_texture_size_ee(gst->Width, gst->Height, gst->PSM);
 			SyncDCache(gst->Mem, (uint8_t *)gst->Mem + upload_size);
 			gsKit_texture_send_inline(gsGlobal, gst->Mem,
 				gst->Width, gst->Height, gst->Vram,
@@ -526,88 +517,50 @@ static void ps2_ui_draw_drawSprite(void *data, int slot,
 		tex->vram_valid = 1;
 	}
 
-	/* The texture itself carries the final font/icon colors. */
-	(void)color;
-	video_driver->drawUISprite(d->video_data, gst, gst->PSM, 0,
-		gst->Width, gst->Height, gst->Width,
-		su, sv, sw, sh, dx, dy, dw, dh, blend);
-
-	/* Oversized scratch draws (primarily the NJEMU logo) still use the legacy
-	 * single texture, so flush before common/ui_draw.c rewrites that same upload
-	 * buffer. Normal text takes the batched ring path above. */
-	if (slot == UI_TEXTURE_FONT) {
-		gsKit_queue_exec(gsGlobal);
-		dmaKit_wait_fast();
-	}
+	draw->texture = gst;
+	draw->format = gst->PSM;
+	draw->swizzled = 0;
+	draw->width = gst->Width;
+	draw->height = gst->Height;
+	draw->stride = gst->Width;
+	d->prepared_font_scratch = slot == UI_TEXTURE_FONT;
+	return true;
 }
 
-static void ps2_ui_draw_drawLine(void *data,
-	int x1, int y1, int x2, int y2,
-	uint32_t color)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	video_driver->drawUILine(d->video_data, x1, y1, x2, y2, color);
-}
-
-static void ps2_ui_draw_drawLineGradient(void *data,
-	int x1, int y1, int x2, int y2,
-	uint32_t color1, uint32_t color2)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	video_driver->drawUILineGradient(d->video_data, x1, y1, x2, y2, color1, color2);
-}
-
-static void ps2_ui_draw_drawRect(void *data,
-	int x, int y, int w, int h,
-	uint32_t color)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	video_driver->drawUIRect(d->video_data, x, y, w, h, color);
-}
-
-static void ps2_ui_draw_fillRect(void *data,
-	int x, int y, int w, int h,
-	uint32_t color)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	video_driver->fillUIRect(d->video_data, x, y, w, h, color);
-}
-
-static void ps2_ui_draw_fillRectGradient(void *data,
-	int x, int y, int w, int h,
-	uint32_t color1, uint32_t color2,
-	int direction)
-{
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
-	video_driver->fillUIRectGradient(d->video_data, x, y, w, h, color1, color2, direction);
-}
-
-static void ps2_ui_draw_setScissor(void *data, int x, int y, int w, int h)
+static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	GSGLOBAL *gsGlobal = d->gsGlobal;
-	int left, top, right, bottom;
 
-	if (!gsGlobal || w <= 0 || h <= 0)
+	if (slot != UI_TEXTURE_FONT || !gsGlobal)
 		return;
 
-	/* UI rectangles use x/y/width/height while the GS SCISSOR register uses
-	 * inclusive min/max coordinates. */
-	left = x < 0 ? 0 : x;
-	top = y < 0 ? 0 : y;
-	right = x + w - 1;
-	bottom = y + h - 1;
-	if (right >= ui_layout_get()->output_width)
-		right = ui_layout_get()->output_width - 1;
-	if (bottom >= ui_layout_get()->output_height)
-		bottom = ui_layout_get()->output_height - 1;
-	if (left > right || top > bottom)
-		return;
+	if (d->prepared_font_ring)
+	{
+		d->font_ring_next++;
+		if (d->font_ring_next == PS2_UI_FONT_RING_SIZE)
+		{
+			/* Submit a whole glyph batch at once. gsKit will wait for the
+			 * previous batch's FINISH before these ring slots are reused; only
+			 * the much shorter GIF DMA must complete before CPU buffers can be
+			 * overwritten. */
+			gsKit_queue_exec(gsGlobal);
+			dmaKit_wait_fast();
+			d->font_ring_next = 0;
+		}
+	}
+	else if (d->prepared_font_scratch)
+	{
+		/* Oversized scratch draws (primarily the NJEMU logo) still use the legacy
+		 * single texture, so flush before common/ui_draw.c rewrites that same upload
+		 * buffer. Normal text takes the batched ring path above. */
+		gsKit_queue_exec(gsGlobal);
+		dmaKit_wait_fast();
+	}
 
-	gsKit_set_scissor(gsGlobal,
-		GS_SETREG_SCISSOR(left, right, top, bottom));
+	d->prepared_font_ring = 0;
+	d->prepared_font_scratch = 0;
 }
-
 
 /******************************************************************************
 	Driver instance
@@ -622,11 +575,6 @@ const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_uploadTexture,
 	ps2_ui_draw_clearTexture,
 	ps2_ui_draw_getTextureBasePtr,
-	ps2_ui_draw_drawSprite,
-	ps2_ui_draw_drawLine,
-	ps2_ui_draw_drawLineGradient,
-	ps2_ui_draw_drawRect,
-	ps2_ui_draw_fillRect,
-	ps2_ui_draw_fillRectGradient,
-	ps2_ui_draw_setScissor,
+	ps2_ui_draw_prepareTextureDraw,
+	ps2_ui_draw_finishTextureDraw,
 };

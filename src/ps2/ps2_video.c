@@ -1801,6 +1801,30 @@ static void ps2_fillUIRectGradient(void *data,
 	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
+static void ps2_setUIScissor(void *data, int x, int y, int w, int h)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSGLOBAL *gsGlobal = ps2 ? ps2->gsGlobal : NULL;
+	int left, top, right, bottom;
+
+	if (!gsGlobal || w <= 0 || h <= 0)
+		return;
+
+	left = x < 0 ? 0 : x;
+	top = y < 0 ? 0 : y;
+	right = x + w - 1;
+	bottom = y + h - 1;
+	if (right >= gsGlobal->Width)
+		right = gsGlobal->Width - 1;
+	if (bottom >= gsGlobal->Height)
+		bottom = gsGlobal->Height - 1;
+	if (left > right || top > bottom)
+		return;
+
+	gsKit_set_scissor(gsGlobal,
+		GS_SETREG_SCISSOR(left, right, top, bottom));
+}
+
 video_driver_t video_ps2 = {
 	"ps2",
 	ps2_init,
@@ -1838,4 +1862,5 @@ video_driver_t video_ps2 = {
 	ps2_drawUIRect,
 	ps2_fillUIRect,
 	ps2_fillUIRectGradient,
+	ps2_setUIScissor,
 };

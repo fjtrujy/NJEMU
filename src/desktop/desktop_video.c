@@ -537,6 +537,166 @@ static void desktop_clearColorBuffer(void *data) {
 	// No-op: color buffer clear within scissor not needed on desktop yet
 }
 
+/*--------------------------------------------------------
+	2D UI Drawing Primitives
+--------------------------------------------------------*/
+
+static void desktop_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+	int tex_width, int tex_height, int tex_stride,
+	int su, int sv, int sw, int sh,
+	int dx, int dy, int dw, int dh, int blend)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	SDL_Texture *texture = (SDL_Texture *)tex;
+	SDL_Rect src_rect = {su, sv, sw, sh};
+	SDL_Rect dst_rect = {dx, dy, dw, dh};
+
+	(void)tex_format;
+	(void)tex_swizzled;
+	(void)tex_width;
+	(void)tex_height;
+	(void)tex_stride;
+	if (!desktop || !desktop->renderer || !texture)
+		return;
+
+	SDL_SetTextureBlendMode(texture, blend ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
+	SDL_SetTextureColorMod(texture, 255, 255, 255);
+	SDL_SetTextureAlphaMod(texture, 255);
+	SDL_RenderCopy(desktop->renderer, texture, &src_rect, &dst_rect);
+}
+
+static void desktop_drawUILine(void *data,
+	int x1, int y1, int x2, int y2, uint32_t color)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+	uint8_t a = (color >> 24) & 0xFF;
+
+	if (!desktop || !desktop->renderer)
+		return;
+	SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+	SDL_RenderDrawLine(desktop->renderer, x1, y1, x2, y2);
+}
+
+static void desktop_drawUILineGradient(void *data,
+	int x1, int y1, int x2, int y2, uint32_t color1, uint32_t color2)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	int dx = x2 - x1;
+	int dy = y2 - y1;
+	int abs_dx = dx > 0 ? dx : -dx;
+	int abs_dy = dy > 0 ? dy : -dy;
+	int steps = abs_dx > abs_dy ? abs_dx : abs_dy;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	int i;
+
+	if (!desktop || !desktop->renderer || steps == 0)
+		return;
+
+	for (i = 0; i <= steps; i++) {
+		float t = (float)i / steps;
+		int x = x1 + (int)(dx * t);
+		int y = y1 + (int)(dy * t);
+		uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
+		uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
+		uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+		uint8_t a = (uint8_t)(a1 + (a2 - a1) * t);
+
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		SDL_RenderDrawPoint(desktop->renderer, x, y);
+	}
+}
+
+static void desktop_drawUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	SDL_Rect rect = {x, y, w, h};
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+	uint8_t a = (color >> 24) & 0xFF;
+
+	if (!desktop || !desktop->renderer)
+		return;
+	SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+	SDL_RenderDrawRect(desktop->renderer, &rect);
+}
+
+static void desktop_fillUIRect(void *data,
+	int x, int y, int w, int h, uint32_t color)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	SDL_Rect rect = {x, y, w, h};
+	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t g = (color >> 8) & 0xFF;
+	uint8_t b = color & 0xFF;
+	uint8_t a = (color >> 24) & 0xFF;
+
+	if (!desktop || !desktop->renderer)
+		return;
+	SDL_SetRenderDrawBlendMode(desktop->renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+	SDL_RenderFillRect(desktop->renderer, &rect);
+}
+
+static void desktop_fillUIRectGradient(void *data,
+	int x, int y, int w, int h, uint32_t color1, uint32_t color2, int direction)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	int lines = direction == 0 ? w : h;
+	int i;
+
+	if (!desktop || !desktop->renderer || w <= 0 || h <= 0 || lines <= 0)
+		return;
+	if (lines == 1) {
+		desktop_fillUIRect(data, x, y, w, h, color1);
+		return;
+	}
+
+	SDL_SetRenderDrawBlendMode(desktop->renderer, SDL_BLENDMODE_BLEND);
+	for (i = 0; i < lines; i++) {
+		float t = (float)i / (lines - 1);
+		uint8_t r = (uint8_t)(r1 + (r2 - r1) * t);
+		uint8_t g = (uint8_t)(g1 + (g2 - g1) * t);
+		uint8_t b = (uint8_t)(b1 + (b2 - b1) * t);
+		uint8_t a = (uint8_t)(a1 + (a2 - a1) * t);
+
+		SDL_SetRenderDrawColor(desktop->renderer, r, g, b, a);
+		if (direction == 0)
+			SDL_RenderDrawLine(desktop->renderer, x + i, y, x + i, y + h - 1);
+		else
+			SDL_RenderDrawLine(desktop->renderer, x, y + i, x + w - 1, y + i);
+	}
+}
+
+static void desktop_setUIScissor(void *data, int x, int y, int w, int h)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	SDL_Rect scissor = {x, y, w, h};
+
+	if (!desktop || !desktop->renderer)
+		return;
+	SDL_RenderSetClipRect(desktop->renderer, &scissor);
+}
+
 video_driver_t video_desktop = {
 	"desktop",
 	desktop_init,
@@ -568,10 +728,11 @@ video_driver_t video_desktop = {
 	desktop_disableDepthTest,
 	desktop_clearDepthBuffer,
 	desktop_clearColorBuffer,
-	NULL, // drawUISprite
-	NULL, // drawUILine
-	NULL, // drawUILineGradient
-	NULL, // drawUIRect
-	NULL, // fillUIRect
-	NULL, // fillUIRectGradient
+	desktop_drawUISprite,
+	desktop_drawUILine,
+	desktop_drawUILineGradient,
+	desktop_drawUIRect,
+	desktop_fillUIRect,
+	desktop_fillUIRectGradient,
+	desktop_setUIScissor,
 };

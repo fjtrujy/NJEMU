@@ -57,67 +57,19 @@ static uint16_t *null_getTextureBasePtr(void *data, int slot)
 	return NULL;
 }
 
-static void null_drawSprite(void *data, int slot,
-                            int su, int sv, int sw, int sh,
-                            int dx, int dy, int dw, int dh,
-                            uint32_t color, int blend)
+static bool null_prepareTextureDraw(void *data, int slot,
+                                    int su, int sv, int sw, int sh,
+                                    ui_texture_draw_t *draw)
 {
 	(void)data; (void)slot;
 	(void)su; (void)sv; (void)sw; (void)sh;
-	(void)dx; (void)dy; (void)dw; (void)dh;
-	(void)color; (void)blend;
+	(void)draw;
+	return false;
 }
 
-static void null_drawLine(void *data,
-                          int x1, int y1, int x2, int y2,
-                          uint32_t color)
+static void null_finishTextureDraw(void *data, int slot)
 {
-	(void)data;
-	(void)x1; (void)y1; (void)x2; (void)y2;
-	(void)color;
-}
-
-static void null_drawLineGradient(void *data,
-                                  int x1, int y1, int x2, int y2,
-                                  uint32_t color1, uint32_t color2)
-{
-	(void)data;
-	(void)x1; (void)y1; (void)x2; (void)y2;
-	(void)color1; (void)color2;
-}
-
-static void null_drawRect(void *data,
-                          int x, int y, int w, int h,
-                          uint32_t color)
-{
-	(void)data;
-	(void)x; (void)y; (void)w; (void)h;
-	(void)color;
-}
-
-static void null_fillRect(void *data,
-                          int x, int y, int w, int h,
-                          uint32_t color)
-{
-	(void)data;
-	(void)x; (void)y; (void)w; (void)h;
-	(void)color;
-}
-
-static void null_fillRectGradient(void *data,
-                                  int x, int y, int w, int h,
-                                  uint32_t color1, uint32_t color2,
-                                  int direction)
-{
-	(void)data;
-	(void)x; (void)y; (void)w; (void)h;
-	(void)color1; (void)color2; (void)direction;
-}
-
-static void null_setScissor(void *data, int x, int y, int w, int h)
-{
-	(void)data;
-	(void)x; (void)y; (void)w; (void)h;
+	(void)data; (void)slot;
 }
 
 /******************************************************************************
@@ -133,13 +85,8 @@ const ui_draw_driver_t null_ui_draw_driver = {
 	null_uploadTexture,
 	null_clearTexture,
 	null_getTextureBasePtr,
-	null_drawSprite,
-	null_drawLine,
-	null_drawLineGradient,
-	null_drawRect,
-	null_fillRect,
-	null_fillRectGradient,
-	null_setScissor,
+	null_prepareTextureDraw,
+	null_finishTextureDraw,
 };
 
 void *ui_draw_data = NULL;

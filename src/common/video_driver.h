@@ -110,6 +110,11 @@ typedef struct clut_info {
 	uint8_t bank_count;          /* Number of banks (2 for Neo Geo, 1 for CPS) */
 } clut_info_t;
 
+enum {
+	UI_GRADIENT_HORIZONTAL = 0,
+	UI_GRADIENT_VERTICAL
+};
+
 typedef struct video_driver
 {
 	/* Human-readable identifier. */
@@ -161,7 +166,8 @@ typedef struct video_driver
 	void (*clearDepthBuffer)(void *data);
 	void (*clearColorBuffer)(void *data);
 
-	/* 2D UI drawing primitives (used by ui_draw_driver backends) */
+	/* Low-level 2D UI drawing primitives. Common ui_draw.c owns UI semantics and
+	 * the UI texture adapter resolves native texture storage for drawUISprite. */
 	void (*drawUISprite)(void *data, void *tex, int tex_format, int tex_swizzled,
 	                    int tex_width, int tex_height, int tex_stride,
 	                    int su, int sv, int sw, int sh,
@@ -173,6 +179,9 @@ typedef struct video_driver
 	void (*fillUIRect)(void *data, int x, int y, int w, int h, uint32_t color);
 	void (*fillUIRectGradient)(void *data, int x, int y, int w, int h,
 	                          uint32_t color1, uint32_t color2, int direction);
+	/* UI clipping uses x/y/width/height semantics, unlike the emulator scissor
+	 * callback above which uses edge coordinates. */
+	void (*setUIScissor)(void *data, int x, int y, int w, int h);
 
 } video_driver_t;
 

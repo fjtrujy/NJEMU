@@ -1039,6 +1039,17 @@ static void psp_fillUIRectGradient(void *data,
 	sceGuEnable(GU_TEXTURE_2D);
 }
 
+static void psp_setUIScissor(void *data, int x, int y, int w, int h)
+{
+	/* Preserve the historical PSP UI behavior: individual GE draws own their
+	 * clipping state and the higher-level UI scissor hint is not applied. */
+	(void)data;
+	(void)x;
+	(void)y;
+	(void)w;
+	(void)h;
+}
+
 video_driver_t video_psp = {
 	"psp",
 	psp_init,
@@ -1076,4 +1087,5 @@ video_driver_t video_psp = {
 	psp_drawUIRect,
 	psp_fillUIRect,
 	psp_fillUIRectGradient,
+	psp_setUIScissor,
 };

@@ -149,13 +149,20 @@ static const int gauss_fact[12][12] = {
 static void ui_driver_draw_sprite(int slot,
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh,
-	uint32_t color, int blend)
+	int blend)
 {
 	int x, y, w, h;
+	ui_texture_draw_t draw;
 
 	ui_layout_transform_rect(dx, dy, dw, dh, &x, &y, &w, &h);
-	ui_draw_driver->drawSprite(ui_draw_data, slot,
-		su, sv, sw, sh, x, y, w, h, color, blend);
+	if (!ui_draw_driver->prepareTextureDraw(ui_draw_data, slot,
+		su, sv, sw, sh, &draw))
+		return;
+
+	video_driver->drawUISprite(video_data, draw.texture,
+		draw.format, draw.swizzled, draw.width, draw.height, draw.stride,
+		su, sv, sw, sh, x, y, w, h, blend);
+	ui_draw_driver->finishTextureDraw(ui_draw_data, slot);
 }
 
 static void ui_driver_draw_line(int x1, int y1, int x2, int y2, uint32_t color)
@@ -164,7 +171,7 @@ static void ui_driver_draw_line(int x1, int y1, int x2, int y2, uint32_t color)
 
 	ui_layout_transform_point(x1, y1, &sx, &sy);
 	ui_layout_transform_point(x2, y2, &ex, &ey);
-	ui_draw_driver->drawLine(ui_draw_data, sx, sy, ex, ey, color);
+	video_driver->drawUILine(video_data, sx, sy, ex, ey, color);
 }
 
 static void ui_driver_draw_line_gradient(int x1, int y1, int x2, int y2,
@@ -174,7 +181,7 @@ static void ui_driver_draw_line_gradient(int x1, int y1, int x2, int y2,
 
 	ui_layout_transform_point(x1, y1, &sx, &sy);
 	ui_layout_transform_point(x2, y2, &ex, &ey);
-	ui_draw_driver->drawLineGradient(ui_draw_data, sx, sy, ex, ey, color1, color2);
+	video_driver->drawUILineGradient(video_data, sx, sy, ex, ey, color1, color2);
 }
 
 static void ui_driver_draw_rect(int x, int y, int w, int h, uint32_t color)
@@ -182,7 +189,7 @@ static void ui_driver_draw_rect(int x, int y, int w, int h, uint32_t color)
 	int dx, dy, dw, dh;
 
 	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
-	ui_draw_driver->drawRect(ui_draw_data, dx, dy, dw, dh, color);
+	video_driver->drawUIRect(video_data, dx, dy, dw, dh, color);
 }
 
 static void ui_driver_fill_rect(int x, int y, int w, int h, uint32_t color)
@@ -190,7 +197,7 @@ static void ui_driver_fill_rect(int x, int y, int w, int h, uint32_t color)
 	int dx, dy, dw, dh;
 
 	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
-	ui_draw_driver->fillRect(ui_draw_data, dx, dy, dw, dh, color);
+	video_driver->fillUIRect(video_data, dx, dy, dw, dh, color);
 }
 
 static void ui_driver_fill_rect_gradient(int x, int y, int w, int h,
@@ -199,7 +206,7 @@ static void ui_driver_fill_rect_gradient(int x, int y, int w, int h,
 	int dx, dy, dw, dh;
 
 	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
-	ui_draw_driver->fillRectGradient(ui_draw_data, dx, dy, dw, dh,
+	video_driver->fillUIRectGradient(video_data, dx, dy, dw, dh,
 		color1, color2, direction);
 }
 
@@ -208,7 +215,7 @@ static void ui_driver_set_scissor(int x, int y, int w, int h)
 	int dx, dy, dw, dh;
 
 	ui_layout_transform_rect(x, y, w, h, &dx, &dy, &dw, &dh);
-	ui_draw_driver->setScissor(ui_draw_data, dx, dy, dw, dh);
+	video_driver->setUIScissor(video_data, dx, dy, dw, dh);
 }
 
 /******************************************************************************
@@ -830,7 +837,7 @@ static int internal_font_putc(struct font_t *font, int sx, int sy, int r, int g,
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width, font->height,
 		sx, sy, font->width, font->height,
-		0xFFFFFFFF, 1);
+		1);
 
 	return 1;
 }
@@ -853,7 +860,7 @@ static int internal_shadow_putc(struct font_t *font, int sx, int sy)
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width + 4, font->height + 4,
 		sx, sy, font->width + 4, font->height + 4,
-		0xFFFFFFFF, 1);
+		1);
 
 	return 1;
 }
@@ -876,7 +883,7 @@ static int internal_light_putc(struct font_t *font, int sx, int sy)
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, font->width, font->height,
 		sx, sy, font->width, font->height,
-		0xFFFFFFFF, 1);
+		1);
 
 	return 1;
 }
@@ -1457,7 +1464,7 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 		ui_driver_draw_sprite(UI_TEXTURE_SMALLFONT,
 			u, v, 8, 8,
 			sx, sy, 8, 8,
-			0xFFFFFFFF, bg ? 0 : 1);
+			bg ? 0 : 1);
 
 		sx += 8;
 	}
@@ -1506,7 +1513,7 @@ static void debug_font_print(void *frame, int sx, int sy, const char *s, int bg)
 		ui_driver_draw_sprite(UI_TEXTURE_SMALLFONT,
 			u, v, 8, 8,
 			sx, sy, 8, 8,
-			0xFFFFFFFF, bg ? 0 : 1);
+			bg ? 0 : 1);
 
 		sx += 8;
 	}
@@ -1686,7 +1693,7 @@ static void draw_boxshadow(int sx, int sy, int w, int h, int code)
 	ui_driver_draw_sprite(UI_TEXTURE_BOXSHADOW,
 		code << 3, 0, 8, 8,
 		sx, sy, 8, 8,
-		0xFFFFFFFF, 1);
+		1);
 
 	ui_driver_set_scissor(0, 0,
 		ui_layout_get()->logical_width, ui_layout_get()->logical_height);
@@ -1860,11 +1867,11 @@ void logo(int sx, int sy, int r, int g, int b)
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, 208, 14,
 		sx, sy, 208, 14,
-		0xFFFFFFFF, 1);
+		1);
 #else
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
 		0, 0, 232, 14,
 		sx, sy, 232, 14,
-		0xFFFFFFFF, 1);
+		1);
 #endif
 }
