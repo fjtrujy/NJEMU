@@ -254,7 +254,7 @@ Result (2026-09-26):
 - validated Desktop CPS1/CPS2/MVS/NCDZ builds, MVS 10/10 focused CTests, and a
   30-frame MVS runtime smoke.
 
-### D2 - Establish include ownership and common geometry [IN PROGRESS]
+### D2 - Establish include ownership and common geometry [COMPLETE]
 
 Introduce narrow common headers for:
 
@@ -319,11 +319,29 @@ Validation (2026-09-26):
 - `src/common/` contains no PSP/PS2/Desktop SDK or umbrella includes;
 - `git diff --check` is clean and no resource file is part of the change.
 
-#### D2c - CMake include-scope cleanup
+#### D2c - CMake include-scope cleanup [COMPLETE]
 
 After source/header ownership is explicit, replace directory-wide
 `include_directories()` calls with target-scoped include directories and remove
 platform-directory search paths that are no longer needed.
+
+Result (2026-09-26):
+- removed all directory-wide `include_directories()` calls from the application
+  build;
+- the NJEMU executable now receives one private project include root (`src/`),
+  relying on normal quoted-header same-directory lookup for target/CPU/platform
+  local headers;
+- SDL2 and libmad include paths are target-private instead of directory-global;
+- test executables retain their already-explicit private include scopes.
+
+Validation (2026-09-26):
+- Desktop CPS1/CPS2/MVS/NCDZ builds pass, including MVS GUI ON/OFF;
+- PSP MVS GUI ON/OFF and PS2 MVS GUI ON/OFF builds pass;
+- Desktop MVS focused CTests pass 10/10 and the 30-frame smoke passes;
+- generated Desktop MVS compile flags contain only the `src/` project include
+  root plus external dependency includes; no target/platform/CPU directory-wide
+  paths remain;
+- `git diff --check` is clean and no resource file is changed.
 
 Acceptance:
 - common headers include no PSP/PS2/Desktop umbrella header;
@@ -480,6 +498,6 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Proceed with D2c. Source/header ownership is now explicit enough to replace the
-remaining directory-wide CMake include paths with target-scoped include paths
-without masking missing dependencies.
+Proceed with D3. With header ownership and CMake include scope explicit, shrink
+`platform_driver_t` to genuine host services and move PSP firmware/WLAN details
+into the PSP AdHoc transport where they belong.

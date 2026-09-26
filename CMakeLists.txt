@@ -202,12 +202,6 @@ elseif (PLATFORM STREQUAL "DESKTOP")
     endif()
 endif()
 
-# Include directories
-include_directories(
-    src
-    ${PLATFORM_LOWER}
-)
-
 # Common source files
 set(COMMON_SRC
     emumain.c
@@ -403,12 +397,6 @@ if (ADHOC AND PLATFORM STREQUAL "PSP")
     )
 endif()
 
-# CPU source files
-include_directories(
-    src/cpu/m68000
-    src/cpu/z80
-)
-
 set(TARGET_SRC ${TARGET_SRC}
     cpu/m68000/m68000.h
     cpu/m68000/m68000.c
@@ -424,10 +412,6 @@ set(TARGET_SRC ${TARGET_SRC}
 
 # Add specific target source files
 if (${TARGET} STREQUAL "MVS")
-    include_directories(
-        src/mvs
-    )
-
     set(TARGET_SRC ${TARGET_SRC}
         mvs/mvs.h
         mvs/mvs.c
@@ -459,11 +443,6 @@ endif()
 
 # Add specific target source files
 if (${TARGET} STREQUAL "CPS1")
-
-    include_directories(
-        src/cps1
-    )
-
     set(TARGET_SRC ${TARGET_SRC}
         common/coin.h
         common/coin.c
@@ -499,11 +478,6 @@ endif()
 
 # Add specific target source files
 if (${TARGET} STREQUAL "CPS2")
-
-    include_directories(
-        src/cps2
-    )
-
     set(TARGET_SRC ${TARGET_SRC}
         common/coin.h
         common/coin.c
@@ -534,10 +508,6 @@ endif()
 
 # Add specific target source files
 if (${TARGET} STREQUAL "NCDZ")
-    include_directories(
-        src/ncdz
-    )
-
     set(TARGET_SRC ${TARGET_SRC}
         ncdz/cdda.c
         ncdz/cdda.h
@@ -614,6 +584,16 @@ list(TRANSFORM ALL_SRC PREPEND "src/")
 # # Create the executable
 add_executable(${TARGET}
     ${ALL_SRC}
+)
+
+# Every NJEMU source includes project headers from the source root (for example
+# "common/video_driver.h" or "mvs/driver.h").  Keep that search path local to
+# the executable instead of mutating directory-wide include state. Quoted
+# same-directory headers (such as "mvs.h" from src/mvs/) continue to resolve
+# through the compiler's normal current-file lookup, so platform/CPU/target
+# subdirectories do not need separate search paths.
+target_include_directories(${TARGET} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
 # Keep miniz's usage requirements local to the ZIP implementation. Public
@@ -776,7 +756,7 @@ target_link_options(${TARGET} PUBLIC ${SANITIZER_OPTIONS})
 # Add platform specific libraries
 if (PLATFORM STREQUAL "DESKTOP")
     find_package(SDL2 REQUIRED)
-    target_include_directories(${TARGET} PUBLIC 
+    target_include_directories(${TARGET} PRIVATE
         ${SDL2_INCLUDE_DIRS}
     )
     if(TARGET SDL2::SDL2-static)
@@ -837,7 +817,7 @@ if (LIB_MAD)
     # Get the directory of the library for -L
     get_filename_component(LIBMAD_LIBRARY_DIR ${LIBMAD_LIBRARY} DIRECTORY)
     
-    target_include_directories(${TARGET} PUBLIC 
+    target_include_directories(${TARGET} PRIVATE
         ${LIBMAD_INCLUDE_DIR}
     )
     target_link_directories(${TARGET} PUBLIC
