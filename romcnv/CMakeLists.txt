@@ -118,7 +118,6 @@ else()
         set(CMAKE_BUILD_TYPE "" CACHE STRING "Choose the type of build." FORCE)
     endif()
     set(ROMCNV_MINIZ_TARGET miniz)
-    set(ROMCNV_MINIZ_FETCHED TRUE)
 endif()
 
 get_target_property(ROMCNV_MINIZ_INCLUDE_DIRS ${ROMCNV_MINIZ_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
@@ -162,10 +161,6 @@ set(BINARY_TARGET "${PROJECT_LOWER}_${TARGET_LOWER}")
 add_executable(${BINARY_TARGET}
     ${ALL_SRC}
 )
-
-if(ROMCNV_MINIZ_FETCHED)
-    add_dependencies(${BINARY_TARGET} ${ROMCNV_MINIZ_TARGET})
-endif()
 
 set_source_files_properties(
     src/zip_reader.c
@@ -217,4 +212,4 @@ else()
     target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
 endif()
 
-target_link_libraries(${BINARY_TARGET} PRIVATE "$<TARGET_FILE:${ROMCNV_MINIZ_TARGET}>")
+target_link_libraries(${BINARY_TARGET} PRIVATE "$<LINK_ONLY:${ROMCNV_MINIZ_TARGET}>")

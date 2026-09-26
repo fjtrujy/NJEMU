@@ -55,6 +55,12 @@ static int num_gfx1rom;
 
 static uint8_t block_empty[0x200];
 
+static void change_directory(const char *path)
+{
+	if (chdir(path) != 0)
+		perror(path);
+}
+
 static uint8_t null_tile[128] =
 {
 	0x67,0x66,0x66,0x66,0x66,0x66,0x66,0x56,
@@ -1000,7 +1006,7 @@ static int create_raw_cache(char *game_name)
 
 	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	chdir("cache");
+	change_directory("cache");
 
 	header_size = 8;
 	header_size += gfx_total_elements[TILE08];
@@ -1038,7 +1044,7 @@ static int create_raw_cache(char *game_name)
 	fp = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0644);
 	if (fp < 0)
 	{
-		chdir("..");
+		change_directory("..");
 #ifdef CHINESE
 		printf("错误: 无法创建文件.\n");
 #else
@@ -1076,7 +1082,7 @@ static int create_raw_cache(char *game_name)
 
 	close(fp);
 
-	chdir("..");
+	change_directory("..");
 
 	return 1;
 }
@@ -1102,7 +1108,7 @@ static int create_zip_cache(char *game_name)
 
 	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	chdir("cache");
+	change_directory("cache");
 
 	sprintf(zipname, "%s%ccache%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
 	remove(zipname);
@@ -1180,7 +1186,7 @@ done:
 	if (!res) printf("ERROR: Could not create file.\n");
 #endif
 
-	chdir("..");
+	change_directory("..");
 
 	return res;
 }
@@ -1194,7 +1200,7 @@ static int create_folder_cache(char *game_name)
 
 	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	chdir("cache");
+	change_directory("cache");
 
 	sprintf(fname, "%s_cache", game_name);
 
@@ -1215,10 +1221,10 @@ static int create_folder_cache(char *game_name)
 #else
 			printf("ERROR: Could not create directory \"cache%c%s_cache\".\n", delimiter, game_name);
 #endif
-			chdir("..");
+			change_directory("..");
 			return 0;
 		}
-		chdir(fname);
+		change_directory(fname);
 	}
 
 	for (block = 0; block < 0x200; block++)
@@ -1253,8 +1259,8 @@ static int create_folder_cache(char *game_name)
 	print_progress(++count, total);
 	printf("\n");
 
-	chdir("..");
-	chdir("..");
+	change_directory("..");
+	change_directory("..");
 	return 1;
 
 error:
@@ -1263,8 +1269,8 @@ error:
 #else
 	printf("ERROR: Could not create file.\n");
 #endif
-	chdir("..");
-	chdir("..");
+	change_directory("..");
+	change_directory("..");
 	return 0;
 }
 
@@ -1331,7 +1337,7 @@ int main(int argc, char *argv[])
 			goto error;
 		}
 	}
-	else chdir("..");
+	else change_directory("..");
 
 	getcwd(launchDir, PATH_MAX);
 	strcat(launchDir, "/");
@@ -1358,7 +1364,7 @@ int main(int argc, char *argv[])
 			printf("-------------------------------------------\n\n");
 #endif
 
-			chdir(launchDir);
+			change_directory(launchDir);
 			if (!convert_rom(game_name))
 			{
 #ifdef CHINESE
@@ -1438,7 +1444,7 @@ int main(int argc, char *argv[])
 		}
 		*p = '\0';
 
-		chdir(launchDir);
+		change_directory(launchDir);
 		if (!convert_rom(game_name))
 		{
 			res = 0;

@@ -259,9 +259,10 @@ set(COMMON_SRC
 find_package(miniz 3.1.2 CONFIG QUIET)
 if (TARGET miniz::miniz)
     set(NJEMU_MINIZ_TARGET miniz::miniz)
-elseif (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP")
-    # Desktop development/CI and PSP builds can obtain the pinned dependency
-    # directly when the host/toolchain package is not available yet.
+elseif (PLATFORM STREQUAL "DESKTOP")
+    # Desktop development/CI can obtain the pinned dependency directly when
+    # the host does not provide a miniz CMake package. Console toolchains must
+    # provide their native miniz package instead.
     include(FetchContent)
     set(BUILD_EXAMPLES OFF CACHE BOOL "Build miniz examples" FORCE)
     set(BUILD_TESTS OFF CACHE BOOL "Build miniz tests" FORCE)
@@ -289,7 +290,6 @@ elseif (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP")
         set(CMAKE_BUILD_TYPE "" CACHE STRING "Choose the type of build." FORCE)
     endif()
     set(NJEMU_MINIZ_TARGET miniz)
-    set(NJEMU_MINIZ_FETCHED TRUE)
 else()
     message(FATAL_ERROR "miniz 3.1.2 is required by NJEMU on ${PLATFORM}")
 endif()
@@ -610,10 +610,6 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
-if(NJEMU_MINIZ_FETCHED)
-    add_dependencies(${TARGET} ${NJEMU_MINIZ_TARGET})
-endif()
-
 # Keep miniz's usage requirements local to the ZIP implementation. Public
 # domain headers deliberately do not expose miniz types.
 set_source_files_properties(
@@ -814,9 +810,11 @@ elseif(PLATFORM STREQUAL "PSP")
     endif()
 endif()
 
-# Link the archive by path so its public compile definitions and include
-# directories do not leak into every NJEMU translation unit.
-target_link_libraries(${TARGET} PRIVATE "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>")
+# Link only miniz itself here: zip_archive.c receives the dependency's compile
+# usage requirements above, while the rest of NJEMU remains independent of
+# miniz headers and definitions. LINK_ONLY also preserves CMake's target-level
+# build dependency, unlike spelling the archive path with TARGET_FILE.
+target_link_libraries(${TARGET} PRIVATE "$<LINK_ONLY:${NJEMU_MINIZ_TARGET}>")
 if (PLATFORM STREQUAL "PS2")
     # The PS2 miniz package should be compiled with -ffunction-sections and
     # -fdata-sections so this can discard unused writer/deflate APIs while
@@ -892,11 +890,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             TEST_RESOURCE_ROOT="${CMAKE_CURRENT_BINARY_DIR}"
         )
         target_link_libraries(resource_source_tests PRIVATE
-            "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
+            "$<LINK_ONLY:${NJEMU_MINIZ_TARGET}>"
         )
-        if(NJEMU_MINIZ_FETCHED)
-            add_dependencies(resource_source_tests ${NJEMU_MINIZ_TARGET})
-        endif()
         add_test(NAME resource_source_tests COMMAND resource_source_tests)
     endif()
 
@@ -918,11 +913,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         TEST_ZIP_DIRECTORY="${CMAKE_CURRENT_BINARY_DIR}"
     )
     target_link_libraries(zip_archive_tests PRIVATE
-        "$<TARGET_FILE:${NJEMU_MINIZ_TARGET}>"
+        "$<LINK_ONLY:${NJEMU_MINIZ_TARGET}>"
     )
-    if(NJEMU_MINIZ_FETCHED)
-        add_dependencies(zip_archive_tests ${NJEMU_MINIZ_TARGET})
-    endif()
     add_test(NAME zip_archive_tests COMMAND zip_archive_tests)
 
     add_executable(ui_layout_tests

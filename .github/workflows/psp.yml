@@ -62,7 +62,9 @@ jobs:
             gui: ON
       fail-fast: false
 
-    container: pspdev/pspdev:latest
+    # miniz is already packaged in the development toolchain but has not yet
+    # reached the latest stable PSP image.
+    container: ghcr.io/pspdev/pspdev:develop
     steps:
     - uses: actions/checkout@v4
 

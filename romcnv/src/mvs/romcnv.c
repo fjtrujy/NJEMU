@@ -77,6 +77,12 @@ static int machine_init_type;
 static int machine_input_type;
 static int machine_screen_type;
 
+static void change_directory(const char *path)
+{
+	if (chdir(path) != 0)
+		perror(path);
+}
+
 static struct rom_t gfx2rom[MAX_GFX2ROM];
 static struct rom_t gfx3rom[MAX_GFX3ROM];
 static struct rom_t snd1rom[MAX_SND1ROM];
@@ -1062,7 +1068,7 @@ static int create_raw_cache(char *game_name)
 
 	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	chdir("cache");
+	change_directory("cache");
 #ifdef CHINESE
 	printf("正在创建缓存文件...\n");
 #else
@@ -1078,10 +1084,10 @@ static int create_raw_cache(char *game_name)
 #else
 			printf("ERROR: Could not create folder.\n");
 #endif
-			chdir(launchDir);
+			change_directory(launchDir);
 			return 0;
 		}
-		chdir(fname);
+		change_directory(fname);
 	}
 
 	fp = open("cache_info", O_WRONLY|O_CREAT|O_TRUNC, 0644);
@@ -1112,8 +1118,8 @@ static int create_raw_cache(char *game_name)
 		close(fp);
 	}
 
-	chdir("..");
-	chdir("..");
+	change_directory("..");
+	change_directory("..");
 	return 1;
 
 error:
@@ -1131,7 +1137,7 @@ error:
 		remove("vrom");
 	}
 
-	chdir("..");
+	change_directory("..");
 
 	sprintf(fname, "cache_%s", game_name);
 	rmdir(fname);
@@ -1140,7 +1146,7 @@ error:
 #else
 	printf("ERROR: Could not create file.\n");
 #endif
-	chdir("..");
+	change_directory("..");
 	return 0;
 }
 
@@ -1155,7 +1161,7 @@ static int create_zip_cache(char *game_name)
 
 	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	chdir("cache");
+	change_directory("cache");
 
 	sprintf(zipname, "%s%ccache%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
 	remove(zipname);
@@ -1251,7 +1257,7 @@ done:
 	if (!res) printf("ERROR: Could not create file.\n");
 #endif
 
-	chdir("..");
+	change_directory("..");
 
 	return res;
 }
@@ -1315,7 +1321,7 @@ int main(int argc, char *argv[])
 			goto error;
 		}
 	}
-	else chdir("..");
+	else change_directory("..");
 
 	getcwd(launchDir, PATH_MAX);
 	strcat(launchDir, "/");
@@ -1347,7 +1353,7 @@ int main(int argc, char *argv[])
 			printf("-------------------------------------------\n\n");
 #endif
 
-			chdir(launchDir);
+			change_directory(launchDir);
 			convert_result = convert_rom(game_name);
 			if (convert_result == 0)
 			{
@@ -1423,7 +1429,7 @@ int main(int argc, char *argv[])
 		printf("cache folder name: cache%c%s_cache\n", delimiter, game_name);
 #endif
 
-		chdir(launchDir);
+		change_directory(launchDir);
 		{
 			int convert_result = convert_rom(game_name);
 
