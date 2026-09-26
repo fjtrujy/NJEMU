@@ -56,25 +56,14 @@ struct sprite_t
 extern SPRITE ALIGN16_DATA *fix_head[FIX_HASH_SIZE];
 extern SPRITE ALIGN16_DATA fix_data[FIX_TEXTURE_SIZE];
 extern SPRITE *fix_free_head;
-extern uint16_t fix_num;
 extern uint16_t fix_texture_num;
 
 extern SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
 extern SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
 extern SPRITE *spr_free_head;
-extern uint16_t spr_num;
 extern uint16_t spr_texture_num;
-extern uint16_t spr_index;
-extern uint8_t spr_disable;
-
-extern int clip_min_y;
-extern int clip_max_y;
 extern int clear_spr_texture;
 extern int clear_fix_texture;
-
-extern uint8_t *tex_fix;
-extern uint8_t *tex_spr[3];
-extern uint16_t *clut;
 
 extern const uint32_t ALIGN16_DATA color_table[16];
 

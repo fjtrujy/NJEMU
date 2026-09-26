@@ -619,6 +619,38 @@ Validation (2026-09-26):
   arrays with the compact portable vertex representation;
 - `git diff --check` is clean and no resource file is part of the change.
 
+#### D7b - MVS portable sprite renderer [COMPLETE]
+
+Result (2026-09-26):
+- replaced `mvs/{psp,ps2,desktop}_sprite.c` with one platform-neutral
+  `mvs/sprite.c` built on the indexed-atlas and portable sprite-batch contract
+  introduced by D7a;
+- kept MVS-specific C-ROM cache behaviour in target-common code: atlas keys,
+  `read_cache()` source translation, `update_cache()` reuse notifications, and
+  the per-frame sprite-disable fallback when no atlas entry can be reclaimed;
+- moved draw-list counters, palette binding and the sprite-disable state out of
+  `sprite_common` and into the renderer that owns them. Removed dead clip state
+  that was written by all three legacy renderers but never read;
+- removed the MVS PS2 dependency on `getNativeObjects()`, gsKit vertex types and
+  native texture objects. MVS now contains no PSP/PS2/SDL renderer API types;
+- unified `StretchScreen` indices with `common/menu/mvs.c`, fixing the same
+  historical Desktop extra-entry/index shift found during D7a;
+- reused backend-owned swizzled T8 writes on PSP, linear indexed writes on PS2,
+  indexed expansion on Desktop, and portable physical-output geometry without
+  adding target-side platform conditionals.
+
+Validation (2026-09-26):
+- MVS GUI OFF and GUI ON builds pass on Desktop, PSP, and PS2;
+- Desktop MVS passes 13/13 CTests and a 30-frame `pbobbl2n` runtime smoke;
+- PSP Release GUI-OFF, SAVE_STATE=OFF baseline vs D7b: `.text` +572 B,
+  `.data` -48 B, `.bss` -72 B, total runtime image +452 B, ELF +336 B,
+  PRX +472 B;
+- PS2 Release GUI-OFF, SAVE_STATE=OFF baseline vs D7b: `.text` -728 B,
+  `.data` -16 B, `.bss` -539,520 B, total runtime image -540,264 B,
+  ELF -888 B;
+- no MVS sprite source references `getNativeObjects()` or native PSP/PS2/SDL
+  APIs after the migration.
+
 ### D8 - Remove remaining platform conditionals from common behaviour
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
@@ -664,8 +696,9 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Continue D7 with MVS. Reuse the portable indexed-atlas and sprite-batch contract
-proven by NCDZ, extending it only for behaviour that MVS genuinely needs. Keep
-MVS sprite decoding, cache/atlas ownership, palette selection, clipping, and
-batching in target-common code; remove the three MVS platform sprite files and
-their PS2 `getNativeObjects()` dependency only after cross-platform validation.
+Continue D7 with CPS1. Reuse the portable draw data and backend translation
+proven by NCDZ and MVS, but model CPS1's scroll/object layers explicitly rather
+than leaking native backend textures or vertices. Preserve target-owned tile
+decode, priority, clipping, rotation/flip and batching semantics in common code,
+and extend the video contract only where CPS1 demonstrates a real missing
+capability.

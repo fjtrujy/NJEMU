@@ -434,7 +434,7 @@ if (${TARGET} STREQUAL "MVS")
         mvs/vidhrdw.c
         mvs/sprite_common.h
         mvs/sprite_common.c
-        mvs/${PLATFORM_LOWER}_sprite.c
+        mvs/sprite.c
         mvs/pd4990a.h
         mvs/pd4990a.c
         mvs/neocrypt.c
