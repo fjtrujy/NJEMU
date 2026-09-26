@@ -95,9 +95,7 @@ RM = -rm
 #------------------------------------------------------------------------------
 
 INCDIR = \
-	src \
-	src/zip \
-	$(shell psp-config --psp-prefix)/include/miniz \
+	src
 
 
 #------------------------------------------------------------------------------
@@ -106,7 +104,7 @@ INCDIR = \
 
 MAINOBJS = \
 	emumain.o \
-	zip/zfile.o \
+	common/zip_archive.o \
 	sound/sndintrf.o \
 	common/cache.o \
 	common/filer.o \
@@ -235,6 +233,9 @@ CDEFS += -DRELEASE=0
 endif
 
 CFLAGS += $(CDEFS)
+
+# Only the ZIP implementation needs miniz headers; callers use domain types.
+src/common/zip_archive.o: CFLAGS += -I$(shell psp-config --psp-prefix)/include/miniz
 
 #------------------------------------------------------------------------------
 # Linker Flags

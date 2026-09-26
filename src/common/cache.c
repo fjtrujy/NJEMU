@@ -10,7 +10,7 @@
 #include <sys/param.h>
 #include "emumain.h"
 #include "common/memory_sizes.h"
-#include "zip/zip_archive.h"
+#include "common/zip_archive.h"
 
 #if USE_CACHE
 #define BLOCK_MASK			0xffff

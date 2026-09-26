@@ -200,7 +200,6 @@ endif()
 # Include directories
 include_directories(
     src
-    src/zip
     ${PLATFORM_LOWER}
 )
 
@@ -208,7 +207,7 @@ include_directories(
 set(COMMON_SRC
     emumain.h
     emumain.c
-    zip/zip_archive.h
+    common/zip_archive.h
     sound/sndintrf.h
     sound/sndintrf.c
     common/cache.h
@@ -292,7 +291,7 @@ if (NOT MINIZ_COMPILE_DEFINITIONS)
     set(MINIZ_COMPILE_DEFINITIONS "")
 endif()
 list(APPEND COMMON_SRC
-    zip/zip_archive.c
+    common/zip_archive.c
 )
 
 # Additional source files based on options
@@ -599,30 +598,14 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 
-# Keep miniz's usage requirements local to translation units that use the
-# explicit ZIP API. Propagating them through the executable would add
-# MINIZ_STATIC_DEFINE and miniz include paths to every NJEMU source file.
+# Keep miniz's usage requirements local to the ZIP implementation. Public
+# domain headers deliberately do not expose miniz types.
 set_source_files_properties(
-    src/common/cache.c
-    src/common/loadrom.c
-    src/zip/zip_archive.c
+    src/common/zip_archive.c
     PROPERTIES
     INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
 )
-
-if (${TARGET} STREQUAL "NCDZ")
-    set_source_files_properties(
-        src/common/filer.c
-        src/ncdz/cdrom.c
-        src/ncdz/driver.c
-        src/ncdz/resource_source.c
-        src/${PLATFORM_LOWER}/${PLATFORM_LOWER}_no_gui.c
-        PROPERTIES
-        INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
-        COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
-    )
-endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
@@ -876,7 +859,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_executable(resource_source_tests
             tests/resource_source_tests.c
             src/ncdz/resource_source.c
-            src/zip/zip_archive.c
+            src/common/zip_archive.c
         )
         target_include_directories(resource_source_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -898,7 +881,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 
     add_executable(zip_archive_tests
         tests/zip_archive_tests.c
-        src/zip/zip_archive.c
+        src/common/zip_archive.c
     )
     target_include_directories(zip_archive_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

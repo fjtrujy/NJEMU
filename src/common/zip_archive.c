@@ -1,29 +1,39 @@
+/******************************************************************************
+ *
+ *    zip_archive.c
+ *
+ *    Explicit ZIP archive and entry objects backed by miniz
+ *
+ ******************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <miniz.h>
 
-#include "zip_reader.h"
+#include "common/zip_archive.h"
 
-typedef struct zip_reader_archive_state_t
+#define ZIP_ENTRY_BYTE_CACHE_SIZE 4096
+
+typedef struct zip_archive_state_t
 {
     mz_zip_archive archive;
-} zip_reader_archive_state_t;
+} zip_archive_state_t;
 
-typedef struct zip_reader_entry_state_t
+typedef struct zip_entry_state_t
 {
     mz_zip_reader_extract_iter_state *reader;
     uint64_t size;
     uint64_t bytes_read;
     uint32_t crc32;
-    unsigned char byte_cache[4096];
+    unsigned char *byte_cache;
     size_t byte_cache_pos;
     size_t byte_cache_len;
-} zip_reader_entry_state_t;
+} zip_entry_state_t;
 
-static bool zip_reader_info_from_stat(const mz_zip_archive_file_stat *stat,
-                                      zip_reader_entry_info_t *info)
+static bool zip_entry_info_from_stat(const mz_zip_archive_file_stat *stat,
+                                     zip_entry_info_t *info)
 {
     if (stat == NULL || info == NULL)
         return false;
@@ -35,9 +45,9 @@ static bool zip_reader_info_from_stat(const mz_zip_archive_file_stat *stat,
     return true;
 }
 
-bool zip_reader_archive_open(zip_reader_archive_t *archive, const char *path)
+bool zip_archive_open(zip_archive_t *archive, const char *path)
 {
-    zip_reader_archive_state_t *state;
+    zip_archive_state_t *state;
 
     if (archive == NULL || path == NULL || archive->state != NULL)
         return false;
@@ -56,9 +66,9 @@ bool zip_reader_archive_open(zip_reader_archive_t *archive, const char *path)
     return true;
 }
 
-void zip_reader_archive_close(zip_reader_archive_t *archive)
+void zip_archive_close(zip_archive_t *archive)
 {
-    zip_reader_archive_state_t *state;
+    zip_archive_state_t *state;
 
     if (archive == NULL)
         return;
@@ -73,11 +83,11 @@ void zip_reader_archive_close(zip_reader_archive_t *archive)
     memset(archive, 0, sizeof(*archive));
 }
 
-bool zip_reader_archive_stat(zip_reader_archive_t *archive,
-                             const char *name,
-                             zip_reader_entry_info_t *info)
+bool zip_archive_stat(zip_archive_t *archive,
+                      const char *name,
+                      zip_entry_info_t *info)
 {
-    zip_reader_archive_state_t *state;
+    zip_archive_state_t *state;
     mz_zip_archive_file_stat stat;
     int index;
 
@@ -94,14 +104,14 @@ bool zip_reader_archive_stat(zip_reader_archive_t *archive,
     if (!mz_zip_reader_file_stat(&state->archive, (mz_uint)index, &stat))
         return false;
 
-    return zip_reader_info_from_stat(&stat, info);
+    return zip_entry_info_from_stat(&stat, info);
 }
 
-bool zip_reader_archive_find_crc(zip_reader_archive_t *archive,
-                                 uint32_t crc32,
-                                 zip_reader_entry_info_t *info)
+bool zip_archive_find_crc(zip_archive_t *archive,
+                          uint32_t crc32,
+                          zip_entry_info_t *info)
 {
-    zip_reader_archive_state_t *state;
+    zip_archive_state_t *state;
     mz_uint i;
     mz_uint count;
 
@@ -120,18 +130,18 @@ bool zip_reader_archive_find_crc(zip_reader_archive_t *archive,
         if (!mz_zip_reader_file_stat(&state->archive, i, &stat))
             continue;
         if (stat.m_crc32 == crc32)
-            return zip_reader_info_from_stat(&stat, info);
+            return zip_entry_info_from_stat(&stat, info);
     }
 
     return false;
 }
 
-bool zip_reader_entry_open(zip_reader_archive_t *archive,
-                           const char *name,
-                           zip_reader_entry_t *entry)
+bool zip_entry_open(zip_archive_t *archive,
+                    const char *name,
+                    zip_entry_t *entry)
 {
-    zip_reader_archive_state_t *archive_state;
-    zip_reader_entry_state_t *entry_state;
+    zip_archive_state_t *archive_state;
+    zip_entry_state_t *entry_state;
     mz_zip_archive_file_stat stat;
     int index;
 
@@ -168,9 +178,9 @@ error:
     return false;
 }
 
-size_t zip_reader_entry_read(zip_reader_entry_t *entry, void *dst, size_t size)
+size_t zip_entry_read(zip_entry_t *entry, void *dst, size_t size)
 {
-    zip_reader_entry_state_t *state;
+    zip_entry_state_t *state;
     size_t result;
 
     if (entry == NULL || dst == NULL || size == 0)
@@ -185,9 +195,9 @@ size_t zip_reader_entry_read(zip_reader_entry_t *entry, void *dst, size_t size)
     return result;
 }
 
-int zip_reader_entry_getc(zip_reader_entry_t *entry)
+int zip_entry_getc(zip_entry_t *entry)
 {
-    zip_reader_entry_state_t *state;
+    zip_entry_state_t *state;
 
     if (entry == NULL)
         return EOF;
@@ -196,11 +206,21 @@ int zip_reader_entry_getc(zip_reader_entry_t *entry)
     if (state == NULL || state->reader == NULL)
         return EOF;
 
+    if (state->byte_cache == NULL)
+    {
+        state->byte_cache = malloc(ZIP_ENTRY_BYTE_CACHE_SIZE);
+        if (state->byte_cache == NULL)
+        {
+            unsigned char value;
+            return zip_entry_read(entry, &value, 1) == 1 ? value : EOF;
+        }
+    }
+
     if (state->byte_cache_pos >= state->byte_cache_len)
     {
-        state->byte_cache_len = zip_reader_entry_read(entry,
-                                                      state->byte_cache,
-                                                      sizeof(state->byte_cache));
+        state->byte_cache_len = zip_entry_read(entry,
+                                               state->byte_cache,
+                                               ZIP_ENTRY_BYTE_CACHE_SIZE);
         state->byte_cache_pos = 0;
         if (state->byte_cache_len == 0)
             return EOF;
@@ -209,14 +229,14 @@ int zip_reader_entry_getc(zip_reader_entry_t *entry)
     return state->byte_cache[state->byte_cache_pos++] & 0xff;
 }
 
-bool zip_reader_entry_is_open(const zip_reader_entry_t *entry)
+bool zip_entry_is_open(const zip_entry_t *entry)
 {
     return entry != NULL && entry->state != NULL;
 }
 
-bool zip_reader_entry_close(zip_reader_entry_t *entry)
+bool zip_entry_close(zip_entry_t *entry)
 {
-    zip_reader_entry_state_t *state;
+    zip_entry_state_t *state;
     bool complete;
     bool ok = true;
 
@@ -226,12 +246,15 @@ bool zip_reader_entry_close(zip_reader_entry_t *entry)
     state = entry->state;
     if (state != NULL)
     {
+        /* Preserve the established behavior: a CRC failure matters only after
+           the complete uncompressed entry has been consumed. */
         complete = state->bytes_read >= state->size;
         if (state->reader != NULL)
         {
             mz_bool reader_ok = mz_zip_reader_extract_iter_free(state->reader);
             ok = !complete || reader_ok != 0;
         }
+        free(state->byte_cache);
         free(state);
     }
 

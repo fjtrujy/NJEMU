@@ -1,13 +1,20 @@
 # ZIP and Resource I/O Architecture Refactor Plan
 
 Date: 2026-09-26
-Status: Z0-Z7 complete; Z8 next
+Status: Z0-Z8 complete; Z9 next
 
 ## Purpose
 
-NJEMU now uses external upstream miniz 3.1.2 for ZIP support on Desktop, PS2 and PSP, and the old embedded MiniZip sources have been removed. The remaining technical debt is no longer the ZIP library itself: it is the historical `zfile` abstraction built around it.
+NJEMU uses external upstream miniz 3.1.2 for ZIP support on Desktop, PS2 and
+PSP, and the old embedded MiniZip sources have been removed. This plan started
+from the remaining technical debt in the historical `zfile` abstraction built
+around that backend and tracks its replacement with explicit domain APIs.
 
-At the start of this plan, the runtime API intentionally made ZIP entries and normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`, `zsize()` and `zlength()`. Z5 removes that runtime compatibility layer. Z6 also removes the converter read-side compatibility API; only the temporary converter writer names remain until Z7.
+At the start of this plan, the runtime API intentionally made ZIP entries and
+normal files look alike through `zip_open()`, `zopen()`, `zread()`, `zclose()`,
+`zsize()` and `zlength()`. Z5 removed that runtime compatibility layer, Z6
+removed the converter read-side compatibility API, and Z7 removed its final
+writer compatibility layer.
 
 This plan replaces that implicit model with small explicit C abstractions while preserving all current supported input formats and runtime behavior.
 
@@ -38,11 +45,13 @@ This plan replaces that implicit model with small explicit C abstractions while 
 - Solving the PS2/PSP miniz package-size optimization in this refactor. That remains a toolchain/package concern documented in `ZIP_MINIZ_EVALUATION.md`.
 - Touching anything under `resources/`.
 
-## Current architecture and problems
+## Z0 baseline architecture and problems
 
 ### Global archive state
 
-`src/zip/zfile.c` currently owns one global `mz_zip_archive`, one global extraction iterator, one current `mz_zip_archive_file_stat`, one enumeration index, one 4 KiB byte cache and one streamed-length counter.
+At Z0, `src/zip/zfile.c` owned one global `mz_zip_archive`, one global extraction
+iterator, one current `mz_zip_archive_file_stat`, one enumeration index, one
+4 KiB byte cache and one streamed-length counter.
 
 Consequences:
 
@@ -70,7 +79,9 @@ NCDZ relies on this behavior. It is semantically ambiguous and should be removed
 
 ### Metadata performs unnecessary extraction setup
 
-NCDZ `zlength()` currently calls `zopen()` + `zsize()` + `zclose()`. For ZIP entries this creates an extraction iterator even though only central-directory metadata is required.
+At Z0, NCDZ `zlength()` called `zopen()` + `zsize()` + `zclose()`. For ZIP
+entries this created an extraction iterator even though only central-directory
+metadata was required.
 
 ### Archive enumeration exists for one domain operation
 
@@ -78,11 +89,17 @@ NCDZ `zlength()` currently calls `zopen()` + `zsize()` + `zclose()`. For ZIP ent
 
 ### Cache code already knows its backend
 
-MVS/CPS2 cache handling explicitly distinguishes `CACHE_RAWFILE`, `CACHE_ZIPFILE` and `CACHE_FOLDER`, yet ZIP/folder unification still leaks through the historical `zfile` API in some paths. No generic source abstraction is required there.
+MVS/CPS2 cache handling already distinguished `CACHE_RAWFILE`, `CACHE_ZIPFILE`
+and `CACHE_FOLDER`, yet at Z0 ZIP/folder unification still leaked through the
+historical `zfile` API in some paths. No generic source abstraction was needed
+there.
 
 ### ROM converter still emulates old writer semantics
 
-`romcnv` currently preserves `zopen()` / `zwrite()` / `zclose()` for ZIP output by staging each entry in `tmpfile()` and feeding it to `mz_zip_writer_add_cfile()`. This is correct and memory-safe, but is now compatibility machinery for an API that no longer has another implementation behind it.
+At Z0, `romcnv` preserved `zopen()` / `zwrite()` / `zclose()` for ZIP output by
+staging each entry in `tmpfile()` and feeding it to `mz_zip_writer_add_cfile()`.
+That was correct and memory-safe, but it was compatibility machinery for an API
+that no longer had another implementation behind it.
 
 ## Architectural rules
 
@@ -844,6 +861,44 @@ Exit criteria:
 
 - filenames and APIs describe actual semantics;
 - no comments refer to MiniZip-era pseudo-handles or transparent ZIP/directory fallback.
+
+#### Z8 implementation result
+
+Z8 finishes the naming and dependency-boundary cleanup. Runtime ZIP support now
+lives at `src/common/zip_archive.c/.h`, matching its shared scope across ROM
+loading, caches and NCDZ. The obsolete `src/zip` source location is no longer
+used, and the legacy PSP Makefile now builds `common/zip_archive.o` rather than
+the removed `zip/zfile.o`.
+
+The runtime public `zip_archive_t` and `zip_entry_t` types now contain only an
+opaque domain state pointer. All `mz_*` archive/iterator structures live in the
+implementation translation unit. `zip_entry_is_open()` replaces the final
+caller inspection of miniz iterator state. CMake consequently applies miniz
+include directories and compile definitions only to `src/common/zip_archive.c`
+instead of to ROM/cache/NCDZ callers.
+
+`romcnv` follows the same boundary: `zip_reader.h` and `zip_writer.h` no longer
+include or expose miniz types, their implementation state is private, and miniz
+compile requirements are attached only to `zip_reader.c` and `zip_writer.c`.
+The executable links the miniz archive without propagating its usage
+requirements target-wide.
+
+Current architecture documentation and repository pointers were updated to
+describe the explicit ZIP API rather than the removed `zfile` compatibility
+layer. Historical migration/measurement sections retain old names only where
+they describe the code that existed at that phase.
+
+Validation while closing Z8:
+
+- Release Desktop builds pass for CPS1, CPS2, MVS and NCDZ;
+- Release `romcnv_mvs` and `romcnv_cps2` builds pass;
+- CPS1 non-`memory_plan_tests` CTest passes 10/10;
+- NCDZ non-`memory_plan_tests` CTest passes 11/11, including
+  `resource_source_tests` and `zip_archive_tests`;
+- real MVS `pbobbl2n` and CPS2 `mpangu` converter ZIPs are regenerated with
+  the opaque reader/writer owners, pass `unzip -t`, and are consumed by NJEMU
+  in 30-frame Desktop smokes;
+- `resources/` remains untouched.
 
 ### Z9 — Full validation and measurements
 

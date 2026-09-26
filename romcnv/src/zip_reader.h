@@ -6,23 +6,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <miniz.h>
-
 typedef struct zip_reader_archive_t
 {
-    mz_zip_archive archive;
-    bool is_open;
+    void *state;
 } zip_reader_archive_t;
 
 typedef struct zip_reader_entry_t
 {
-    mz_zip_reader_extract_iter_state *reader;
-    uint64_t size;
-    uint64_t bytes_read;
-    uint32_t crc32;
-    unsigned char byte_cache[4096];
-    size_t byte_cache_pos;
-    size_t byte_cache_len;
+    void *state;
 } zip_reader_entry_t;
 
 typedef struct zip_reader_entry_info_t
@@ -49,6 +40,7 @@ bool zip_reader_entry_open(zip_reader_archive_t *archive,
 
 size_t zip_reader_entry_read(zip_reader_entry_t *entry, void *dst, size_t size);
 int zip_reader_entry_getc(zip_reader_entry_t *entry);
+bool zip_reader_entry_is_open(const zip_reader_entry_t *entry);
 bool zip_reader_entry_close(zip_reader_entry_t *entry);
 
 #endif /* ZIP_READER_H */

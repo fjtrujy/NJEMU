@@ -4,12 +4,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include <miniz.h>
-
 typedef struct zip_writer_t
 {
-    mz_zip_archive archive;
-    bool is_open;
+    void *state;
 } zip_writer_t;
 
 typedef struct zip_writer_segment_t

@@ -116,6 +116,15 @@ else()
     set(ROMCNV_MINIZ_TARGET miniz)
 endif()
 
+get_target_property(ROMCNV_MINIZ_INCLUDE_DIRS ${ROMCNV_MINIZ_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(ROMCNV_MINIZ_COMPILE_DEFINITIONS ${ROMCNV_MINIZ_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+if(NOT ROMCNV_MINIZ_INCLUDE_DIRS)
+    set(ROMCNV_MINIZ_INCLUDE_DIRS "")
+endif()
+if(NOT ROMCNV_MINIZ_COMPILE_DEFINITIONS)
+    set(ROMCNV_MINIZ_COMPILE_DEFINITIONS "")
+endif()
+
 # Add specific target source files
 if (${TARGET} STREQUAL "MVS")
     include_directories(
@@ -147,6 +156,14 @@ string(TOLOWER ${PROJECT_NAME} PROJECT_LOWER)
 set(BINARY_TARGET "${PROJECT_LOWER}_${TARGET_LOWER}")
 add_executable(${BINARY_TARGET}
     ${ALL_SRC}
+)
+
+set_source_files_properties(
+    src/zip_reader.c
+    src/zip_writer.c
+    PROPERTIES
+    INCLUDE_DIRECTORIES "${ROMCNV_MINIZ_INCLUDE_DIRS}"
+    COMPILE_DEFINITIONS "${ROMCNV_MINIZ_COMPILE_DEFINITIONS}"
 )
 
 # Add the warning flags
@@ -191,4 +208,4 @@ else()
     target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
 endif()
 
-target_link_libraries(${BINARY_TARGET} PRIVATE ${ROMCNV_MINIZ_TARGET})
+target_link_libraries(${BINARY_TARGET} PRIVATE "$<TARGET_FILE:${ROMCNV_MINIZ_TARGET}>")

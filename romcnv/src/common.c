@@ -144,7 +144,7 @@ rom_file_open_result_t file_open(const char *fname1, const char *fname2, const u
 
 int file_read(void *buf, size_t length)
 {
-	if (rom_entry.reader != NULL)
+	if (zip_reader_entry_is_open(&rom_entry))
 		return (int)zip_reader_entry_read(&rom_entry, buf, length);
 	return -1;
 }
@@ -156,7 +156,7 @@ int file_read(void *buf, size_t length)
 
 int file_getc(void)
 {
-	if (rom_entry.reader != NULL)
+	if (zip_reader_entry_is_open(&rom_entry))
 		return zip_reader_entry_getc(&rom_entry);
 	return -1;
 }

@@ -40,7 +40,7 @@ make -j4
 - **Quick pointers to inspect for common tasks:**
   - Entry & driver wiring: `src/emumain.c` and `src/mvs/driver.c`.
   - Sprite/video interfaces: `src/mvs/sprite_common.c`, `src/cps1/sprite_common.c`, and `src/cps2/sprite_common.c`.
-  - ROM loading and zip handling: `src/zip/` and `src/common/loadrom.c`.
+  - ROM loading and ZIP handling: `src/common/zip_archive.c` and `src/common/loadrom.c`.
   - Video driver change: each TARGET must define `emu_layer_textures`, `emu_layer_textures_count`, and `emu_clut_info` in its core file; see `src/mvs/mvs.c` for an example and `src/emumain.c` for the init call.
   - CPS2 Z-buffer masking: PS2 uses GS ZBUF register (`src/ps2/ps2_video.c`), Desktop uses `desktop_clearFrame` (`src/desktop/desktop_video.c`).
 

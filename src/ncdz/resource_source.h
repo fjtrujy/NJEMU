@@ -13,7 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "zip/zip_archive.h"
+#include "common/zip_archive.h"
 
 typedef enum resource_source_type_t
 {

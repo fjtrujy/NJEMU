@@ -4,7 +4,7 @@
 
 #include <miniz.h>
 
-#include "zip/zip_archive.h"
+#include "common/zip_archive.h"
 
 #ifndef TEST_ZIP_ARCHIVE_PATH
 #define TEST_ZIP_ARCHIVE_PATH "zip_archive_tests.zip"
@@ -74,7 +74,9 @@ int main(void)
     assert(!zip_archive_find_crc(&archive, 0x12345678U, &info));
 
     /* Two entries may be open at once; opening one must not close the other. */
+    assert(!zip_entry_is_open(&alpha_entry));
     assert(zip_entry_open(&archive, "ALPHA.TXT", &alpha_entry));
+    assert(zip_entry_is_open(&alpha_entry));
     assert(!zip_entry_open(&archive, "beta.bin", &alpha_entry));
     assert(zip_entry_open(&archive, "beta.bin", &beta_entry));
     assert(zip_entry_read(&alpha_entry, buffer, 5) == 5);
@@ -82,6 +84,7 @@ int main(void)
     assert(zip_entry_read(&beta_entry, buffer, 3) == 3);
     assert(memcmp(buffer, beta, 3) == 0);
     assert(zip_entry_close(&alpha_entry));
+    assert(!zip_entry_is_open(&alpha_entry));
     assert(zip_entry_close(&beta_entry));
 
     /* Sequential reuse has no hidden iterator or byte-cache state. */

@@ -9,28 +9,19 @@
 #ifndef ZIP_ARCHIVE_H
 #define ZIP_ARCHIVE_H
 
-#include <stdbool.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#include <miniz.h>
-
 typedef struct zip_archive_t
 {
-    mz_zip_archive archive;
-    bool is_open;
+    void *state;
 } zip_archive_t;
 
 typedef struct zip_entry_t
 {
-    mz_zip_reader_extract_iter_state *reader;
-    uint64_t size;
-    uint64_t bytes_read;
-    uint32_t crc32;
-    unsigned char *byte_cache;
-    size_t byte_cache_pos;
-    size_t byte_cache_len;
+    void *state;
 } zip_entry_t;
 
 typedef struct zip_entry_info_t
@@ -58,6 +49,7 @@ bool zip_entry_open(zip_archive_t *archive,
 
 size_t zip_entry_read(zip_entry_t *entry, void *dst, size_t size);
 int zip_entry_getc(zip_entry_t *entry);
+bool zip_entry_is_open(const zip_entry_t *entry);
 bool zip_entry_close(zip_entry_t *entry);
 
 #endif /* ZIP_ARCHIVE_H */

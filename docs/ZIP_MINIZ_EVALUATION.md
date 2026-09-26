@@ -6,39 +6,38 @@ Date: 2026-09-25
 
 NJEMU historically embedded the 1998 MiniZip 0.15 implementation in
 `src/zip/unzip.c`, with `src/zip/zfile.c` providing the application-facing API
-and a POSIX directory fallback. That embedded implementation has now been
-removed. `src/zip/zfile.c` uses external upstream miniz 3.1.2 directly while
-preserving that public API and the directory behavior.
+and a POSIX directory fallback. That embedded implementation and the later
+compatibility `zfile` layer have now been removed. Runtime ZIP access lives in
+`src/common/zip_archive.c`; NCDZ owns its intentional ZIP-or-directory policy
+separately in `src/ncdz/resource_source.c`.
 
 The ROM converter had separate copies of the same legacy reader plus the old
-MiniZip writer. Those copies have also been removed: `romcnv/src/zfile.c` now
-uses miniz for both reading source ROM ZIPs and writing cache ZIPs.
+MiniZip writer. Those copies and their temporary `zfile` compatibility layer
+have also been removed. `romcnv/src/zip_reader.c` and `zip_writer.c` now expose
+explicit reader/writer owners backed by miniz.
 
 ## API actually used by NJEMU
 
-The shared ROM/cache/CD code uses the following API on every core:
+The final runtime abstraction uses the following operations:
 
 | NJEMU API | miniz implementation |
 | --- | --- |
-| `zip_open()` | `mz_zip_reader_init_file()` |
-| `zip_close()` | `mz_zip_reader_end()` |
-| `zip_findfirst()` / `zip_findnext()` | `mz_zip_reader_get_num_files()` + `mz_zip_reader_file_stat()` |
-| `zopen()` | `mz_zip_reader_locate_file()` + `mz_zip_reader_file_stat()` + `mz_zip_reader_extract_iter_new()` |
-| `zread()` | `mz_zip_reader_extract_iter_read()` |
-| `zgetc()` | existing 4 KiB NJEMU byte cache over `zread()` |
-| `zclose()` | `mz_zip_reader_extract_iter_free()` |
-| `zsize()` | cached `m_uncomp_size` from `mz_zip_archive_file_stat` |
-| `zlength()` (NCDZ) | unchanged `zopen()` / `zsize()` / `zclose()` composition |
+| `zip_archive_open()` | `mz_zip_reader_init_file()` |
+| `zip_archive_close()` | `mz_zip_reader_end()` |
+| `zip_archive_stat()` | `mz_zip_reader_locate_file()` + `mz_zip_reader_file_stat()` |
+| `zip_archive_find_crc()` | private central-directory scan with `mz_zip_reader_file_stat()` |
+| `zip_entry_open()` | `mz_zip_reader_locate_file()` + `mz_zip_reader_extract_iter_new()` |
+| `zip_entry_read()` | `mz_zip_reader_extract_iter_read()` |
+| `zip_entry_getc()` | lazy 4 KiB NJEMU byte cache over `zip_entry_read()` |
+| `zip_entry_close()` | `mz_zip_reader_extract_iter_free()` |
 
-If `zip_open()` cannot open the path as a ZIP, NJEMU keeps the existing
-directory backend based on `open()`, `read()`, `lseek()` and `close()`. This is
-required by NCDZ and cache/resource paths.
+The ZIP layer is ZIP-only. Cache code chooses raw/folder/ZIP backends
+explicitly, while NCDZ's `resource_source_t` is the only domain abstraction
+that deliberately unifies directory and ZIP resources.
 
-The old wrapper's pointer/integer warning suppression is no longer needed.
-`zip_open()` and archive-mode `zopen()` historically returned the `unzFile`
-pointer cast to `int`/`long`, even though every caller only tested the result
-against `-1`. The miniz implementation returns `0` as the success sentinel and
-does not convert archive pointers to integer pseudo-handles.
+The old wrapper's pointer/integer warning suppression and pseudo-handle model
+are no longer present. Public runtime ZIP types contain only opaque domain
+state; miniz types do not cross the public header boundary.
 
 `mz_zip_reader_locate_file(..., 0)` was verified to retain the case-insensitive
 lookup behavior expected by the previous `unzLocateFile()` path.
@@ -52,12 +51,13 @@ lookup behavior expected by the previous `unzLocateFile()` path.
 - PSP: `psp-packages` now contains a miniz 3.1.2 package built from the same
   upstream release, with no `MINIZ_NO_*` configuration. The local PSPDEV
   installation exposes that package through its normal CMake config and NJEMU
-  builds against it using the same `src/zip/zfile.c` backend as PS2 and
+  builds against it using the same `src/common/zip_archive.c` backend as PS2 and
   Desktop.
 
 The CMake integration keeps miniz's include directories and compile definitions
-local to `src/zip/zfile.c`; they are not propagated to the CPU cores or
-other NJEMU translation units.
+local to the ZIP implementation translation unit. Runtime and `romcnv` public
+headers do not include miniz, so its compile requirements are not propagated to
+their callers.
 
 ## Functional validation
 
@@ -75,8 +75,9 @@ Representative real-ROM 30-frame smokes also exited successfully:
 | MVS | `pbobbl2n` | BIOS + ROM + C-ROM cache load completed; exited 0 |
 | NCDZ | `Windjammers` | directory/CD resource path loaded and ran; exited 0 |
 
-These paths exercise entry enumeration, filename lookup, size/CRC metadata,
-streaming decompression/read, and the NCDZ directory fallback.
+These paths exercise filename and CRC lookup, metadata-only queries, streaming
+decompression/read, explicit cache backends, and the NCDZ resource-source
+directory path.
 
 The PS2 MVS `Release`, GUI, `COMMAND_LIST=ON`, `SAVE_STATE=ON`, `ADHOC=OFF`
 cross-build also succeeds with miniz. A separate no-GUI/COMMAND_LIST=OFF ELF
@@ -201,9 +202,9 @@ budget.
 
 ## Decision
 
-The same `src/zip/zfile.c` reader implementation is used by Desktop, PS2 and
-PSP; there is no platform-specific ZIP code. The package and linker strategy
-does need to differ between the consoles, however.
+The same `src/common/zip_archive.c` reader implementation is used by Desktop,
+PS2 and PSP; there is no platform-specific ZIP code. The package and linker
+strategy does need to differ between the consoles, however.
 
 On PS2, full upstream miniz 3.1.2 is suitable when the port is built with
 `-ffunction-sections -fdata-sections` and the final application uses

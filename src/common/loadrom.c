@@ -9,7 +9,7 @@
 #include <limits.h>
 #include <sys/unistd.h>
 #include "emumain.h"
-#include "zip/zip_archive.h"
+#include "common/zip_archive.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
@@ -158,7 +158,7 @@ void file_close(void)
 
 size_t file_read(void *buf, size_t length)
 {
-	if (rom_entry.reader != NULL)
+	if (zip_entry_is_open(&rom_entry))
 		return zip_entry_read(&rom_entry, buf, length);
 	return (size_t)-1;
 }
@@ -170,7 +170,7 @@ size_t file_read(void *buf, size_t length)
 
 int file_getc(void)
 {
-	if (rom_entry.reader != NULL)
+	if (zip_entry_is_open(&rom_entry))
 		return zip_entry_getc(&rom_entry);
 	return -1;
 }

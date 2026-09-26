@@ -92,7 +92,7 @@ src/
 ├── common/          # Platform-agnostic code and driver interfaces
 ├── cpu/             # CPU cores (m68000, z80)
 ├── sound/           # Sound synthesis
-├── zip/             # ROM archive handling
+├── common/          # Shared services, including ZIP archive handling
 ├── mvs/             # Neo-Geo MVS target
 ├── cps1/            # CPS1 target
 ├── cps2/            # CPS2 target
