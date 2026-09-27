@@ -855,6 +855,61 @@ Acceptance for any future VU1 path: identical output/state ordering, no common o
 target-side PS2 conditional, and a clear real-hardware performance win over the
 best EE backend.  Otherwise retain the EE path.
 
+#### D7d - CPS2 portable sprite renderer [COMPLETE]
+
+Result (2026-09-27):
+- replaced `cps2/{psp,ps2,desktop}_sprite.c` with one platform-neutral
+  `cps2/sprite.c`. Sprite decoding, cache replacement, priority lists, CLUT
+  batching, scroll clipping, flip semantics and presentation geometry now have a
+  single implementation;
+- kept CPS2's priority-mask semantics explicit without leaking native GPU types:
+  the common renderer retains each object's compact `z` value and selects the
+  normal or masked object path, while PSP/PS2 own their native depth state behind
+  `enableDepthTest`, `disableDepthTest`, `clearDepthBuffer` and
+  `clearColorBuffer`. The latched CPS2 `z` counter can increase at most once per
+  priority inversion across the 1024-entry object list, so the portable signed
+  16-bit vertex field preserves its full runtime range;
+- preserved the existing object-priority flattening/batching algorithm rather than
+  adding a new abstraction pass. All three previous CPS2 renderers already copied
+  linked-list object vertices into a flat submission buffer; D7d merely changes
+  those retained/submission vertices from native platform types to the shared
+  12-byte representation;
+- reused two compact scroll vertex buffers sequentially, matching the original PSP
+  ownership model. Compile-time assertions guarantee the SCROLL1-sized buffers
+  remain large enough for SCROLL2 and SCROLL3 if those limits change later;
+- retained the D7P execution model: PSP submits the portable vertex layout
+  directly to GU, PS2 materializes it once into its final gsKit command-queue
+  location, and Desktop consumes it through SDL. No new portable-to-native
+  staging array was introduced for CPS2;
+- removed the final target-renderer escape hatches from `video_driver_t`:
+  `textureLayer`, `getNativeObjects`, legacy `blitTexture`, and `flushCache` no
+  longer exist. CPS2, like NCDZ/MVS/CPS1, contains no GU/gsKit/SDL renderer types;
+- removed dead common texture-address macros left over from the original PSP
+  renderers and localized the one remaining PSP-only uncached-frame address
+  conversion inside `psp_video.c`;
+- exact Desktop framebuffer comparison used temporary out-of-tree instrumentation
+  against the immediately preceding `HEAD`. The logical framebuffer hashes match
+  for every compared frame: `mpangu` 120/120, `19xx` 600/600, `ssf2` 600/600 and
+  `progear` 600/600 (1,920 frames total). The instrumentation is not part of the
+  source tree;
+- Desktop CPS2 Release GUI-OFF passes 13/13 CTests and a 600-frame `mpangu`
+  runtime smoke. PSP and PS2 CPS2 Release GUI-OFF builds pass; PSP produces a
+  valid EBOOT.PBP. Fresh CPS2 `GUI=ON`, `SAVE_STATE=ON` builds also pass on
+  Desktop, PSP and PS2, with PSP again producing EBOOT.PBP;
+- PSP Release GUI-OFF, SAVE_STATE=OFF versus pre-D7d `HEAD`: `.text` 672,904 ->
+  672,112 B (-792), `.data` 4,952 -> 4,888 B (-64), `.bss` unchanged at
+  1,750,304 B, ELF -1,500 B and PRX/PBP -1,040 B;
+- PS2 Release GUI-OFF, SAVE_STATE=OFF versus pre-D7d `HEAD`: `.text` 774,100 ->
+  769,284 B (-4,816), `.data` 389,524 -> 389,508 B (-16), `.bss` 2,117,152 ->
+  1,518,176 B (-598,976), total runtime image -603,808 B and ELF -5,212 B. The
+  BSS reduction comes from eliminating persistent native gsKit object/flat/scroll
+  vertex arrays in favour of compact portable retained data;
+- `git diff --check` is clean and no file under `resources/` is modified.
+
+The deferred VU1/VIF1 experiment remains intentionally outside D7. If revisited,
+it must compare against the optimized direct-queue EE backend established in D7P,
+not against the removed native-staging implementation.
+
 ### D8 - Remove remaining platform conditionals from common behaviour
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
@@ -900,10 +955,14 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Continue D7 with CPS2, now using the D7P-refined contract: compact common draw
-data, direct backend-native execution, and no avoidable PS2 materialization pass.
-Model CPS2's depth/priority masking explicitly in the video backend rather than
-leaking native GS state into target code. Keep the VU1/VIF1 experiment deferred.
-Once CPS2 no longer needs native backend objects, remove the legacy
-`getNativeObjects()` / native-vertex escape hatches from `video_driver_t` before
-starting the broader D8 common-conditional audit.
+Start D8 now that all four target sprite renderers use the same portable video
+contract and the native-object escape hatches are gone. Audit the remaining
+platform conditionals in `src/common/` by semantic category (filesystem/path,
+geometry/presentation, capability, lifecycle and genuinely compile-time target
+facts), moving behaviour into common helpers or explicit backend capabilities only
+when that reduces duplication without adding runtime work. Keep include ownership
+strict while doing so: every touched source should include the declarations it
+uses directly, and platform SDK headers must remain inside platform code. After
+D8, perform the broader D9 include-fanout/API audit and document the final recipe
+for adding another platform such as PS Vita. The VU1/VIF1 experiment remains
+deferred until a separate measured optimization effort is justified.

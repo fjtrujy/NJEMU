@@ -552,12 +552,6 @@ static inline GSPRIMPOINT *ps2_beginPointList(GSGLOBAL *gsGlobal, int count)
 	return (GSPRIMPOINT *)p_data;
 }
 
-static void *ps2_textureLayer(void *data, uint8_t layerIndex)
-{
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	return ps2->tex_layers[layerIndex].texture->Mem;
-}
-
 static void ps2_getOutputSize(void *data, int *width, int *height)
 {
 	ps2_video_t *ps2 = (ps2_video_t *)data;
@@ -1328,29 +1322,6 @@ static void ps2_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_re
 	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
-static void *ps2_getNativeObjects(void *data, int index) {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	if (!ps2)
-		return NULL;
-
-	switch (index) {
-	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
-		return ps2->gsGlobal;
-	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
-		return (void *)ps2->gsGlobal->ScreenBuffer[!(ps2->gsGlobal->ActiveBuffer & 1)];
-	case COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER:
-		return (void *)ps2->gsGlobal->ScreenBuffer[ps2->gsGlobal->ActiveBuffer & 1];
-	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
-		return ps2->scrbitmap;
-	default: {
-		int layer_index = index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER;
-		if (layer_index < 0 || layer_index >= ps2->tex_layers_count)
-			return NULL;
-		return ps2->tex_layers[layer_index].texture;
-	}
-	}
-}
-
 static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	if (!ps2 || textureIndex >= ps2->tex_layers_count)
@@ -1530,16 +1501,6 @@ static void ps2_blitSpriteVertices(void *data, uint8_t textureIndex,
 	}
 }
 
-static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices) {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
-	GSTEXTURE *tex = ps2_prepareSpriteTexture(ps2, textureIndex,
-		(const uint16_t *)clut, bank_index);
-	if (!tex || !vertices || vertices_count == 0)
-		return;
-
-	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex, ps2->vertexColor, vertices_count, vertices);
-}
-
 static void ps2_blitPointVertices(void *data, uint32_t points_count,
 	const video_point_vertex_t *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
@@ -1562,13 +1523,6 @@ static void ps2_blitPointVertices(void *data, uint32_t points_count,
 			GETG15(src->color), GETB15(src->color), 0x80, 0);
 	}
 	gsKit_set_test(ps2->gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
-}
-
-static void ps2_flushCache(void *data, void *addr, size_t size) {
-	(void)data;
-	if (!addr || size == 0)
-		return;
-	SyncDCache(addr, (uint8_t *)addr + size);
 }
 
 /*--------------------------------------------------------
@@ -2008,7 +1962,6 @@ video_driver_t video_ps2 = {
 	ps2_frameAddr,
 	ps2_video_read_frame,
 	ps2_getOutputSize,
-	ps2_textureLayer,
 	ps2_scissor,
 	ps2_clearScreen,
 	ps2_clearFrame,
@@ -2019,15 +1972,12 @@ video_driver_t video_ps2 = {
 	ps2_copyRectFlip,
 	ps2_copyRectRotate,
 	ps2_drawTexture,
-	ps2_getNativeObjects,
 	ps2_uploadMem,
 	ps2_uploadClut,
 	ps2_writeIndexedTextureRect,
 	ps2_writeDirectTextureRect,
 	ps2_blitSpriteVertices,
 	ps2_blitPointVertices,
-	ps2_blitTexture,
-	ps2_flushCache,
 	ps2_enableDepthTest,
 	ps2_disableDepthTest,
 	ps2_clearDepthBuffer,

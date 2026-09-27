@@ -271,6 +271,11 @@ void psp_video_sync_ui_scratch(void *data)
 		Resolve frame index to VRAM pointer
 --------------------------------------------------------*/
 
+static inline uint16_t *psp_uncachedFrameAddr(void *frame)
+{
+	return (uint16_t *)((uintptr_t)frame | 0x44000000u);
+}
+
 static void *psp_resolveFrame(psp_video_t *psp, int index) {
 	switch (index) {
 	case COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER:
@@ -300,12 +305,6 @@ static void psp_getOutputSize(void *data, int *width, int *height)
 	(void)data;
 	if (width) *width = SCR_WIDTH;
 	if (height) *height = SCR_HEIGHT;
-}
-
-static void *psp_textureLayer(void *data, uint8_t layerIndex)
-{
-	psp_video_t *psp = (psp_video_t *)data;
-	return psp->tex_layers[layerIndex].buffer;
 }
 
 static void psp_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
@@ -392,7 +391,7 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 	void *src_ptr = psp_resolveFrame(psp, srcIndex);
 	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 
 	sw = src_rect->right - src_rect->left;
 	dw = dst_rect->right - dst_rect->left;
@@ -406,7 +405,7 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
 	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
-	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
+	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, psp_uncachedFrameAddr(src_ptr));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -414,7 +413,7 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 	for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -431,7 +430,7 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 
 	if (j < sw)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -500,7 +499,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	void *src_ptr = psp_resolveFrame(psp, srcIndex);
 	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int16_t j, sw, dw, sh, dh;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 
 	sw = src_rect->right - src_rect->left;
 	dw = dst_rect->right - dst_rect->left;
@@ -512,7 +511,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, psp_uncachedFrameAddr(src_ptr));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -520,7 +519,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 	for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -537,7 +536,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 	if (j < sw)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -567,7 +566,7 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	void *src_ptr = psp_resolveFrame(psp, srcIndex);
 	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int16_t j, sw, dw, sh, dh;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 
 	sw = src_rect->right - src_rect->left;
 	dw = dst_rect->right - dst_rect->left;
@@ -579,17 +578,17 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	sceGuDisable(GU_ALPHA_TEST);
 
 	sceGuTexMode(pixel_format, 0, 0, GU_FALSE);
-	sceGuTexImage(0, 512, 512, BUF_WIDTH, GU_FRAME_ADDR(src_ptr));
+	sceGuTexImage(0, 512, 512, BUF_WIDTH, psp_uncachedFrameAddr(src_ptr));
 	if (sw == dh && sh == dw)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
 		sceGuTexFilter(GU_LINEAR, GU_LINEAR);
 
-	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+	vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 	for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->right - j;
 		vertices[0].v = src_rect->bottom;
@@ -606,7 +605,7 @@ static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 
 	if (j < sw)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->right + j;
 		vertices[0].v = src_rect->bottom;
@@ -636,7 +635,7 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 	void *src = psp_resolveFrame(psp, srcIndex);
 	void *dst = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 
 	sw = src_rect->right - src_rect->left;
 	dw = dst_rect->right - dst_rect->left;
@@ -647,7 +646,7 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 	sceGuScissor(dst_rect->left, dst_rect->top, dw, dh);
 
 	sceGuTexMode(GU_PSM_5551, 0, 0, GU_FALSE);
-	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, GU_FRAME_ADDR(src));
+	sceGuTexImage(0, BUF_WIDTH, BUF_WIDTH, BUF_WIDTH, psp_uncachedFrameAddr(src));
 	if (sw == dw && sh == dh)
 		sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 	else
@@ -655,7 +654,7 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 
 	for (j = 0; (j + SLICE_SIZE) < sw; j = j + SLICE_SIZE)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -672,7 +671,7 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 
 	if (j < sw)
 	{
-		vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+		vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 		vertices[0].u = src_rect->left + j;
 		vertices[0].v = src_rect->top;
@@ -690,8 +689,6 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 	// sceGuFinish();
 	// sceGuSync(0, GU_SYNC_FINISH);
 }
-
-static void *psp_getNativeObjects(void *data, int index) { return NULL; }
 
 static void psp_uploadMem(void *data, uint8_t textureIndex)
 {
@@ -807,19 +804,6 @@ static void psp_blitSpriteVertices(void *data, uint8_t textureIndex,
 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
 }
 
-static void psp_blitTexture(void *data, uint8_t textureIndex, void *clut,
-							uint8_t clut_index, uint32_t vertices_count,
-							void *vertices)
-{
-	psp_video_t *psp = (psp_video_t *)data;
-	(void)clut_index;
-	if (!psp || textureIndex >= psp->tex_layers_count || !vertices ||
-	    vertices_count == 0)
-		return;
-	psp_bindSpriteTexture(psp, textureIndex, (const uint16_t *)clut);
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
-}
-
 static void psp_blitPointVertices(void *data, uint32_t points_count,
 	const video_point_vertex_t *vertices)
 {
@@ -833,12 +817,6 @@ static void psp_blitPointVertices(void *data, uint32_t points_count,
 	sceGuDrawArray(GU_POINTS, GU_COLOR_5551 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, points_count, NULL, vertices);
 	sceGuEnable(GU_TEXTURE_2D);
 	sceGuEnable(GU_ALPHA_TEST);
-}
-
-static void psp_flushCache(void *data, void *addr, size_t size)
-{
-	size_t aligned_size = (size + 63) & ~63;
-	sceKernelDcacheWritebackRange(addr, aligned_size);
 }
 
 static void psp_enableDepthTest(void *data)
@@ -882,7 +860,7 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 
 	if (!tex) return;
 
@@ -897,7 +875,7 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexFilter(GU_NEAREST, GU_NEAREST);
 
-	vertices = (struct Vertex *)sceGuGetMemory(2 * sizeof(struct Vertex));
+	vertices = (video_sprite_vertex_t *)sceGuGetMemory(2 * sizeof(video_sprite_vertex_t));
 
 	if (vertices)
 	{
@@ -1168,7 +1146,6 @@ video_driver_t video_psp = {
 	psp_frameAddr,
 	NULL, // readFrame: PSP surfaces are directly CPU-addressable
 	psp_getOutputSize,
-	psp_textureLayer,
 	psp_scissor,
 	psp_clearScreen,
 	psp_clearFrame,
@@ -1179,15 +1156,12 @@ video_driver_t video_psp = {
 	psp_copyRectFlip,
 	psp_copyRectRotate,
 	psp_drawTexture,
-	psp_getNativeObjects,
 	psp_uploadMem,
 	psp_uploadClut,
 	psp_writeIndexedTextureRect,
 	psp_writeDirectTextureRect,
 	psp_blitSpriteVertices,
 	psp_blitPointVertices,
-	psp_blitTexture,
-	psp_flushCache,
 	psp_enableDepthTest,
 	psp_disableDepthTest,
 	psp_clearDepthBuffer,

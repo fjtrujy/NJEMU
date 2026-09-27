@@ -502,7 +502,7 @@ if (${TARGET} STREQUAL "CPS2")
         cps2/sprite.h
         cps2/sprite_common.h
         cps2/sprite_common.c
-        cps2/${PLATFORM_LOWER}_sprite.c
+        cps2/sprite.c
         cps2/eeprom.h
         cps2/eeprom.c
     )

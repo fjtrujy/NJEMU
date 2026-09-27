@@ -230,12 +230,6 @@ static void desktop_getOutputSize(void *data, int *width, int *height)
 	if (height) *height = h;
 }
 
-static void *desktop_textureLayer(void *data, uint8_t layerIndex)
-{
-	desktop_video_t *desktop = (desktop_video_t*)data;
-	return desktop->tex_layers[layerIndex].buffer;
-}
-
 static void desktop_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
@@ -436,16 +430,6 @@ static void desktop_drawTexture(void *data, int srcIndex, int dstIndex, RECT *sr
 {
 }
 
-static void *desktop_getNativeObjects(void *data, int index) {
-	desktop_video_t *desktop = (desktop_video_t *)data;
-	switch (index) {
-	case COMMON_GRAPHIC_OBJECTS_GLOBAL_CONTEXT:
-		return desktop->renderer;
-	default:
-		return NULL;
-	}
-}
-
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 static void desktop_writeIndexedTextureRect(void *data, uint8_t textureIndex,
@@ -578,11 +562,6 @@ static void desktop_blitSpriteVertices(void *data, uint8_t textureIndex,
 	}
 }
 
-static void desktop_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_t clut_index, uint32_t vertices_count, void *vertices) {
-	desktop_blitSpriteVertices(data, textureIndex, (const uint16_t *)clut,
-		clut_index, vertices_count, (const video_sprite_vertex_t *)vertices);
-}
-
 static void desktop_uploadMem(void *data, uint8_t textureIndex) {
 }
 
@@ -602,10 +581,6 @@ static void desktop_blitPointVertices(void *data, uint32_t points_count,
 		SDL_SetRenderDrawColor(desktop->renderer, GETR15(c), GETG15(c), GETB15(c), 255);
 		SDL_RenderDrawPoint(desktop->renderer, vertices[i].x, vertices[i].y);
 	}
-}
-
-static void desktop_flushCache(void *data, void *addr, size_t size) {
-	// No cache to flush on desktop
 }
 
 static void desktop_enableDepthTest(void *data) {
@@ -795,7 +770,6 @@ video_driver_t video_desktop = {
 	desktop_frameAddr,
 	NULL, // readFrame: Desktop state thumbnails use CPU-side UI scratch
 	desktop_getOutputSize,
-	desktop_textureLayer,
 	desktop_scissor,
 	desktop_clearScreen,
 	desktop_clearFrame,
@@ -806,15 +780,12 @@ video_driver_t video_desktop = {
 	desktop_copyRectFlip,
 	desktop_copyRectRotate,
 	desktop_drawTexture,
-	desktop_getNativeObjects,
 	desktop_uploadMem,
 	desktop_uploadClut,
 	desktop_writeIndexedTextureRect,
 	desktop_writeDirectTextureRect,
 	desktop_blitSpriteVertices,
 	desktop_blitPointVertices,
-	desktop_blitTexture,
-	desktop_flushCache,
 	desktop_enableDepthTest,
 	desktop_disableDepthTest,
 	desktop_clearDepthBuffer,

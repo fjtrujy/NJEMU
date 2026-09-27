@@ -1,18 +1,12 @@
 /******************************************************************************
 
-	psp_sprite.c
+	sprite.c
 
-	CPS2 Sprite Manager - PSP Platform
+	CPS2 platform-neutral sprite renderer
 
-	This file contains PSP-specific sprite rendering using the video_driver
-	abstraction layer. Platform-agnostic code is in sprite_common.c.
-
-	Key features:
-	- Swizzled texture formats for optimal GU performance
-	- video_driver API calls for hardware-accelerated rendering
-	- CLUT-based palettized textures (8-bit indexed)
-	- Vertex arrays for batched sprite drawing
-	- Z-buffer support for CPS2 priority masking
+	This file owns CPS2 sprite decoding, cache policy, batching, priority and
+	presentation semantics. Platform backends own texture layout, vertex
+	materialization and GPU submission.
 
 ******************************************************************************/
 
@@ -21,13 +15,7 @@
 #include "common/cache.h"
 #include "common/emulator_options.h"
 #include "common/video_driver.h"
-
-
-/******************************************************************************
-	Constants/Macros
-******************************************************************************/
-
-#define PSP_UNCACHE_PTR(p)	(((uint32_t)(p)) | 0x40000000)
+#include "common/video_geometry.h"
 
 
 /******************************************************************************
@@ -40,34 +28,129 @@ static void blit_render_object_zb(int start_pri, int end_pri);
 
 
 /******************************************************************************
-	Local Structures/Variables
+	Renderer state and portable helpers
 ******************************************************************************/
+
+typedef struct cps_presentation_size
+{
+	int16_t width;
+	int16_t height;
+} cps_presentation_size_t;
+
+static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
+
+/* option_stretch semantics shared with common/menu/cps.c. The final entry is
+ * reserved for the rotated CPS presentation path. */
+static const cps_presentation_size_t cps_presentation_sizes[6] =
+{
+	{ 384, 224 },	/* OFF/native */
+	{ 360, 270 },	/* 4:3 */
+	{ 384, 270 },	/* 24:17 */
+	{ 466, 272 },	/* 12:7 */
+	{ 480, 270 },	/* 16:9 */
+	{ 204, 272 }	/* rotated 3:4 */
+};
+
+static RECT cps_presentation_rect(int option, bool scale_logical)
+{
+	int output_width = SCR_WIDTH;
+	int output_height = SCR_HEIGHT;
+	int width;
+	int height;
+	RECT rect;
+
+	if (option < 0 || option >= (int)(sizeof(cps_presentation_sizes) /
+			sizeof(cps_presentation_sizes[0])))
+		option = 0;
+	if (video_driver->getOutputSize)
+		video_driver->getOutputSize(video_data, &output_width, &output_height);
+
+	width = cps_presentation_sizes[option].width;
+	height = cps_presentation_sizes[option].height;
+	if (scale_logical)
+		video_scale_logical_size(output_width, output_height,
+			width, height, &width, &height);
+
+	rect.left = (int16_t)((output_width - width) / 2);
+	rect.top = (int16_t)((output_height - height) / 2);
+	rect.right = (int16_t)(rect.left + width);
+	rect.bottom = (int16_t)(rect.top + height);
+	return rect;
+}
+
+static void cps_atlas_position(int16_t index, int tile_size, int *x, int *y)
+{
+	int tiles_per_line = BUF_WIDTH / tile_size;
+	*x = (index % tiles_per_line) * tile_size;
+	*y = (index / tiles_per_line) * tile_size;
+}
+
+static void cps_decode_indexed_tile(uint8_t *pixels, int tile_size,
+	const uint8_t *src, int src_stride, uint32_t palette)
+{
+	int y;
+	for (y = 0; y < tile_size; y++) {
+		int group;
+		for (group = 0; group < tile_size / 8; group++) {
+			uint32_t tile = *(const uint32_t *)(src + group * 4);
+			uint32_t *dst = (uint32_t *)&pixels[y * tile_size + group * 8];
+			dst[0] = ((tile >> 0) & 0x0f0f0f0f) | palette;
+			dst[1] = ((tile >> 4) & 0x0f0f0f0f) | palette;
+		}
+		src += src_stride;
+	}
+}
+
+static void cps_cache_indexed_tile(uint8_t layer, int16_t index, int tile_size,
+	const uint8_t *src, int src_stride, uint32_t palette)
+{
+	uint8_t pixels[32 * 32] __attribute__((aligned(4)));
+	int x;
+	int y;
+
+	cps_decode_indexed_tile(pixels, tile_size, src, src_stride, palette);
+	cps_atlas_position(index, tile_size, &x, &y);
+	video_driver->writeIndexedTextureRect(video_data, layer,
+		x, y, tile_size, tile_size, pixels, tile_size);
+}
+
+static void cps_set_sprite_vertices(video_sprite_vertex_t *vertices,
+	int16_t x, int16_t y, uint16_t z, int16_t index, int tile_size, uint16_t attr)
+{
+	int atlas_x;
+	int atlas_y;
+
+	cps_atlas_position(index, tile_size, &atlas_x, &atlas_y);
+	vertices[0].x = vertices[1].x = x;
+	vertices[0].y = vertices[1].y = y;
+	vertices[0].z = vertices[1].z = (int16_t)z;
+	vertices[0].u = vertices[1].u = (uint16_t)atlas_x;
+	vertices[0].v = vertices[1].v = (uint16_t)atlas_y;
+	vertices[0].color = vertices[1].color = 0;
+
+	attr ^= 0x60;
+	vertices[(attr & 0x20) >> 5].u += (uint16_t)tile_size;
+	vertices[(attr & 0x40) >> 6].v += (uint16_t)tile_size;
+	vertices[1].x += (int16_t)tile_size;
+	vertices[1].y += (int16_t)tile_size;
+}
+
+
+/*------------------------------------------------------------------------
+	Vertex Data
+------------------------------------------------------------------------*/
 
 typedef struct object_t OBJECT;
 
 struct object_t
 {
 	uint32_t clut;
-	struct Vertex vertices[2];
+	video_sprite_vertex_t vertices[2];
 	OBJECT *next;
 };
 
-static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
-
-static RECT cps_clip[6] =
-{
-	{ 48, 24, 48 + 384, 24 + 224 },	// option_stretch = 0  (384x224)
-	{ 60,  1, 60 + 360,  1 + 270 },	// option_stretch = 1  (360x270  4:3)
-	{ 48,  1, 48 + 384,  1 + 270 },	// option_stretch = 2  (384x270 24:17)
-	{ 7,   0,   7+ 466,      272 },	// option_stretch = 3  (466x272 12:7)
-	{ 0,   1, 480,       1 + 270 },	// option_stretch = 4  (480x270 16:9)
-	{ 138, 0, 138 + 204,     272 }	    // option_stretch = 5  (204x272 3:4 vertical)
-};
-
-
-/*------------------------------------------------------------------------
-	Vertex Data
-------------------------------------------------------------------------*/
+/* CLUT */
+static uint16_t *clut;
 
 /* OBJECT priority-based linked lists */
 static OBJECT *vertices_object_head[8];
@@ -77,18 +160,20 @@ static OBJECT ALIGN16_DATA vertices_object[OBJECT_MAX_SPRITES];
 static uint16_t object_num[8];
 static uint16_t object_index;
 
-/* Flattened object vertex buffer for rendering (replaces sceGuGetMemory) */
-static struct Vertex ALIGN16_DATA vertices_object_flat[OBJECT_MAX_SPRITES * 2];
+/* Flattened object vertex buffer for rendering */
+static video_sprite_vertex_t ALIGN16_DATA vertices_object_flat[OBJECT_MAX_SPRITES * 2];
 
-/* Scroll vertex arrays (shared between scroll layers - reused sequentially) */
-static struct Vertex ALIGN16_DATA vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
+/* Scroll layers are submitted sequentially. Reuse the two largest portable
+ * buffers just as the original PSP renderer did; PS2 materializes each batch
+ * directly into its final gsKit queue and Desktop submits synchronously. */
+static video_sprite_vertex_t ALIGN16_DATA
+	vertices_scroll[2][SCROLL1_MAX_SPRITES * 2];
 
+_Static_assert(SCROLL1_MAX_SPRITES >= SCROLL2_MAX_SPRITES,
+	"shared CPS2 scroll vertex buffer must fit SCROLL2");
+_Static_assert(SCROLL1_MAX_SPRITES >= SCROLL3_MAX_SPRITES,
+	"shared CPS2 scroll vertex buffer must fit SCROLL3");
 
-/*------------------------------------------------------------------------
-	CLUT
-------------------------------------------------------------------------*/
-
-static uint16_t *clut;
 static uint16_t clut0_num;
 static uint16_t clut1_num;
 
@@ -105,11 +190,6 @@ void blit_reset(void)
 {
 	int i;
 
-	tex_object  = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_OBJECT);
-	tex_scroll1 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL1);
-	tex_scroll2 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL2);
-	tex_scroll3 = (uint8_t *)video_driver->textureLayer(video_data, TEXTURE_LAYER_SCROLL3);
-
 	for (i = 0; i < OBJECT_TEXTURE_SIZE; i++) object_data[i].index = i;
 	for (i = 0; i < SCROLL1_TEXTURE_SIZE; i++) scroll1_data[i].index = i;
 	for (i = 0; i < SCROLL2_TEXTURE_SIZE; i++) scroll2_data[i].index = i;
@@ -119,7 +199,7 @@ void blit_reset(void)
 	clip_max_y = LAST_VISIBLE_LINE;
 
 	pen_usage = gfx_pen_usage[TILE16];
-	clut = (uint16_t *)PSP_UNCACHE_PTR(&video_palette);
+	clut = (uint16_t *)&video_palette;
 
 	blit_finish_object = blit_render_object;
 
@@ -163,6 +243,10 @@ void blit_start(int start, int end)
 
 		if (cps2_has_mask)
 			video_driver->clearDepthBuffer(video_data);
+
+		/* PS2 uploads the complete CPS2 palette to GS VRAM here. PSP/Desktop
+		 * keep their backend-specific CLUT coherency/materialization semantics. */
+		video_driver->uploadClut(video_data, clut, 0);
 	}
 }
 
@@ -173,24 +257,39 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	if (cps2_has_mask) video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
+	RECT dst_clip;
 
-	if (cps_rotate_screen)
-	{
-		if (cps_flip_screen)
-		{
-			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_src_clip);
-			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &cps_src_clip, &cps_src_clip);
-			video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
+	if (cps2_has_mask)
+		video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
+
+	if (cps_rotate_screen) {
+		if (cps_flip_screen) {
+			video_driver->copyRectFlip(video_data,
+				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+				&cps_src_clip, &cps_src_clip);
+			video_driver->copyRect(video_data,
+				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+				&cps_src_clip, &cps_src_clip);
+			video_driver->clearFrame(video_data,
+				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
-		video_driver->copyRectRotate(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[5]);
-	}
-	else
-	{
+		dst_clip = cps_presentation_rect(5, true);
+		video_driver->copyRectRotate(video_data,
+			COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+			COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+			&cps_src_clip, &dst_clip);
+	} else {
+		dst_clip = cps_presentation_rect(option_stretch, option_stretch != 0);
 		if (cps_flip_screen)
-			video_driver->copyRectFlip(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->copyRectFlip(video_data,
+				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+				&cps_src_clip, &dst_clip);
 		else
-			video_driver->transferWorkFrame(video_data, &cps_src_clip, &cps_clip[option_stretch]);
+			video_driver->transferWorkFrame(video_data,
+				&cps_src_clip, &dst_clip);
 	}
 	video_driver->endFrame(video_data);
 }
@@ -206,40 +305,27 @@ void blit_draw_object(int16_t x, int16_t y, uint16_t z, int16_t pri, uint32_t co
 	{
 		int16_t idx;
 		OBJECT *object;
-		struct Vertex *vertices;
+		video_sprite_vertex_t *vertices;
 		uint32_t key = MAKE_KEY(code, attr);
 
 		if ((idx = object_get_sprite(key)) < 0)
 		{
-			uint32_t col, tile;
-			uint8_t *src, *dst, lines = 16;
+			const uint8_t *src;
+			uint32_t palette = color_table[attr & 0x0f];
 
-			if (object_texture_num == OBJECT_TEXTURE_SIZE - 1)
-			{
+			if (object_texture_num == OBJECT_TEXTURE_SIZE - 1) {
 				cps2_scan_object_callback();
 				object_delete_sprite();
 			}
-
 			idx = object_insert_sprite(key);
-			dst = SWIZZLED8_16x16(tex_object, idx);
+			if (idx < 0) return;
 #if USE_CACHE
 			src = &memory_region_gfx1[(*read_cache)(code << 7)];
 #else
 			src = &memory_region_gfx1[code << 7];
 #endif
-			col = color_table[attr & 0x0f];
-
-			while (lines--)
-			{
-				tile = *(uint32_t *)(src + 0);
-				*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-				*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-				tile = *(uint32_t *)(src + 4);
-				*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
-				*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
-				src += 8;
-				dst += swizzle_table_8bit[lines];
-			}
+			cps_cache_indexed_tile(TEXTURE_LAYER_OBJECT, idx, 16,
+				src, 8, palette);
 		}
 
 		object = &vertices_object[object_index++];
@@ -255,18 +341,7 @@ void blit_draw_object(int16_t x, int16_t y, uint16_t z, int16_t pri, uint32_t co
 
 		vertices = object->vertices;
 
-		vertices[0].x = vertices[1].x = x;
-		vertices[0].y = vertices[1].y = y;
-		vertices[0].z = vertices[1].z = z;
-		vertices[0].u = vertices[1].u = (idx & 0x001f) << 4;
-		vertices[0].v = vertices[1].v = (idx & 0x03e0) >> 1;
-
-		attr ^= 0x60;
-		vertices[(attr & 0x20) >> 5].u += 16;
-		vertices[(attr & 0x40) >> 6].v += 16;
-
-		vertices[1].x += 16;
-		vertices[1].y += 16;
+		cps_set_sprite_vertices(vertices, x, y, z, idx, 16, attr);
 
 		object_num[pri] += 2;
 	}
@@ -281,7 +356,7 @@ static void blit_render_object(int start_pri, int end_pri)
 {
 	int i, total_sprites = 0;
 	uint8_t color = 0;
-	struct Vertex *vertices, *vertices_tmp;
+	video_sprite_vertex_t *vertices, *vertices_tmp;
 	OBJECT *object;
 	int size = 0;
 
@@ -293,7 +368,6 @@ static void blit_render_object(int start_pri, int end_pri)
 	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 
-	/* Use pre-allocated flat vertex buffer */
 	vertices_tmp = vertices = vertices_object_flat;
 
 	for (i = start_pri; i <= end_pri; i++)
@@ -304,18 +378,13 @@ static void blit_render_object(int start_pri, int end_pri)
 		{
 			if (color != object->clut)
 			{
-				color = object->clut;
-
 				if (total_sprites)
 				{
-					video_driver->uploadClut(video_data, &clut[(color ? 0 : 16) << 4], 0);
-					video_driver->flushCache(video_data, vertices, total_sprites * sizeof(struct Vertex));
-					video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, &clut[(color ? 0 : 16) << 4], 0, total_sprites, vertices);
+					video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
 					total_sprites = 0;
 					vertices = vertices_tmp;
 				}
-
-				video_driver->uploadClut(video_data, &clut[color << 4], 0);
+				color = object->clut;
 			}
 
 			vertices_tmp[0] = object->vertices[0];
@@ -329,8 +398,7 @@ static void blit_render_object(int start_pri, int end_pri)
 
 	if (total_sprites)
 	{
-		video_driver->flushCache(video_data, vertices, total_sprites * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
 	}
 }
 
@@ -341,13 +409,12 @@ static void blit_render_object(int start_pri, int end_pri)
 
 static void blit_render_object_zb0(void)
 {
-	int size = object_num[0], total_sprites = 0;
-	struct Vertex *vertices, *vertices_tmp;
+	int total_sprites = 0;
+	video_sprite_vertex_t *vertices, *vertices_tmp;
 	OBJECT *object;
 
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
-	video_driver->uploadClut(video_data, clut, 0);
 	video_driver->enableDepthTest(video_data);
 
 	vertices_tmp = vertices = vertices_object_flat;
@@ -363,9 +430,7 @@ static void blit_render_object_zb0(void)
 		vertices_tmp += 2;
 		object = object->next;
 	}
-
-	video_driver->flushCache(video_data, vertices, total_sprites * sizeof(struct Vertex));
-	video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, clut, 0, total_sprites, vertices);
+	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT, clut, 0, total_sprites, vertices);
 
 	video_driver->disableDepthTest(video_data);
 	video_driver->clearColorBuffer(video_data);
@@ -380,7 +445,7 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 {
 	int i, size = 0, total_sprites = 0;
 	uint8_t color = 0;
-	struct Vertex *vertices, *vertices_tmp;
+	video_sprite_vertex_t *vertices, *vertices_tmp;
 	OBJECT *object;
 
 	if (start_pri == 0 && object_num[0] != 0)
@@ -396,7 +461,6 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
-	video_driver->uploadClut(video_data, clut, 0);
 	video_driver->enableDepthTest(video_data);
 
 	vertices_tmp = vertices = vertices_object_flat;
@@ -409,17 +473,13 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 		{
 			if (color != object->clut)
 			{
-				color = object->clut;
-
 				if (total_sprites)
 				{
-					video_driver->flushCache(video_data, vertices, total_sprites * sizeof(struct Vertex));
-					video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, &clut[(color ? 0 : 16) << 4], 0, total_sprites, vertices);
+					video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
 					total_sprites = 0;
 					vertices = vertices_tmp;
 				}
-
-				video_driver->uploadClut(video_data, &clut[color << 4], 0);
+				color = object->clut;
 			}
 
 			vertices_tmp[0] = object->vertices[0];
@@ -433,8 +493,7 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 
 	if (total_sprites)
 	{
-		video_driver->flushCache(video_data, vertices, total_sprites * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT, &clut[color << 4], 0, total_sprites, vertices);
 	}
 
 	video_driver->disableDepthTest(video_data);
@@ -448,37 +507,27 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
 	int16_t idx;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 	uint32_t key = MAKE_KEY(code, attr);
 
 	if ((idx = scroll1_get_sprite(key)) < 0)
 	{
-		uint32_t col, tile;
-		uint8_t *src, *dst, lines = 8;
+		const uint8_t *src;
+		uint32_t palette = color_table[attr & 0x0f];
 
-		if (scroll1_texture_num == SCROLL1_TEXTURE_SIZE - 1)
-		{
+		if (scroll1_texture_num == SCROLL1_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll1_callback();
 			scroll1_delete_sprite();
 		}
-
 		idx = scroll1_insert_sprite(key);
-		dst = SWIZZLED8_8x8(tex_scroll1, idx);
+		if (idx < 0) return;
 #if USE_CACHE
 		src = &memory_region_gfx1[(*read_cache)(code << 6)];
 #else
 		src = &memory_region_gfx1[code << 6];
 #endif
-		col = color_table[attr & 0x0f];
-
-		while (lines--)
-		{
-			tile = *(uint32_t *)(src + 4);
-			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			src += 8;
-			dst += 16;
-		}
+		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL1, idx, 8,
+			src + 4, 8, palette);
 	}
 
 	if (attr & 0x10)
@@ -492,17 +541,7 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		clut0_num += 2;
 	}
 
-	vertices[0].x = vertices[1].x = x;
-	vertices[0].y = vertices[1].y = y;
-	vertices[0].u = vertices[1].u = (idx & 0x003f) << 3;
-	vertices[0].v = vertices[1].v = (idx & 0x0fc0) >> 3;
-
-	attr ^= 0x60;
-	vertices[(attr & 0x20) >> 5].u += 8;
-	vertices[(attr & 0x40) >> 6].v += 8;
-
-	vertices[1].x += 8;
-	vertices[1].y += 8;
+	cps_set_sprite_vertices(vertices, x, y, 0, idx, 8, attr);
 }
 
 
@@ -522,16 +561,12 @@ void blit_finish_scroll1(void)
 	if (clut0_num)
 	{
 		current_clut = &clut[32 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, clut0_num, vertices_scroll[0]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, clut0_num, vertices_scroll[0]);
 	}
 	if (clut1_num)
 	{
 		current_clut = &clut[48 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, clut1_num, vertices_scroll[1]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL1, current_clut, 0, clut1_num, vertices_scroll[1]);
 	}
 
 	clut0_num = 0;
@@ -557,40 +592,27 @@ void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
 void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
 	int16_t idx;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 	uint32_t key = MAKE_KEY(code, attr);
 
 	if ((idx = scroll2_get_sprite(key)) < 0)
 	{
-		uint32_t col, tile;
-		uint8_t *src, *dst, lines = 16;
+		const uint8_t *src;
+		uint32_t palette = color_table[attr & 0x0f];
 
-		if (scroll2_texture_num == SCROLL2_TEXTURE_SIZE - 1)
-		{
+		if (scroll2_texture_num == SCROLL2_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll2_callback();
 			scroll2_delete_sprite();
 		}
-
 		idx = scroll2_insert_sprite(key);
-		dst = SWIZZLED8_16x16(tex_scroll2, idx);
+		if (idx < 0) return;
 #if USE_CACHE
 		src = &memory_region_gfx1[(*read_cache)(code << 7)];
 #else
 		src = &memory_region_gfx1[code << 7];
 #endif
-		col = color_table[attr & 0x0f];
-
-		while (lines--)
-		{
-			tile = *(uint32_t *)(src + 0);
-			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			tile = *(uint32_t *)(src + 4);
-			*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			src += 8;
-			dst += swizzle_table_8bit[lines];
-		}
+		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL2, idx, 16,
+			src, 8, palette);
 	}
 
 	if (attr & 0x10)
@@ -604,17 +626,7 @@ void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		clut0_num += 2;
 	}
 
-	vertices[0].x = vertices[1].x = x;
-	vertices[0].y = vertices[1].y = y;
-	vertices[0].u = vertices[1].u = (idx & 0x001f) << 4;
-	vertices[0].v = vertices[1].v = (idx & 0x03e0) >> 1;
-
-	attr ^= 0x60;
-	vertices[(attr & 0x20) >> 5].u += 16;
-	vertices[(attr & 0x40) >> 6].v += 16;
-
-	vertices[1].x += 16;
-	vertices[1].y += 16;
+	cps_set_sprite_vertices(vertices, x, y, 0, idx, 16, attr);
 }
 
 
@@ -634,17 +646,16 @@ void blit_finish_scroll2(void)
 	if (clut0_num)
 	{
 		current_clut = &clut[64 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, clut0_num, vertices_scroll[0]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, clut0_num, vertices_scroll[0]);
 	}
 	if (clut1_num)
 	{
 		current_clut = &clut[80 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, clut1_num, vertices_scroll[1]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2, current_clut, 0, clut1_num, vertices_scroll[1]);
 	}
+
+	/* Restore full screen scissor */
+	video_driver->scissor(video_data, 64, 16, 448, 240);
 
 	clut0_num = 0;
 	clut1_num = 0;
@@ -658,46 +669,27 @@ void blit_finish_scroll2(void)
 void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
 	int16_t idx;
-	struct Vertex *vertices;
+	video_sprite_vertex_t *vertices;
 	uint32_t key = MAKE_KEY(code, attr);
 
 	if ((idx = scroll3_get_sprite(key)) < 0)
 	{
-		uint32_t col, tile;
-		uint8_t *src, *dst, lines = 32;
+		const uint8_t *src;
+		uint32_t palette = color_table[attr & 0x0f];
 
-		if (scroll3_texture_num == SCROLL3_TEXTURE_SIZE - 1)
-		{
+		if (scroll3_texture_num == SCROLL3_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll3_callback();
 			scroll3_delete_sprite();
 		}
-
 		idx = scroll3_insert_sprite(key);
-		dst = SWIZZLED8_32x32(tex_scroll3, idx);
+		if (idx < 0) return;
 #if USE_CACHE
 		src = &memory_region_gfx1[(*read_cache)(code << 9)];
 #else
 		src = &memory_region_gfx1[code << 9];
 #endif
-		col = color_table[attr & 0x0f];
-
-		while (lines--)
-		{
-			tile = *(uint32_t *)(src + 0);
-			*(uint32_t *)(dst +  0) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst +  4) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			tile = *(uint32_t *)(src + 4);
-			*(uint32_t *)(dst +  8) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst + 12) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			tile = *(uint32_t *)(src + 8);
-			*(uint32_t *)(dst + 128) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst + 132) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			tile = *(uint32_t *)(src + 12);
-			*(uint32_t *)(dst + 136) = ((tile >> 0) & 0x0f0f0f0f) | col;
-			*(uint32_t *)(dst + 140) = ((tile >> 4) & 0x0f0f0f0f) | col;
-			src += 16;
-			dst += swizzle_table_8bit[lines];
-		}
+		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL3, idx, 32,
+			src, 16, palette);
 	}
 
 	if (attr & 0x10)
@@ -711,17 +703,7 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		clut0_num += 2;
 	}
 
-	vertices[0].x = vertices[1].x = x;
-	vertices[0].y = vertices[1].y = y;
-	vertices[0].u = vertices[1].u = (idx & 0x000f) << 5;
-	vertices[0].v = vertices[1].v = (idx & 0x00f0) << 1;
-
-	attr ^= 0x60;
-	vertices[(attr & 0x20) >> 5].u += 32;
-	vertices[(attr & 0x40) >> 6].v += 32;
-
-	vertices[1].x += 32;
-	vertices[1].y += 32;
+	cps_set_sprite_vertices(vertices, x, y, 0, idx, 32, attr);
 }
 
 
@@ -741,16 +723,12 @@ void blit_finish_scroll3(void)
 	if (clut0_num)
 	{
 		current_clut = &clut[96 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[0], clut0_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, clut0_num, vertices_scroll[0]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, clut0_num, vertices_scroll[0]);
 	}
 	if (clut1_num)
 	{
 		current_clut = &clut[112 << 4];
-		video_driver->uploadClut(video_data, current_clut, 0);
-		video_driver->flushCache(video_data, vertices_scroll[1], clut1_num * sizeof(struct Vertex));
-		video_driver->blitTexture(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, clut1_num, vertices_scroll[1]);
+		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL3, current_clut, 0, clut1_num, vertices_scroll[1]);
 	}
 
 	clut0_num = 0;

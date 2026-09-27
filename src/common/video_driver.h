@@ -1,6 +1,6 @@
 /******************************************************************************
 
-	power_driver.h
+	video_driver.h
 
 ******************************************************************************/
 
@@ -40,32 +40,14 @@
 #define COLOR_DARKCYAN		  0,127,127
 #define COLOR_DARKGRAY		 63, 63, 63
 
-#define GU_FRAME_ADDR(frame)		(uint16_t *)((uint32_t)frame | 0x44000000)
 #define CNVCOL15TO32(c)				(GETR15(c) | (GETG15(c) << 8) | (GETB15(c) << 16))
-#define CNVCOL32TO15(c)				(((GETR32(c) & 0xf8) >> 3) | ((GETG32(c) & 0xf8) << 2) | ((GETB32(src[x]) & 0xf8) << 7))
 
-#define SWIZZLED_8x8(tex, idx)		&tex[(idx) << 6]
-#define SWIZZLED_16x16(tex, idx)	&tex[((idx & ~31) << 8) | ((idx & 31) << 7)]
-#define SWIZZLED_32x32(tex, idx)	&tex[((idx & ~15) << 10) | ((idx & 15) << 8)]
-
-#define NONE_SWIZZLED_8x8(tex, idx)		&tex[((idx & ~63) << 6) | ((idx & 63) << 3)]
-#define NONE_SWIZZLED_16x16(tex, idx)	&tex[((idx & ~31) << 8) | ((idx & 31) << 4)]
-#define NONE_SWIZZLED_32x32(tex, idx)	&tex[((idx & ~15) << 10) | ((idx & 15) << 5)]
-
-#define SWIZZLED8_8x8(tex, idx)		&tex[((idx & ~1) << 6) | ((idx & 1) << 3)]
-#define SWIZZLED8_16x16(tex, idx)	&tex[((idx & ~31) << 8) | ((idx & 31) << 7)]
-#define SWIZZLED8_32x32(tex, idx)	&tex[((idx & ~15) << 10) | ((idx & 15) << 8)]
-
-struct Vertex
+typedef struct video_sprite_vertex
 {
 	uint16_t u, v;
 	uint16_t color;
 	int16_t x, y, z;
-};
-
-/* Portable sprite vertex used by target-common renderers.  `struct Vertex`
- * remains as the legacy spelling while MVS/CPS1/CPS2 are migrated. */
-typedef struct Vertex video_sprite_vertex_t;
+} video_sprite_vertex_t;
 
 typedef struct video_point_vertex
 {
@@ -148,7 +130,6 @@ typedef struct video_driver
 		int x, int y, int width, int height, uint16_t *dst, int dstPitch);
 	/* Physical presentation size owned by the backend. */
 	void (*getOutputSize)(void *data, int *width, int *height);
-	void *(*textureLayer)(void *data, uint8_t layerIndex);
 	void (*scissor)(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 	void (*clearScreen)(void *data);
 	void (*clearFrame)(void *data, int index);
@@ -159,7 +140,6 @@ typedef struct video_driver
 	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
-	void *(*getNativeObjects)(void *data, int index);
 	void (*uploadMem)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);
 	/* Portable indexed-atlas update used by target-common renderers.  x/y/w/h
@@ -179,9 +159,6 @@ typedef struct video_driver
 		uint32_t vertices_count, const video_sprite_vertex_t *vertices);
 	void (*blitPointVertices)(void *data, uint32_t points_count,
 		const video_point_vertex_t *vertices);
-	/* Legacy native-vertex entry points retained until MVS/CPS1/CPS2 migrate. */
-	void (*blitTexture)(void *data, uint8_t textureIndex, void *clut, uint8_t bank_index, uint32_t vertices_count, void *vertices);
-	void (*flushCache)(void *data, void *addr, size_t size);
 
 	/* Depth-test support (used by CPS2 priority masking) */
 	void (*enableDepthTest)(void *data);
