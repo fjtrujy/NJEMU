@@ -478,26 +478,24 @@ static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 		(*th)++;
 }
 
-static inline void gskit_prim_list_sprite_texture_uv_flat_color2(GSGLOBAL *gsGlobal, const GSTEXTURE *Texture, gs_rgbaq color, int count, const GSPRIMUVPOINTFLAT *vertices)
+static inline GSPRIMUVPOINTFLAT *ps2_beginSpriteTextureList(
+	GSGLOBAL *gsGlobal, const GSTEXTURE *Texture, gs_rgbaq color, int count)
 {
-	u64* p_data;
-	u64* p_store;
+	u64 *p_data;
+	u64 *p_store;
 	int tw, th;
-
 	int qsize = (count * 2) + 3;
-	int bytes = count * sizeof(GSPRIMUVPOINTFLAT);
 
 	gsKit_set_tw_th(Texture, &tw, &th);
+	p_store = p_data = gsKit_heap_alloc(gsGlobal, qsize, qsize * 16, GIF_AD);
 
-	p_store = p_data = gsKit_heap_alloc(gsGlobal, qsize, (qsize*16), GIF_AD);
-
-	if(p_store == gsGlobal->CurQueue->last_tag)
+	if (p_store == gsGlobal->CurQueue->last_tag)
 	{
 		*p_data++ = GIF_TAG_AD(qsize);
 		*p_data++ = GIF_AD;
 	}
 
-	if(Texture->VramClut == 0)
+	if (Texture->VramClut == 0)
 	{
 		*p_data++ = GS_SETREG_TEX0(Texture->Vram/256, Texture->TBW, Texture->PSM,
 			tw, th, gsGlobal->PrimAlphaEnable, 0,
@@ -507,21 +505,51 @@ static inline void gskit_prim_list_sprite_texture_uv_flat_color2(GSGLOBAL *gsGlo
 	{
 		*p_data++ = GS_SETREG_TEX0(Texture->Vram/256, Texture->TBW, Texture->PSM,
 			tw, th, gsGlobal->PrimAlphaEnable, 0,
-			Texture->VramClut/256, Texture->ClutPSM, Texture->ClutStorageMode, 0, GS_CLUT_STOREMODE_LOAD);
+			Texture->VramClut/256, Texture->ClutPSM, Texture->ClutStorageMode, 0,
+			GS_CLUT_STOREMODE_LOAD);
 	}
 	*p_data++ = GS_TEX0_1 + gsGlobal->PrimContext;
 
-	*p_data++ = GS_SETREG_PRIM( GS_PRIM_PRIM_SPRITE, 0, 1, gsGlobal->PrimFogEnable,
-				gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable,
-				1, gsGlobal->PrimContext, 0);
-
+	*p_data++ = GS_SETREG_PRIM(GS_PRIM_PRIM_SPRITE, 0, 1, gsGlobal->PrimFogEnable,
+		gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable,
+		1, gsGlobal->PrimContext, 0);
 	*p_data++ = GS_PRIM;
 
-	// Copy color
 	memcpy(p_data, &color, sizeof(gs_rgbaq));
-	p_data += 2; // Advance 2 u64, which is 16 bytes the gs_rgbaq struct size
-	// Copy vertices
-	memcpy(p_data, vertices, bytes);
+	p_data += 2;
+	return (GSPRIMUVPOINTFLAT *)p_data;
+}
+
+static inline void gskit_prim_list_sprite_texture_uv_flat_color2(
+	GSGLOBAL *gsGlobal, const GSTEXTURE *Texture, gs_rgbaq color, int count,
+	const GSPRIMUVPOINTFLAT *vertices)
+{
+	GSPRIMUVPOINTFLAT *destination =
+		ps2_beginSpriteTextureList(gsGlobal, Texture, color, count);
+	memcpy(destination, vertices, (size_t)count * sizeof(*vertices));
+}
+
+static inline GSPRIMPOINT *ps2_beginPointList(GSGLOBAL *gsGlobal, int count)
+{
+	u64 *p_data;
+	u64 *p_store;
+	int qsize = count * 2 + 2;
+
+	p_store = p_data = gsKit_heap_alloc(gsGlobal, qsize, qsize * 16, GIF_AD);
+	*p_data++ = GIF_TAG_AD(qsize);
+	*p_data++ = GIF_AD;
+
+	if (p_store == gsGlobal->CurQueue->last_tag)
+	{
+		*p_data++ = GIF_TAG_POINT(count - 1);
+		*p_data++ = GIF_TAG_POINT_REGS;
+	}
+
+	*p_data++ = GS_SETREG_PRIM(GS_PRIM_PRIM_POINT, 0, 0, gsGlobal->PrimFogEnable,
+		gsGlobal->PrimAlphaEnable, gsGlobal->PrimAAEnable,
+		0, gsGlobal->PrimContext, 0);
+	*p_data++ = GS_PRIM;
+	return (GSPRIMPOINT *)p_data;
 }
 
 static void *ps2_textureLayer(void *data, uint8_t layerIndex)
@@ -1435,37 +1463,70 @@ static GSTEXTURE *ps2_prepareSpriteTexture(ps2_video_t *ps2,
 	return tex;
 }
 
+static inline uint16_t ps2_spriteGsXY(int16_t coordinate, int offset)
+{
+	int value = (int)coordinate * 16 - 8 + offset;
+	if (value < 0)
+		value = 0;
+	else if (value >= 4096 * 16)
+		value = 4096 * 16 - 1;
+	return (uint16_t)value;
+}
+
+static inline uint16_t ps2_spriteGsUV(uint16_t coordinate, int extent)
+{
+	int value = (int)coordinate * 16;
+	int maximum = extent * 16;
+	if (value > maximum)
+		value = maximum;
+	if (value >= 1024 * 16)
+		value = 1024 * 16 - 1;
+	return (uint16_t)value;
+}
+
+static inline gs_xyz2 ps2_spriteXYZ2(const GSGLOBAL *gsGlobal,
+	int16_t x, int16_t y, int16_t z)
+{
+	gs_xyz2 result;
+	result.xyz.x = ps2_spriteGsXY(x, gsGlobal->OffsetX);
+	result.xyz.y = ps2_spriteGsXY(y, gsGlobal->OffsetY);
+	result.xyz.z = z;
+	result.tag = GS_XYZ2;
+	return result;
+}
+
+static inline gs_uv ps2_spriteUV(const GSTEXTURE *texture,
+	uint16_t u, uint16_t v)
+{
+	gs_uv result;
+	result.coord.u = ps2_spriteGsUV(u, texture->Width);
+	result.coord.v = ps2_spriteGsUV(v, texture->Height);
+	result.tag = GS_UV;
+	return result;
+}
+
 static void ps2_blitSpriteVertices(void *data, uint8_t textureIndex,
 	const uint16_t *clut, uint8_t bank_index,
 	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
 {
 	ps2_video_t *ps2 = (ps2_video_t *)data;
 	GSTEXTURE *tex = ps2_prepareSpriteTexture(ps2, textureIndex, clut, bank_index);
-	uint32_t base;
+	GSPRIMUVPOINTFLAT *native_vertices;
+	uint32_t i;
 
 	if (!tex || !vertices || vertices_count == 0)
 		return;
 
-	/* The gsKit helper copies native vertices into its command queue, so a
-	 * small stack conversion buffer is safe and avoids target-sized backend
-	 * allocations. Keep chunks even because GU/GS sprites are vertex pairs. */
-	for (base = 0; base < vertices_count; ) {
-		GSPRIMUVPOINTFLAT native_vertices[256];
-		uint32_t count = vertices_count - base;
-		uint32_t i;
-		if (count > 256) count = 256;
-		if (count & 1u) count--;
-		if (count == 0) break;
-
-		for (i = 0; i < count; i++) {
-			const video_sprite_vertex_t *src = &vertices[base + i];
-			native_vertices[i].xyz2 = vertex_to_XYZ2(ps2->gsGlobal,
-				(float)src->x - 0.5f, (float)src->y - 0.5f, src->z);
-			native_vertices[i].uv = vertex_to_UV(tex, src->u, src->v);
-		}
-		gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex,
-			ps2->vertexColor, (int)count, native_vertices);
-		base += count;
+	/* Materialize the compact portable vertices directly into gsKit's command
+	 * queue. This preserves the retained-memory saving of the portable arrays
+	 * without an 8 KiB native stack buffer or a second memcpy into the queue. */
+	native_vertices = ps2_beginSpriteTextureList(ps2->gsGlobal, tex,
+		ps2->vertexColor, (int)vertices_count);
+	for (i = 0; i < vertices_count; i++) {
+		const video_sprite_vertex_t *src = &vertices[i];
+		native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
+			src->x, src->y, src->z);
+		native_vertices[i].uv = ps2_spriteUV(tex, src->u, src->v);
 	}
 }
 
@@ -1482,28 +1543,23 @@ static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_
 static void ps2_blitPointVertices(void *data, uint32_t points_count,
 	const video_point_vertex_t *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	int prev_alpha_test = ps2->gsGlobal->Test->ATE;
-	uint32_t base;
+	int prev_alpha_test;
+	GSPRIMPOINT *native_vertices;
+	uint32_t i;
 
 	if (!ps2 || !vertices || points_count == 0)
 		return;
 
-	/* Disable alpha test for point drawing (matches PSP behavior) */
+	prev_alpha_test = ps2->gsGlobal->Test->ATE;
+	/* Disable alpha test for point drawing (matches PSP behavior). */
 	gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
-	for (base = 0; base < points_count; ) {
-		GSPRIMPOINT native_vertices[256];
-		uint32_t count = points_count - base;
-		uint32_t i;
-		if (count > 256) count = 256;
-		for (i = 0; i < count; i++) {
-			const video_point_vertex_t *src = &vertices[base + i];
-			native_vertices[i].xyz2 = vertex_to_XYZ2(ps2->gsGlobal,
-				(float)src->x - 0.5f, (float)src->y - 0.5f, src->z);
-			native_vertices[i].rgbaq = color_to_RGBAQ(GETR15(src->color),
-				GETG15(src->color), GETB15(src->color), 0x80, 0);
-		}
-		gsKit_prim_list_points(ps2->gsGlobal, count, native_vertices);
-		base += count;
+	native_vertices = ps2_beginPointList(ps2->gsGlobal, (int)points_count);
+	for (i = 0; i < points_count; i++) {
+		const video_point_vertex_t *src = &vertices[i];
+		native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
+			src->x, src->y, src->z);
+		native_vertices[i].rgbaq = color_to_RGBAQ(GETR15(src->color),
+			GETG15(src->color), GETB15(src->color), 0x80, 0);
 	}
 	gsKit_set_test(ps2->gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }

@@ -21,6 +21,7 @@
 #include "main_ui_draw.h"
 #if (EMU_SYSTEM == NCDZ)
 #include "common/mp3.h"
+#include "ncdz/driver.h"
 #endif
 #include <fcntl.h>
 #include <stdio.h>

@@ -579,11 +579,23 @@ For each target:
 
 CPS2 comes last because its depth/priority masking is the most specialized.
 
+Performance rule for this phase: unification must share emulator/render semantics,
+but it must not require an avoidable extra materialization pass merely to make the
+code look uniform.  The preferred end state is **common semantics + backend-native
+execution**.  A portable intermediate representation is appropriate where it is
+either consumed directly (as on PSP GU today), materially reduces retained memory,
+or has measured negligible cost.  Backend-specific materialization/command
+submission remains valid when it is the faster representation, provided target
+renderers do not regain platform SDK dependencies or platform `#if`s.
+
 Acceptance per target:
 - one target sprite implementation instead of PSP/PS2/Desktop copies;
 - no platform SDK include in that target's renderer;
 - visual/screenshot and runtime tests preserved;
-- binary/memory impact measured on PSP and PS2.
+- binary/memory impact measured on PSP and PS2;
+- no unexplained measurable renderer regression versus the previous platform-native
+  implementation.  CPU/render submission cost must be measured whenever a portable
+  representation adds staging, conversion, or copying.
 
 #### D7a - NCDZ portable sprite renderer [COMPLETE]
 
@@ -693,6 +705,156 @@ Validation (2026-09-27):
 - after CPS1 migration, CPS2 PS2 is the only target renderer that still consumes
   `getNativeObjects()`; CPS1 contains no native PSP/PS2/SDL renderer API types.
 
+#### D7P - Portable-renderer performance checkpoint [COMPLETE]
+
+Do not start the CPS2 migration until the already-unified NCDZ/MVS/CPS1 path has
+been audited for CPU cost as well as code/data/BSS size.  D7a-D7c deliberately
+proved the ownership model first; this checkpoint verifies that the abstraction
+does not buy cleanliness by adding avoidable work on low-end hardware.
+
+Primary questions:
+
+1. **PSP vertex submission** - keep the current zero-conversion fast path.
+   `video_sprite_vertex_t` intentionally matches the GU sprite vertex layout, so
+   `sceGuDrawArray()` consumes the common array directly.  Do not introduce a
+   second PSP-native vertex array.
+2. **PS2 vertex submission** - quantify the cost of reading compact 12-byte
+   portable vertices, converting them to 32-byte `GSPRIMUVPOINTFLAT`/point data,
+   and then letting gsKit copy that native data to its command queue.  Preserve
+   the very large BSS saving from compact retained arrays, but investigate a
+   cheaper backend path (integer/fixed conversion, direct queue construction, or
+   another backend-local fast path) if the extra pass is measurable.
+3. **Tile-cache staging** - quantify the extra cache-miss path introduced by
+   decoding a tile into a temporary linear buffer and then asking the backend to
+   copy/swizzle it into the atlas.  This is not a per-drawn-sprite cost, but CPS1
+   high-priority/palette invalidation can make it hot enough to matter.  Prefer a
+   backend-owned writable-atlas/row-writer contract or equivalent fast path when
+   it can remove a copy without exposing PSP swizzle/PS2 texture details to target
+   code.
+4. **Desktop** - keep correctness as the priority; avoid optimizing SDL-specific
+   paths at the expense of PSP/PS2 simplicity unless profiling shows a real issue.
+
+Measurement policy:
+
+- compare the portable renderer with the immediately preceding platform-native
+  implementation using identical target/options/ROM/workload;
+- collect at minimum: vertices submitted, sprite batches, texture-cache misses,
+  bytes staged/copied for atlas updates, time spent building common draw data,
+  time spent in backend vertex conversion/submission, and total frame time;
+- use real PSP/PS2 hardware as the authoritative performance result when
+  available.  PCSX2/PPSSPP are useful for functional validation and relative
+  instrumentation but are not substitutes for hardware timing;
+- profiling instrumentation should be build-time/temporary or compiled out by
+  default and must not alter the normal renderer contract;
+- retain the D7 binary/BSS comparisons alongside timing results: a small CPU cost
+  may be acceptable only when the memory win is material and the measured frame
+  budget remains unaffected; unexplained regressions are not accepted.
+
+Optimization order:
+
+1. remove obviously redundant work without changing the portable contract;
+2. specialize backend materialization internally (no target-side platform types);
+3. eliminate temporary tile copies for linear backends where a clean generic
+   contract permits it, retaining PSP swizzle ownership in the PSP backend;
+4. only after measurements are satisfactory, use the refined path as the basis
+   for CPS2.
+
+Result (2026-09-27):
+- confirmed the PSP sprite path is already the desired zero-conversion case:
+  `video_sprite_vertex_t` has the GU-compatible 12-byte layout and is submitted
+  directly to `sceGuDrawArray()`; no PSP native staging array was added;
+- replaced PS2's per-vertex `int -> float -> fixed` gsKit helper path with an
+  exactly equivalent integer/fixed conversion. Exhaustive host-side comparison
+  covered every signed 16-bit XY value and every unsigned 16-bit UV value at the
+  texture extents used by the renderer;
+- with the exact R5900 Release flags used by NJEMU, the original
+  `ps2_blitSpriteVertices()` compiled to 392 static instructions including 28
+  FP-related instructions. Integer conversion alone reduced that to 360 / 0;
+- refactored NJEMU's local gsKit sprite-list helper so the PS2 backend reserves
+  the final render-queue storage first and materializes portable vertices directly
+  into it. The final sprite path is 304 static instructions, contains no FP
+  conversion, uses a 64-byte stack frame instead of the former approximately
+  8 KiB `GSPRIMUVPOINTFLAT[256]` staging buffer, and has no second vertex `memcpy`;
+- applied the same direct-queue approach to portable colored points (CPS1 stars):
+  the approximately 8 KiB `GSPRIMPOINT[256]` staging buffer and following gsKit
+  copy are gone, and the function stack frame is 48 bytes;
+- for CPS1 PS2 Release (`GUI=OFF`, `SAVE_STATE=OFF`), the D7c float/staging
+  baseline changes from `.text` 791,348 B to 790,860 B after the optimized direct
+  queue path (-488 B); `.data` and `.bss` are unchanged, so the large compact-
+  vertex BSS saving from D7c is fully preserved;
+- temporary CPS1 instrumentation measured atlas staging independently from drawn
+  vertices, then was removed completely. Representative samples were:
+  - `ghoulsu`, 600 frames: 14,068 sprite vertices / 151 batches versus 18 indexed
+    8x8 atlas updates (1,152 staged bytes);
+  - `sf2`, 600 frames: 47,926 vertices / 552 batches versus 55 indexed 8x8
+    updates (3,520 staged bytes);
+  - `sf2`, 1,800 frames: 298,424 vertices / 1,718 batches versus 89 indexed 8x8
+    updates (5,696 staged bytes).
+  These samples did not exercise every high-priority/direct-color invalidation
+  case, so they do not prove all workloads are cold; however they show that the
+  extra tile copy is orders of magnitude less frequent than vertex submission in
+  the exercised workloads. No new writable-atlas/row-writer API is justified at
+  this point; retain the simple backend-owned texture-update contract and revisit
+  it only if profiling a representative hot case shows otherwise;
+- completing the cross-platform validation exposed two remaining transitive-
+  include assumptions rather than renderer defects: NCDZ command-list reduction
+  now directly includes `ncdz/driver.h` for `games[]`, and `power_driver_tests`
+  directly includes `<stddef.h>` for `NULL`;
+- final validation: CPS1/CPS2/MVS/NCDZ PS2 builds pass with the optimized backend;
+  NCDZ PSP builds; NCDZ Desktop builds and passes 15/15 CTests; CPS1 Desktop runs
+  a clean 30-frame `ghoulsu` smoke with all temporary profiling code absent;
+  `git diff --check` is clean and no resource file is modified.
+
+Real-PS2 timing remains a useful release-level confirmation, especially for cache
+behaviour, but D7P no longer has an avoidable EE materialization pass to optimize:
+portable sprite/point data is converted exactly once into its final gsKit queue
+location. The deferred VU1 experiment should therefore compare against this
+direct-queue EE path, not the former staging implementation.
+
+##### Deferred PS2 VU1/VIF1 backend experiment
+
+A future PS2 optimization may replace the EE-side portable-to-gsKit conversion
+with a VIF1/VU1 submission path.  This is intentionally **not** part of the current
+D7P implementation work and must remain optional until a measured prototype wins.
+
+Candidate architecture:
+
+```text
+common target renderer
+        |
+        v
+compact video_sprite_vertex_t batches
+        |
+        +-- PSP: direct sceGuDrawArray (existing zero-conversion path)
+        |
+        +-- PS2: DMA -> VIF1 UNPACK -> VU1 -> GIF/XGKICK -> GS
+        |
+        `-- Desktop: SDL backend
+```
+
+The VU program should remain backend infrastructure, not emulator logic.  Sprite
+decoding, clipping, cache replacement, priority, batching, atlas selection and
+palette decisions stay in common/target code.  VU1 would only materialize GS
+coordinates/UVs and primitive packets.  The prototype should investigate:
+
+- feeding the existing compact 16-bit vertex fields through VIF1 without first
+  expanding them into a second EE buffer;
+- VU1 double buffering so EE batch construction overlaps VIF/VU/GIF work rather
+  than synchronously waiting for each batch;
+- direct GIF/XGKICK output to remove both the temporary
+  `GSPRIMUVPOINTFLAT[256]` conversion buffer and the subsequent gsKit queue copy;
+- coexistence/order with gsKit-managed texture, CLUT, scissor, framebuffer,
+  alpha/depth and CPS2 priority state;
+- a batch-size threshold or EE fallback if VIF/VU launch overhead makes small
+  batches slower;
+- optional evaluation with the modern VU toolchain/OpenVCL once the basic PS2SDK
+  microprogram is correct; NJEMU must not depend on that toolchain merely to keep
+  the portable renderer architecture.
+
+Acceptance for any future VU1 path: identical output/state ordering, no common or
+target-side PS2 conditional, and a clear real-hardware performance win over the
+best EE backend.  Otherwise retain the EE path.
+
 ### D8 - Remove remaining platform conditionals from common behaviour
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
@@ -738,9 +900,10 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Continue D7 with CPS2, the final and most specialized renderer. Reuse the
-portable atlas/batch contracts proven by NCDZ, MVS and CPS1, but model CPS2's
-depth/priority masking explicitly rather than leaking PS2 native textures,
-vertices or GS state into target code. Once CPS2 no longer needs native backend
-objects, remove the legacy `getNativeObjects()` / native-vertex escape hatches
-from `video_driver_t` before starting the broader D8 common-conditional audit.
+Continue D7 with CPS2, now using the D7P-refined contract: compact common draw
+data, direct backend-native execution, and no avoidable PS2 materialization pass.
+Model CPS2's depth/priority masking explicitly in the video backend rather than
+leaking native GS state into target code. Keep the VU1/VIF1 experiment deferred.
+Once CPS2 no longer needs native backend objects, remove the legacy
+`getNativeObjects()` / native-vertex escape hatches from `video_driver_t` before
+starting the broader D8 common-conditional audit.
