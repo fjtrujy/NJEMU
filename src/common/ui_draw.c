@@ -1844,11 +1844,7 @@ void logo(int sx, int sy, int r, int g, int b)
 
 	for (y = 0; y < 14; y++)
 	{
-#if (EMU_SYSTEM == MVS)
-		for (x = 0; x < 208; x++)
-#else
-		for (x = 0; x < 232; x++)
-#endif
+		for (x = 0; x < LOGO_WIDTH; x++)
 		{
 			if (x & 1)
 				alpha = logo_data[y][x >> 1] >> 4;
@@ -1860,15 +1856,10 @@ void logo(int sx, int sy, int r, int g, int b)
 		dst += BUF_WIDTH;
 	}
 
-#if (EMU_SYSTEM == MVS)
 	ui_driver_draw_sprite(UI_TEXTURE_FONT,
-		0, 0, 208, 14,
-		sx, sy, 208, 14,
+		0, 0, LOGO_WIDTH, 14,
+		sx, sy, LOGO_WIDTH, 14,
 		1);
-#else
-	ui_driver_draw_sprite(UI_TEXTURE_FONT,
-		0, 0, 232, 14,
-		sx, sy, 232, 14,
-		1);
-#endif
 }
+
+#undef LOGO_WIDTH
