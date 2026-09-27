@@ -24,7 +24,7 @@
 static volatile int sound_active;
 static void *sound_thread;
 static int sound_volume;
-static int sound_enable;
+static volatile int sound_enable;
 static int16_t ALIGN16_DATA sound_buffer[2][SOUND_BUFFER_SIZE];
 
 static struct sound_t sound_info;
@@ -117,6 +117,17 @@ void sound_thread_enable(int enable)
 		else
 			sound_volume = 0;
 	}
+}
+
+
+/*--------------------------------------------------------
+	Sound Stream Pause/Resume
+--------------------------------------------------------*/
+
+void sound_thread_pause(int pause)
+{
+	if (sound_active && audio_driver->setPaused != NULL)
+		audio_driver->setPaused(game_audio, pause != 0);
 }
 
 

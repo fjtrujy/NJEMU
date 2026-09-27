@@ -103,7 +103,27 @@ Texture-update staging is acceptable when it is a cold cache-miss operation and
 measurements show it is not significant. Add a more complex writable-atlas API
 only after profiling demonstrates a real need.
 
-## 6. Input contract
+## 6. Audio pause semantics
+
+`audio_driver_t::setPaused()` is an optional backend capability for platforms whose
+native audio API keeps a queued stream running when the emulator enters a menu or
+other foreground pause. It is deliberately separate from the emulated game-sound
+enable flag.
+
+This distinction matters for mixed backends such as PS2 NCDZ: disabling YM2610
+synthesis must still allow the primary output stream to carry CDDA/MP3 samples,
+whereas opening the emulator menu should silence the native stream immediately while
+the common silent-buffer path drains queued audio. Backends without a problematic
+queued stream may leave the hook
+`NULL` and retain the historical silent-buffer behavior.
+
+A backend implementing `setPaused()` should silence its native output immediately
+without requiring device/channel reallocation. The common sound thread continues to
+feed silent game buffers while paused, which allows queued backends to drain old
+audio instead of freezing a stale tail. Keep this transport behavior in the backend;
+common code owns when the emulator is paused.
+
+## 7. Input contract
 
 `input_driver_t::sample()` returns stable physical input state. The backend should
 only translate native controller data into that representation and report the
@@ -113,7 +133,7 @@ Target-specific interpretation belongs outside the platform backend. Examples
 include player routing, analog game semantics, autofire, menu combinations, and
 special MVS input modes. Do not change the input-driver ABI based on `EMU_SYSTEM`.
 
-## 7. Platform and power capabilities
+## 8. Platform and power capabilities
 
 `platform_driver_t` is intentionally small. A backend provides lifecycle/main-loop
 services, memory telemetry, and system-language mapping. Memory telemetry is
@@ -123,7 +143,7 @@ policy.
 Power support is capability based. Do not fabricate battery values or fake
 performance levels on platforms that do not expose those features.
 
-## 8. UI architecture
+## 9. UI architecture
 
 The complete menu/file-browser/configuration UI lives in `src/common/`.
 `ui_draw_driver_t` is not a second renderer: it owns only UI texture
@@ -137,7 +157,7 @@ A GUI-capable backend therefore needs both:
 
 The common UI must remain free of native SDK includes and host-platform branches.
 
-## 9. Includes and private APIs
+## 10. Includes and private APIs
 
 Include the narrow header that declares what a translation unit consumes.
 Platform SDK headers stay in `src/<platform>/` implementation files or narrow
@@ -154,7 +174,7 @@ Rules for a new backend:
   state rather than publishing the backend state structure;
 - keep public headers self-contained.
 
-## 10. CMake integration
+## 11. CMake integration
 
 Add the new `PLATFORM` value and its required external SDK/library setup while
 keeping the existing target/platform axes independent. The application should
@@ -164,7 +184,7 @@ include directories.
 Do not add platform-specific source selection inside target directories. CMake
 selects the backend sources; the four target renderers remain shared.
 
-## 11. Validation gate
+## 12. Validation gate
 
 Before calling a backend usable, validate at least:
 
@@ -184,7 +204,7 @@ Emulator output and timing should be checked on real hardware for console
 backends. Emulator-only timing is useful for development but is not the final
 performance authority.
 
-## 12. Deferred PS2 VU1 experiment
+## 13. Deferred PS2 VU1 experiment
 
 VU1/VIF1 is a possible future PS2 backend optimization, not part of the portable
 contract. If prototyped, it should consume the existing compact common batches and

@@ -231,6 +231,7 @@ void adhoc_pause(void)
 	else
 		control = 0;
 
+	sound_thread_pause(1);
 	sound_thread_enable(0);
 
 	video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &rect, &rect);
@@ -318,4 +319,5 @@ void adhoc_pause(void)
 
 	autoframeskip_reset();
 	sound_thread_enable(1);
+	sound_thread_pause(0);
 }

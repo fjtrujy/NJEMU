@@ -332,7 +332,13 @@ void sound_set_samplerate(void)
 void sound_mute(int mute)
 {
 	if (mute)
+	{
+		sound_thread_pause(1);
 		sound_thread_enable(0);
+	}
 	else
+	{
 		sound_thread_enable(option_sound_enable);
+		sound_thread_pause(0);
+	}
 }

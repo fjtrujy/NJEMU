@@ -253,7 +253,7 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 
 	/* Mix MP3 audio into the output buffer before output. */
 	mix_mp3_audio((int16_t*)buffer, num_samples);
-	
+
 	audsrv_wait_audio(size);
 	audsrv_play_audio(buffer, size);
 }
@@ -340,6 +340,19 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 	g_mp3_write_pos = write_pos;
 }
 
+static void ps2_setPaused(void *data, bool paused)
+{
+	ps2_audio_t *ps2 = (ps2_audio_t *)data;
+
+	/* audsrv_stop_audio() leaves its queued ring data intact. Muting the native
+	 * stream instead lets the common sound thread keep feeding silence so the
+	 * queue advances while a menu is open and cannot replay a frozen tail. */
+	if (ps2 == NULL || ps2->is_mp3_channel)
+		return;
+
+	audsrv_set_volume(paused ? 0 : MAX_VOLUME);
+}
+
 audio_driver_t audio_ps2 = {
 	"ps2",
 	ps2_init,
@@ -350,4 +363,5 @@ audio_driver_t audio_ps2 = {
 	ps2_srcOutputBlocking,
 	ps2_outputPannedBlocking,
 	ps2_release,
+	ps2_setPaused,
 };

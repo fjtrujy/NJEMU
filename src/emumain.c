@@ -158,7 +158,7 @@ volatile int Sleep;
 	FPS Display
 --------------------------------------------------------*/
 
-static void show_fps(void)
+static void show_fps(bool draw)
 {
 	size_t sx;
 	char buf[32];
@@ -169,8 +169,11 @@ static void show_fps(void)
 		game_speed_percent,
 		frames_per_second);
 
-	sx = SCR_WIDTH - (strlen(buf) << 3);
 	printf("%s\n", buf);
+	if (!draw)
+		return;
+
+	sx = SCR_WIDTH - (strlen(buf) << 3);
 	small_font_print((int)sx, 0, buf, 1);
 }
 
@@ -310,14 +313,23 @@ void update_screen(void)
 {
 	uint8_t skipped_it = skiptable[frameskip][frameskip_counter];
 
-	if (show_frames_each_second && (frames_displayed % 60) == 0)
+	if (show_frames_each_second && !option_showfps &&
+		(frames_displayed % 60) == 0)
 	{
-		show_fps();
+		show_fps(false);
 	}
 
 	if (!skipped_it)
 	{
-		if (option_showfps) show_fps();
+		/* Target rendering has already completed its frame at this point. UI
+		 * primitives (notably PSP GU draws) require their own valid backend
+		 * frame, so submit the optional FPS HUD as a small overlay pass. */
+		if (option_showfps)
+		{
+			video_driver->beginFrame(video_data);
+			show_fps(true);
+			video_driver->endFrame(video_data);
+		}
 		show_battery_warning();
 		ui_show_popup(1);
 	}

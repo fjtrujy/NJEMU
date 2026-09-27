@@ -594,6 +594,7 @@ void commandlist(int flag)
 			mp3_paused = 1;
 		}
 #endif
+		sound_thread_pause(1);
 		sound_thread_enable(0);
 		power_set_lowest_performance_level();
 	}
@@ -844,6 +845,7 @@ void commandlist(int flag)
 
 		sound_thread_set_volume();
 		sound_thread_enable(1);
+		sound_thread_pause(0);
 
 #if (EMU_SYSTEM == NCDZ)
 		mp3_set_volume();
