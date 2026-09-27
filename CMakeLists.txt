@@ -1156,7 +1156,9 @@ endif()
 # ==============================================================================
 
 # Set default install prefix if not specified
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+# vita.toolchain.cmake presets the prefix to the SDK itself: treat that as the default too.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT OR
+   (PLATFORM STREQUAL "PSVITA" AND CMAKE_INSTALL_PREFIX STREQUAL "${VITASDK}/arm-vita-eabi"))
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Install path prefix" FORCE)
 endif()
 
