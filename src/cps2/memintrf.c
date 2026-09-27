@@ -18,6 +18,7 @@
 #include "common/adhoc.h"
 #endif
 #include "common/cache.h"
+#include "common/cmdlist.h"
 #include "common/memory_plan.h"
 #include "common/memory_sizes.h"
 #include "common/emulator_options.h"

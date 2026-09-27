@@ -472,6 +472,30 @@ static void desktop_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 			pixels + row * srcPitch, (size_t)width);
 }
 
+static void desktop_writeDirectTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint16_t *pixels, int srcPitch)
+{
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	texture_layer_t *layer;
+	int texture_width, texture_height;
+	int row;
+
+	if (!desktop || textureIndex >= desktop->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	layer = &desktop->tex_layers[textureIndex];
+	if (layer->bytes_per_pixel != 2 || !layer->buffer || !layer->texture)
+		return;
+	if (SDL_QueryTexture(layer->texture, NULL, NULL, &texture_width, &texture_height) != 0)
+		return;
+	if (x < 0 || y < 0 || x + width > texture_width || y + height > texture_height)
+		return;
+
+	for (row = 0; row < height; row++)
+		memcpy(layer->buffer + ((size_t)(y + row) * texture_width + x) * 2,
+			pixels + row * srcPitch, (size_t)width * sizeof(uint16_t));
+}
+
 static SDL_Texture *desktop_prepareBlitTexture(desktop_video_t *desktop,
 	uint8_t textureIndex, const uint16_t *clut)
 {
@@ -565,16 +589,18 @@ static void desktop_uploadMem(void *data, uint8_t textureIndex) {
 static void desktop_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 }
 
-static void desktop_blitPoints(void *data, uint32_t points_count, void *vertices) {
+static void desktop_blitPointVertices(void *data, uint32_t points_count,
+	const video_point_vertex_t *vertices) {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-	struct PointVertex *pts = (struct PointVertex *)vertices;
 	uint32_t i;
 
+	if (!desktop || !vertices)
+		return;
 	for (i = 0; i < points_count; i++)
 	{
-		uint16_t c = pts[i].color;
+		uint16_t c = vertices[i].color;
 		SDL_SetRenderDrawColor(desktop->renderer, GETR15(c), GETG15(c), GETB15(c), 255);
-		SDL_RenderDrawPoint(desktop->renderer, pts[i].x, pts[i].y);
+		SDL_RenderDrawPoint(desktop->renderer, vertices[i].x, vertices[i].y);
 	}
 }
 
@@ -784,9 +810,10 @@ video_driver_t video_desktop = {
 	desktop_uploadMem,
 	desktop_uploadClut,
 	desktop_writeIndexedTextureRect,
+	desktop_writeDirectTextureRect,
 	desktop_blitSpriteVertices,
+	desktop_blitPointVertices,
 	desktop_blitTexture,
-	desktop_blitPoints,
 	desktop_flushCache,
 	desktop_enableDepthTest,
 	desktop_disableDepthTest,

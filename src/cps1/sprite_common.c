@@ -34,7 +34,6 @@ SPRITE ALIGN16_DATA *object_head[OBJECT_HASH_SIZE];
 SPRITE ALIGN16_DATA object_data[OBJECT_TEXTURE_SIZE];
 SPRITE *object_free_head;
 uint8_t *gfx_object;
-uint8_t *tex_object;
 uint16_t object_texture_num;
 
 /* SCROLL1 */
@@ -42,7 +41,6 @@ SPRITE ALIGN16_DATA *scroll1_head[SCROLL1_HASH_SIZE];
 SPRITE ALIGN16_DATA scroll1_data[SCROLL1_TEXTURE_SIZE];
 SPRITE *scroll1_free_head;
 uint8_t *gfx_scroll1;
-uint8_t *tex_scroll1;
 uint16_t scroll1_texture_num;
 
 /* SCROLL2 */
@@ -50,7 +48,6 @@ SPRITE ALIGN16_DATA *scroll2_head[SCROLL2_HASH_SIZE];
 SPRITE ALIGN16_DATA scroll2_data[SCROLL2_TEXTURE_SIZE];
 SPRITE *scroll2_free_head;
 uint8_t *gfx_scroll2;
-uint8_t *tex_scroll2;
 uint16_t scroll2_texture_num;
 
 /* SCROLL3 */
@@ -58,14 +55,12 @@ SPRITE ALIGN16_DATA *scroll3_head[SCROLL3_HASH_SIZE];
 SPRITE ALIGN16_DATA scroll3_data[SCROLL3_TEXTURE_SIZE];
 SPRITE *scroll3_free_head;
 uint8_t *gfx_scroll3;
-uint8_t *tex_scroll3;
 uint16_t scroll3_texture_num;
 
 /* SCROLLH */
 SPRITE ALIGN16_DATA *scrollh_head[SCROLLH_HASH_SIZE];
 SPRITE ALIGN16_DATA scrollh_data[SCROLLH_TEXTURE_SIZE];
 SPRITE *scrollh_free_head;
-uint16_t *tex_scrollh;
 uint16_t scrollh_num;
 uint16_t scrollh_texture_num;
 uint8_t scrollh_texture_clear;

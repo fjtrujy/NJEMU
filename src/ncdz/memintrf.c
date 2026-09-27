@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <zlib.h>
 #include "ncdz.h"
+#include "common/cmdlist.h"
 #include "common/emulator_runtime.h"
 #include "common/loadrom.h"
 #include "common/power_driver.h"

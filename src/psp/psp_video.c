@@ -748,6 +748,28 @@ static void psp_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 	}
 }
 
+static void psp_writeDirectTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint16_t *pixels, int srcPitch)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	texture_layer_t *layer;
+	uint16_t *dst;
+	int row;
+
+	if (!psp || textureIndex >= psp->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	layer = &psp->tex_layers[textureIndex];
+	if (!layer->buffer || layer->bytes_per_pixel != 2 ||
+	    x < 0 || y < 0 || x + width > layer->width || y + height > layer->height)
+		return;
+
+	dst = (uint16_t *)layer->buffer;
+	for (row = 0; row < height; row++)
+		memcpy(dst + (size_t)(y + row) * layer->stride + x,
+			pixels + row * srcPitch, (size_t)width * sizeof(uint16_t));
+}
+
 static void psp_bindSpriteTexture(psp_video_t *psp, uint8_t textureIndex,
 	const uint16_t *clut)
 {
@@ -761,6 +783,10 @@ static void psp_bindSpriteTexture(psp_video_t *psp, uint8_t textureIndex,
 	}
 	if (clut != NULL && psp->current_clut != clut) {
 		psp->current_clut = (uint16_t *)clut;
+		/* Portable renderers pass the exact 256-entry CLUT window used by a
+		 * batch. Keep cache coherency a backend concern instead of requiring
+		 * targets to know that the PSP consumes CLUTs directly from RAM. */
+		sceKernelDcacheWritebackRange(clut, 256 * sizeof(uint16_t));
 		sceGuClutLoad(256 / 8, clut);
 	}
 }
@@ -794,8 +820,14 @@ static void psp_blitTexture(void *data, uint8_t textureIndex, void *clut,
 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
 }
 
-static void psp_blitPoints(void *data, uint32_t points_count, void *vertices)
+static void psp_blitPointVertices(void *data, uint32_t points_count,
+	const video_point_vertex_t *vertices)
 {
+	(void)data;
+	if (!vertices || points_count == 0)
+		return;
+	sceKernelDcacheWritebackRange(vertices,
+		points_count * sizeof(video_point_vertex_t));
 	sceGuDisable(GU_TEXTURE_2D);
 	sceGuDisable(GU_ALPHA_TEST);
 	sceGuDrawArray(GU_POINTS, GU_COLOR_5551 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, points_count, NULL, vertices);
@@ -1151,9 +1183,10 @@ video_driver_t video_psp = {
 	psp_uploadMem,
 	psp_uploadClut,
 	psp_writeIndexedTextureRect,
+	psp_writeDirectTextureRect,
 	psp_blitSpriteVertices,
+	psp_blitPointVertices,
 	psp_blitTexture,
-	psp_blitPoints,
 	psp_flushCache,
 	psp_enableDepthTest,
 	psp_disableDepthTest,

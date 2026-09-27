@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "ncdz.h"
+#include "common/cmdlist.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
 #include "common/ui_text_driver.h"

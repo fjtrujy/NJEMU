@@ -10,6 +10,7 @@
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
+#include "common/cmdlist.h"
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"

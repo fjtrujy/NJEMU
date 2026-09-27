@@ -1379,6 +1379,27 @@ static void ps2_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 			pixels + row * srcPitch, (size_t)width);
 }
 
+static void ps2_writeDirectTextureRect(void *data, uint8_t textureIndex,
+	int x, int y, int width, int height, const uint16_t *pixels, int srcPitch)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	GSTEXTURE *tex;
+	uint16_t *dst;
+	int row;
+
+	if (!ps2 || textureIndex >= ps2->tex_layers_count || !pixels ||
+	    width <= 0 || height <= 0 || srcPitch < width)
+		return;
+	tex = ps2->tex_layers[textureIndex].texture;
+	if (!tex || !tex->Mem || tex->PSM != GS_PSM_CT16 ||
+	    x < 0 || y < 0 || x + width > tex->Width || y + height > tex->Height)
+		return;
+	dst = (uint16_t *)tex->Mem;
+	for (row = 0; row < height; row++)
+		memcpy(dst + (size_t)(y + row) * tex->Width + x,
+			pixels + row * srcPitch, (size_t)width * sizeof(uint16_t));
+}
+
 static GSTEXTURE *ps2_prepareSpriteTexture(ps2_video_t *ps2,
 	uint8_t textureIndex, const uint16_t *clut, uint8_t bank_index)
 {
@@ -1458,13 +1479,32 @@ static void ps2_blitTexture(void *data, uint8_t textureIndex, void *clut, uint8_
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, tex, ps2->vertexColor, vertices_count, vertices);
 }
 
-static void ps2_blitPoints(void *data, uint32_t points_count, void *vertices) {
+static void ps2_blitPointVertices(void *data, uint32_t points_count,
+	const video_point_vertex_t *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	int prev_alpha_test = ps2->gsGlobal->Test->ATE;
+	uint32_t base;
+
+	if (!ps2 || !vertices || points_count == 0)
+		return;
 
 	/* Disable alpha test for point drawing (matches PSP behavior) */
 	gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
-	gsKit_prim_list_points(ps2->gsGlobal, points_count, (GSPRIMPOINT *)vertices);
+	for (base = 0; base < points_count; ) {
+		GSPRIMPOINT native_vertices[256];
+		uint32_t count = points_count - base;
+		uint32_t i;
+		if (count > 256) count = 256;
+		for (i = 0; i < count; i++) {
+			const video_point_vertex_t *src = &vertices[base + i];
+			native_vertices[i].xyz2 = vertex_to_XYZ2(ps2->gsGlobal,
+				(float)src->x - 0.5f, (float)src->y - 0.5f, src->z);
+			native_vertices[i].rgbaq = color_to_RGBAQ(GETR15(src->color),
+				GETG15(src->color), GETB15(src->color), 0x80, 0);
+		}
+		gsKit_prim_list_points(ps2->gsGlobal, count, native_vertices);
+		base += count;
+	}
 	gsKit_set_test(ps2->gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
@@ -1927,9 +1967,10 @@ video_driver_t video_ps2 = {
 	ps2_uploadMem,
 	ps2_uploadClut,
 	ps2_writeIndexedTextureRect,
+	ps2_writeDirectTextureRect,
 	ps2_blitSpriteVertices,
+	ps2_blitPointVertices,
 	ps2_blitTexture,
-	ps2_blitPoints,
 	ps2_flushCache,
 	ps2_enableDepthTest,
 	ps2_disableDepthTest,

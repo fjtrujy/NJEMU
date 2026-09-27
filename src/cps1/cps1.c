@@ -12,6 +12,9 @@
 #include "common/adhoc.h"
 #include "common/adhoc_transport.h"
 #endif
+#ifdef COMMAND_LIST
+#include "common/cmdlist.h"
+#endif
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
 #include "common/ui_defs.h"

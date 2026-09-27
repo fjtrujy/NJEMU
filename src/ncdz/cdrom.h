@@ -9,6 +9,10 @@
 #ifndef NCDZ_CDROM_H
 #define NCDZ_CDROM_H
 
+#include <stdint.h>
+#include "emucfg.h"
+#include "common/state.h"
+
 extern int neogeo_loadscreen;
 extern int neogeo_cdspeed_limit;
 extern int neogeo_loadfinished;

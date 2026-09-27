@@ -651,6 +651,48 @@ Validation (2026-09-26):
 - no MVS sprite source references `getNativeObjects()` or native PSP/PS2/SDL
   APIs after the migration.
 
+#### D7c - CPS1 portable sprite renderer [COMPLETE]
+
+Result (2026-09-27):
+- replaced `cps1/{psp,ps2,desktop}_sprite.c` with one platform-neutral
+  `cps1/sprite.c` that owns object/scroll decoding, atlas placement, CLUT
+  batching, high-priority direct-color layers, scroll clipping, stars,
+  flip/rotation and final presentation geometry;
+- extended `video_driver_t` only for CPS1 capabilities that were genuinely
+  missing from the portable contract: 16-bit direct-color atlas rectangle
+  updates and typed colored-point batches. PSP, PS2 and Desktop now own the
+  native memory layout/submission details for both operations;
+- kept PSP T8 swizzling and CLUT cache coherency inside `psp_video.c`, PS2
+  converts compact portable vertices/points to gsKit command data inside the
+  backend, and Desktop expands/draws the same portable representation through
+  SDL;
+- removed all CPS1 uses of `getNativeObjects()`, all target-side GU/gsKit/SDL
+  types, and the five direct texture-buffer pointers that previously leaked
+  backend storage into `sprite_common`;
+- unified CPS1 `StretchScreen` indices with `common/menu/cps.c`, removing the
+  stale Desktop-only leading 640x480 entry/index shift while preserving PSP and
+  PS2 logical presentation sizes;
+- while exercising GUI/save-state/command-list configurations, made the NCDZ
+  CD-ROM save-state dependency and all remaining CPS1/CPS2/NCDZ command-list
+  dependencies explicit instead of relying on transitive include ordering.
+
+Validation (2026-09-27):
+- Desktop CPS1/CPS2/MVS/NCDZ GUI-OFF builds pass and CPS1 GUI-ON passes;
+- CPS1 passes the 12-test non-memory-plan Desktop suite and a 30-frame
+  `ghoulsu` runtime smoke; MVS also passes its 12-test non-memory-plan suite and
+  the 30-frame `pbobbl2n` smoke after the backend contract extension;
+- PSP CPS1 GUI ON/OFF, CPS2, MVS and NCDZ builds pass and generate EBOOT.PBP;
+- PS2 CPS1 GUI ON/OFF, CPS2, MVS and NCDZ builds pass;
+- PSP Release GUI-OFF, SAVE_STATE=OFF baseline vs D7c: `.text` -460 B,
+  `.data` -48 B, `.bss` -20 B, total runtime image -528 B, ELF -10,468 B,
+  PRX/PBP -544 B;
+- PS2 Release GUI-OFF, SAVE_STATE=OFF baseline vs D7c: `.text` -3,416 B,
+  `.data` -8 B, `.bss` -386,992 B, total runtime image -390,416 B,
+  ELF -3,328 B. The BSS reduction comes from replacing target-owned native
+  gsKit vertex arrays with the compact portable vertex representation;
+- after CPS1 migration, CPS2 PS2 is the only target renderer that still consumes
+  `getNativeObjects()`; CPS1 contains no native PSP/PS2/SDL renderer API types.
+
 ### D8 - Remove remaining platform conditionals from common behaviour
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
@@ -696,9 +738,9 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Continue D7 with CPS1. Reuse the portable draw data and backend translation
-proven by NCDZ and MVS, but model CPS1's scroll/object layers explicitly rather
-than leaking native backend textures or vertices. Preserve target-owned tile
-decode, priority, clipping, rotation/flip and batching semantics in common code,
-and extend the video contract only where CPS1 demonstrates a real missing
-capability.
+Continue D7 with CPS2, the final and most specialized renderer. Reuse the
+portable atlas/batch contracts proven by NCDZ, MVS and CPS1, but model CPS2's
+depth/priority masking explicitly rather than leaking PS2 native textures,
+vertices or GS state into target code. Once CPS2 no longer needs native backend
+objects, remove the legacy `getNativeObjects()` / native-vertex escape hatches
+from `video_driver_t` before starting the broader D8 common-conditional audit.
