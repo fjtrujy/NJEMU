@@ -99,10 +99,10 @@ static void psp_ui_draw_getLogicalSize(void *data, int output_width, int output_
 }
 
 static void psp_ui_draw_uploadTexture(void *data, int slot,
-	const uint16_t *pixels, int w, int h, int pitch, int format, int swizzle)
+	const uint16_t *pixels, int w, int h, int pitch, int format, int source_tiled8x8)
 {
 	psp_ui_data_t *d = (psp_ui_data_t *)data;
-	(void)pixels; (void)w; (void)h; (void)pitch; (void)format; (void)swizzle;
+	(void)pixels; (void)w; (void)h; (void)pitch; (void)format; (void)source_tiled8x8;
 
 	/*
 	 * On PSP, texture data is written directly to VRAM via getTextureBasePtr.

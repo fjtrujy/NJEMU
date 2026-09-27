@@ -13,6 +13,7 @@
 #include "desktop/desktop_video.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
+#include "common/ui_texture_layout.h"
 #include "common/video_driver.h"
 
 #define UI_TEXTURE_SIZE 512
@@ -154,11 +155,10 @@ static void desktop_ui_draw_getLogicalSize(void *data, int output_width, int out
 ------------------------------------------------------*/
 
 static void desktop_ui_draw_uploadTexture(void *data, int slot,
-	const uint16_t *pixels, int w, int h, int pitch, int format, int swizzle)
+	const uint16_t *pixels, int w, int h, int pitch, int format, int source_tiled8x8)
 {
 	desktop_ui_data_t *d = (desktop_ui_data_t *)data;
 	desktop_ui_texture_t *tex;
-	int y;
 
 	if (slot >= UI_TEXTURE_MAX) return;
 	tex = &d->textures[slot];
@@ -168,20 +168,14 @@ static void desktop_ui_draw_uploadTexture(void *data, int slot,
 	tex->height = h;
 	tex->pitch = pitch;
 
-	/* Copy pixel data to CPU buffer */
-	if (pixels) {
-		const uint16_t *src = pixels;
-		uint16_t *dst = tex->buffer;
-		for (y = 0; y < h; y++) {
-			memcpy(dst, src, w * sizeof(uint16_t));
-			src += pitch;
-			dst += tex->pitch;
-		}
-	}
+	/* Desktop textures are linear. Static PSP-era UI atlases arrive in packed
+	 * 8x8 tile order, so materialize them into conventional row-major pixels. */
+	if (pixels && !ui_texture_copy_to_linear16(tex->buffer, tex->pitch,
+		pixels, pitch, w, h, source_tiled8x8))
+		return;
 
 	/* Mark SDL texture as invalid (will recreate on next draw) */
 	tex->sdl_tex_valid = 0;
-	(void)swizzle;  /* No swizzling needed on desktop */
 }
 
 static void desktop_ui_draw_clearTexture(void *data, int slot, int w, int h, int pitch)

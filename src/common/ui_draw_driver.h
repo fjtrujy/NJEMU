@@ -91,10 +91,12 @@ typedef struct ui_draw_driver
 	 *   w, h:    dimensions in pixels
 	 *   pitch:   row stride in pixels (may be > w)
 	 *   format:  UI_PIXFMT_*
-	 *   swizzle: non-zero if platform should store swizzled
+	 *   source_tiled8x8: non-zero when pixels use the legacy packed 8x8-tile
+	 *                    source layout. Linear backends must detile it; PSP can
+	 *                    consume it directly as a swizzled texture.
 	 */
 	void (*uploadTexture)(void *data, int slot, const uint16_t *pixels,
-	                      int w, int h, int pitch, int format, int swizzle);
+	                      int w, int h, int pitch, int format, int source_tiled8x8);
 
 	/*
 	 * clearTexture — Clear a region of a texture slot to zero.

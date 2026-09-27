@@ -1047,6 +1047,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME ui_layout_tests COMMAND ui_layout_tests)
 
+    add_executable(ui_texture_layout_tests
+        tests/ui_texture_layout_tests.c
+    )
+    target_include_directories(ui_texture_layout_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ui_texture_layout_tests COMMAND ui_texture_layout_tests)
+
     add_executable(ui_text_id_tests
         tests/ui_text_id_tests.c
     )

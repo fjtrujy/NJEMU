@@ -24,6 +24,7 @@
 #include "ps2/ps2_video.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
+#include "common/ui_texture_layout.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
 
@@ -355,12 +356,10 @@ static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_
 ------------------------------------------------------*/
 
 static void ps2_ui_draw_uploadTexture(void *data, int slot,
-	const uint16_t *pixels, int w, int h, int pitch, int format, int swizzle)
+	const uint16_t *pixels, int w, int h, int pitch, int format, int source_tiled8x8)
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	ps2_ui_texture_t *tex;
-	int x, y;
-	uint16_t *src, *dst;
 
 	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
 	    w <= 0 || h <= 0 || pitch < w ||
@@ -377,12 +376,9 @@ static void ps2_ui_draw_uploadTexture(void *data, int slot,
 
 	if (pixels)
 	{
-		for (y = 0; y < h; y++)
-		{
-			src = (uint16_t *)pixels + y * pitch;
-			dst = tex->buffer + y * pitch;
-			memcpy(dst, src, w * sizeof(uint16_t));
-		}
+		if (!ui_texture_copy_to_linear16(tex->buffer, tex->pitch,
+			pixels, pitch, w, h, source_tiled8x8))
+			return;
 		tex->buffer_valid = 1;
 		tex->vram_valid = 0;
 	}

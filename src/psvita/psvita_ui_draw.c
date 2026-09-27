@@ -16,6 +16,7 @@
 #include <string.h>
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
+#include "common/ui_texture_layout.h"
 #include "common/video_geometry.h"
 
 #define FONT_HEIGHT			64		/* glyphs, shadows and the logo: up to 48 rows */
@@ -89,7 +90,7 @@ static void psvita_ui_draw_getLogicalSize(void *data, int output_width, int outp
  * rows) stored one after another, `w / 8` blocks per block row.
  */
 static void psvita_ui_draw_uploadTexture(void *data, int slot, const uint16_t *pixels,
-	int w, int h, int pitch, int format, int swizzle)
+	int w, int h, int pitch, int format, int source_tiled8x8)
 {
 	psvita_ui_draw_t *ui = data;
 	psvita_ui_texture_t *dst;
@@ -103,20 +104,8 @@ static void psvita_ui_draw_uploadTexture(void *data, int slot, const uint16_t *p
 		h = dst->height;
 	dst->format = format;
 
-	if (!swizzle) {
-		for (int y = 0; y < h; y++)
-			memcpy(dst->pixels + (size_t)y * dst->pitch, pixels + (size_t)y * pitch,
-				(size_t)w * sizeof(uint16_t));
-		return;
-	}
-
-	const int blocks_per_row = pitch / 8;
-	for (int y = 0; y < h; y++) {
-		for (int x = 0; x < w; x++) {
-			const int block = (y / 8) * blocks_per_row + x / 8;
-			dst->pixels[(size_t)y * dst->pitch + x] = pixels[block * 64 + (y % 8) * 8 + x % 8];
-		}
-	}
+	(void)ui_texture_copy_to_linear16(dst->pixels, dst->pitch,
+		pixels, pitch, w, h, source_tiled8x8 != 0);
 }
 
 static void psvita_ui_draw_clearTexture(void *data, int slot, int w, int h, int pitch)

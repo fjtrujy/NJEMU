@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include "emucfg.h"
 #include "common/ui_draw.h"
+#include "common/ui_layout.h"
 #include "common/ui.h"
 #include "common/png_io.h"
 #include "common/emulator_options.h"
@@ -175,7 +176,7 @@ static void show_fps(bool draw)
 	if (!draw)
 		return;
 
-	sx = SCR_WIDTH - (strlen(buf) << 3);
+	sx = (size_t)ui_layout_get()->logical_width - (strlen(buf) << 3);
 	small_font_print((int)sx, 0, buf, 1);
 }
 

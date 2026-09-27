@@ -304,13 +304,14 @@ int ui_init(void)
 			}
 		}
 
-		/* Upload smallfont atlas (includes boxshadow data) */
-		ui_draw_driver->uploadTexture(ui_draw_data, UI_TEXTURE_SMALLFONT,
-			tex_smallfont, BUF_WIDTH, 16, BUF_WIDTH, UI_PIXFMT_5551, 1);
-
-		/* Upload boxshadow */
+		/* Upload boxshadow first: its packed source lives immediately after the
+		 * small-font tiles in the same staging buffer. Linear backends detile the
+		 * small-font slot in place, so preserve this aliased source first. */
 		ui_draw_driver->uploadTexture(ui_draw_data, UI_TEXTURE_BOXSHADOW,
 			tex_boxshadow, 72, 8, 72, UI_PIXFMT_4444, 1);
+
+		ui_draw_driver->uploadTexture(ui_draw_data, UI_TEXTURE_SMALLFONT,
+			tex_smallfont, BUF_WIDTH, 16, BUF_WIDTH, UI_PIXFMT_5551, 1);
 	}
 
 	gauss_sum = 0;
