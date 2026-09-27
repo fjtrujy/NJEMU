@@ -23,6 +23,7 @@
 #include "common/emulator_runtime.h"
 #include "common/emulator_video.h"
 #include "common/filer.h"
+#include "common/frame_pacing.h"
 #include "common/input_driver.h"
 #include "common/platform_driver.h"
 #include "common/platform_memory_info.h"
@@ -362,25 +363,35 @@ void update_screen(void)
 	if (!skipped_it)
 	{
 		uint64_t curr = ticker_driver->currentUs(ticker_data);
-		int flip = 0;
+		uint64_t target = this_frame_base +
+			(int)((float)frameskip_counter * TICKS_PER_FRAME);
+		bool sync_flip = frame_pacing_should_sync_flip(
+			option_speedlimit != 0, option_vsync != 0, curr, target);
 
-		if (option_speedlimit)
+		/* With software pacing but no useful VBlank wait, reach the emulation
+		 * deadline before presenting. If VSync is useful, present first: waiting
+		 * for VBlank may consume most/all of the remaining budget. */
+		if (option_speedlimit && !sync_flip)
 		{
-			uint64_t target = this_frame_base + (int)((float)frameskip_counter * TICKS_PER_FRAME);
-
-			if (option_vsync)
-			{
-				if (curr < target - 100)
-				{
-					video_driver->flipScreen(video_data, 1);
-					flip = 1;
-				}
-			}
-
-			if (target > curr) usleep(target - curr);
-			curr = ticker_driver->currentUs(ticker_data);
+			uint64_t delay = frame_pacing_sleep_us(true, curr, target);
+			if (delay != 0)
+				usleep(delay);
 		}
-		if (!flip) video_driver->flipScreen(video_data, 0);
+
+		video_driver->flipScreen(video_data, sync_flip);
+		curr = ticker_driver->currentUs(ticker_data);
+
+		/* A synchronous flip blocks until VBlank. Re-sample the clock before
+		 * applying the software limit so that VSync time is never counted twice. */
+		if (option_speedlimit && sync_flip)
+		{
+			uint64_t delay = frame_pacing_sleep_us(true, curr, target);
+			if (delay != 0)
+			{
+				usleep(delay);
+				curr = ticker_driver->currentUs(ticker_data);
+			}
+		}
 
 		rendered_frames_since_last_fps++;
 

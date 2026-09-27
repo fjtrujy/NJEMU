@@ -117,7 +117,10 @@ typedef struct video_driver
 	void *(*init)(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info);
 	/* Stops and frees driver data. */
    	void (*free)(void *data);
+	/* Wait for one presentation refresh without swapping buffers. */
 	void (*waitVsync)(void *data);
+	/* Present the completed frame. When vsync is true, the backend must wait
+	 * for the next presentation boundary when that capability is available. */
 	void (*flipScreen)(void *data, bool vsync);
 	/* Begin a new rendering frame (e.g. start GPU command list).
 	 * All draw calls between beginFrame/endFrame just enqueue commands. */

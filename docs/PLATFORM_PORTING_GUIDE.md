@@ -89,6 +89,40 @@ native vertex structures back through the common driver merely to make a target
 renderer work. If a platform requires a special fast path, implement it inside
 its backend while preserving the common semantic contract.
 
+### Presentation and frame pacing
+
+`ticker_driver_t::currentUs()` must be a monotonic wall-clock timer in
+microseconds. It must continue advancing while the main thread sleeps or blocks
+on VBlank; CPU-time clocks are not valid for frame pacing.
+
+`video_driver_t::flipScreen(data, vsync)` has one portable meaning: present the
+completed frame, and when `vsync` is true wait for the next presentation boundary
+when the backend supports that operation. `waitVsync()` waits for one refresh
+without changing the presented buffer. Backends must not silently ignore the
+`vsync` argument when runtime control is available.
+
+The common scheduler treats the two user options independently:
+
+- frame-rate limit off + VSync off: intentionally uncapped emulation;
+- frame-rate limit off + VSync on: presentation is paced by the host refresh;
+- frame-rate limit on + VSync off: the monotonic software deadline paces the
+  emulated system to its native `FPS`;
+- frame-rate limit on + VSync on: VBlank may consume part/all of the software
+  pacing budget, so the clock must be sampled again after the blocking flip
+  before applying any residual sleep. Never charge the same wait twice.
+
+The historical INI key is still named `60FPSLimit` for compatibility, but the
+actual deadline uses each target's native refresh (for example MVS and CPS2 are
+not exactly 60 Hz). New user-facing text should therefore say frame-rate limit,
+not 60 FPS limit.
+
+With both frame-rate limiting and VSync disabled, emulation is intentionally
+uncapped. Native audio devices still consume samples in real time, so correct
+audio is not guaranteed in that mode and audio must not become an implicit frame
+limiter. If a future fast-forward feature wants usable sound, define that policy
+explicitly (for example mute, sample dropping/resampling, or time stretching)
+rather than adding a hidden sleep/yield to the uncapped scheduler.
+
 ## 5. Renderer performance rule
 
 Portability must not require an avoidable per-frame materialization pass.

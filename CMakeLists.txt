@@ -1038,6 +1038,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME zip_archive_tests COMMAND zip_archive_tests)
 
+    add_executable(frame_pacing_tests
+        tests/frame_pacing_tests.c
+    )
+    target_include_directories(frame_pacing_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME frame_pacing_tests COMMAND frame_pacing_tests)
+
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c
         src/common/ui_layout.c

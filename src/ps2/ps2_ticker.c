@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <time.h>
+
+#include <timer.h>
 
 #include "common/ticker_driver.h"
 
@@ -18,8 +19,13 @@ static void ps2_free(void *data) {
 	free(ps2);
 }
 
-static u_int64_t ps2_currentUs(void *data) {
-    return clock();
+static uint64_t ps2_currentUs(void *data) {
+	u32 seconds;
+	u32 microseconds;
+
+	(void)data;
+	TimerBusClock2USec(GetTimerSystemTime(), &seconds, &microseconds);
+	return (uint64_t)seconds * 1000000ULL + microseconds;
 }
 
 ticker_driver_t ticker_ps2 = {

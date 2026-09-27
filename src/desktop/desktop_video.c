@@ -35,6 +35,8 @@ typedef struct desktop_video {
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint32_t presented_frames;	/* NJEMU_DUMP_FRAMES numbering */
+	int vsync_enabled;
+	int vsync_control_available;
 } desktop_video_t;
 
 #define OUTPUT_WIDTH 640
@@ -90,6 +92,12 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	}
 
 	desktop->renderer = renderer;
+	desktop->vsync_enabled = 0;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+	desktop->vsync_control_available = 1;
+#else
+	desktop->vsync_control_available = 0;
+#endif
 
 	desktop->blendMode = SDL_ComposeCustomBlendMode(
 		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, 
@@ -222,6 +230,24 @@ static void desktop_waitVsync(void *data)
 static void desktop_flipScreen(void *data, bool vsync)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
+
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+	if (desktop->vsync_control_available &&
+		desktop->vsync_enabled != (vsync ? 1 : 0))
+	{
+		if (SDL_RenderSetVSync(desktop->renderer, vsync ? 1 : 0) == 0)
+			desktop->vsync_enabled = vsync ? 1 : 0;
+		else
+		{
+			printf("Desktop video: runtime VSync control unavailable: %s\n",
+				SDL_GetError());
+			desktop->vsync_control_available = 0;
+		}
+	}
+#else
+	(void)vsync;
+#endif
+
 	SDL_RenderPresent(desktop->renderer);
 }
 
