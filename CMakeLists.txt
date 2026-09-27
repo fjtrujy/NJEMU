@@ -84,6 +84,7 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
+option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
 
 # Add options to compiler definitions
@@ -424,6 +425,10 @@ endif()
 if (PLATFORM STREQUAL "PSVITA")
     if (GUI)
         message(FATAL_ERROR "PLATFORM=PSVITA does not have a UI texture adapter (psvita_ui_draw.c) yet: use GUI=OFF")
+    endif()
+    if (USE_VITAGL)
+        list(REMOVE_ITEM OS_SRC psvita/psvita_video.c)
+        list(APPEND OS_SRC psvita/psvita_video_gl.c)
     endif()
     list(APPEND OS_SRC
         psvita/psvita_power.c
@@ -819,7 +824,20 @@ elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
     # defines PATH_MAX as 4096: provide the same value to the whole build.
     target_compile_definitions(${TARGET} PRIVATE PATH_MAX=4096)
-    target_link_libraries(${TARGET} PUBLIC vita2d)
+    if (USE_VITAGL)
+        target_link_libraries(${TARGET} PUBLIC
+            vitaGL
+            vitashark
+            SceShaccCgExt
+            taihen_stub
+            SceShaccCg_stub
+            SceKernelDmacMgr_stub
+            mathneon
+            stdc++
+        )
+    else()
+        target_link_libraries(${TARGET} PUBLIC vita2d)
+    endif()
     target_link_libraries(${TARGET} PUBLIC
         SceDisplay_stub
         SceGxm_stub
