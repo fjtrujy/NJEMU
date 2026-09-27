@@ -86,6 +86,7 @@ option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
 option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
+option(USE_DESKTOP_GL "Desktop: OpenGL 3.3 video backend (test bench for the Vita renderers)" OFF)
 
 # Add options to compiler definitions
 if (GUI)
@@ -434,6 +435,18 @@ if (PLATFORM STREQUAL "PSVITA")
         psvita/psvita_power.c
         common/hw_recorder.c
     )
+elseif (PLATFORM STREQUAL "DESKTOP")
+    if (USE_DESKTOP_GL)
+        if (GUI)
+            message(FATAL_ERROR "USE_DESKTOP_GL requires GUI=OFF (the desktop GUI draws through SDL_Renderer)")
+        endif()
+        list(REMOVE_ITEM OS_SRC desktop/desktop_video.c)
+        list(APPEND OS_SRC
+            desktop/desktop_video_gl.c
+            common/hw_recorder.c
+        )
+    endif()
+    list(APPEND OS_SRC desktop/desktop_frame_dump.c)
 endif()
 
 if (ADHOC AND PLATFORM STREQUAL "PSP")
