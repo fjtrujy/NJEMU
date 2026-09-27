@@ -241,7 +241,7 @@ static void DisplayPspList(int top, int rows)
 {
 	if (max == 0)
 	{
-		msg_printf(TEXT(WAITING_FOR_ANOTHER_PSP_TO_JOIN));
+		msg_printf(TEXT(WAITING_FOR_ANOTHER_PLAYER_TO_JOIN));
 	}
 	else
 	{

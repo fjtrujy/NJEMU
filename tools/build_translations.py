@@ -35,6 +35,16 @@ LANGUAGE_IDS = {
     "zh-Hant": 4,
 }
 
+# V2 packs store numeric IDs and strings, not symbolic source keys. These aliases
+# let us remove PSP-specific names from editable translations without invalidating
+# existing V2 packs that use the same numeric schema.
+SCHEMA_COMPAT_NAMES = {
+    "UNSUPPORTED_DEVICE_CONFIGURATION": "THIS_PROGRAM_REQUIRES_PSP2000",
+    "CPU_CLOCK": "PSP_CLOCK",
+    "WAITING_FOR_ANOTHER_PLAYER_TO_JOIN": "WAITING_FOR_ANOTHER_PSP_TO_JOIN",
+    **{f"INPUT_BUTTON_NAME{i}": f"PSP_BUTTON_NAME{i}" for i in range(1, 13)},
+}
+
 GRAPHIC_TOKENS = {
     "<UPARROW>": 0xE000,
     "<DOWNARROW>": 0xE001,
@@ -225,7 +235,8 @@ def schema_hash(names: list[str]) -> int:
     """32-bit FNV-1a over the canonical stable-ID schema."""
     value = 0x811C9DC5
     for message_id, name in enumerate(names):
-        canonical = f"{message_id}:{name}\n".encode("ascii")
+        stable_name = SCHEMA_COMPAT_NAMES.get(name, name)
+        canonical = f"{message_id}:{stable_name}\n".encode("ascii")
         for byte in canonical:
             value ^= byte
             value = (value * 0x01000193) & 0xFFFFFFFF

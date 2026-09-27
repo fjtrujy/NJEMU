@@ -4,6 +4,11 @@
 The five `.lang` files contain one value for every stable ID in exactly that
 order.
 
+Symbolic keys are platform-neutral. A small compatibility-name map in
+`tools/build_translations.py` preserves the original V2 schema hash for numeric
+slots whose historical source names contained `PSP`; existing generated V2 packs
+therefore remain loadable after those source-key cleanups.
+
 The `.lang` files are UTF-8 source files and the generated `.lng` V2 packs
 store UTF-8 directly. There is no source-to-GBK transcoding in the translation
 pipeline.

@@ -980,8 +980,8 @@ static UI_HELP *help_init(int number)
 	help.mes[5].text1 = FONT_TRIANGLE;
 	help.mes[6].text1 = FONT_LTRIGGER;
 	help.mes[7].text1 = FONT_RTRIGGER;
-	help.mes[8].text1 = TEXT(PSP_BUTTON_NAME11);
-	help.mes[9].text1 = TEXT(PSP_BUTTON_NAME12);
+	help.mes[8].text1 = TEXT(INPUT_BUTTON_NAME11);
+	help.mes[9].text1 = TEXT(INPUT_BUTTON_NAME12);
 	help.mes[10].text1 = NULL;
 
 	switch (number)
