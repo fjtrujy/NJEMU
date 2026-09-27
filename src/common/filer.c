@@ -635,8 +635,9 @@ static int entry_is_dir(const char *dir, const struct dirent *entry)
 	struct stat st;
 	size_t len = strlen(dir);
 
-	snprintf(path, sizeof(path), "%s%s%s", dir,
-		(len != 0 && dir[len - 1] != '/') ? "/" : "", entry->d_name);
+	if (snprintf(path, sizeof(path), "%s%s%s", dir,
+			(len != 0 && dir[len - 1] != '/') ? "/" : "", entry->d_name) >= (int)sizeof(path))
+		return 0;
 	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
