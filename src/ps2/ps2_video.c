@@ -23,6 +23,8 @@
 #include <gsInline.h>
 #include <gsCore.h>
 
+#include "ps2/ps2_video.h"
+
 
 /******************************************************************************
 	Global Functions

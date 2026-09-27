@@ -9,6 +9,23 @@
 #ifndef COMMON_UI_H
 #define COMMON_UI_H
 
+#include <stdint.h>
+
+/* Public high-level UI lifecycle/presentation surface. */
+void load_background(int number);
+void show_background(void);
+int draw_battery_status(int draw);
+void draw_dialog(int sx, int sy, int ex, int ey);
+
+int ui_show_popup(int draw);
+void ui_popup(const char *text, ...);
+void ui_popup_reset(void);
+
+void msg_printf(const char *text, ...);
+void msg_screen_init(int wallpaper, int icon, const char *title);
+void msg_screen_clear(void);
+int help(int number);
+
 #define UI_FULL_REFRESH		1
 #define UI_PARTIAL_REFRESH	2
 

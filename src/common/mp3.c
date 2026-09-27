@@ -17,7 +17,7 @@
 #include "audio_driver.h"
 #include "common/emulator_runtime.h"
 #include "common/ui_text_driver.h"
-#include "main_ui_draw.h"
+#include "common/ui.h"
 #include "ncdz/cdda.h"
 
 #define MP3_SAMPLES			(736 * 2)

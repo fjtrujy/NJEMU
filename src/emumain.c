@@ -15,7 +15,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "emucfg.h"
-#include "main_ui_draw.h"
+#include "common/ui_draw.h"
+#include "common/ui.h"
+#include "common/png_io.h"
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/emulator_video.h"

@@ -21,10 +21,11 @@
 #include <gsInline.h>
 #include <gsToolkit.h>
 #include <dmaKit.h>
-#include "ps2/ps2.h"
+#include "ps2/ps2_video.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
 #include "common/video_driver.h"
+#include "common/video_geometry.h"
 
 /******************************************************************************
 	Texture management

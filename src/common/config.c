@@ -17,7 +17,7 @@
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
 #include "common/ui_text_driver.h"
-#include "main_ui_draw.h"
+
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif

@@ -392,7 +392,6 @@ endif()
 
 
 set(OS_SRC ${OS_SRC}
-    ${PLATFORM_LOWER}/${PLATFORM_LOWER}.h
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_drivers.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_platform.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ticker.c

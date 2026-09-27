@@ -13,7 +13,9 @@
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
-#include "main_ui_draw.h"
+#include "common/ui.h"
+#include "common/filer.h"
+#include "common/config.h"
 #include <string.h>
 #include "common/memory_sizes.h"
 

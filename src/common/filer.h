@@ -6,6 +6,10 @@
 
 extern char startupDir[PATH_MAX];
 
+void file_browser(void);
+void show_exit_screen(void);
+void delete_files(const char *dirname, const char *pattern);
+
 char *find_file(char *pattern, char *path);
 int file_exist(const char *path);
 #ifdef SAVE_STATE

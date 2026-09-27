@@ -14,7 +14,26 @@
 
 #include <stdlib.h>
 #include <SDL.h>
-#include "desktop/desktop.h"
+#include "desktop/desktop_video.h"
+
+typedef struct texture_layer {
+	SDL_Texture *texture;
+	uint8_t *buffer;
+	uint8_t bytes_per_pixel;
+} texture_layer_t;
+
+typedef struct desktop_video {
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	bool draw_extra_info;
+	SDL_BlendMode blendMode;
+	uint16_t *clut_base;
+	uint8_t *texturesMem;
+	SDL_Texture *sdl_texture_scrbitmap;
+	uint8_t *scrbitmap;
+	texture_layer_t *tex_layers;
+	uint8_t tex_layers_count;
+} desktop_video_t;
 
 #define OUTPUT_WIDTH 640
 #define OUTPUT_HEIGHT 480
@@ -22,6 +41,12 @@
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
+
+void *desktop_video_get_renderer(void *video_data)
+{
+	desktop_video_t *desktop = (desktop_video_t *)video_data;
+	return desktop ? desktop->renderer : NULL;
+}
 
 static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {

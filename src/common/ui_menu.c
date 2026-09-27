@@ -25,7 +25,7 @@
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
-#include "main_ui_draw.h"
+#include "common/ui_menu.h"
 #include "sound/sndintrf.h"
 #if (EMU_SYSTEM == NCDZ)
 #include "common/mp3.h"

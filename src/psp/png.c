@@ -15,7 +15,8 @@
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
-#include "main_ui_draw.h"
+#include "common/ui.h"
+#include "common/png_io.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

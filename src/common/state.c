@@ -22,7 +22,7 @@
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
-#include "main_ui_draw.h"
+
 #if USE_CACHE
 #include "common/cache.h"
 #endif

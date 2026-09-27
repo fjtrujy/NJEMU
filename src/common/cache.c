@@ -16,7 +16,7 @@
 #include "common/runtime_paths.h"
 #include "common/ticker_driver.h"
 #include "common/ui_text_driver.h"
-#include "main_ui_draw.h"
+#include "common/ui.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>

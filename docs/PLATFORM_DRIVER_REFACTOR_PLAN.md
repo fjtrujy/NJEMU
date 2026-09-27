@@ -953,7 +953,7 @@ Validation (2026-09-27):
   + save-state/command-list builds pass;
 - `git diff --check` is clean and no file under `resources/` is modified.
 
-### D9 - Final include/API audit and documentation
+### D9 - Final include/API audit and documentation [COMPLETE]
 
 - run an include-fanout audit again;
 - remove stale umbrella headers and duplicate declarations;
@@ -962,6 +962,62 @@ Validation (2026-09-27):
 - document the final extension recipe for a future platform such as PS Vita;
 - capture final counts for platform conditionals, duplicated renderer files,
   binary sizes, and test matrix.
+
+Result (2026-09-27):
+- removed the unused PSP/PS2/Desktop umbrella headers and split
+  `main_ui_draw.h` declarations among their owning UI, menu, config, filer and
+  PNG contracts;
+- hid Desktop video state inside its implementation and exposed only an opaque
+  backend-private renderer accessor; PS2 readback/context declarations now live
+  in its narrow private video header;
+- removed the unused PSP wallpaper implementation and embedded data. Current
+  backgrounds continue to use the common UI texture path;
+- updated `CLAUDE.md`, `README.md`, and `PORTING_PLAN.md`, and added the backend
+  extension recipe in `docs/PLATFORM_PORTING_GUIDE.md`;
+- final source audit: zero host-platform conditionals in `src/common/`, zero
+  common/target includes of platform headers or native GPU SDK headers, zero
+  references to the removed umbrella headers, and zero `getNativeObjects`,
+  `pollFatfursp`, or `pollAnalog` API references;
+- four shared target `sprite.c` files remain, with zero platform-specific target
+  sprite files. Common driver registries no longer select the host platform;
+- direct quoted-include audit over production C/header files: the largest fan-in
+  is `emucfg.h` (60), followed by `common/emulator_runtime.h` (38),
+  `common/video_driver.h` (38), `common/ui_text_driver.h` (34), and
+  `common/ui.h` (31). These are common contracts, not platform umbrellas.
+
+Validation repeated against the final working tree (2026-09-27):
+- Desktop: all four targets in Release, GUI OFF and ON; ON also enables
+  save-state and command-list. CTests pass for CPS1 13/13 OFF and 14/14 ON,
+  CPS2 13/13 and 14/14, MVS 13/13 and 14/14, NCDZ 14/14 and 15/15
+  (110 successful test executions, including translation/font validation);
+- PS2: all four targets build with GUI OFF and ON; ON enables save-state and
+  command-list;
+- PSP: all four targets build with GUI/save-state/command-list ON and generate
+  EBOOT.PBP; MVS additionally builds with those options OFF and with AdHoc ON;
+- 22 build configurations pass in total;
+- Desktop MVS `pbobbl2n` runs for 30 frames and exits successfully. An initial
+  attempt used an incomplete temporary resource directory; the successful run
+  used the complete isolated runtime directory;
+- `git diff --check` passes; no tracked resource changes and no runtime resources
+  are included in the commit.
+
+Final console size snapshot in bytes (Release, GUI/save-state/command-list ON,
+AdHoc OFF; `text/data/bss` reported by each platform's GNU size tool):
+
+| Platform | Target | text | data | bss | ELF file | EBOOT.PBP |
+|---|---|---:|---:|---:|---:|---:|
+| PSP | CPS1 | 942040 | 291020 | 2307904 | 3038432 | 1476518 |
+| PSP | CPS2 | 872800 | 19144 | 1768820 | 2541340 | 1043535 |
+| PSP | MVS | 960268 | 22908 | 1956116 | 2719428 | 1154271 |
+| PSP | NCDZ | 1005724 | 10840 | 1914376 | 2739676 | 1174669 |
+| PS2 | CPS1 | 1063132 | 675668 | 2076496 | 3764968 | — |
+| PS2 | CPS2 | 980964 | 403652 | 1538480 | 3348948 | — |
+| PS2 | MVS | 1083548 | 407300 | 1725792 | 3511484 | — |
+| PS2 | NCDZ | 1087900 | 395148 | 1683072 | 3637376 | — |
+
+These are final build snapshots, not D9 before/after deltas. ELF file sizes include
+non-runtime sections; dynamic allocations are not included in `bss`. No new
+real-hardware PSP/PS2 run was performed for this include/documentation milestone.
 
 ## 7. Validation matrix
 
@@ -987,14 +1043,10 @@ One coherent, verified commit per milestone. Never mix speculative later-phase
 cleanup into an earlier phase merely because a file is already open. Update this
 plan after every completed milestone with observed results and any design change.
 
-## 9. Immediate next step
+## 9. Completion and follow-up
 
-Start D9. Re-run the include-fanout/API audit against the architecture that now
-has unified UI and target rendering plus no host-platform branches in
-`src/common/`. Remove stale umbrella headers, transitive include dependencies and
-obsolete declarations without rebuilding broad include paths. Update the
-architecture documentation and write the final extension recipe for adding a new
-backend such as PS Vita, including the minimal driver/capability surface a port
-must implement. Capture final conditional/renderer/API counts and the full
-validation matrix. The VU1/VIF1 experiment remains deferred until a separate
-measured optimization effort is justified.
+D0-D9 are complete. No implementation milestone remains in this plan. Periodic
+real-hardware PSP/PS2 regression testing, including multitap/hotplug and native
+input/timing, remains release-level follow-up as recorded in `PORTING_PLAN.md`.
+A future platform should follow `PLATFORM_PORTING_GUIDE.md`. The VU1/VIF1
+experiment remains deferred to a separate measured optimization effort.

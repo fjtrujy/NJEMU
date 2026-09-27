@@ -14,6 +14,22 @@
 #include "common/font_t.h"
 #include "common/font/gbk_s14_runtime.h"
 
+/* Public drawing surface shared by GUI and no-GUI implementations. */
+int ui_init(void);
+void ui_exit(void);
+
+void small_font_print(int sx, int sy, const char *s, int bg);
+void small_font_printf(int x, int y, const char *text, ...);
+void small_icon(int sx, int sy, int r, int g, int b, int no);
+void small_icon_shadow(int sx, int sy, int r, int g, int b, int no);
+void boxfill_alpha(int sx, int sy, int ex, int ey, int r, int g, int b, int alpha);
+
+void uifont_print(int sx, int sy, int r, int g, int b, const char *s);
+void uifont_print_center(int sy, int r, int g, int b, const char *s);
+void uifont_print_shadow(int sx, int sy, int r, int g, int b, const char *s);
+void uifont_print_shadow_center(int sy, int r, int g, int b, const char *s);
+int uifont_get_string_width(const char *s);
+
 #define CHARSET_DEFAULT		0
 #define CHARSET_ISO8859_1	1
 #define CHARSET_LATIN1		1

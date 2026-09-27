@@ -1,161 +1,147 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides repository-specific guidance for work on NJEMU.
 
 ## Project Overview
 
-NJEMU is a multi-platform arcade emulator written in C. It emulates Capcom and SNK arcade systems:
-- **CPS1** (Capcom Play System 1)
-- **CPS2** (Capcom Play System 2)
-- **MVS** (Neo-Geo MVS/AES)
-- **NCDZ** (Neo-Geo CD)
+NJEMU is a multi-platform arcade emulator written in C. It emulates:
 
-Builds are organized by two orthogonal axes: `TARGET` (arcade system) and `PLATFORM` (PSP, PS2, DESKTOP).
+- CPS1 (Capcom Play System 1)
+- CPS2 (Capcom Play System 2)
+- MVS/AES (Neo Geo)
+- NCDZ (Neo Geo CD)
+
+Builds are selected by two independent CMake axes: `TARGET` (arcade system) and
+`PLATFORM` (PSP, PS2, DESKTOP).
 
 ## Build Commands
 
-CMake requires both `-DTARGET=` and `-DPLATFORM=`:
+CMake requires both axes:
 
 ```bash
-# Desktop MVS build (recommended for development)
-mkdir build_desktop_mvs && cd build_desktop_mvs
-cmake -DTARGET=MVS -DPLATFORM=DESKTOP ..
-make -j4
+cmake -S . -B build_desktop_mvs -DTARGET=MVS -DPLATFORM=DESKTOP
+cmake --build build_desktop_mvs -j4
 
-# Desktop CPS1 build
-mkdir build_desktop_cps1 && cd build_desktop_cps1
-cmake -DTARGET=CPS1 -DPLATFORM=DESKTOP ..
-make -j4
+cmake -S . -B build_desktop_cps1 -DTARGET=CPS1 -DPLATFORM=DESKTOP
+cmake --build build_desktop_cps1 -j4
 
-# Desktop CPS2 build
-mkdir build_desktop_cps2 && cd build_desktop_cps2
-cmake -DTARGET=CPS2 -DPLATFORM=DESKTOP ..
-make -j4
-
-# PSP build (memory tier auto-selected at runtime)
-mkdir build_psp_mvs && cd build_psp_mvs
-cmake -DTARGET=MVS -DPLATFORM=PSP ..
-make -j4
-
-# PS2 CPS1 build
-mkdir build_ps2_cps1 && cd build_ps2_cps1
-cmake -DTARGET=CPS1 -DPLATFORM=PS2 ..
-make -j4
-
-# PS2 CPS2 build
-mkdir build_ps2_cps2 && cd build_ps2_cps2
-cmake -DTARGET=CPS2 -DPLATFORM=PS2 ..
-make -j4
-
-# PS2 MVS build
-mkdir build_ps2_mvs && cd build_ps2_mvs
-cmake -DTARGET=MVS -DPLATFORM=PS2 ..
-make -j4
+cmake -S . -B build_ps2_mvs \
+  -DCMAKE_TOOLCHAIN_FILE="$PS2DEV/share/ps2dev.cmake" \
+  -DTARGET=MVS -DPLATFORM=PS2
+cmake --build build_ps2_mvs -j4
 ```
 
-**Run from the build directory** so relative resource paths work. The executable is named after the TARGET (e.g., `MVS`, `CPS1`).
+For PSP use the PSPSDK CMake toolchain (`$PSPDEV/psp/share/pspdev.cmake`). Run
+executables from their build/resource context when relative resource paths are
+needed.
 
-### Useful CMake Options
+Useful options include:
 
-- `GUI=OFF` (default) - Enable GUI menu system
-- `USE_ASAN=ON` - AddressSanitizer
-- `SAVE_STATE=ON` - Enable save states
-- `COMMAND_LIST=ON` - Command list recording
+- `GUI=ON/OFF`;
+- `SAVE_STATE=ON/OFF`;
+- `COMMAND_LIST=ON/OFF`;
+- `ADHOC=ON/OFF` (PSP where supported);
+- `USE_ASAN=ON` (Desktop development).
 
-PSP packages explicitly request the largest user-memory partition (`MEMSIZE=1`).
-Platform `queryMemoryInfo()` values are diagnostic telemetry only. CPS2/MVS
-cache capacity is established at ROM-load time by retained empirical allocator
-probes after mandatory regions are resident; MVS may use independent C-ROM and
-PCM blocks from different heap holes. `memory_plan_t` still owns reserve/floor
-policy. Use `NJEMU_MEMORY_BUDGET_MB` / `NJEMU_MEMORY_LARGEST_BLOCK_MB` as
-deterministic caps for memory-policy testing.
+PSP packages request the large user-memory partition (`MEMSIZE=1`). Platform
+`queryMemoryInfo()` values are telemetry; CPS2/MVS cache capacity is established
+at ROM-load time by retained allocator probes after mandatory regions are
+resident. `memory_plan_t` owns reserve/floor policy.
 
 ## Architecture
 
-### Driver-Based Abstraction
+### Platform drivers
 
-The codebase uses driver interfaces in `src/common/` to decouple emulation from platform-specific code:
+Common contracts live in `src/common/`:
 
-- **`video_driver_t`** - Screen rendering, texture management, CLUT
-- **`audio_driver_t`** - Sound output
-- **`input_driver_t`** - Controller input
-- **`platform_driver_t`** - Platform init and main loop
-- **`thread_driver_t`** - Threading primitives
-- **`ticker_driver_t`** - Timing and frame sync
+- `video_driver_t` - presentation, texture/CLUT operations, portable sprite
+  submission and low-level UI drawing;
+- `audio_driver_t` - audio output;
+- `input_driver_t` - raw physical input sampling;
+- `platform_driver_t` - lifecycle/main loop, memory telemetry and system language;
+- `thread_driver_t` - threading primitives;
+- `ticker_driver_t` - monotonic timing;
+- `power_driver_t` - optional battery/performance capabilities;
+- `ui_draw_driver_t` - UI texture storage/lifecycle only.
 
-Each platform implements these interfaces in `src/<platform>/` (e.g., `src/psp/psp_video.c`, `src/ps2/ps2_audio.c`).
+Each platform binds these globals in `src/<platform>/<platform>_drivers.c`.
+Backend selection is a build/link concern; shared code should not add host-
+platform `#ifdef`s.
 
-### Source Layout
+### Rendering
 
-```
+Every emulator target has one platform-neutral renderer:
+
+- `src/cps1/sprite.c`
+- `src/cps2/sprite.c`
+- `src/mvs/sprite.c`
+- `src/ncdz/sprite.c`
+
+Target renderers own emulator semantics such as sprite/tile decoding, clipping,
+priority, atlas/cache policy, palette selection and batching. They emit portable
+`video_sprite_vertex_t` / `video_point_vertex_t` data and texture updates through
+`video_driver_t`.
+
+Native execution stays in the backend. PSP can submit the compact sprite layout
+directly to GU. PS2 materializes it directly into the final gsKit queue rather
+than retaining native target-side vertex arrays. Desktop maps the same data to
+SDL. Do not reintroduce PSP/PS2/SDL SDK types or `getNativeObjects()` escape
+hatches into target code.
+
+Logical 480x272 presentation geometry lives in `common/video_geometry.h`.
+Physical output dimensions come from `video_driver_t::getOutputSize()`.
+
+### GUI
+
+The GUI/menu/file-browser/configuration logic is common and works on PSP, PS2 and
+Desktop. `common/ui_draw.c` owns UI semantics; `video_driver_t` owns primitive
+rendering. Platform `*_ui_draw.c` files are small texture-storage/lifecycle
+adapters, not parallel renderers.
+
+### Includes
+
+Use narrow, direct headers. Common/target code must not include platform umbrella
+headers or acquire native SDK declarations transitively. Platform SDK includes
+belong in platform implementation files or narrowly-scoped backend-private
+headers. The application uses one project include root (`src/`) rather than a
+collection of directory-wide include paths.
+
+## Source Layout
+
+```text
 src/
-├── common/          # Platform-agnostic code and driver interfaces
-├── cpu/             # CPU cores (m68000, z80)
-├── sound/           # Sound synthesis
-├── common/          # Shared services, including ZIP archive handling
-├── mvs/             # Neo-Geo MVS target
-├── cps1/            # CPS1 target
-├── cps2/            # CPS2 target
-├── ncdz/            # Neo-Geo CD target
-├── psp/             # PSP platform drivers
-├── ps2/             # PS2 platform drivers
-└── desktop/         # Desktop (SDL2) platform drivers
+├── common/          shared drivers, UI, runtime services, ZIP/cache policy
+├── cpu/             CPU cores
+├── sound/           sound chip emulation
+├── cps1/            CPS1 target
+├── cps2/            CPS2 target
+├── mvs/             MVS/AES target
+├── ncdz/            Neo Geo CD target
+├── psp/             PSP backend
+├── ps2/             PS2 backend
+└── desktop/         SDL2 backend
 ```
 
-### Platform-Specific Sprite Rendering
+## Key Entry Points
 
-Each TARGET has platform-specific sprite files following the pattern `src/<target>/<platform>_sprite.c`:
-- `src/mvs/psp_sprite.c`, `src/mvs/ps2_sprite.c`, `src/mvs/desktop_sprite.c`
-- `src/cps1/psp_sprite.c`, `src/cps1/ps2_sprite.c`, `src/cps1/desktop_sprite.c`
-- `src/cps2/psp_sprite.c`, `src/cps2/ps2_sprite.c`, `src/cps2/desktop_sprite.c`
-- `src/ncdz/psp_sprite.c`, `src/ncdz/ps2_sprite.c`, `src/ncdz/desktop_sprite.c`
+- `src/emumain.c` - common emulator startup and driver initialization;
+- `src/<target>/driver.c` - target/game driver wiring;
+- `src/<target>/memintrf.c` - CPU/memory interface;
+- `src/<target>/vidhrdw.c` - video-hardware emulation;
+- `src/<target>/sprite.c` - portable target renderer.
 
-Shared sprite logic lives in `<target>/sprite_common.c`.
+Each target defines `emu_layer_textures`, `emu_layer_textures_count`, and
+`emu_clut_info`; these describe the target's atlas/CLUT requirements to the video
+backend.
 
-### CPS2 Porting Notes
+## Validation
 
-CPS2 is now fully ported to all platforms (PSP, PS2, Desktop). It is similar to CPS1 but simpler (no SCROLLH layer, no star field). It has 4 indexed texture atlases (OBJECT 16x16, SCROLL1 8x8, SCROLL2 16x16, SCROLL3 32x32), all 512x512 at 8-bit indexed. Key differences from CPS1: 8-level object priority with Z-buffer masking (`cps2_has_mask`), double-buffered object RAM, and optional 1-frame palette delay.
+For driver/render/common changes, prefer the smallest focused matrix first, then
+cross-platform validation before committing. Renderer/input changes should expand
+to all four targets. Keep `git diff --check` clean and never include runtime
+resources/caches/ROMs in source commits.
 
-CPS2-specific implementation details:
-- **PS2:** Z-buffer masking via GS ZBUF register (ZTST GEQUAL/ALWAYS modes), priority linked-lists with gsKit primitives
-- **Desktop:** Priority linked-lists with struct Vertex arrays, CLUT batching, `desktop_clearFrame` for mask support
-- **PSP:** Original sceGu-based rendering with swizzled textures
-
-### Key Entry Points
-
-- **`src/emumain.c`** - Main entry, driver initialization
-- **`src/<target>/driver.c`** - Target-specific driver wiring
-- **`src/<target>/memintrf.c`** - Memory interface (CPU, PPU, sound chip access)
-- **`src/<target>/vidhrdw.c`** - Video hardware simulation
-
-### Video Driver Integration
-
-Each TARGET must define these globals in its core file (e.g., `src/mvs/mvs.c`, `src/cps1/cps1.c`):
-- **`emu_layer_textures`** - Array of `layer_texture_info_t` describing texture atlas dimensions
-- **`emu_layer_textures_count`** - Number of texture layers
-- **`emu_clut_info`** - CLUT configuration (`clut_info_t` with base pointer, entries per bank, bank count)
-
-These are passed to the video driver during initialization in `src/emumain.c`.
-
-## Where to Make Changes
-
-- **Emulator core logic:** `src/common/` and `src/cpu/`
-- **Target-specific behavior:** `src/mvs/`, `src/cps1/`, `src/cps2/`, `src/ncdz/`
-- **Platform glue:** `src/<platform>/` (e.g., `src/ps2/`)
-- **Build configuration:** `CMakeLists.txt`
-
-## External Dependencies
-
-- **Desktop:** SDL2 (linked as `SDL2::SDL2-static`)
-- **MP3 support:** libmad (optional, `-DLIB_MAD=ON`)
-- **PS2/PSP:** Platform SDK libraries
-
-## Current Porting Status
-
-- **MVS:** Fully ported to all platforms (PSP, PS2, Desktop)
-- **CPS1:** Fully ported to all platforms (PSP, PS2, Desktop)
-- **CPS2:** Fully ported to all platforms (PSP, PS2, Desktop)
-- **NCDZ:** Fully ported to all platforms (PSP, PS2, Desktop)
-- **GUI:** Only available on PSP; other platforms use stub UI (`*_no_gui.c`)
-
-All four emulator cores are complete. The next milestone is GUI/menu system porting. See `PORTING_PLAN.md` for detailed roadmap.
+The current driver-refactor history and its performance/size measurements are in
+`docs/PLATFORM_DRIVER_REFACTOR_PLAN.md`. The extension recipe for a future backend
+such as Vita is `docs/PLATFORM_PORTING_GUIDE.md`. `PORTING_PLAN.md` now records
+only current platform status and remaining follow-up work.

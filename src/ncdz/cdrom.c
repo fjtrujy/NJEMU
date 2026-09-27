@@ -13,7 +13,9 @@
 #include "common/runtime_paths.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
-#include "main_ui_draw.h"
+#include "common/ui_draw.h"
+#include "common/ui.h"
+#include "common/png_io.h"
 #include <stdio.h>
 #include <string.h>
 #include "ncdz/resource_source.h"

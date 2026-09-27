@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL.h>
-#include "desktop/desktop.h"
+#include "desktop/desktop_video.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
 #include "common/video_driver.h"
@@ -31,7 +31,7 @@ typedef struct desktop_ui_texture {
 } desktop_ui_texture_t;
 
 typedef struct desktop_ui_data {
-	desktop_video_t *video_data;  /* Cast to access SDL_Renderer */
+	void *video_data;
 	
 	/* 4 texture slots */
 	desktop_ui_texture_t textures[UI_TEXTURE_MAX];
@@ -73,9 +73,7 @@ static uint32_t rgba5551_to_sdl(uint16_t c)
 static SDL_Renderer *get_renderer(desktop_ui_data_t *d)
 {
 	if (!d || !d->video_data) return NULL;
-	/* video_data is a pointer to desktop_video_t, which has renderer as second field */
-	desktop_video_t *video = (desktop_video_t *)d->video_data;
-	return video->renderer;
+	return (SDL_Renderer *)desktop_video_get_renderer(d->video_data);
 }
 
 /******************************************************************************
@@ -94,7 +92,7 @@ static void *desktop_ui_draw_init(void *video_data)
 	if (!d) return NULL;
 
 	memset(d, 0, sizeof(desktop_ui_data_t));
-	d->video_data = (desktop_video_t *)video_data;
+	d->video_data = video_data;
 
 	/* Allocate buffers for each texture slot */
 	for (i = 0; i < UI_TEXTURE_MAX; i++) {

@@ -26,7 +26,7 @@
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
-#include "main_ui_draw.h"
+
 #ifdef ADHOC
 #include "common/adhoc.h"
 #include "common/adhoc_transport.h"
