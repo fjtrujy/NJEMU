@@ -14,6 +14,7 @@ extern const power_driver_t power_psvita;
 extern thread_driver_t thread_psvita;
 extern ticker_driver_t ticker_psvita;
 extern video_driver_t video_psvita;
+extern const ui_draw_driver_t psvita_ui_draw_driver;
 extern const ui_draw_driver_t null_ui_draw_driver;
 
 audio_driver_t *const audio_driver = &audio_psvita;
@@ -24,5 +25,8 @@ thread_driver_t *const thread_driver = &thread_psvita;
 ticker_driver_t *const ticker_driver = &ticker_psvita;
 video_driver_t *const video_driver = &video_psvita;
 
-/* The Vita backend has no UI texture adapter yet: GUI builds are rejected by CMake. */
+#ifdef GUI
+const ui_draw_driver_t *const ui_draw_driver = &psvita_ui_draw_driver;
+#else
 const ui_draw_driver_t *const ui_draw_driver = &null_ui_draw_driver;
+#endif

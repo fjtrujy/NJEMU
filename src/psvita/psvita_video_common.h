@@ -28,6 +28,108 @@
 #define PSVITA_DISPLAY_HEIGHT	544
 
 /*
+ * UI texel atlas, shared by both backends.
+ *
+ * The common UI rebuilds glyphs in one scratch texture before every draw, so
+ * each draw needs its texels somewhere the GPU can read them after the CPU
+ * has moved on. Instead of one copy (and one texture) per draw, regions are
+ * identified by a hash of their texels and appended once to a persistent
+ * atlas texture: a static menu draws everything from the atlas without any
+ * copy, and entries are never rewritten while a scene may use them. When the
+ * atlas is full, the caller copies the draw somewhere else for the rest of the
+ * frame and resets the atlas once the GPU is idle.
+ */
+#define PSVITA_UI_ATLAS_ENTRIES	8192		/* power of two */
+
+typedef struct psvita_ui_atlas_entry {
+	uint64_t key;			/* texel hash, 0 = free */
+	uint32_t size;			/* width | height << 16 */
+	uint16_t x, y;
+} psvita_ui_atlas_entry_t;
+
+typedef struct psvita_ui_atlas {
+	uint16_t *texels;		/* GPU-visible, `width` texels per row */
+	int width;
+	int height;
+	int shelf_x, shelf_y, shelf_h;
+	bool full;				/* reset before the next scene */
+	psvita_ui_atlas_entry_t entries[PSVITA_UI_ATLAS_ENTRIES];
+	uint32_t used;
+} psvita_ui_atlas_t;
+
+static inline void psvita_ui_atlas_reset(psvita_ui_atlas_t *a)
+{
+	memset(a->entries, 0, sizeof(a->entries));
+	a->used = 0;
+	a->shelf_x = a->shelf_y = a->shelf_h = 0;
+	a->full = false;
+}
+
+static inline uint64_t psvita_ui_hash(const uint16_t *texels, int stride, int w, int h)
+{
+	uint64_t hash = 0xcbf29ce484222325ull;		/* FNV-1a */
+	for (int y = 0; y < h; y++) {
+		const uint16_t *row = texels + (size_t)y * stride;
+		for (int x = 0; x < w; x++) {
+			hash = (hash ^ row[x]) * 0x100000001b3ull;
+		}
+	}
+	return hash ? hash : 1;
+}
+
+/*
+ * Finds or adds the w x h region at `texels` (16-bit, `stride` texels per row);
+ * false when the atlas is full (the caller must draw from a copy of its own).
+ */
+static inline bool psvita_ui_atlas_get(psvita_ui_atlas_t *a, const uint16_t *texels, int stride,
+	int w, int h, int *out_x, int *out_y)
+{
+	const uint64_t key = psvita_ui_hash(texels, stride, w, h);
+	const uint32_t size = (uint32_t)w | ((uint32_t)h << 16);
+	uint32_t i = (uint32_t)key & (PSVITA_UI_ATLAS_ENTRIES - 1);
+
+	if (a->texels == NULL || w > a->width || h > a->height)
+		return false;
+	for (;; i = (i + 1) & (PSVITA_UI_ATLAS_ENTRIES - 1)) {
+		psvita_ui_atlas_entry_t *e = &a->entries[i];
+		if (e->key == 0)
+			break;
+		if (e->key == key && e->size == size) {
+			*out_x = e->x;
+			*out_y = e->y;
+			return true;
+		}
+	}
+
+	/* Keep the table at most half full so that probing stays short. */
+	if (a->full || a->used >= PSVITA_UI_ATLAS_ENTRIES / 2)
+		goto full;
+	if (a->shelf_x + w > a->width) {
+		a->shelf_x = 0;
+		a->shelf_y += a->shelf_h;
+		a->shelf_h = 0;
+	}
+	if (a->shelf_y + h > a->height)
+		goto full;
+
+	for (int y = 0; y < h; y++)
+		memcpy(a->texels + (size_t)(a->shelf_y + y) * a->width + a->shelf_x,
+			texels + (size_t)y * stride, (size_t)w * sizeof(uint16_t));
+	a->entries[i] = (psvita_ui_atlas_entry_t){ key, size, (uint16_t)a->shelf_x, (uint16_t)a->shelf_y };
+	a->used++;
+	*out_x = a->shelf_x;
+	*out_y = a->shelf_y;
+	a->shelf_x += w;
+	if (h > a->shelf_h)
+		a->shelf_h = h;
+	return true;
+
+full:
+	a->full = true;
+	return false;
+}
+
+/*
  * Copies a rectangle of texels into a linear texture whose rows are `tex_w`
  * texels apart (writeIndexedTextureRect/writeDirectTextureRect). `src_pitch` is
  * in texels. The rectangle is clipped to the texture.

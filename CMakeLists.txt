@@ -424,9 +424,6 @@ endif()
 
 # GPU backends replaying a recorded work frame (see common/hw_recorder.h)
 if (PLATFORM STREQUAL "PSVITA")
-    if (GUI)
-        message(FATAL_ERROR "PLATFORM=PSVITA does not have a UI texture adapter (psvita_ui_draw.c) yet: use GUI=OFF")
-    endif()
     if (USE_VITAGL)
         list(REMOVE_ITEM OS_SRC psvita/psvita_video.c)
         list(APPEND OS_SRC psvita/psvita_video_gl.c)
@@ -961,6 +958,10 @@ if(PLATFORM STREQUAL "PSVITA")
         endif()
         list(APPEND VITA_VPK_FILE_ARGS FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
     endforeach()
+
+    if (GUI)
+        list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
+    endif()
 
     vita_create_self(${TARGET}.self ${TARGET})
     vita_create_vpk(${TARGET}.vpk ${VITA_TITLEID_${TARGET}} ${TARGET}.self

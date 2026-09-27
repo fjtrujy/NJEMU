@@ -19,7 +19,7 @@ jobs:
       matrix:
         target: [MVS, NCDZ, CPS1, CPS2]
         use_vitagl: [OFF, ON] # GXM/vita2d and vitaGL backends
-        gui: [OFF]
+        gui: [OFF, ON]
       fail-fast: false
 
     container: vitasdk/vitasdk:latest

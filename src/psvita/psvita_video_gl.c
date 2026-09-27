@@ -37,6 +37,11 @@
     blending equation is inverted (dst = src * (1 - a) + dst * a), and the
     depth-tested CPS2 path discards instead of blending.
 
+    The GUI draws straight into the same display scene with the direct
+    program and conventional blending: sprites from the shared UI atlas (see
+    psvita_video_common.h), colour fills from 2x2 textures in the scratch pool
+    whose bilinear filtering reproduces the per-corner gradient colours.
+
 ******************************************************************************/
 
 #include <stddef.h>
@@ -48,6 +53,7 @@
 #include <vitaGL.h>
 
 #include "common/hw_recorder.h"
+#include "common/ui_draw_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
 #include "psvita_shaders.h"
@@ -59,6 +65,11 @@
 
 /* Mid-frame scene splits counted by the vitaGL fork; absent upstream. */
 extern uint32_t vgl_debug_scene_splits __attribute__((weak));
+
+/* vitaGL's display buffers (globals of its gxm.c), for SHOW_FRAME_BUFFER. */
+extern void *gxm_color_surfaces_addr[] __attribute__((weak));
+extern unsigned int gxm_front_buffer_index __attribute__((weak));
+extern int DISPLAY_STRIDE __attribute__((weak));
 
 #define GL_WORK_WIDTH		SCR_WIDTH
 #define GL_WORK_HEIGHT		SCR_HEIGHT
@@ -80,6 +91,15 @@ extern uint32_t vgl_debug_scene_splits __attribute__((weak));
  */
 #define GL_MAX_CHUNKS		32
 #define GL_SCRATCH_ALIGN	256			/* GXM texture data alignment, rounded up */
+
+/* GUI */
+#define GL_UI_CHUNK_QUADS	1024		/* UI quads per stream VBO allocation */
+#define GL_UI_FILL_BYTES	64			/* one 2x2 RGBA texture: 2 rows of 8 texels... */
+#define GL_UI_FILL_CHUNK	16384		/* ...allocated from the scratch pool in chunks */
+#define GL_UI_ATLAS_WIDTH	1024
+#define GL_UI_ATLAS_HEIGHT	512
+#define GL_SCRATCH_WIDTH	BUF_WIDTH	/* INITIAL_TEXTURE_LAYER */
+#define GL_SCRATCH_HEIGHT	SCR_HEIGHT
 
 typedef struct gl_page {
 	GLuint tex;
@@ -125,6 +145,31 @@ typedef struct psvita_gl_video {
 	gl_program_t progs[HW_PROG_COUNT];
 	bool pending_flip;
 	uint32_t presented;			/* for PSVITA_DUMP_LIST */
+
+	/*
+	 * The display scene: cleared to black by the first draw of a frame, and
+	 * only swapped by flipScreen() when something was drawn.
+	 */
+	bool display_open;
+	bool ui_blend;				/* conventional blending set (UI), not NJEMU's */
+	RECT ui_clip;				/* setUIScissor(), display pixels */
+
+	/* DRAW / SCREEN_BITMAP as solid fills (menu backgrounds, see copyRect). */
+	uint32_t draw_fill;
+	uint32_t screen_fill;
+	bool screen_fill_valid;
+
+	GLuint ui_vbo;
+	hw_vertex_t *ui_vtx;		/* current chunk, NULL at frame start */
+	uint32_t ui_quads;
+	uint8_t *fill_chunk;		/* current chunk, NULL at frame start */
+	uint32_t fill_used;
+	GLuint fill_tex;			/* 2x2 RGBA, data set per draw */
+	GLuint atlas_tex;
+	psvita_ui_atlas_t *atlas;
+	GLuint scratch_tex;
+	uint16_t *scratch;			/* INITIAL_TEXTURE_LAYER texels (PSP 5551) */
+	GLuint frame_tex;			/* points at the displayed frame when drawn */
 
 	/* Statistics */
 	uint32_t stat_frames;
@@ -294,6 +339,30 @@ static uint8_t *gl_create_texture(GLuint *tex, int width, int height,
 	return data;
 }
 
+/*
+ * GUI texture: RGBA storage of `type` owned by vitaGL, retagged as the GXM
+ * format `format` (drawing may retag it again).  Returns its texels.
+ */
+static void *gl_create_ui_texture(GLuint *tex, int width, int height, GLenum type,
+								  SceGxmTextureFormat format, GLint filter)
+{
+	const size_t bpp = type == GL_UNSIGNED_BYTE ? 4 : 2;
+
+	glGenTextures(1, tex);
+	glBindTexture(GL_TEXTURE_2D, *tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, type, NULL);
+	sceGxmTextureSetFormat(vglGetGxmTexture(GL_TEXTURE_2D), format);
+
+	void *data = vglGetTexDataPointer(GL_TEXTURE_2D);
+	if (data != NULL)
+		memset(data, 0, (size_t)((width + 7) & ~7) * height * bpp);
+	return data;
+}
+
 static bool gl_create_layers(psvita_gl_video_t *gl,
 							 const layer_texture_info_t *info, uint8_t count)
 {
@@ -438,7 +507,63 @@ static void gl_frame_sync(psvita_gl_video_t *gl)
 	gl->frame_valid = true;
 	gl->frame = frame;
 	gl->chunks_used = 0;
+	gl->ui_vtx = NULL;
+	gl->fill_chunk = NULL;
 	hw_rec_reset(&gl->rec);
+}
+
+/* Selects NJEMU's inverted blending (replay) or the conventional one (UI). */
+static void gl_set_blend(psvita_gl_video_t *gl, bool ui)
+{
+	if (gl->ui_blend == ui)
+		return;
+	gl->ui_blend = ui;
+	if (ui)
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	else
+		glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA);
+}
+
+/*
+ * Makes the display the render target.  The first display draw of a frame
+ * clears it (to black, or to `color` when the caller clears the colour
+ * anyway); `mask` adds buffers to clear now.
+ */
+static void gl_open_display(psvita_gl_video_t *gl, GLbitfield mask, uint32_t color)
+{
+	gl_frame_sync(gl);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT);
+	glDisable(GL_SCISSOR_TEST);
+	if (!gl->display_open) {
+		gl->display_open = true;
+		gl->ui_clip = (RECT){ 0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT };
+		mask |= GL_COLOR_BUFFER_BIT;
+	}
+	if (mask) {
+		glClearColor((color & 0xff) / 255.0f, ((color >> 8) & 0xff) / 255.0f,
+			((color >> 16) & 0xff) / 255.0f, 1.0f);
+		glClearStencil(0);
+		glStencilMask(0xff);
+		glClear(mask);
+	}
+}
+
+/* Vertex attributes of hw_vertex_t in `vbo` for `prog`. */
+static void gl_bind_vertices(const gl_program_t *prog, GLuint vbo)
+{
+	const GLsizei stride = sizeof(hw_vertex_t);
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glEnableVertexAttribArray(prog->a_uv);
+	glVertexAttribPointer(prog->a_uv, 2, GL_FLOAT, GL_FALSE, stride,
+		(const void *)offsetof(hw_vertex_t, u));
+	glEnableVertexAttribArray(prog->a_pos);
+	glVertexAttribPointer(prog->a_pos, 2, GL_SHORT, GL_FALSE, stride,
+		(const void *)offsetof(hw_vertex_t, x));
+	glEnableVertexAttribArray(prog->a_zp);
+	glVertexAttribPointer(prog->a_zp, 2, GL_UNSIGNED_SHORT, GL_FALSE, stride,
+		(const void *)offsetof(hw_vertex_t, z));
 }
 
 
@@ -450,7 +575,6 @@ static void gl_replay_draw(psvita_gl_video_t *gl, const hw_cmd_t *cmd,
 						   const float row_x[3], const float row_y[3])
 {
 	gl_program_t *prog = &gl->progs[cmd->prog];
-	const GLsizei stride = sizeof(hw_vertex_t);
 
 	/* The depth-tested program discards instead of blending. */
 	if (cmd->prog == HW_PROG_INDEXED_DEPTH)
@@ -479,16 +603,7 @@ static void gl_replay_draw(psvita_gl_video_t *gl, const hw_cmd_t *cmd,
 	glUniform4f(prog->u_tex_scale, 1.0f / cmd->tex_w, 1.0f / cmd->tex_h,
 		1.0f / HW_CLUT_ROWS, 0.0f);
 
-	glBindBuffer(GL_ARRAY_BUFFER, (GLuint)(uintptr_t)cmd->vertices);
-	glEnableVertexAttribArray(prog->a_uv);
-	glVertexAttribPointer(prog->a_uv, 2, GL_FLOAT, GL_FALSE, stride,
-		(const void *)offsetof(hw_vertex_t, u));
-	glEnableVertexAttribArray(prog->a_pos);
-	glVertexAttribPointer(prog->a_pos, 2, GL_SHORT, GL_FALSE, stride,
-		(const void *)offsetof(hw_vertex_t, x));
-	glEnableVertexAttribArray(prog->a_zp);
-	glVertexAttribPointer(prog->a_zp, 2, GL_UNSIGNED_SHORT, GL_FALSE, stride,
-		(const void *)offsetof(hw_vertex_t, z));
+	gl_bind_vertices(prog, (GLuint)(uintptr_t)cmd->vertices);
 
 	uint32_t first = cmd->first_quad, quads = cmd->quads;
 	while (quads) {
@@ -537,14 +652,9 @@ static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
 	const float display_x[3] = { 2.0f / PSVITA_DISPLAY_WIDTH, 0.0f, -1.0f };
 	const float display_y[3] = { 0.0f, -2.0f / PSVITA_DISPLAY_HEIGHT, 1.0f };
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT);
-	glDisable(GL_SCISSOR_TEST);
+	gl_open_display(gl, GL_STENCIL_BUFFER_BIT, 0);
+	gl_set_blend(gl, false);
 	glDisable(GL_DEPTH_TEST);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClearStencil(0);
-	glStencilMask(0xff);
-	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	glEnable(GL_STENCIL_TEST);
 	glStencilFunc(GL_ALWAYS, 1, 0xff);
@@ -624,6 +734,24 @@ static void *psvita_gl_init(layer_texture_info_t *layer_textures,
 	/* Streamed vertex chunks, re-specified every frame (see GL_CHUNK_QUADS). */
 	glGenBuffers(GL_MAX_CHUNKS, gl->vbos);
 
+	/* GUI: failures only disable the corresponding UI drawing. */
+	glGenBuffers(1, &gl->ui_vbo);
+	gl_create_ui_texture(&gl->fill_tex, 2, 2, GL_UNSIGNED_BYTE,
+		SCE_GXM_TEXTURE_FORMAT_U8U8U8U8_ABGR, GL_LINEAR);
+	gl_create_ui_texture(&gl->frame_tex, 8, 8, GL_UNSIGNED_BYTE,
+		SCE_GXM_TEXTURE_FORMAT_X8U8U8U8_1BGR, GL_NEAREST);
+	gl->scratch = gl_create_ui_texture(&gl->scratch_tex, GL_SCRATCH_WIDTH, GL_SCRATCH_HEIGHT,
+		GL_UNSIGNED_SHORT_5_5_5_1, SCE_GXM_TEXTURE_FORMAT_X1U5U5U5_1BGR, GL_NEAREST);
+	gl->atlas = calloc(1, sizeof(*gl->atlas));
+	if (gl->atlas != NULL) {
+		gl->atlas->texels = gl_create_ui_texture(&gl->atlas_tex, GL_UI_ATLAS_WIDTH,
+			GL_UI_ATLAS_HEIGHT, GL_UNSIGNED_SHORT_4_4_4_4, SCE_GXM_TEXTURE_FORMAT_U4U4U4U4_ABGR,
+			GL_NEAREST);
+		gl->atlas->width = GL_UI_ATLAS_WIDTH;
+		gl->atlas->height = GL_UI_ATLAS_HEIGHT;
+	}
+	gl->draw_fill = 0xff000000u;
+
 	gl_log("vitaGL init ok: %u layers in %u page(s), %u CLUT windows\n",
 		(unsigned)gl->layer_count, (unsigned)gl->page_count, (unsigned)gl->rec.clut_windows);
 	return gl;
@@ -643,6 +771,16 @@ static void psvita_gl_free(void *data)
 
 	if (gl->vbos[0])
 		glDeleteBuffers(GL_MAX_CHUNKS, gl->vbos);
+	if (gl->ui_vbo)
+		glDeleteBuffers(1, &gl->ui_vbo);
+	{
+		const GLuint ui_textures[] = { gl->fill_tex, gl->frame_tex, gl->scratch_tex, gl->atlas_tex };
+		for (size_t i = 0; i < sizeof(ui_textures) / sizeof(ui_textures[0]); i++) {
+			if (ui_textures[i])
+				glDeleteTextures(1, &ui_textures[i]);
+		}
+	}
+	free(gl->atlas);
 	if (gl->clut_tex)
 		glDeleteTextures(1, &gl->clut_tex);
 	for (uint8_t i = 0; i < gl->layer_count; i++) {
@@ -677,8 +815,17 @@ static void psvita_gl_flipScreen(void *data, bool vsync)
 {
 	psvita_gl_video_t *gl = data;
 
+	/* Nothing drawn since the last flip (e.g. a message box waiting for a
+	 * key): keep showing the current frame instead of a stale back buffer. */
+	if (!gl->display_open) {
+		if (vsync)
+			sceDisplayWaitVblankStart();
+		return;
+	}
+
 	vglWaitVblankStart(vsync ? GL_TRUE : GL_FALSE);
 	vglSwapBuffers(GL_FALSE);
+	gl->display_open = false;
 
 #if PSVITA_VIDEO_STATS
 	if (++gl->stat_frames == PSVITA_VIDEO_STATS_FRAMES) {
@@ -710,11 +857,62 @@ static void psvita_gl_endFrame(void *data)
 
 static void *psvita_gl_frameAddr(void *data, int frameIndex, int x, int y)
 {
-	(void)data;
-	(void)frameIndex;
-	(void)x;
-	(void)y;
-	return NULL;
+	psvita_gl_video_t *gl = data;
+
+	/* Only the UI scratch surface is CPU-addressable (PSP 5551 texels). */
+	if (frameIndex != COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER || gl->scratch == NULL
+		|| x < 0 || y < 0 || x >= GL_SCRATCH_WIDTH || y >= GL_SCRATCH_HEIGHT)
+		return NULL;
+	return gl->scratch + y * GL_SCRATCH_WIDTH + x;
+}
+
+/* The last presented frame (vitaGL's front display buffer), or NULL. */
+static const uint32_t *gl_front_buffer(int *stride)
+{
+	if (&gxm_front_buffer_index == NULL || (void *)gxm_color_surfaces_addr == NULL)
+		return NULL;
+	*stride = &DISPLAY_STRIDE != NULL ? DISPLAY_STRIDE : PSVITA_DISPLAY_WIDTH;
+	return gxm_color_surfaces_addr[gxm_front_buffer_index];
+}
+
+/*
+ * CPU copy of a frame as PSP 555 texels. SHOW_FRAME_BUFFER is read from the
+ * displayed frame in the 480x272 logical space (sampled from the 960x544
+ * display); INITIAL_TEXTURE_LAYER from the scratch surface.
+ */
+static int psvita_gl_readFrame(void *data, int frameIndex, int x, int y, int width, int height,
+							   uint16_t *dst, int dstPitch)
+{
+	psvita_gl_video_t *gl = data;
+	const uint32_t *fb;
+	int stride;
+
+	if (dst == NULL || width <= 0 || height <= 0 || x < 0 || y < 0)
+		return 0;
+
+	if (frameIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		if (gl->scratch == NULL || x + width > GL_SCRATCH_WIDTH || y + height > GL_SCRATCH_HEIGHT)
+			return 0;
+		for (int row = 0; row < height; row++)
+			memcpy(dst + (size_t)row * dstPitch, gl->scratch + (size_t)(y + row) * GL_SCRATCH_WIDTH + x,
+				(size_t)width * sizeof(uint16_t));
+		return 1;
+	}
+
+	if (frameIndex != COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER
+		|| x + width > SCR_WIDTH || y + height > SCR_HEIGHT
+		|| (fb = gl_front_buffer(&stride)) == NULL)
+		return 0;
+
+	glFinish();
+	for (int row = 0; row < height; row++) {
+		const uint32_t *src = fb + (size_t)((y + row) * PSVITA_DISPLAY_HEIGHT / SCR_HEIGHT) * stride;
+		for (int col = 0; col < width; col++) {
+			const uint32_t c = src[(x + col) * PSVITA_DISPLAY_WIDTH / SCR_WIDTH];
+			dst[(size_t)row * dstPitch + col] = hw_rgba_to_555(c);
+		}
+	}
+	return 1;
 }
 
 static void psvita_gl_getOutputSize(void *data, int *width, int *height)
@@ -730,14 +928,11 @@ static void psvita_gl_scissor(void *data, uint16_t left, uint16_t top,
 	hw_rec_set_clip(&((psvita_gl_video_t *)data)->rec, left, top, right, bottom);
 }
 
+/* DRAW_FRAME_BUFFER / SHOW_FRAME_BUFFER are the display being built. */
 static void gl_clear_display(psvita_gl_video_t *gl, uint32_t color)
 {
-	(void)gl;
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glDisable(GL_SCISSOR_TEST);
-	glClearColor((color & 0xff) / 255.0f, ((color >> 8) & 0xff) / 255.0f,
-		((color >> 16) & 0xff) / 255.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	gl_open_display(gl, GL_COLOR_BUFFER_BIT, color);
+	gl->draw_fill = color | 0xff000000u;
 }
 
 static void psvita_gl_clearScreen(void *data)
@@ -747,15 +942,17 @@ static void psvita_gl_clearScreen(void *data)
 
 static void psvita_gl_clearFrame(void *data, int index)
 {
-	/*
-	 * As on PSP, DRAW_FRAME_BUFFER is the presentation back buffer, which
-	 * every present clears anyway; SCREEN_BITMAP is the work frame.
-	 */
+	/* SCREEN_BITMAP is the recorded work frame; the others are the display. */
 	psvita_gl_video_t *gl = data;
 
 	if (index == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
 		gl_frame_sync(gl);
 		hw_rec_fill(&gl->rec, &gl->rec.work, 0, HW_DEPTH_OFF);
+	} else if (index == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		if (gl->scratch != NULL)
+			memset(gl->scratch, 0, (size_t)GL_SCRATCH_WIDTH * GL_SCRATCH_HEIGHT * sizeof(uint16_t));
+	} else {
+		gl_clear_display(gl, 0);
 	}
 }
 
@@ -767,7 +964,7 @@ static void psvita_gl_fillFrame(void *data, int frameIndex, uint32_t color)
 		gl_frame_sync(gl);
 		hw_rec_fill(&gl->rec, &gl->rec.work, hw_rgba_to_555(color), HW_DEPTH_OFF);
 	} else
-		gl_clear_display(data, color);
+		gl_clear_display(gl, color);
 }
 
 static void psvita_gl_startWorkFrame(void *data, uint32_t color)
@@ -776,27 +973,58 @@ static void psvita_gl_startWorkFrame(void *data, uint32_t color)
 
 	gl_frame_sync(gl);
 	gl->pending_flip = false;
+	gl->screen_fill_valid = false;
 	hw_rec_begin_work(&gl->rec, hw_rgba_to_555(color));
 }
 
+static void gl_ui_fill(psvita_gl_video_t *gl, int x, int y, int w, int h, uint32_t c0,
+					   uint32_t c1, uint32_t c2, uint32_t c3, bool clip);
+static void gl_draw_scratch(psvita_gl_video_t *gl, const RECT *src, const RECT *dst);
+static void gl_draw_front(psvita_gl_video_t *gl);
+
 static void psvita_gl_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
-	gl_present(data, src_rect, dst_rect, HW_ORIENT_NORMAL);
+	psvita_gl_video_t *gl = data;
+
+	/* The UI background cached in SCREEN_BITMAP is a solid fill (copyRect). */
+	if (gl->screen_fill_valid) {
+		gl_ui_fill(gl, dst_rect->left, dst_rect->top, dst_rect->right - dst_rect->left,
+			dst_rect->bottom - dst_rect->top, gl->screen_fill, gl->screen_fill,
+			gl->screen_fill, gl->screen_fill, false);
+		return;
+	}
+	gl_present(gl, src_rect, dst_rect, HW_ORIENT_NORMAL);
 }
 
 static void psvita_gl_copyRect(void *data, int srcIndex, int dstIndex,
 							   RECT *src_rect, RECT *dst_rect)
 {
 	psvita_gl_video_t *gl = data;
+	const bool dst_display = dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER
+		|| dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER;
 
-	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
-		dstIndex != COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
-		gl_present(gl, src_rect, dst_rect, HW_ORIENT_NORMAL);
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
+		if (dst_display)
+			gl_present(gl, src_rect, dst_rect, HW_ORIENT_NORMAL);
+		/* SCREEN_BITMAP -> INITIAL (save state thumbnails) is not supported. */
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER
+			   && dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
+		/*
+		 * Either the CPS rotate+flip sequence, whose flip is folded into the
+		 * final rotated present, or the UI caching its background, which is
+		 * the solid fill of the display (no chrome without UI_DRAW_CAP_CACHE_CHROME).
+		 */
+		if (!gl->pending_flip) {
+			gl->screen_fill = gl->draw_fill;
+			gl->screen_fill_valid = true;
+		}
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER
+			   && dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER) {
+		/* Dialogs start from the displayed frame: draw it back, whole. */
+		gl_draw_front(gl);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER && dst_display) {
+		gl_draw_scratch(gl, src_rect, dst_rect);
 	}
-	/*
-	 * DRAW_FRAME_BUFFER -> SCREEN_BITMAP only appears in the CPS rotate+flip
-	 * sequence, whose flip is folded into the final rotated present.
-	 */
 }
 
 static void psvita_gl_copyRectFlip(void *data, int srcIndex, int dstIndex,
@@ -839,11 +1067,10 @@ static void psvita_gl_copyRectRotate(void *data, int srcIndex, int dstIndex,
 static void psvita_gl_drawTexture(void *data, int srcIndex, int dstIndex,
 								  RECT *src_rect, RECT *dst_rect)
 {
-	(void)data;
-	(void)srcIndex;
-	(void)dstIndex;
-	(void)src_rect;
-	(void)dst_rect;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER
+		&& (dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER
+			|| dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER))
+		gl_draw_scratch(data, src_rect, dst_rect);
 }
 
 
@@ -947,6 +1174,297 @@ static void psvita_gl_clearColorBuffer(void *data)
 	hw_rec_fill(&gl->rec, &gl->rec.clip, 0, HW_DEPTH_OFF);
 }
 
+/******************************************************************************
+	Driver: UI primitives
+
+	Common UI code passes display pixels.  Everything goes into the display
+	scene with the direct program and conventional alpha blending; vertices
+	come from a stream VBO, colours and copies from the scratch pool.  The UI
+	scissor is applied on the CPU, like the work frame's.
+******************************************************************************/
+
+static hw_vertex_t *gl_ui_alloc(psvita_gl_video_t *gl, GLint *first)
+{
+	gl_frame_sync(gl);
+	if (gl->ui_vtx == NULL || gl->ui_quads == GL_UI_CHUNK_QUADS) {
+		glBindBuffer(GL_ARRAY_BUFFER, gl->ui_vbo);
+		glBufferData(GL_ARRAY_BUFFER, GL_UI_CHUNK_QUADS * 4 * sizeof(hw_vertex_t), NULL,
+			GL_STREAM_DRAW);
+		gl->ui_vtx = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+		glUnmapBuffer(GL_ARRAY_BUFFER);
+		gl->ui_quads = 0;
+		if (gl->ui_vtx == NULL) {
+			gl_log_alloc_failure(gl, "UI vertices");
+			return NULL;
+		}
+	}
+	*first = (GLint)gl->ui_quads * 4;
+	return gl->ui_vtx + gl->ui_quads++ * 4;
+}
+
+/* Colours of one fill, as a 2x2 texture (rows of 8 texels). */
+static uint32_t *gl_ui_fill_texels(psvita_gl_video_t *gl)
+{
+	if (gl->fill_chunk == NULL || gl->fill_used + GL_UI_FILL_BYTES > GL_UI_FILL_CHUNK) {
+		gl->fill_chunk = gl_scratch_alloc(GL_UI_FILL_CHUNK);
+		gl->fill_used = 0;
+		if (gl->fill_chunk == NULL) {
+			gl_log_alloc_failure(gl, "UI colours");
+			return NULL;
+		}
+	}
+	uint32_t *texels = (uint32_t *)(gl->fill_chunk + gl->fill_used);
+	gl->fill_used += GL_UI_FILL_BYTES;
+	return texels;
+}
+
+/* Draws `count` vertices from the UI chunk with the texture bound to unit 0. */
+static void gl_ui_emit(psvita_gl_video_t *gl, GLenum mode, GLint first, GLsizei count,
+					   int tex_w, int tex_h)
+{
+	const gl_program_t *prog = &gl->progs[HW_PROG_DIRECT];
+
+	gl_set_blend(gl, true);
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glUseProgram(prog->id);
+	glUniform4f(prog->u_row_x, 2.0f / PSVITA_DISPLAY_WIDTH, 0.0f, -1.0f, 0.0f);
+	glUniform4f(prog->u_row_y, 0.0f, -2.0f / PSVITA_DISPLAY_HEIGHT, 1.0f, 0.0f);
+	glUniform4f(prog->u_tex_scale, 1.0f / tex_w, 1.0f / tex_h, 0.0f, 0.0f);
+	gl_bind_vertices(prog, gl->ui_vbo);
+	glDrawArrays(mode, first, count);
+	gl->stat_draws++;
+}
+
+/*
+ * Clips a textured display quad to `clip` and queues it; returns its first
+ * vertex, or -1 when nothing is left.  The caller binds the texture and emits.
+ */
+static GLint gl_ui_quad(psvita_gl_video_t *gl, const RECT *clip, int x0, int y0, int x1, int y1,
+						float u0, float v0, float u1, float v1)
+{
+	GLint first;
+	hw_vertex_t *q;
+
+	if (!hw_clip_quad(clip, &x0, &y0, &x1, &y1, &u0, &v0, &u1, &v1))
+		return -1;
+	gl_open_display(gl, 0, 0);
+	if ((q = gl_ui_alloc(gl, &first)) == NULL)
+		return -1;
+	hw_write_quad(q, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1, u0, v0, u1, v1, 0, 0);
+	return first;
+}
+
+/* Binds the fill texture to `texels` (see gl_ui_fill_texels). */
+static void gl_ui_bind_fill(psvita_gl_video_t *gl, const uint32_t *texels)
+{
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->fill_tex);
+	sceGxmTextureSetData(vglGetGxmTexture(GL_TEXTURE_2D), texels);
+}
+
+/*
+ * Rectangle with one colour per corner: top-left, top-right, bottom-left,
+ * bottom-right.  Sampling a 2x2 texture from texel centre to texel centre
+ * with bilinear filtering interpolates them across the rectangle.
+ */
+static void gl_ui_fill(psvita_gl_video_t *gl, int x, int y, int w, int h, uint32_t c0,
+					   uint32_t c1, uint32_t c2, uint32_t c3, bool clip)
+{
+	static const RECT display = { 0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT };
+	uint32_t *texels;
+	GLint first;
+
+	if (w <= 0 || h <= 0)
+		return;
+	first = gl_ui_quad(gl, clip ? &gl->ui_clip : &display, x, y, x + w, y + h,
+		0.5f, 0.5f, 1.5f, 1.5f);
+	if (first < 0 || (texels = gl_ui_fill_texels(gl)) == NULL)
+		return;
+	texels[0] = c0;
+	texels[1] = c1;
+	texels[8] = c2;
+	texels[9] = c3;
+	gl_ui_bind_fill(gl, texels);
+	gl_ui_emit(gl, GL_QUADS, first, 4, 2, 2);
+}
+
+/* Draws the scratch surface (INITIAL_TEXTURE_LAYER) opaque onto the display. */
+static void gl_draw_scratch(psvita_gl_video_t *gl, const RECT *src, const RECT *dst)
+{
+	static const RECT display = { 0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT };
+	GLint first;
+
+	if (gl->scratch == NULL)
+		return;
+	first = gl_ui_quad(gl, &display, dst->left, dst->top, dst->right, dst->bottom,
+		src->left, src->top, src->right, src->bottom);
+	if (first < 0)
+		return;
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->scratch_tex);
+	gl_ui_emit(gl, GL_QUADS, first, 4, GL_SCRATCH_WIDTH, GL_SCRATCH_HEIGHT);
+}
+
+/*
+ * Draws the last presented frame back onto the display.  The GPU renders
+ * scenes in order, so this scene samples it complete.
+ */
+static void gl_draw_front(psvita_gl_video_t *gl)
+{
+	static const RECT display = { 0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT };
+	const uint32_t *fb;
+	int stride;
+	GLint first;
+
+	if ((fb = gl_front_buffer(&stride)) == NULL)
+		return;
+	first = gl_ui_quad(gl, &display, 0, 0, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT,
+		0.0f, 0.0f, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT);
+	if (first < 0)
+		return;
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->frame_tex);
+	SceGxmTexture *t = vglGetGxmTexture(GL_TEXTURE_2D);
+	if (sceGxmTextureInitLinearStrided(t, fb, SCE_GXM_TEXTURE_FORMAT_X8U8U8U8_1BGR,
+			PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, stride * 4) < 0)
+		return;
+	gl_ui_emit(gl, GL_QUADS, first, 4, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT);
+}
+
+/*
+ * UI textures come from psvita_ui_draw.c as linear CPU buffers of PSP-layout
+ * texels (4444 or 5551, alpha in the top bits): the ABGR GXM formats. Without
+ * blending the alpha is forced to 1.  The texels are drawn from the UI atlas.
+ */
+static void psvita_gl_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+								   int tex_width, int tex_height, int tex_stride,
+								   int su, int sv, int sw, int sh,
+								   int dx, int dy, int dw, int dh, int blend)
+{
+	psvita_gl_video_t *gl = data;
+	SceGxmTextureFormat format;
+	const uint16_t *texels;
+	int x0 = dx, y0 = dy, x1 = dx + dw, y1 = dy + dh;
+	int ax, ay;
+	(void)tex_swizzled;
+	(void)tex_width;
+
+	if (tex == NULL || gl->atlas == NULL || gl->atlas->texels == NULL || sw <= 0 || sh <= 0
+		|| su < 0 || sv < 0 || sv + sh > tex_height || su + sw > tex_stride)
+		return;
+	/* Nothing visible: skip the atlas. */
+	if (x1 <= gl->ui_clip.left || x0 >= gl->ui_clip.right
+		|| y1 <= gl->ui_clip.top || y0 >= gl->ui_clip.bottom || x1 <= x0 || y1 <= y0)
+		return;
+	if (tex_format == UI_PIXFMT_4444)
+		format = blend ? SCE_GXM_TEXTURE_FORMAT_U4U4U4U4_ABGR : SCE_GXM_TEXTURE_FORMAT_X4U4U4U4_1BGR;
+	else
+		format = blend ? SCE_GXM_TEXTURE_FORMAT_U1U5U5U5_ABGR : SCE_GXM_TEXTURE_FORMAT_X1U5U5U5_1BGR;
+
+	texels = (const uint16_t *)tex + (size_t)sv * tex_stride + su;
+	if (!psvita_ui_atlas_get(gl->atlas, texels, tex_stride, sw, sh, &ax, &ay)) {
+		if (!gl->atlas->full)
+			return;
+		/* Wait for the GPU to stop reading the atlas (this ends the scene). */
+		glFinish();
+		psvita_ui_atlas_reset(gl->atlas);
+		if (!psvita_ui_atlas_get(gl->atlas, texels, tex_stride, sw, sh, &ax, &ay))
+			return;
+	}
+
+	const GLint first = gl_ui_quad(gl, &gl->ui_clip, x0, y0, x1, y1,
+		ax, ay, ax + sw, ay + sh);
+	if (first < 0)
+		return;
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->atlas_tex);
+	sceGxmTextureSetFormat(vglGetGxmTexture(GL_TEXTURE_2D), format);
+	gl_ui_emit(gl, GL_QUADS, first, 4, gl->atlas->width, gl->atlas->height);
+}
+
+static void gl_ui_line(psvita_gl_video_t *gl, int x1, int y1, int x2, int y2,
+					   uint32_t color1, uint32_t color2)
+{
+	/* hline()/vline() pass an exclusive end point: draw 1-pixel rectangles. */
+	if (y1 == y2) {
+		if (x2 < x1) {
+			int t = x1; x1 = x2; x2 = t;
+			uint32_t c = color1; color1 = color2; color2 = c;
+		}
+		gl_ui_fill(gl, x1, y1, x2 - x1, 1, color1, color2, color1, color2, true);
+	} else if (x1 == x2) {
+		if (y2 < y1) {
+			int t = y1; y1 = y2; y2 = t;
+			uint32_t c = color1; color1 = color2; color2 = c;
+		}
+		gl_ui_fill(gl, x1, y1, 1, y2 - y1, color1, color1, color2, color2, true);
+	} else {
+		/* Diagonal lines are not clipped to the UI scissor. */
+		uint32_t *texels;
+		hw_vertex_t *q;
+		GLint first;
+
+		gl_open_display(gl, 0, 0);
+		if ((q = gl_ui_alloc(gl, &first)) == NULL || (texels = gl_ui_fill_texels(gl)) == NULL)
+			return;
+		q[0] = (hw_vertex_t){ 0.5f, 0.5f, (int16_t)x1, (int16_t)y1, 0, 0 };
+		q[1] = (hw_vertex_t){ 1.5f, 0.5f, (int16_t)x2, (int16_t)y2, 0, 0 };
+		texels[0] = texels[8] = color1;
+		texels[1] = texels[9] = color2;
+		gl_ui_bind_fill(gl, texels);
+		gl_ui_emit(gl, GL_LINES, first, 2, 2, 2);
+	}
+}
+
+static void psvita_gl_drawUILine(void *data, int x1, int y1, int x2, int y2, uint32_t color)
+{
+	gl_ui_line(data, x1, y1, x2, y2, color, color);
+}
+
+static void psvita_gl_drawUILineGradient(void *data, int x1, int y1, int x2, int y2,
+										 uint32_t color1, uint32_t color2)
+{
+	gl_ui_line(data, x1, y1, x2, y2, color1, color2);
+}
+
+static void psvita_gl_drawUIRect(void *data, int x, int y, int w, int h, uint32_t color)
+{
+	psvita_gl_video_t *gl = data;
+
+	gl_ui_fill(gl, x, y, w, 1, color, color, color, color, true);
+	gl_ui_fill(gl, x, y + h - 1, w, 1, color, color, color, color, true);
+	gl_ui_fill(gl, x, y, 1, h, color, color, color, color, true);
+	gl_ui_fill(gl, x + w - 1, y, 1, h, color, color, color, color, true);
+}
+
+static void psvita_gl_fillUIRect(void *data, int x, int y, int w, int h, uint32_t color)
+{
+	gl_ui_fill(data, x, y, w, h, color, color, color, color, true);
+}
+
+static void psvita_gl_fillUIRectGradient(void *data, int x, int y, int w, int h,
+										 uint32_t color1, uint32_t color2, int direction)
+{
+	if (direction == UI_GRADIENT_HORIZONTAL)
+		gl_ui_fill(data, x, y, w, h, color1, color2, color1, color2, true);
+	else
+		gl_ui_fill(data, x, y, w, h, color1, color1, color2, color2, true);
+}
+
+static void psvita_gl_setUIScissor(void *data, int x, int y, int w, int h)
+{
+	psvita_gl_video_t *gl = data;
+	int x1 = x + w, y1 = y + h;
+
+	if (x < 0) x = 0;
+	if (y < 0) y = 0;
+	if (x1 > PSVITA_DISPLAY_WIDTH) x1 = PSVITA_DISPLAY_WIDTH;
+	if (y1 > PSVITA_DISPLAY_HEIGHT) y1 = PSVITA_DISPLAY_HEIGHT;
+	gl->ui_clip = (RECT){ x, y, x1, y1 };
+}
+
 video_driver_t video_psvita = {
 	.ident = "psvita_gl",
 	.init = psvita_gl_init,
@@ -956,7 +1474,7 @@ video_driver_t video_psvita = {
 	.beginFrame = psvita_gl_beginFrame,
 	.endFrame = psvita_gl_endFrame,
 	.frameAddr = psvita_gl_frameAddr,
-	.readFrame = NULL,
+	.readFrame = psvita_gl_readFrame,
 	.getOutputSize = psvita_gl_getOutputSize,
 	.scissor = psvita_gl_scissor,
 	.clearScreen = psvita_gl_clearScreen,
@@ -978,12 +1496,11 @@ video_driver_t video_psvita = {
 	.disableDepthTest = psvita_gl_disableDepthTest,
 	.clearDepthBuffer = psvita_gl_clearDepthBuffer,
 	.clearColorBuffer = psvita_gl_clearColorBuffer,
-	/* 2D UI primitives: GUI builds are not supported on Vita yet. */
-	.drawUISprite = NULL,
-	.drawUILine = NULL,
-	.drawUILineGradient = NULL,
-	.drawUIRect = NULL,
-	.fillUIRect = NULL,
-	.fillUIRectGradient = NULL,
-	.setUIScissor = NULL,
+	.drawUISprite = psvita_gl_drawUISprite,
+	.drawUILine = psvita_gl_drawUILine,
+	.drawUILineGradient = psvita_gl_drawUILineGradient,
+	.drawUIRect = psvita_gl_drawUIRect,
+	.fillUIRect = psvita_gl_fillUIRect,
+	.fillUIRectGradient = psvita_gl_fillUIRectGradient,
+	.setUIScissor = psvita_gl_setUIScissor,
 };
