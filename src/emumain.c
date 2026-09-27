@@ -169,7 +169,9 @@ static void show_fps(bool draw)
 		game_speed_percent,
 		frames_per_second);
 
+#if !defined(GUI)
 	printf("%s\n", buf);
+#endif
 	if (!draw)
 		return;
 
