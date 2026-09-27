@@ -28,7 +28,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash cmake python3
+        apt-get update
+        apt-get install -y --no-install-recommends build-essential git cmake python3
 
     - name: Install miniz 3.1.2
       run: |
@@ -42,11 +43,7 @@ jobs:
         cmake --build miniz/build -j $(getconf _NPROCESSORS_ONLN)
         cmake --install miniz/build
 
-    - name: Install vita2d
-      if: matrix.use_vitagl == 'OFF'
-      run: |
-        git clone --depth 1 https://github.com/xerpi/libvita2d
-        make -C libvita2d/libvita2d -j $(getconf _NPROCESSORS_ONLN) install
+    # libvita2d comes with the image (upstream no longer builds with GCC 15).
 
     - name: Install vitaGL
       if: matrix.use_vitagl == 'ON'
