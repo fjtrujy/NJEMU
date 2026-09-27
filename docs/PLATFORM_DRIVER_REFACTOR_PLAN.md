@@ -910,7 +910,7 @@ The deferred VU1/VIF1 experiment remains intentionally outside D7. If revisited,
 it must compare against the optimized direct-queue EE backend established in D7P,
 not against the removed native-staging implementation.
 
-### D8 - Remove remaining platform conditionals from common behaviour
+### D8 - Remove remaining platform conditionals from common behaviour [COMPLETE]
 
 Audit the remaining platform `#if`s in `src/common/` (config defaults, filer,
 state, UI, menu). Replace them only where a capability, geometry, filesystem, or
@@ -918,6 +918,40 @@ backend contract expresses the real semantic difference more clearly.
 
 Do not replace a simple compile-time semantic fact with an over-engineered vtable.
 The goal is meaningful ownership, not a zero-preprocessor vanity metric.
+
+Result (2026-09-27):
+- removed the remaining host-platform preprocessor branches from `src/common/`;
+  an audit for PSP/PS2/Desktop conditionals now returns no matches there;
+- kept the Neo Geo default stretch preset as an intentionally compile-time
+  presentation fact selected by CMake (`5`/16:9 on PS2, `4` on the other
+  backends). MVS/NCDZ common config consumes the resulting generic definition
+  instead of knowing which host selected it, avoiding a runtime driver callback
+  for a value that cannot change while the executable is running;
+- removed the PS2-only file-browser partial-refresh implementation. All backends
+  now use the same clipped copy/redraw path through `video_driver_t`, after the
+  earlier video/UI phases made those operations portable;
+- made `pad_wait_clear()` consistently wait for physical input release on every
+  backend instead of making that debouncing behaviour PS2-only. The common code
+  waits through `video_driver_t` and contains no native input/timing dependency;
+- made save-state thumbnail storage capability-driven: common state code first
+  asks `video_driver_t::frameAddr()` for CPU-addressable thumbnail storage and
+  falls back to the UI texture store when unavailable, while `readFrame()`
+  remains the explicit readback capability for non-CPU-addressable surfaces;
+- no new platform hook was added merely to eliminate preprocessor syntax; the
+  compile-time presentation default stays compile-time and runtime differences
+  are expressed only through already-existing backend capabilities.
+
+Validation (2026-09-27):
+- fresh Desktop GUI-OFF builds pass for CPS1/CPS2/MVS/NCDZ; MVS and NCDZ also
+  build with `GUI=ON`, `SAVE_STATE=ON`, and `COMMAND_LIST=ON`;
+- Desktop CTest passes 13/13 for CPS1, 13/13 for CPS2, 13/13 for MVS, 14/14 for
+  NCDZ, and 14/14 for the MVS GUI build;
+- a 30-frame Desktop MVS `pbobbl2n` runtime smoke passes;
+- PSP MVS GUI OFF, PSP MVS GUI ON + save-state/command-list, and PSP NCDZ GUI ON
+  + save-state/command-list builds pass and generate EBOOT.PBP;
+- PS2 MVS GUI OFF, PS2 MVS GUI ON + save-state/command-list, and PS2 NCDZ GUI ON
+  + save-state/command-list builds pass;
+- `git diff --check` is clean and no file under `resources/` is modified.
 
 ### D9 - Final include/API audit and documentation
 
@@ -955,14 +989,12 @@ plan after every completed milestone with observed results and any design change
 
 ## 9. Immediate next step
 
-Start D8 now that all four target sprite renderers use the same portable video
-contract and the native-object escape hatches are gone. Audit the remaining
-platform conditionals in `src/common/` by semantic category (filesystem/path,
-geometry/presentation, capability, lifecycle and genuinely compile-time target
-facts), moving behaviour into common helpers or explicit backend capabilities only
-when that reduces duplication without adding runtime work. Keep include ownership
-strict while doing so: every touched source should include the declarations it
-uses directly, and platform SDK headers must remain inside platform code. After
-D8, perform the broader D9 include-fanout/API audit and document the final recipe
-for adding another platform such as PS Vita. The VU1/VIF1 experiment remains
-deferred until a separate measured optimization effort is justified.
+Start D9. Re-run the include-fanout/API audit against the architecture that now
+has unified UI and target rendering plus no host-platform branches in
+`src/common/`. Remove stale umbrella headers, transitive include dependencies and
+obsolete declarations without rebuilding broad include paths. Update the
+architecture documentation and write the final extension recipe for adding a new
+backend such as PS Vita, including the minimal driver/capability surface a port
+must implement. Capture final conditional/renderer/API counts and the full
+validation matrix. The VU1/VIF1 experiment remains deferred until a separate
+measured optimization effort is justified.

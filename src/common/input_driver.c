@@ -191,13 +191,11 @@ bool pad_pressed_any(void)
 
 void pad_wait_clear(void)
 {
-#if defined(PS2)
 	while (poll_gamepad())
 	{
 		video_driver->waitVsync(video_data);
 		if (!Loop) break;
 	}
-#endif
 
 	pad = 0;
 	pressed_check = 0;

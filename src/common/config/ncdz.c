@@ -17,11 +17,7 @@ static const char *inifile_name = "ncdzpsp.ini";
 #elif defined(INCLUDE_CONFIG_STRUCT)
 
 #define DEFAULT_SAMPLERATE	1	// 22050Hz
-#if defined(PS2)
-#define DEFAULT_STRETCH		5	// Fill the PS2 output width using the 16:9 preset
-#else
-#define DEFAULT_STRETCH		4
-#endif
+#define DEFAULT_STRETCH		PLATFORM_NEOGEO_DEFAULT_STRETCH
 
 /******************************************************************************
 	˜‹ÔìÌå

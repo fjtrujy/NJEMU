@@ -135,13 +135,18 @@ static const char *current_version_str = "NCDZSV23";
 
 static uint16_t *state_thumbnail_addr(int x)
 {
-#if defined(PS2)
-	return (uint16_t *)video_driver->frameAddr(video_data,
-		COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, x, 0);
-#else
-	uint16_t *base = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
+	uint16_t *base = NULL;
+
+	if (video_driver->frameAddr != NULL)
+	{
+		base = (uint16_t *)video_driver->frameAddr(video_data,
+			COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, x, 0);
+		if (base != NULL)
+			return base;
+	}
+
+	base = ui_draw_driver->getTextureBasePtr(ui_draw_data, UI_TEXTURE_FONT);
 	return base ? base + x : NULL;
-#endif
 }
 
 static void save_thumbnail(void)
@@ -166,8 +171,8 @@ static void save_thumbnail(void)
 
 	if (video_driver->readFrame != NULL)
 	{
-		/* Backends with non-CPU-addressable render surfaces can provide explicit
-		 * readback.  PS2 uses this for its GS-backed thumbnail scratch. */
+		/* Backends with non-CPU-addressable thumbnail surfaces can provide
+		 * explicit readback without leaking their storage model here. */
 		readback = (uint16_t *)calloc((size_t)w * h, sizeof(uint16_t));
 		if (readback)
 		{

@@ -49,6 +49,16 @@ string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
 add_definitions(-D${PLATFORM})
 add_definitions(-DPLATFORM_STR="${PLATFORM}")
 
+# Platform-selected presentation preference used by Neo Geo configuration
+# defaults. Keep this compile-time: it preserves the historical PSP/Desktop
+# 14:9 default and the PS2 full-width 16:9 default without leaking platform
+# conditionals into common configuration code or adding a runtime driver hook.
+if (PLATFORM STREQUAL "PS2")
+    add_definitions(-DPLATFORM_NEOGEO_DEFAULT_STRETCH=5)
+else()
+    add_definitions(-DPLATFORM_NEOGEO_DEFAULT_STRETCH=4)
+endif()
+
 # Different options availables
 # Memory sizing is runtime-driven. PSP packaging explicitly requests the
 # largest user-memory partition and the planner adapts to what the device

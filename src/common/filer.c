@@ -259,51 +259,6 @@ static int zipname_num;
 
 #endif
 
-#if defined(PS2) && (EMU_SYSTEM != NCDZ)
-static void draw_file_browser_row(int file_index, int row, int selected, int icon_no)
-{
-	struct file_entry *entry = files[file_index];
-	int y = 37 + row * 20;
-
-	if (!entry)
-		return;
-
-	if (selected)
-	{
-		boxfill_gradation(4, y, ui_layout_right(15), y + 19,
-			UI_COLOR(UI_PAL_FILESEL1), UI_COLOR(UI_PAL_FILESEL2), 8, 0);
-		small_icon_light(6, y + 1, UI_COLOR(UI_PAL_SELECT), icon_no);
-
-		if (entry->flag & GAME_BADROM)
-			uifont_print_shadow(36, y + 3, COLOR_RED, entry->title);
-		else if (entry->flag & GAME_NOT_WORK)
-			uifont_print_shadow(36, y + 3, COLOR_GRAY, entry->title);
-		else if (entry->flag & GAME_BOOTLEG)
-			uifont_print_shadow(36, y + 3, COLOR_YELLOW, entry->title);
-		else if (entry->flag & GAME_HACK)
-			uifont_print_shadow(36, y + 3, COLOR_GREEN, entry->title);
-		else
-			uifont_print_shadow(36, y + 3, UI_COLOR(UI_PAL_SELECT), entry->title);
-	}
-	else
-	{
-		boxfill(4, y, ui_layout_right(15), y + 19, UI_COLOR(UI_PAL_BG2));
-		small_icon(6, y + 1, UI_COLOR(UI_PAL_NORMAL), icon_no);
-
-		if (entry->flag & GAME_BADROM)
-			uifont_print(36, y + 3, COLOR_DARKRED, entry->title);
-		else if (entry->flag & GAME_NOT_WORK)
-			uifont_print(36, y + 3, COLOR_DARKGRAY, entry->title);
-		else if (entry->flag & GAME_BOOTLEG)
-			uifont_print(36, y + 3, COLOR_DARKYELLOW, entry->title);
-		else if (entry->flag & GAME_HACK)
-			uifont_print(36, y + 3, COLOR_DARKGREEN, entry->title);
-		else
-			uifont_print(36, y + 3, UI_COLOR(UI_PAL_NORMAL), entry->title);
-	}
-}
-#endif
-
 
 #if (EMU_SYSTEM == NCDZ)
 
@@ -1328,38 +1283,6 @@ void file_browser(void)
 		}
 		else if (update & UI_PARTIAL_REFRESH)
 		{
-#if defined(PS2) && (EMU_SYSTEM != NCDZ)
-			int output_width = 0;
-			int output_height = 0;
-			int old_row = prev_sel - top;
-			int new_row = sel - top;
-			RECT screen_rect;
-
-			video_driver->getOutputSize(video_data, &output_width, &output_height);
-			screen_rect.left = 0;
-			screen_rect.top = 0;
-			screen_rect.right = output_width;
-			screen_rect.bottom = output_height;
-
-			video_driver->beginFrame(video_data);
-			video_driver->copyRect(video_data,
-				COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
-				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
-				&screen_rect, &screen_rect);
-
-			if (old_row >= 0 && old_row < rows)
-				draw_file_browser_row(prev_sel, old_row, 0, icon[files[prev_sel]->type]);
-			if (new_row >= 0 && new_row < rows)
-				draw_file_browser_row(sel, new_row, 1, icon[files[sel]->type]);
-
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, nfiles, sel);
-			video_driver->endFrame(video_data);
-
-			update  = draw_battery_status(0);
-			update |= ui_show_popup(0);
-			video_driver->flipScreen(video_data, 1);
-#else
 			int x, y, w, h;
 			RECT clip1, clip2;
 
@@ -1397,7 +1320,6 @@ void file_browser(void)
 			update = draw_battery_status(0);
 			update |= ui_show_popup(0);
 			video_driver->flipScreen(video_data, 1);
-#endif
 		}
 		else
 		{
