@@ -311,7 +311,7 @@ void blit_draw_object(int16_t x, int16_t y, uint16_t z, int16_t pri, uint32_t co
 		if ((idx = object_get_sprite(key)) < 0)
 		{
 			const uint8_t *src;
-			uint32_t palette = color_table[attr & 0x0f];
+			uint32_t palette = sprite_color_table[attr & 0x0f];
 
 			if (object_texture_num == OBJECT_TEXTURE_SIZE - 1) {
 				cps2_scan_object_callback();
@@ -513,7 +513,7 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 	if ((idx = scroll1_get_sprite(key)) < 0)
 	{
 		const uint8_t *src;
-		uint32_t palette = color_table[attr & 0x0f];
+		uint32_t palette = sprite_color_table[attr & 0x0f];
 
 		if (scroll1_texture_num == SCROLL1_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll1_callback();
@@ -598,7 +598,7 @@ void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 	if ((idx = scroll2_get_sprite(key)) < 0)
 	{
 		const uint8_t *src;
-		uint32_t palette = color_table[attr & 0x0f];
+		uint32_t palette = sprite_color_table[attr & 0x0f];
 
 		if (scroll2_texture_num == SCROLL2_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll2_callback();
@@ -675,7 +675,7 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 	if ((idx = scroll3_get_sprite(key)) < 0)
 	{
 		const uint8_t *src;
-		uint32_t palette = color_table[attr & 0x0f];
+		uint32_t palette = sprite_color_table[attr & 0x0f];
 
 		if (scroll3_texture_num == SCROLL3_TEXTURE_SIZE - 1) {
 			cps2_scan_scroll3_callback();

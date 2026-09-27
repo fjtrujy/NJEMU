@@ -340,7 +340,7 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		index = object_insert_sprite(key);
 		if (index < 0) return;
 		cps_cache_indexed_tile(TEXTURE_LAYER_OBJECT, index, 16,
-			&gfx_object[code << 7], 8, color_table[attr & 0x0f]);
+			&gfx_object[code << 7], 8, sprite_color_table[attr & 0x0f]);
 	}
 
 	sprite_clut = (attr & 0x10) ? &clut[16 << 4] : clut;
@@ -395,7 +395,7 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr,
 		if (index < 0) return;
 		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL1, index, 8,
 			&gfx_scroll1[(code << 6) + (gfxset << 2)], 8,
-			color_table[attr & 0x0f]);
+			sprite_color_table[attr & 0x0f]);
 	}
 
 	if (attr & 0x10) {
@@ -441,7 +441,7 @@ void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		index = scroll2_insert_sprite(MAKE_KEY(code, attr));
 		if (index < 0) return;
 		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL2, index, 16,
-			&gfx_scroll2[code << 7], 8, color_table[attr & 0x0f]);
+			&gfx_scroll2[code << 7], 8, sprite_color_table[attr & 0x0f]);
 	}
 
 	if (attr & 0x10) {
@@ -483,7 +483,7 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 		index = scroll3_insert_sprite(MAKE_KEY(code, attr));
 		if (index < 0) return;
 		cps_cache_indexed_tile(TEXTURE_LAYER_SCROLL3, index, 32,
-			&gfx_scroll3[code << 9], 16, color_table[attr & 0x0f]);
+			&gfx_scroll3[code << 9], 16, sprite_color_table[attr & 0x0f]);
 	}
 
 	if (attr & 0x10) {

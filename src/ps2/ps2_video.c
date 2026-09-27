@@ -71,7 +71,7 @@
  *   CLUT lookup = Bank base + (N * 256) + P
  *
  * Example - CPS1 SCROLL3 with palette index 5:
- *   - Texture pixels encoded as 0x50-0x5F (via color_table[5])
+ *   - Texture pixels encoded as 0x50-0x5F (via sprite_color_table[5])
  *   - current_clut = &clut[96 << 4] = &clut[1536]
  *   - COV = 1536 / 256 = 6
  *   - Pixel 0x55 → CLUT entry 6*256 + 0x55 = 1621
