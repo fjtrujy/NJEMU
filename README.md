@@ -48,30 +48,33 @@
 
 ## Overview
 
-**NJEMU** is an open-source arcade emulator that provides emulation for classic arcade systems from Capcom and SNK. Originally developed exclusively for the **PSP (PlayStation Portable)**, this project is now being ported to additional platforms.
+**NJEMU** is an open-source arcade emulator for classic Capcom and SNK hardware. It originated as a **PSP (PlayStation Portable)** project and now supports PSP, **PlayStation 2**, and **Desktop/SDL2** from the same C codebase.
 
 **Current Version:** 2.4.0  
 **Based on:** NJEmu 2.3.5
 
-### Porting Project
+### Multi-Platform Status
 
-This repository contains the ongoing effort to bring NJEMU to multiple platforms:
+The PSP-first codebase has completed its platform-driver refactor. All four emulator cores and the shared GUI/menu frontend now run through common contracts on all three supported hosts:
 
-- **PSP** - Original platform, with the common GUI and native PSP backends
-- **PS2** - All four emulator cores plus the common GUI/menu system
-- **DESKTOP** - All four emulator cores plus the common SDL2 GUI, useful for development and debugging
+- **PSP** - Original platform with native GU/audio/input backends
+- **PS2** - Native gsKit/PS2SDK backend for all four cores and the common GUI
+- **DESKTOP** - SDL2 backend for all four cores and the common GUI, also used for tests and debugging
 
-All four emulator cores (MVS, CPS1, CPS2, NCDZ) and the shared GUI/menu system run on all three platforms. Target sprite rendering and UI policy are common; each host backend owns only native video/audio/input/thread/timing and presentation mechanics.
+MVS, CPS1, CPS2, and NCDZ each have a single platform-neutral `sprite.c`. Target code owns emulation and rendering semantics; the selected host backend owns native texture layout, GPU submission, audio, physical input, threading, timing, lifecycle, and optional power capabilities.
 
 ### Architecture
 
-The porting effort encapsulates platform-agnostic code behind specific **drivers** for each host. Common/target code owns emulator, GUI, file-browser, input-policy and rendering semantics, while platform backends own native mechanics such as:
+Platform selection is a build/link-time concern rather than a set of host `#ifdef`s spread through common code. Each backend binds the shared driver contracts from its `<platform>_drivers.c`, while common and target code remain independent of PSP/PS2/SDL SDK types.
 
-- Video presentation, native texture layout and GPU submission
-- Audio output
-- Raw physical input sampling
-- Threading and timing
-- Platform lifecycle and optional power capabilities
+The current architecture follows these rules:
+
+- `src/common/` contains no PSP/PS2/Desktop conditionals and no native platform SDK includes
+- Target sprite renderers emit compact portable texture updates and vertex/point batches through `video_driver_t`
+- PSP consumes the common sprite vertex layout directly; PS2 converts it once into its final gsKit queue location; Desktop consumes it through SDL
+- Input backends report stable physical state; player routing, menu combinations, autofire, and target-specific interpretation stay in common/target code
+- Power, frame readback, UI texture storage, and similar differences are expressed as capabilities instead of PSP-shaped assumptions
+- Platform SDK headers and private backend state stay inside `src/<platform>/`
 
 ### Current Porting Status
 
@@ -107,18 +110,14 @@ Each target has specific setup requirements. See the linked README files for:
 | Platform | Description | Status |
 |----------|-------------|--------|
 | **PSP** | Sony PlayStation Portable | ✅ Original platform |
-| **PS2** | Sony PlayStation 2 | ✅ Core complete |
-| **DESKTOP** | PC/Desktop (SDL2) | ✅ Core complete |
+| **PS2** | Sony PlayStation 2 | ✅ Full |
+| **DESKTOP** | PC/Desktop (SDL2) | ✅ Full |
 
-### PSP Firmware Compatibility
+### PSP Runtime and Packaging
 
-| Build Type | Required Firmware | Target Hardware |
-|------------|-------------------|-----------------|
-| **FW 3.xx** | CFW 3.03+ | PSP-1000/2000/3000 |
-| **FW 1.50 Kernel** | FW 1.50 | PSP-1000 only |
-| **Standard package** | Modern PSP CFW/homebrew runtime | PSP-1000/2000/3000 |
+The maintained PSP build uses the current CMake/PSPSDK PRX + `EBOOT.PBP` packaging path. By default NJEMU runs as a user-mode module and explicitly requests the largest PSP user-memory partition; runtime memory sizing is then determined by the common allocator policy.
 
-> **Note:** The 1.50 Kernel build does NOT work on PSP-2000 or later models.
+`KERNEL_MODE=ON` remains available for the PSP-specific code paths that require a kernel module, but it is not a separate legacy 1.50 packaging system. Historical firmware-specific build layouts from the original PSP-only project are no longer the maintained build path.
 
 ---
 
@@ -131,8 +130,7 @@ Each target has specific setup requirements. See the linked README files for:
 | O (Circle) | OK / Confirm |
 | X (Cross) | Cancel |
 | SELECT | Help (press in any menu except game screen) |
-| HOME / PS | Emulator menu (during gameplay) |
-| SELECT + START | Emulator menu (alternative) |
+| SELECT + START | Emulator menu (during gameplay) |
 | R Trigger | BIOS menu (MVS file browser) |
 
 > **Menu shortcut:** press START+SELECT during gameplay to open the emulator menu on every platform.
@@ -311,8 +309,6 @@ All folders are automatically created on first launch.
 ├── snap/                       # Screenshots
 └── state/                      # Save states
 ```
-
-> **Note:** For FW 1.5 Kernel, use `/PSP/GAME150/` or `/PSP/GAME3xx/` instead of `/PSP/GAME/`.
 
 ---
 
@@ -1033,17 +1029,24 @@ NJEMU/
 
 ### Driver Architecture
 
-Each platform implements the same driver interfaces:
+A platform backend is selected at link time and implements the shared contracts declared in `src/common/`. The normal backend layout is:
 
-| Driver | Purpose |
-|--------|---------|
-| `*_platform.c` | Platform initialization and main loop |
-| `*_video.c` | Screen rendering and sprite drawing |
-| `*_audio.c` | Sound output and mixing |
-| `*_input.c` | Controller/keyboard input |
+| Backend file | Purpose |
+|--------------|---------|
+| `*_drivers.c` | Bind the common driver globals to this platform's implementations |
+| `*_platform.c` | Startup, launch path, main loop, language and memory telemetry |
+| `*_video.c` | Native GPU/display, texture layout, sprite submission and readback |
+| `*_audio.c` | Native audio output |
+| `*_input.c` | Raw physical controller/keyboard sampling |
 | `*_thread.c` | Threading and synchronization |
-| `*_ticker.c` | Timing and frame pacing |
-| `*_power.c` | Power management |
+| `*_ticker.c` | Monotonic timing/frame pacing support |
+| `*_power.c` | Optional battery/performance capabilities |
+| `*_ui_draw.c` | GUI texture storage/lifecycle adapter when `GUI=ON` |
+| `png.c` | Platform image load/save/readback glue when `GUI=ON` |
+
+The bound common services are `audio_driver_t`, `input_driver_t`, `platform_driver_t`, `power_driver_t`, `thread_driver_t`, `ticker_driver_t`, `video_driver_t`, and `ui_draw_driver_t`. `ui_draw_driver_t` is deliberately not a second renderer: low-level drawing belongs to `video_driver_t`, while the UI adapter only handles texture storage/lifetime details that genuinely differ by host.
+
+All four target renderers are shared across platforms. A backend receives logical indexed/direct-color atlas updates plus compact `video_sprite_vertex_t`/`video_point_vertex_t` batches and chooses the fastest native execution path without exposing native GPU objects back to target code.
 
 ### Target Configuration
 
@@ -1106,25 +1109,9 @@ All targets use a hash-table based texture caching system to avoid re-decoding s
 
 #### PSP Texture Swizzling (PSP-Specific)
 
-The PSP GPU has a specific memory layout for optimal texture cache performance called "swizzling". This rearranges bytes within texture blocks:
+The PSP GPU benefits from swizzled texture storage, but swizzling is no longer part of any target renderer. Common MVS/CPS/NCDZ code always describes atlas updates in logical rectangular coordinates through `video_driver_t::writeIndexedTextureRect()` / `writeDirectTextureRect()`.
 
-```c
-// PSP swizzle table - controls row advancement in swizzled texture
-static const int swizzle_table_8bit[16] = {
-       0, 16, 16, 16, 16, 16, 16, 16,
-    3984, 16, 16, 16, 16, 16, 16, 16
-};
-
-// Swizzled address calculation for 16x16 tile
-dst = SWIZZLED8_16x16(texture_base, tile_index);
-```
-
-**For porting to other platforms:** Replace with linear row/column calculation:
-```c
-row = idx / TILES_PER_LINE;
-column = idx % TILES_PER_LINE;
-dst = &texture[((row * TILE_HEIGHT) + line) * BUF_WIDTH + (column * TILE_WIDTH)];
-```
+The PSP backend translates those logical coordinates into its native swizzled T8 layout; PS2 and Desktop use their own backend-native layouts. This keeps cache/decode policy shared while preventing PSP memory-addressing rules from leaking back into target code. A new platform should implement the same logical texture-update contract rather than copying PSP swizzle helpers.
 
 #### Color Table (CLUT) System
 
@@ -1987,7 +1974,7 @@ NCDZ is similar to MVS but with key differences:
 
 Target renderers are no longer ported separately per host. They emit portable texture updates and compact sprite/point batches through `video_driver_t`; PSP, PS2 and Desktop keep native texture layout, CLUT handling and GPU submission inside their backends.
 
-For the current extension recipe, including logical-vs-physical geometry, driver binding, input capabilities, UI ownership, performance requirements and the validation gate for a new host such as PS Vita, see [docs/PLATFORM_PORTING_GUIDE.md](docs/PLATFORM_PORTING_GUIDE.md).
+For the current extension recipe, including logical-vs-physical geometry, driver binding, input capabilities, UI ownership, renderer performance requirements and the validation gate for a new host such as PS Vita, see [docs/PLATFORM_PORTING_GUIDE.md](docs/PLATFORM_PORTING_GUIDE.md). The completed refactor and its measurements are recorded in [docs/PLATFORM_DRIVER_REFACTOR_PLAN.md](docs/PLATFORM_DRIVER_REFACTOR_PLAN.md).
 
 ## Internal Systems Documentation
 
