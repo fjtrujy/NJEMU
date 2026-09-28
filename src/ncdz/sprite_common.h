@@ -68,7 +68,7 @@ extern int clip_max_y;
 extern int clear_spr_texture;
 extern int clear_fix_texture;
 
-extern const uint32_t ALIGN16_DATA color_table[16];
+extern const uint32_t ALIGN16_DATA sprite_color_table[16];
 
 /******************************************************************************
 	Common function declarations

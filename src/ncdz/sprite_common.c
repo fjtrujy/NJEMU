@@ -33,7 +33,7 @@ int clear_fix_texture;
  * Each entry broadcasts a 4-bit palette offset to all bytes of a 32-bit word
  * Used when rendering tiles to texture cache
  */
-const uint32_t ALIGN16_DATA color_table[16] =
+const uint32_t ALIGN16_DATA sprite_color_table[16] =
 {
 	0x00000000, 0x10101010, 0x20202020, 0x30303030,
 	0x40404040, 0x50505050, 0x60606060, 0x70707070,

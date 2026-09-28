@@ -623,6 +623,24 @@ static int is_bare_device(const char *path)
 	Check Directory Existence
 --------------------------------------------------------*/
 
+/* Whether an entry read from `dir` is a directory: not every libc (VitaSDK's
+ * newlib) reports d_type, fall back to stat() there. */
+static int entry_is_dir(const char *dir, const struct dirent *entry)
+{
+#if defined(DT_DIR) && defined(DT_UNKNOWN)
+	if (entry->d_type != DT_UNKNOWN)
+		return entry->d_type == DT_DIR;
+#endif
+	char path[PATH_MAX];
+	struct stat st;
+	size_t len = strlen(dir);
+
+	if (snprintf(path, sizeof(path), "%s%s%s", dir,
+			(len != 0 && dir[len - 1] != '/') ? "/" : "", entry->d_name) >= (int)sizeof(path))
+		return 0;
+	return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
 static void checkDir(const char *name)
 {
 	DIR *dp;
@@ -638,7 +656,7 @@ static void checkDir(const char *name)
 		{
 			if ((entry = readdir(dp)) == NULL) break;
 
-			if (entry->d_type == DT_DIR)
+			if (entry_is_dir(launchDir, entry))
 				if (strcasecmp(entry->d_name, name) == 0)
 					found = 1;
 		}
@@ -833,7 +851,7 @@ static void getDir(const char *path)
 					continue;
 				}
 			}
-			if (entry->d_type == DT_DIR)
+			if (entry_is_dir(path, entry))
 			{
 #if USE_CACHE
 				if (strcasecmp(entry->d_name, "cache") == 0) continue;

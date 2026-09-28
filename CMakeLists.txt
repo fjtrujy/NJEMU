@@ -36,6 +36,7 @@ set(PLATFORM_VALUES
     "PSP"     # 0
     "PS2"     # 1 
     "DESKTOP" # 2
+    "PSVITA"  # 3
 )
 list(FIND PLATFORM_VALUES ${PLATFORM} PLATFORM_INDEX)
 if (PLATFORM_INDEX EQUAL -1)
@@ -59,6 +60,15 @@ else()
     add_definitions(-DPLATFORM_NEOGEO_DEFAULT_STRETCH=4)
 endif()
 
+# VitaSDK helpers (vita_create_self, vita_create_vpk). The toolchain file is
+# passed on the command line: -DCMAKE_TOOLCHAIN_FILE=$VITASDK/share/vita.toolchain.cmake
+if (PLATFORM STREQUAL "PSVITA")
+    if (NOT DEFINED ENV{VITASDK})
+        message(FATAL_ERROR "PLATFORM=PSVITA requires the VITASDK environment variable")
+    endif()
+    include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
+endif()
+
 # Different options availables
 # Memory sizing is runtime-driven. PSP packaging explicitly requests the
 # largest user-memory partition and the planner adapts to what the device
@@ -74,6 +84,9 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
+option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
+option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
+option(USE_DESKTOP_GL "Desktop: OpenGL 3.3 video backend (test bench for the Vita renderers)" OFF)
 
 # Add options to compiler definitions
 if (GUI)
@@ -106,6 +119,10 @@ endif()
 
 if (CACHE_IO_FORCE_SEEK)
     add_definitions(-DCACHE_IO_FORCE_SEEK=1)
+endif()
+
+if (PSVITA_VIDEO_STATS AND PLATFORM STREQUAL "PSVITA")
+    add_definitions(-DPSVITA_VIDEO_STATS=1)
 endif()
 
 # Version
@@ -403,6 +420,30 @@ set(OS_SRC ${OS_SRC}
 
 if (PLATFORM STREQUAL "PSP")
     list(APPEND OS_SRC psp/psp_power.c)
+endif()
+
+# GPU backends replaying a recorded work frame (see common/hw_recorder.h)
+if (PLATFORM STREQUAL "PSVITA")
+    if (USE_VITAGL)
+        list(REMOVE_ITEM OS_SRC psvita/psvita_video.c)
+        list(APPEND OS_SRC psvita/psvita_video_gl.c)
+    endif()
+    list(APPEND OS_SRC
+        psvita/psvita_power.c
+        common/hw_recorder.c
+    )
+elseif (PLATFORM STREQUAL "DESKTOP")
+    if (USE_DESKTOP_GL)
+        if (GUI)
+            message(FATAL_ERROR "USE_DESKTOP_GL requires GUI=OFF (the desktop GUI draws through SDL_Renderer)")
+        endif()
+        list(REMOVE_ITEM OS_SRC desktop/desktop_video.c)
+        list(APPEND OS_SRC
+            desktop/desktop_video_gl.c
+            common/hw_recorder.c
+        )
+    endif()
+    list(APPEND OS_SRC desktop/desktop_frame_dump.c)
 endif()
 
 if (ADHOC AND PLATFORM STREQUAL "PSP")
@@ -789,6 +830,36 @@ elseif(PLATFORM STREQUAL "PS2")
         ps2_drivers
         "-ldebug"
     )
+elseif(PLATFORM STREQUAL "PSVITA")
+    # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
+    # defines PATH_MAX as 4096: provide the same value to the whole build.
+    target_compile_definitions(${TARGET} PRIVATE PATH_MAX=4096)
+    if (USE_VITAGL)
+        target_link_libraries(${TARGET} PUBLIC
+            vitaGL
+            vitashark
+            SceShaccCgExt
+            taihen_stub
+            SceShaccCg_stub
+            SceKernelDmacMgr_stub
+            mathneon
+            stdc++
+        )
+    else()
+        target_link_libraries(${TARGET} PUBLIC vita2d)
+    endif()
+    target_link_libraries(${TARGET} PUBLIC
+        SceDisplay_stub
+        SceGxm_stub
+        SceSysmodule_stub
+        SceCtrl_stub
+        SceAudio_stub
+        ScePower_stub
+        SceCommonDialog_stub
+        SceAppMgr_stub
+        SceAppUtil_stub
+        m
+    )
 elseif(PLATFORM STREQUAL "PSP")
     target_link_libraries(${TARGET} PUBLIC
         pspdisplay
@@ -855,6 +926,56 @@ if(PLATFORM STREQUAL "DESKTOP" AND NOT APPLE)
     )
 endif()
        
+# Create the VPK for PS Vita: the executable, the target resources and the
+# translation packs, laid out like the install tree of the other platforms.
+if(PLATFORM STREQUAL "PSVITA")
+    # Title IDs: NJMU0000n, one per target so they can be installed side by side
+    set(VITA_TITLEID_CPS1 "NJMU00003")
+    set(VITA_TITLEID_CPS2 "NJMU00004")
+    set(VITA_TITLEID_MVS "NJMU00001")
+    set(VITA_TITLEID_NCDZ "NJMU00002")
+    # The SFO version must be "NN.NN"
+    math(EXPR VITA_VERSION_MAJOR "${VERSION_MAJOR}")
+    math(EXPR VITA_VERSION_MINOR "${VERSION_MINOR}")
+    if (VITA_VERSION_MAJOR LESS 10)
+        set(VITA_VERSION_MAJOR "0${VITA_VERSION_MAJOR}")
+    endif()
+    if (VITA_VERSION_MINOR LESS 10)
+        set(VITA_VERSION_MINOR "0${VITA_VERSION_MINOR}")
+    endif()
+
+    set(VITA_VPK_FILE_ARGS)
+    foreach(TRANSLATION_PACK IN LISTS TRANSLATION_PACKS)
+        get_filename_component(TRANSLATION_NAME "${TRANSLATION_PACK}" NAME)
+        list(APPEND VITA_VPK_FILE_ARGS FILE "${TRANSLATION_PACK}" "lang/${TRANSLATION_NAME}")
+    endforeach()
+    # Top-level resource files plus the placeholders of the data folders: never
+    # package local ROMs, caches or saves. The app copies them to ux0:data/<target>.
+    file(GLOB_RECURSE VITA_RESOURCE_FILES RELATIVE "${RESOURCE_DIR}" "${RESOURCE_DIR}*")
+    foreach(VITA_RESOURCE_FILE IN LISTS VITA_RESOURCE_FILES)
+        if (VITA_RESOURCE_FILE MATCHES "/" AND NOT VITA_RESOURCE_FILE MATCHES "/_placeholder$")
+            continue()
+        endif()
+        list(APPEND VITA_VPK_FILE_ARGS FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
+    endforeach()
+
+    if (GUI)
+        list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
+    endif()
+
+    # Room after the text segment for the SCE module data that vita-elf-create
+    # appends (vitasdk/vita-toolchain#303): recent binutils may place the data
+    # segment right behind it.
+    target_link_options(${TARGET} PRIVATE "-Wl,--defsym=__sce_headroom=0x10000")
+
+    vita_create_self(${TARGET}.self ${TARGET})
+    vita_create_vpk(${TARGET}.vpk ${VITA_TITLEID_${TARGET}} ${TARGET}.self
+        VERSION "${VITA_VERSION_MAJOR}.${VITA_VERSION_MINOR}"
+        NAME "${TARGET}"
+        ${VITA_VPK_FILE_ARGS}
+    )
+endif()
+
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
     set(BUILD_PRX ON)
@@ -1041,7 +1162,9 @@ endif()
 # ==============================================================================
 
 # Set default install prefix if not specified
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+# vita.toolchain.cmake presets the prefix to the SDK itself: treat that as the default too.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT OR
+   (PLATFORM STREQUAL "PSVITA" AND CMAKE_INSTALL_PREFIX STREQUAL "${VITASDK}/arm-vita-eabi"))
     set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Install path prefix" FORCE)
 endif()
 
@@ -1050,6 +1173,8 @@ if(PLATFORM STREQUAL "PSP")
     install(FILES ${CMAKE_BINARY_DIR}/EBOOT.PBP DESTINATION .)
 elseif(PLATFORM STREQUAL "PS2")
     install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
+elseif(PLATFORM STREQUAL "PSVITA")
+    install(FILES ${CMAKE_BINARY_DIR}/${TARGET}.vpk DESTINATION .)
 else()
     install(TARGETS ${TARGET} DESTINATION .)
 endif()

@@ -14,6 +14,7 @@
 
 #include <stdlib.h>
 #include <SDL.h>
+#include "desktop/desktop_frame_dump.h"
 #include "desktop/desktop_video.h"
 
 typedef struct texture_layer {
@@ -33,6 +34,7 @@ typedef struct desktop_video {
 	uint8_t *scrbitmap;
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
+	uint32_t presented_frames;	/* NJEMU_DUMP_FRAMES numbering */
 } desktop_video_t;
 
 #define OUTPUT_WIDTH 640
@@ -363,6 +365,19 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
     src.y = src_rect->top;
     src.w = src_rect->right - src_rect->left;
     src.h = src_rect->bottom - src_rect->top;
+
+	/* Reference frames for the GPU backends (tools/compare_frames.py). */
+	if (desktop_dump_wanted(++desktop->presented_frames)) {
+		uint8_t *pixels = malloc((size_t)src.w * src.h * 4);
+		if (pixels != NULL) {
+			SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+			if (SDL_RenderReadPixels(desktop->renderer, &src, SDL_PIXELFORMAT_ABGR8888,
+					pixels, src.w * 4) == 0)
+				desktop_dump_write("sdl", desktop->presented_frames, pixels,
+					src.w, src.h, src.w * 4, false);
+			free(pixels);
+		}
+	}
     
     SDL_SetRenderTarget(desktop->renderer, NULL);
     SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);

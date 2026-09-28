@@ -152,7 +152,7 @@ extern int16_t scroll2_ey;
 extern uint8_t *pen_usage;
 
 /* Color table */
-extern const uint32_t ALIGN16_DATA color_table[16];
+extern const uint32_t ALIGN16_DATA sprite_color_table[16];
 
 /* Frame counter (from vidhrdw.c) */
 extern uint32_t frames_displayed;

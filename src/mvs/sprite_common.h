@@ -65,7 +65,7 @@ extern uint16_t spr_texture_num;
 extern int clear_spr_texture;
 extern int clear_fix_texture;
 
-extern const uint32_t ALIGN16_DATA color_table[16];
+extern const uint32_t ALIGN16_DATA sprite_color_table[16];
 
 /******************************************************************************
 	Common function declarations

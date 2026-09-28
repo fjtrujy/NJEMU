@@ -1,0 +1,270 @@
+/******************************************************************************
+
+	psvita_video_common.h
+
+	Helpers shared by the PS Vita video backends (vitaGL and vita2d/GXM):
+	render statistics logging.  The geometry lives in common/hw_render.h.
+
+******************************************************************************/
+
+#ifndef PSVITA_VIDEO_COMMON_H
+#define PSVITA_VIDEO_COMMON_H
+
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
+#include <psp2/kernel/clib.h>
+
+#include "common/hw_render.h"
+
+/* The Vita display: the canvas the frames are presented on. */
+#define PSVITA_DISPLAY_WIDTH	960
+#define PSVITA_DISPLAY_HEIGHT	544
+
+/*
+ * UI texel atlas, shared by both backends.
+ *
+ * The common UI rebuilds glyphs in one scratch texture before every draw, so
+ * each draw needs its texels somewhere the GPU can read them after the CPU
+ * has moved on. Instead of one copy (and one texture) per draw, regions are
+ * identified by a hash of their texels and appended once to a persistent
+ * atlas texture: a static menu draws everything from the atlas without any
+ * copy, and entries are never rewritten while a scene may use them. When the
+ * atlas is full, the caller copies the draw somewhere else for the rest of the
+ * frame and resets the atlas once the GPU is idle.
+ */
+#define PSVITA_UI_ATLAS_ENTRIES	8192		/* power of two */
+
+typedef struct psvita_ui_atlas_entry {
+	uint64_t key;			/* texel hash, 0 = free */
+	uint32_t size;			/* width | height << 16 */
+	uint16_t x, y;
+} psvita_ui_atlas_entry_t;
+
+typedef struct psvita_ui_atlas {
+	uint16_t *texels;		/* GPU-visible, `width` texels per row */
+	int width;
+	int height;
+	int shelf_x, shelf_y, shelf_h;
+	bool full;				/* reset before the next scene */
+	psvita_ui_atlas_entry_t entries[PSVITA_UI_ATLAS_ENTRIES];
+	uint32_t used;
+} psvita_ui_atlas_t;
+
+static inline void psvita_ui_atlas_reset(psvita_ui_atlas_t *a)
+{
+	memset(a->entries, 0, sizeof(a->entries));
+	a->used = 0;
+	a->shelf_x = a->shelf_y = a->shelf_h = 0;
+	a->full = false;
+}
+
+static inline uint64_t psvita_ui_hash(const uint16_t *texels, int stride, int w, int h)
+{
+	uint64_t hash = 0xcbf29ce484222325ull;		/* FNV-1a */
+	for (int y = 0; y < h; y++) {
+		const uint16_t *row = texels + (size_t)y * stride;
+		for (int x = 0; x < w; x++) {
+			hash = (hash ^ row[x]) * 0x100000001b3ull;
+		}
+	}
+	return hash ? hash : 1;
+}
+
+/*
+ * Finds or adds the w x h region at `texels` (16-bit, `stride` texels per row);
+ * false when the atlas is full (the caller must draw from a copy of its own).
+ */
+static inline bool psvita_ui_atlas_get(psvita_ui_atlas_t *a, const uint16_t *texels, int stride,
+	int w, int h, int *out_x, int *out_y)
+{
+	const uint64_t key = psvita_ui_hash(texels, stride, w, h);
+	const uint32_t size = (uint32_t)w | ((uint32_t)h << 16);
+	uint32_t i = (uint32_t)key & (PSVITA_UI_ATLAS_ENTRIES - 1);
+
+	if (a->texels == NULL || w > a->width || h > a->height)
+		return false;
+	for (;; i = (i + 1) & (PSVITA_UI_ATLAS_ENTRIES - 1)) {
+		psvita_ui_atlas_entry_t *e = &a->entries[i];
+		if (e->key == 0)
+			break;
+		if (e->key == key && e->size == size) {
+			*out_x = e->x;
+			*out_y = e->y;
+			return true;
+		}
+	}
+
+	/* Keep the table at most half full so that probing stays short. */
+	if (a->full || a->used >= PSVITA_UI_ATLAS_ENTRIES / 2)
+		goto full;
+	if (a->shelf_x + w > a->width) {
+		a->shelf_x = 0;
+		a->shelf_y += a->shelf_h;
+		a->shelf_h = 0;
+	}
+	if (a->shelf_y + h > a->height)
+		goto full;
+
+	for (int y = 0; y < h; y++)
+		memcpy(a->texels + (size_t)(a->shelf_y + y) * a->width + a->shelf_x,
+			texels + (size_t)y * stride, (size_t)w * sizeof(uint16_t));
+	a->entries[i] = (psvita_ui_atlas_entry_t){ key, size, (uint16_t)a->shelf_x, (uint16_t)a->shelf_y };
+	a->used++;
+	*out_x = a->shelf_x;
+	*out_y = a->shelf_y;
+	a->shelf_x += w;
+	if (h > a->shelf_h)
+		a->shelf_h = h;
+	return true;
+
+full:
+	a->full = true;
+	return false;
+}
+
+/*
+ * Copies a rectangle of texels into a linear texture whose rows are `tex_w`
+ * texels apart (writeIndexedTextureRect/writeDirectTextureRect). `src_pitch` is
+ * in texels. The rectangle is clipped to the texture.
+ */
+static inline void psvita_write_texture_rect(uint8_t *tex, int tex_w, int tex_h, int bpp,
+	int x, int y, int width, int height, const void *pixels, int src_pitch)
+{
+	const uint8_t *src = pixels;
+
+	if (tex == NULL || pixels == NULL || x < 0 || y < 0 || width <= 0 || height <= 0)
+		return;
+	if (x + width > tex_w)
+		width = tex_w - x;
+	if (y + height > tex_h)
+		height = tex_h - y;
+	for (int row = 0; row < height; row++)
+		memcpy(tex + ((size_t)(y + row) * tex_w + x) * bpp,
+			src + (size_t)row * src_pitch * bpp, (size_t)width * bpp);
+}
+
+/*
+ * Render statistics (scenes, draws, quads, CLUT rows per frame) are appended
+ * to PSVITA_VIDEO_LOG_PATH every PSVITA_VIDEO_STATS_FRAMES presented frames
+ * when built with PSVITA_VIDEO_STATS=1 (CMake option of the same name).
+ */
+#ifndef PSVITA_VIDEO_STATS
+#define PSVITA_VIDEO_STATS			0
+#endif
+#define PSVITA_VIDEO_STATS_FRAMES	300
+#define PSVITA_VIDEO_LOG_PATH		"ux0:data/njemu_video.log"
+
+__attribute__((unused, format(printf, 1, 2)))
+static void psvita_video_log(const char *fmt, ...)
+{
+	char line[256];
+	va_list args;
+
+	va_start(args, fmt);
+	int len = vsnprintf(line, sizeof(line), fmt, args);
+	va_end(args);
+	if (len <= 0)
+		return;
+	if (len >= (int)sizeof(line))
+		len = sizeof(line) - 1;
+
+	sceClibPrintf("psvita_video: %s", line);
+	SceUID fd = sceIoOpen(PSVITA_VIDEO_LOG_PATH, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0666);
+	if (fd >= 0) {
+		sceIoWrite(fd, line, len);
+		sceIoClose(fd);
+	}
+}
+
+/*
+ * Frame dumps for comparing the Vita output with the Desktop test bench
+ * (tools/compare_frames.py): list presented frame numbers, comma separated,
+ * in PSVITA_DUMP_LIST.  The displayed frame is sampled back at the work frame
+ * resolution through the present transform and written as a PPM.
+ */
+#define PSVITA_DUMP_LIST	"ux0:data/njemu_dump_frames.txt"
+#define PSVITA_DUMP_DIR		"ux0:data/njemu_dumps"
+
+__attribute__((unused))
+static bool psvita_dump_wanted(uint32_t frame)
+{
+	static bool parsed;
+	static uint32_t frames[64];
+	static int count;
+
+	if (!parsed) {
+		char list[512];
+		parsed = true;
+		SceUID fd = sceIoOpen(PSVITA_DUMP_LIST, SCE_O_RDONLY, 0);
+		if (fd < 0)
+			return false;
+		int len = sceIoRead(fd, list, sizeof(list) - 1);
+		sceIoClose(fd);
+		list[len > 0 ? len : 0] = '\0';
+		for (char *p = list; *p != '\0' && count < 64;) {
+			char *end;
+			unsigned long f = strtoul(p, &end, 10);
+			if (end == p) {
+				p++;
+				continue;
+			}
+			if (f != 0)
+				frames[count++] = (uint32_t)f;
+			p = end;
+		}
+	}
+	for (int i = 0; i < count; i++) {
+		if (frames[i] == frame)
+			return true;
+	}
+	return false;
+}
+
+/* `display` is RGBA8 with `stride` pixels per row; `bottom_up` for GL reads. */
+__attribute__((unused))
+static void psvita_dump_frame(const char *backend, uint32_t frame, const uint8_t *display,
+							  int stride, bool bottom_up, const RECT *src, const hw_xform_t *m)
+{
+	const int w = src->right - src->left, h = src->bottom - src->top;
+	uint8_t *rgb = malloc((size_t)w * h * 3);
+	char path[128];
+
+	if (rgb == NULL)
+		return;
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			float X, Y;
+			hw_map_point(m, src->left + x + 0.5f, src->top + y + 0.5f, &X, &Y);
+			int px = (int)X, py = (int)Y;
+			if (px < 0) px = 0;
+			if (py < 0) py = 0;
+			if (px >= PSVITA_DISPLAY_WIDTH) px = PSVITA_DISPLAY_WIDTH - 1;
+			if (py >= PSVITA_DISPLAY_HEIGHT) py = PSVITA_DISPLAY_HEIGHT - 1;
+			if (bottom_up)
+				py = PSVITA_DISPLAY_HEIGHT - 1 - py;
+			memcpy(rgb + ((size_t)y * w + x) * 3, display + ((size_t)py * stride + px) * 4, 3);
+		}
+	}
+
+	sceIoMkdir(PSVITA_DUMP_DIR, 0777);
+	snprintf(path, sizeof(path), "%s/%s_%05u.ppm", PSVITA_DUMP_DIR, backend, (unsigned)frame);
+	SceUID fd = sceIoOpen(path, SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
+	if (fd >= 0) {
+		char header[32];
+		int len = snprintf(header, sizeof(header), "P6\n%d %d\n255\n", w, h);
+		sceIoWrite(fd, header, len);
+		sceIoWrite(fd, rgb, (SceSize)w * h * 3);
+		sceIoClose(fd);
+		psvita_video_log("dumped %s\n", path);
+	}
+	free(rgb);
+}
+
+#endif /* PSVITA_VIDEO_COMMON_H */
