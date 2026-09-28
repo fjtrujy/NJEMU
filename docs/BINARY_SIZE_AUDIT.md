@@ -351,21 +351,90 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 10. PS2 IRX observations: deferred to `ps2_drivers`
+## 10. PS2 IRX externalization baseline
 
-Representative no-GUI PS2 builds currently contain approximately:
+The deferred `ps2_drivers` work is now available as an external-IRX-image
+provider. Before switching NJEMU to that flavor, a fresh representative MVS
+build was captured with:
 
-| Core | `.text` | `.data` | `.rodata` | `.bss` |
-| --- | ---: | ---: | ---: | ---: |
-| CPS2 | 658,160 B | 390,064 B | 54,168 B | 2,570,456 B |
-| MVS | 755,952 B | 397,760 B | 53,352 B | 2,639,944 B |
+```text
+TARGET=MVS
+PLATFORM=PS2
+GUI=ON
+SAVE_STATE=ON
+COMMAND_LIST=ON
+ADHOC=OFF
+```
 
-The on-disk ELF is larger because these development builds contain debug
-information. A significant fraction of PS2 `.data` is embedded IRX payloads
-(USB/filesystem/pad/audio/memory-card modules). NJEMU will not introduce its own
-runtime IRX-loading/externalization layer as part of this work. If that saving is
-pursued later, the preferred design is to expose it cleanly from `ps2_drivers`
-first so applications can opt into the behavior through a simple shared API.
+The baseline still links the embedded `libps2_drivers.a` flavor. Its final ELF
+measurements are:
+
+| Metric | Bytes |
+| --- | ---: |
+| ELF file | 3,504,216 |
+| `.text` | 983,976 |
+| `.rodata` | 101,236 |
+| `.data` | 407,272 |
+| `.bss` | 1,725,792 |
+| GNU `size` runtime image (`text + data + bss`) | 3,218,336 |
+
+`mips64r5900el-ps2-elf-nm -S -t d` reports these embedded IRX payload arrays:
+
+| Symbol | Bytes |
+| --- | ---: |
+| `audsrv_irx` | 19,389 |
+| `bdm_irx` | 10,745 |
+| `bdmfs_fatfs_irx` | 36,205 |
+| `cdfs_irx` | 10,705 |
+| `fileXio_irx` | 5,637 |
+| `iomanX_irx` | 10,401 |
+| `libsd_irx` | 15,813 |
+| `mcman_irx` | 72,101 |
+| `mcserv_irx` | 8,197 |
+| `mtapman_irx` | 7,781 |
+| `mx4sio_bd_irx` | 11,841 |
+| `padman_irx` | 36,741 |
+| `poweroff_irx` | 3,489 |
+| `ps2atad_irx` | 10,653 |
+| `ps2dev9_irx` | 10,977 |
+| `ps2fs_irx` | 42,477 |
+| `ps2hdd_irx` | 23,701 |
+| `sio2man_irx` | 5,241 |
+| `usbd_irx` | 26,241 |
+| `usbmass_bd_irx` | 12,681 |
+| **Total embedded IRX payloads** | **381,016** |
+
+There are also 20 linked `size_*_irx` metadata symbols at four bytes each (80
+bytes total). The payload arrays alone account for 93.6% of the baseline
+`.data` section, so final-section deltas rather than archive size are the useful
+measure of the migration.
+
+The runtime requirement audit is narrower than staging the complete external
+image. NJEMU always needs audio (`PS2_DRIVER_REQ_AUDIO`) and, after platform
+initialization, joystick/multitap input (`PS2_DRIVER_REQ_JOYSTICK`). The
+filesystem layer uses `init_only_boot_ps2_filesystem_driver()`, so the boot
+device can be classified before the IOP reset with the same
+`getBootDeviceID(getcwd(...))` helper used by `ps2_drivers` itself:
+
+| Boot device family | Filesystem requirements to stage |
+| --- | --- |
+| `host*` / unknown | `FILEXIO` |
+| `mc*` | `FILEXIO | MEMCARD` |
+| `cdrom*` / `cdfs*` | `FILEXIO | CDFS` |
+| `mass*` / `mx4sio*` | `FILEXIO | USB | MX4SIO` |
+| `hdd*` | `FILEXIO | POWEROFF | HDD` |
+
+The external provider expands those top-level requirements to their transitive
+IRX dependencies and deduplicates them. No PS2 network driver is initialized by
+NJEMU in this configuration, so `NETMAN`, `SMAP`, `EEIP`, and `IOPIP` are not
+requirements. This keeps the temporary pre-reset staging peak specific to the
+actual boot path instead of using `PS2_DRIVER_REQ_FILESYSTEM_ALL`.
+
+Existing runtime diagnostics relevant to the post-migration comparison are the
+startup `[memory]` snapshot and the MVS `[memory_plan]` retained-allocation
+probe. The latter is the authoritative signal for whether reclaimed steady-state
+EE memory increases the C-ROM/PCM cache shape after mandatory allocations are
+resident.
 
 ## 11. Current status / future work
 
@@ -415,8 +484,9 @@ Final validation status:
    (32 KiB on PSP) for games that do not implement the stars layer.
 3. Further RAM work should only resume when a new candidate can shorten
    lifetime or remove storage without adding work to CPU/render/audio hot paths.
-4. **Deferred:** PS2 IRX externalization/runtime loading, preferably as a future
-   `ps2_drivers` capability rather than NJEMU-specific infrastructure.
+4. **Baseline captured:** PS2 IRX externalization is now provided by
+   `ps2_drivers`; the representative embedded baseline is recorded in section 10
+   before NJEMU switches link flavors.
 5. **Deferred:** selective `-Os`; keep the current optimization policy for this
    phase.
 
