@@ -12,6 +12,7 @@
 #include <strings.h>
 #include "emucfg.h"
 #include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
 #include "common/filer.h"
 #include "common/input_driver.h"
 #include "common/power_driver.h"
@@ -22,7 +23,6 @@
 #if defined(GUI)
 #include "common/ui_menu.h"
 #else
-#include "common/emulator_runtime.h"
 #include "common/video_driver.h"
 #endif
 #endif
@@ -687,6 +687,7 @@ void load_gamecfg(const char *name)
 #endif
 			save_gamecfg(name);
 	}
+	emu_test_apply_fast();
 #if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 #if defined(GUI)
 	(void)ui_sync_ps2_native_scanout(previous_display_mode);
@@ -710,6 +711,8 @@ void save_gamecfg(const char *name)
 	char path[PATH_MAX];
 	cfg_type *gamecfg;
 
+	/* Never persist the test overrides as the game's settings. */
+	if (emu_test_fast()) return;
 	if (!path_format(path, sizeof(path), "%sconfig/%s.ini", launchDir, name)) return;
 
 #define INCLUDE_SETUP_CONFIG_STRUCT

@@ -18,13 +18,6 @@
 	Renderer state
 ******************************************************************************/
 
-static const RECT mvs_src_clip = {
-	NEOGEO_VISIBLE_X,
-	NEOGEO_VISIBLE_Y,
-	NEOGEO_VISIBLE_X + NEOGEO_VISIBLE_WIDTH,
-	NEOGEO_VISIBLE_Y + NEOGEO_VISIBLE_HEIGHT
-};
-
 static bool tex_fix_changed;
 #ifdef MVS_DIRTY_SPRITE_UPLOADS
 /* Persists across frames and raster batches: queued texture uploads leave the
@@ -42,10 +35,27 @@ static uint16_t spr_count;
 static bool spr_disabled;
 static uint16_t *clut;
 
-static RECT mvs_presentation_rect(int native_width, int native_height)
+static RECT mvs_presentation_rect(void)
 {
-	return display_mode_presentation_rect_aspect(option_display_mode,
-		native_width, native_height, 4, 3);
+	int output_width = SCR_WIDTH;
+	int output_height = SCR_HEIGHT;
+	int width;
+	int height;
+	RECT rect;
+
+	if (!mvs_true_wide_enabled())
+		return display_mode_presentation_rect_aspect(option_display_mode,
+			NEOGEO_VISIBLE_WIDTH, NEOGEO_VISIBLE_HEIGHT, 4, 3);
+
+	if (video_driver->getOutputSize)
+		video_driver->getOutputSize(video_data, &output_width, &output_height);
+	mvs_wide_fit_output(output_width, output_height, &width, &height);
+
+	rect.left = (int16_t)((output_width - width) / 2);
+	rect.top = (int16_t)((output_height - height) / 2);
+	rect.right = (int16_t)(rect.left + width);
+	rect.bottom = (int16_t)(rect.top + height);
+	return rect;
 }
 
 static void mvs_decode_fix_tile(uint8_t pixels[8 * 8], uint32_t code,
@@ -110,6 +120,8 @@ void blit_reset(void)
 
 void blit_start(int start, int end)
 {
+	const mvs_view_geometry_t *view = mvs_get_view_geometry();
+
 	(void)end;
 	spr_vertex_count = 0;
 	spr_count = 0;
@@ -126,14 +138,23 @@ void blit_start(int start, int end)
 		video_driver->beginFrame(video_data);
 		video_driver->startWorkFrame(video_data,
 			CNVCOL15TO32(video_palette[4095]));
-		video_driver->scissor(video_data, 24, 16, 336, 240);
+		video_driver->scissor(video_data,
+			(uint16_t)view->render_left, (uint16_t)view->render_top,
+			(uint16_t)view->render_right, (uint16_t)view->render_bottom);
 	}
 }
 
 void blit_finish(void)
 {
-	RECT dst_clip = mvs_presentation_rect(NEOGEO_VISIBLE_WIDTH, NEOGEO_VISIBLE_HEIGHT);
-	video_driver->transferWorkFrame(video_data, (RECT *)&mvs_src_clip, &dst_clip);
+	const mvs_view_geometry_t *view = mvs_get_view_geometry();
+	RECT src_clip = {
+		(int16_t)view->source_left,
+		(int16_t)view->source_top,
+		(int16_t)view->source_right,
+		(int16_t)view->source_bottom
+	};
+	RECT dst_clip = mvs_presentation_rect();
+	video_driver->transferWorkFrame(video_data, &src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
 }
 

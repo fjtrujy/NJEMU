@@ -9,6 +9,8 @@
 #ifndef MVS_SPRITE_H
 #define MVS_SPRITE_H
 
+#include "mvs/wide.h"
+
 #define SPRITE_BLANK		0x00
 #define SPRITE_TRANSPARENT	0x01
 #define SPRITE_OPAQUE		0x02

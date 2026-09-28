@@ -29,6 +29,9 @@ int32_t m68000_ICountBk;
 int32_t ICount;
 uint32_t BusErrHandling = 0;
 uint32_t BusErrAdr = 0;
+#if defined(BUILD_MVS) && defined(DESKTOP) && !RELEASE
+uint32_t C68k_Current_Instruction_PC = 0;
+#endif
 
 /******************************************************************************
 	Local Variables
@@ -152,6 +155,9 @@ C68k_Exec_Next:
 				}
 
 
+#if defined(BUILD_MVS) && defined(DESKTOP) && !RELEASE
+				C68k_Current_Instruction_PC = GET_PC();
+#endif
 				Opcode = READ_IMM_16();
 				PC += 2;
 				goto *JumpTable[Opcode];
