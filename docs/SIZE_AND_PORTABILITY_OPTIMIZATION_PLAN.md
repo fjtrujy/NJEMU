@@ -201,6 +201,11 @@ The goals are:
 Before changing compression or PNG code, create reproducible baselines from the
 current rebased branch.
 
+**Status: complete (2026-09-28).** The reproducible PSP/PS2 matrix, section and
+package sizes, PNG object costs, compression symbol families, functional-test
+baseline, and measurement commands are recorded in
+`docs/S0_POST_VITA_BASELINE.md`.
+
 Required matrix at minimum:
 
 - PSP: CPS1, CPS2, MVS, NCDZ;
