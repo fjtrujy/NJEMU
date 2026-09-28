@@ -565,3 +565,42 @@ NJEMU runtime ZIP access being read-only. This is now a measured opportunity,
 not an action item: NJEMU will keep using the mainstream package rather than a
 custom/lean miniz variant. The same binaries contain no libz compression symbol
 family; PNG/save-state/CRC use miniz directly.
+
+### MSLUG3 PS2 mandatory-memory decomposition
+
+The post-S2 MVS build makes the next RAM target clearer. `mslug3` declares a
+9 MiB CPU1 region, 576 KiB CPU2 region, 512 KiB GFX2 region, 64 MiB C-ROM and
+16 MiB SOUND1/V-ROM. Before the R10 cache-shape probe, the allocations that are
+directly attributable to MVS ROM/runtime regions are:
+
+| Allocation | Bytes | MiB |
+|---|---:|---:|
+| CPU1 / 68000 program region | 9,437,184 | 9.000 |
+| CPU2 / Z80 program region | 589,824 | 0.5625 |
+| GFX1 / system FIX | 131,072 | 0.125 |
+| GFX2 / game FIX | 524,288 | 0.500 |
+| GFX4 / LO ROM + zoom-table backing | 131,072 | 0.125 |
+| USER1 / BIOS | 131,072 | 0.125 |
+| USER3 / zoom tables | 65,536 | 0.0625 |
+| FIX pen-usage tables | 20,480 | 0.0195 |
+| C-ROM sprite pen-usage table | 524,288 | 0.500 |
+| **Known mandatory MVS heap** | **11,554,816** | **11.0195** |
+
+MSLUG3's C-ROM and SOUND1 regions are deliberately excluded from that mandatory
+sum: R10 handles them as the dynamic GFX/PCM cache shape. The previously
+measured MSLUG3 shape was 13,828,096 bytes including the temporary 2 MiB safety
+reserve, with 8,585,216 bytes retained for C-ROM and 3,145,728 bytes for PCM.
+
+The current post-S2 PS2/MVS executable has a 2,805,752-byte GNU-size runtime
+image. Therefore the two largest explained EE-memory consumers before accounting
+for allocator/subsystem overhead are about 11.02 MiB of mandatory MSLUG3 heap
+and 2.68 MiB of static executable image. CPU1 alone is 9 MiB and is the dominant
+non-cache game allocation. MSLUG3 decrypts this region in place and runtime bank
+switching directly points the 68000 fetch window into it, so reducing it would
+require a program-ROM paging/banking design rather than a simple lifetime free.
+
+This is an accounting decomposition, not a claim that the remaining bytes up to
+32 MiB are all available to `malloc()`: PS2SDK/kernel state, common subsystem
+heap allocations, allocator fragmentation and transient I/O allocations remain
+outside the table. The empirical R10 probe remains authoritative for actual
+cache capacity.
