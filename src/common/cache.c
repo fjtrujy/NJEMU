@@ -10,6 +10,7 @@
 #include <sys/param.h>
 #include "emucfg.h"
 #include "common/cache.h"
+#include "common/cache_storage_driver.h"
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
@@ -135,8 +136,10 @@ static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
 static int32_t pcm_fd;
 static int64_t cache_file_pos;
 static int64_t pcm_file_pos;
+static int cache_storage_handle = -1;
+static int pcm_storage_handle = -1;
 
-int cachefile_open(int type)
+static int cachefile_open_resolved(int type, char *resolved_path, size_t resolved_size)
 {
 	int32_t fd = -1;
 	char path[PATH_MAX];
@@ -196,7 +199,39 @@ int cachefile_open(int type)
 		break;
 	}
 
+	if (fd >= 0 && resolved_path != NULL && resolved_size > 0)
+		snprintf(resolved_path, resolved_size, "%s", path);
+
 	return fd;
+}
+
+int cachefile_open(int type)
+{
+	return cachefile_open_resolved(type, NULL, 0);
+}
+
+static int cache_storage_open_optional(const char *path, const char *name)
+{
+	int handle;
+
+	if (cache_storage_driver == NULL || cache_storage_driver->open == NULL ||
+		cache_storage_driver->readAt == NULL || cache_storage_driver->close == NULL)
+		return -1;
+
+	handle = cache_storage_driver->open(path);
+	if (handle >= 0)
+		printf("[cache-io] %s extent reader enabled\n", name);
+	return handle;
+}
+
+static void cache_storage_close_optional(int *handle)
+{
+	if (handle == NULL || *handle < 0)
+		return;
+
+	if (cache_storage_driver != NULL && cache_storage_driver->close != NULL)
+		cache_storage_driver->close(*handle);
+	*handle = -1;
 }
 
 size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
@@ -252,6 +287,7 @@ typedef struct cache_io_profile_s
 	uint64_t preload_reads;
 	uint64_t preload_seeks;
 	uint64_t preload_seek_skips;
+	uint64_t preload_accelerated_reads;
 	uint64_t preload_bytes;
 	uint64_t preload_time_us;
 	uint64_t hits;
@@ -259,6 +295,8 @@ typedef struct cache_io_profile_s
 	uint64_t sequential_misses;
 	uint64_t seeks;
 	uint64_t seek_skips;
+	uint64_t accelerated_reads;
+	uint64_t accelerated_fallbacks;
 	uint64_t bytes_read;
 	uint64_t miss_time_us;
 	uint64_t max_miss_time_us;
@@ -309,14 +347,17 @@ static void cache_io_profile_print(const char *name, const cache_io_profile_t *p
 	uint64_t rate_x100 = accesses ? (profile->hits * 10000) / accesses : 0;
 
 	printf("[cache-io] %s preload_reads=%llu preload_seeks=%llu "
-		"preload_seek_skips=%llu preload_bytes=%llu preload_time_us=%llu "
+		"preload_seek_skips=%llu preload_accelerated_reads=%llu "
+		"preload_bytes=%llu preload_time_us=%llu "
 		"hits=%llu misses=%llu hit_rate=%llu.%02llu%% "
-		"sequential_misses=%llu seeks=%llu seek_skips=%llu bytes=%llu "
+		"sequential_misses=%llu seeks=%llu seek_skips=%llu "
+		"accelerated_reads=%llu accelerated_fallbacks=%llu bytes=%llu "
 		"avg_miss_us=%llu max_miss_us=%llu\n",
 		name,
 		(unsigned long long)profile->preload_reads,
 		(unsigned long long)profile->preload_seeks,
 		(unsigned long long)profile->preload_seek_skips,
+		(unsigned long long)profile->preload_accelerated_reads,
 		(unsigned long long)profile->preload_bytes,
 		(unsigned long long)profile->preload_time_us,
 		(unsigned long long)profile->hits,
@@ -326,6 +367,8 @@ static void cache_io_profile_print(const char *name, const cache_io_profile_t *p
 		(unsigned long long)profile->sequential_misses,
 		(unsigned long long)profile->seeks,
 		(unsigned long long)profile->seek_skips,
+		(unsigned long long)profile->accelerated_reads,
+		(unsigned long long)profile->accelerated_fallbacks,
 		(unsigned long long)profile->bytes_read,
 		(unsigned long long)avg_us,
 		(unsigned long long)profile->max_miss_time_us);
@@ -340,8 +383,8 @@ static void cache_io_profile_snapshot(const cache_io_profile_t *profile)
 }
 #endif
 
-static int mvs_cache_read_block(int fd, int64_t *known_pos, uint16_t block,
-	uint8_t *dst
+static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
+	uint16_t block, uint8_t *dst, const char *name
 #ifdef CACHE_IO_PROFILE
 	, cache_io_profile_t *profile, int runtime_miss
 #endif
@@ -352,6 +395,41 @@ static int mvs_cache_read_block(int fd, int64_t *known_pos, uint16_t block,
 #ifdef CACHE_IO_PROFILE
 	uint64_t start = cache_io_now_us();
 #endif
+
+	if (storage_handle != NULL && *storage_handle >= 0 &&
+		cache_storage_driver != NULL && cache_storage_driver->readAt != NULL)
+	{
+		bytes = cache_storage_driver->readAt(*storage_handle, (uint64_t)offset,
+			dst, CACHE_BLOCK_SIZE);
+		if (bytes == CACHE_BLOCK_SIZE)
+		{
+#ifdef CACHE_IO_PROFILE
+			if (runtime_miss)
+			{
+				profile->accelerated_reads++;
+				profile->bytes_read += CACHE_BLOCK_SIZE;
+				cache_io_profile_time(profile, start);
+				cache_io_profile_snapshot(profile);
+			}
+			else
+			{
+				uint64_t elapsed = start ? cache_io_now_us() - start : 0;
+				profile->preload_reads++;
+				profile->preload_accelerated_reads++;
+				profile->preload_bytes += CACHE_BLOCK_SIZE;
+				profile->preload_time_us += elapsed;
+			}
+#endif
+			return 1;
+		}
+
+#ifdef CACHE_IO_PROFILE
+		profile->accelerated_fallbacks++;
+#endif
+		printf("[cache-io] %s extent read failed (%d); disabling accelerator\n",
+			name, (int)bytes);
+		cache_storage_close_optional(storage_handle);
+	}
 
 	if (
 #ifdef CACHE_IO_FORCE_SEEK
@@ -439,8 +517,8 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 		p->block = new_block;
 		pcm_blocks[new_block] = p->idx;
 
-		mvs_cache_read_block(pcm_fd, &pcm_file_pos, new_block,
-			&memory_region_sound1[p->idx << BLOCK_SHIFT]
+		mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
+			new_block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
 #ifdef CACHE_IO_PROFILE
 			, &pcm_io_profile, 1
 #endif
@@ -579,8 +657,8 @@ static int fill_cache(void)
 			p->block = block;
 			blocks[block] = p->idx;
 
-			mvs_cache_read_block((int32_t)cache_fd, &cache_file_pos, block,
-				&GFX_MEMORY[p->idx << BLOCK_SHIFT]
+			mvs_cache_read_block((int32_t)cache_fd, &cache_storage_handle,
+				&cache_file_pos, block, &GFX_MEMORY[p->idx << BLOCK_SHIFT], "crom"
 #ifdef CACHE_IO_PROFILE
 				, &crom_io_profile, 0
 #endif
@@ -639,8 +717,8 @@ static int fill_cache(void)
 			p->block = block;
 			pcm_blocks[block] = p->idx;
 
-			mvs_cache_read_block(pcm_fd, &pcm_file_pos, block,
-				&memory_region_sound1[p->idx << BLOCK_SHIFT]
+			mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
+				block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
 #ifdef CACHE_IO_PROFILE
 				, &pcm_io_profile, 0
 #endif
@@ -761,8 +839,8 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 	#ifdef CACHE_IO_PROFILE
 		cache_io_profile_miss(&crom_io_profile, new_block);
 	#endif
-		mvs_cache_read_block((int32_t)cache_fd, &cache_file_pos, new_block,
-			&GFX_MEMORY[p->idx << BLOCK_SHIFT]
+		mvs_cache_read_block((int32_t)cache_fd, &cache_storage_handle,
+			&cache_file_pos, new_block, &GFX_MEMORY[p->idx << BLOCK_SHIFT], "crom"
 	#ifdef CACHE_IO_PROFILE
 			, &crom_io_profile, 1
 	#endif
@@ -972,6 +1050,8 @@ void cache_init(void)
 	cache_fd = -1;
 
 #if (EMU_SYSTEM == MVS)
+	cache_storage_close_optional(&cache_storage_handle);
+	cache_storage_close_optional(&pcm_storage_handle);
 	cache_type = CACHE_NOTFOUND;
 	read_cache = NULL;
 #else
@@ -1023,6 +1103,8 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 #if (EMU_SYSTEM == MVS)
 	int32_t fd;
 	int requested_pcm_blocks;
+	char crom_path[PATH_MAX];
+	char pcm_path[PATH_MAX];
 #endif
 
 	if (plan == NULL)
@@ -1161,21 +1243,32 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	{
 		if (option_sound_enable && disable_sound && requested_pcm_blocks > 0)
 		{
-			pcm_fd = cachefile_open(CACHE_VROM);
+			pcm_fd = cachefile_open_resolved(CACHE_VROM, pcm_path, sizeof(pcm_path));
 			if (pcm_fd >= 0)
+			{
 				pcm_file_pos = 0;
+				pcm_storage_handle = cache_storage_open_optional(pcm_path, "pcm");
+			}
 		}
 	}
 
 	/* Open crom for block access (folder format only) */
 	if (cache_type == CACHE_RAWFILE)
 	{
-		if ((cache_fd = cachefile_open(CACHE_CROM)) < 0)
+		if ((cache_fd = cachefile_open_resolved(CACHE_CROM, crom_path,
+			sizeof(crom_path))) < 0)
 		{
+			if (pcm_fd >= 0)
+			{
+				close(pcm_fd);
+				pcm_fd = -1;
+			}
+			cache_storage_close_optional(&pcm_storage_handle);
 			msg_printf(TEXT(COULD_NOT_OPEN_CACHE_FILE));
 			return 0;
 		}
 		cache_file_pos = 0;
+		cache_storage_handle = cache_storage_open_optional(crom_path, "crom");
 	}
 	/* For zip format, blocks will be accessed via zip_cache_open on demand */
 
@@ -1334,7 +1427,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 				break;
 		}
 
-	if (GFX_MEMORY == NULL)
+		if (GFX_MEMORY == NULL)
 		{
 			msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
 			return 0;
@@ -1369,6 +1462,10 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	cache_data = (cache_t *)malloc(sizeof(*cache_data) * (size_t)num_cache);
 	if (cache_data == NULL)
 	{
+	#if (EMU_SYSTEM == MVS)
+		cache_storage_close_optional(&cache_storage_handle);
+		cache_storage_close_optional(&pcm_storage_handle);
+	#endif
 		msg_printf(TEXT(COULD_NOT_ALLOCATE_CACHE_MEMORY));
 		return 0;
 	}
@@ -1378,9 +1475,9 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	/* GFX/C-ROM is the primary cache target. Only after it has been secured do
 	 * we consume the PCM target, retrying down in cache-block increments when
 	 * fragmentation prevents the planned contiguous allocation. */
-		if (option_sound_enable && disable_sound)
-		{
-			if (requested_pcm_blocks > 0 && pcm_fd >= 0)
+	if (option_sound_enable && disable_sound)
+	{
+		if (requested_pcm_blocks > 0 && pcm_fd >= 0)
 		{
 			if (memory_region_sound1 != NULL)
 			{
@@ -1400,26 +1497,27 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 			}
 		}
 
-			if (num_pcm_cache > 0)
+		if (num_pcm_cache > 0)
+		{
+			pcm_cache_enable = 1;
+			disable_sound = 0;
+		}
+		else
+		{
+			/* An empirical R10 shape may have retained a PCM buffer before the
+			 * cache file was opened. If PCM streaming is unavailable, release
+			 * that otherwise-unused allocation immediately. */
+			if (preallocated_pcm != NULL && memory_region_sound1 != NULL)
 			{
-				pcm_cache_enable = 1;
-				disable_sound = 0;
+				free(memory_region_sound1);
+				memory_region_sound1 = NULL;
 			}
-			else
+			if (pcm_fd >= 0)
 			{
-				/* An empirical R10 shape may have retained a PCM buffer before the
-				 * cache file was opened. If PCM streaming is unavailable, release
-				 * that otherwise-unused allocation immediately. */
-				if (preallocated_pcm != NULL && memory_region_sound1 != NULL)
-				{
-					free(memory_region_sound1);
-					memory_region_sound1 = NULL;
-				}
-				if (pcm_fd >= 0)
-				{
 				close(pcm_fd);
 				pcm_fd = -1;
 			}
+			cache_storage_close_optional(&pcm_storage_handle);
 			memory_length_sound1 = 0;
 		}
 	}
@@ -1433,6 +1531,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 			memory_region_sound1 = NULL;
 			close(pcm_fd);
 			pcm_fd = -1;
+			cache_storage_close_optional(&pcm_storage_handle);
 			pcm_cache_enable = 0;
 			num_pcm_cache = 0;
 			disable_sound = 1;
@@ -1478,11 +1577,13 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 void cache_shutdown(void)
 {
 #if (EMU_SYSTEM == MVS)
-#ifdef CACHE_IO_PROFILE
+	#ifdef CACHE_IO_PROFILE
 	cache_io_profile_print("crom", &crom_io_profile);
 	if (pcm_cache_enable || pcm_io_profile.hits || pcm_io_profile.misses)
 		cache_io_profile_print("pcm", &pcm_io_profile);
-#endif
+	#endif
+	cache_storage_close_optional(&pcm_storage_handle);
+	cache_storage_close_optional(&cache_storage_handle);
 	if (pcm_cache_enable)
 	{
 		if (pcm_fd != -1)
@@ -1543,6 +1644,9 @@ void cache_sleep(int flag)
 		{
 			if (cache_type == CACHE_RAWFILE)
 			{
+	#if (EMU_SYSTEM == MVS)
+				cache_storage_close_optional(&cache_storage_handle);
+	#endif
 				close((int32_t)cache_fd);
 #if (EMU_SYSTEM == MVS)
 				cache_fd = -1;
@@ -1554,9 +1658,10 @@ void cache_sleep(int flag)
 				zip_entry_close(&cache_zip_entry);
 				zip_archive_close(&cache_zip_archive);
 			}
-#if (EMU_SYSTEM == MVS)
+	#if (EMU_SYSTEM == MVS)
 			if (pcm_cache_enable)
 			{
+				cache_storage_close_optional(&pcm_storage_handle);
 				close(pcm_fd);
 				pcm_fd = -1;
 				pcm_file_pos = -1;
@@ -1567,10 +1672,13 @@ void cache_sleep(int flag)
 		{
 			if (cache_type == CACHE_RAWFILE)
 			{
-#if (EMU_SYSTEM == MVS)
-				cache_fd = cachefile_open(CACHE_CROM);
+	#if (EMU_SYSTEM == MVS)
+				char path[PATH_MAX];
+				cache_fd = cachefile_open_resolved(CACHE_CROM, path, sizeof(path));
 				cache_file_pos = cache_fd >= 0 ? 0 : -1;
-#else
+				if (cache_fd >= 0)
+					cache_storage_handle = cache_storage_open_optional(path, "crom");
+	#else
 				cache_fd = open(spr_cache_name, O_RDONLY, 0777);
 #endif
 			}
@@ -1579,11 +1687,14 @@ void cache_sleep(int flag)
 				zip_archive_open(&cache_zip_archive, spr_cache_name);
 			}
 			/* CACHE_FOLDER: nothing to reopen */
-#if (EMU_SYSTEM == MVS)
+	#if (EMU_SYSTEM == MVS)
 			if (pcm_cache_enable)
 			{
-				pcm_fd = cachefile_open(CACHE_VROM);
+				char path[PATH_MAX];
+				pcm_fd = cachefile_open_resolved(CACHE_VROM, path, sizeof(path));
 				pcm_file_pos = pcm_fd >= 0 ? 0 : -1;
+				if (pcm_fd >= 0)
+					pcm_storage_handle = cache_storage_open_optional(path, "pcm");
 			}
 #endif
 		}

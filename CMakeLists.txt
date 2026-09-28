@@ -237,6 +237,7 @@ set(COMMON_SRC
     sound/sndintrf.c
     common/cache.h
     common/cache.c
+    common/cache_storage_driver.h
     common/filer.h
     common/filer.c
     common/loadrom.h
@@ -417,6 +418,10 @@ set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_audio.c
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_thread.c
 )
+
+if (PLATFORM STREQUAL "PS2")
+    list(APPEND OS_SRC ps2/ps2_cache_storage.c)
+endif()
 
 if (PLATFORM STREQUAL "PSP")
     list(APPEND OS_SRC psp/psp_power.c)

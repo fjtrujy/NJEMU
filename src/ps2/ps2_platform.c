@@ -4,6 +4,7 @@
 #include "common/memory_sizes.h"
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
+#include "ps2/ps2_cache_storage.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
@@ -16,10 +17,14 @@
 #include <sys/stat.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
+#include <ps2_cacheio_driver.h>
 #include <ps2_drivers_img.h>
 
 typedef struct ps2_platform {
 } ps2_platform_t;
+
+static bool cacheio_driver_initialized;
+static bool cacheio_driver_requested;
 
 static void reset_IOP()
 {
@@ -31,9 +36,23 @@ static void reset_IOP()
 
 static bool stage_drivers_before_iop_reset(void)
 {
-	const uint32_t application_requirements =
+	uint32_t application_requirements =
 		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
 	int result;
+
+#if (EMU_SYSTEM == MVS)
+	{
+		uint32_t boot_requirements = 0u;
+
+		cacheio_driver_requested = false;
+		if (ps2_drivers_img_requirements_for_current_boot(
+			0u, &boot_requirements) == PS2_DRIVERS_IMG_OK &&
+			(boot_requirements & (PS2_DRIVER_REQ_USB | PS2_DRIVER_REQ_MX4SIO)) != 0u) {
+			application_requirements |= PS2_DRIVER_REQ_CACHEIO;
+			cacheio_driver_requested = true;
+		}
+	}
+#endif
 
 	result = ps2_drivers_img_stage_default_for_current_boot(
 		application_requirements);
@@ -62,7 +81,29 @@ static bool prepare_IOP()
 static bool init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
+#if (EMU_SYSTEM == MVS)
+	if (cacheio_driver_requested) {
+		enum CACHEIO_INIT_STATUS cacheio_status = init_cacheio_driver(false);
+		if (cacheio_status == CACHEIO_INIT_STATUS_OK) {
+			cacheio_driver_initialized = true;
+			ps2_cache_storage_set_available(true);
+		} else {
+			ps2_cache_storage_set_available(false);
+			printf("[cache-io] extent reader unavailable (%d); using POSIX fallback\n",
+				(int)cacheio_status);
+		}
+	} else {
+		ps2_cache_storage_set_available(false);
+	}
+#endif
 	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
+#if (EMU_SYSTEM == MVS)
+		if (cacheio_driver_initialized) {
+			ps2_cache_storage_set_available(false);
+			deinit_cacheio_driver(false);
+			cacheio_driver_initialized = false;
+		}
+#endif
 		deinit_only_boot_ps2_filesystem_driver();
 		return false;
 	}
@@ -76,6 +117,13 @@ static bool init_drivers()
 static void deinit_drivers()
 {
 	deinit_audio_driver();
+#if (EMU_SYSTEM == MVS)
+	if (cacheio_driver_initialized) {
+		ps2_cache_storage_set_available(false);
+		deinit_cacheio_driver(false);
+		cacheio_driver_initialized = false;
+	}
+#endif
 	deinit_only_boot_ps2_filesystem_driver();
 }
 

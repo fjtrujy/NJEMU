@@ -1,4 +1,5 @@
 #include "common/audio_driver.h"
+#include "common/cache_storage_driver.h"
 #include "common/input_driver.h"
 #include "common/platform_driver.h"
 #include "common/power_driver.h"
@@ -8,6 +9,7 @@
 #include "common/video_driver.h"
 
 extern audio_driver_t audio_ps2;
+extern const cache_storage_driver_t cache_storage_ps2;
 extern input_driver_t input_ps2;
 extern platform_driver_t platform_ps2;
 extern thread_driver_t thread_ps2;
@@ -17,6 +19,7 @@ extern const ui_draw_driver_t ps2_ui_draw_driver;
 extern const ui_draw_driver_t null_ui_draw_driver;
 
 audio_driver_t *const audio_driver = &audio_ps2;
+const cache_storage_driver_t *const cache_storage_driver = &cache_storage_ps2;
 input_driver_t *const input_driver = &input_ps2;
 platform_driver_t *const platform_driver = &platform_ps2;
 const power_driver_t *const power_driver = &power_unsupported;

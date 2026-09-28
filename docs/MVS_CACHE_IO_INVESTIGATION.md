@@ -1466,6 +1466,83 @@ Por tanto:
 - la decision de rendimiento continua bloqueada correctamente en mediciones de
   PS2 real, no en timings Desktop.
 
+### Estado de implementacion 2026-09-28
+
+La ruta extent-aware ya existe como prototipo integrado en los tres repositorios.
+Esto cierra la parte estructural de las fases 3--5, pero no sustituye las pruebas
+de correctitud y rendimiento en runtime que siguen pendientes.
+
+En `ps2sdk`, el commit `c7898d258 Add extent-aware cache I/O RPC` anade:
+
+- `cacheio.irx`, un servidor RPC read-only;
+- `libcacheio.a`, con `cacheioOpen()`, `cacheioReadAt()` y `cacheioClose()`;
+- construccion del extent map una sola vez en `open()` mediante
+  `USBMASS_IOCTL_GET_FRAGLIST`;
+- resolucion del raw block device por nombre de driver + numero de dispositivo,
+  requiriendo `parNr == 0`;
+- lectura runtime con `bd_defrag_read()` directamente sobre el block device,
+  sin pasar por FatFs en el hot path;
+- DMA SIF del buffer IOP al destino EE.
+
+El protocolo limita cada lectura a 64 KiB, mantiene como maximo cuatro handles y
+acepta hasta 4096 extents por fichero. El modulo y la libreria compilan con
+`-Wall -Werror`. El IRX generado ocupa aproximadamente 7.7 KiB en disco y declara
+66080 bytes de BSS, dominados por el buffer IOP persistente de 64 KiB. Ese coste
+de IOP RAM es una decision deliberada del prototipo y debe formar parte de la
+evaluacion en hardware real.
+
+La aritmetica de sectores tambien se ha validado contra el codigo actual de BDM:
+`GET_FRAGLIST` devuelve LBAs que ya incluyen el `sectorOffset` de la particion,
+mientras que `cacheio` selecciona el dispositivo raw (`parNr == 0`). Por tanto,
+el offset de particion no se aplica dos veces. Las particiones MBR/GPT heredan
+`name` y `devNr` del raw device, lo que hace estable esa resolucion.
+
+En `ps2_drivers`, el commit `dcf8555 Package cacheio IRX driver`:
+
+- registra `cacheio.irx` como modulo 28;
+- expone `PS2_DRIVER_REQ_CACHEIO`;
+- anade inicializacion/deinicializacion del driver;
+- incluye `libcacheio.a` en las librerias combinadas;
+- integra el modulo tanto en el flavor embebido como en `ps2_drivers.irximg`.
+
+El build completo y los checks de imagen pasan. El `irximg` contiene 28 modulos y
+es determinista. La closure aislada de `PS2_DRIVER_REQ_CACHEIO` son cinco modulos
+(`iomanX`, `fileXio`, `bdm`, `bdmfs_fatfs`, `cacheio`) y 71509 bytes staged. En
+un boot normal desde `mass:`/MX4SIO los cuatro primeros ya pertenecen a la closure
+del filesystem, por lo que el payload incremental es esencialmente el propio
+`cacheio.irx`.
+
+En NJEMU se ha introducido `cache_storage_driver_t`, una abstraccion opcional de
+`open/readAt/close`. Desktop, PSP y Vita no instalan acelerador; PS2 instala el
+backend `cacheio`. El raw cache MVS de C-ROM y PCM intenta primero `readAt()` y,
+si una lectura acelerada falla, deshabilita ese handle y continua inmediatamente
+por la ruta POSIX existente. `sleep/resume` cierra y reconstruye los handles.
+
+Para preservar un fallback real, el backend PS2 solo se marca disponible despues
+de que `init_cacheio_driver()` haya terminado correctamente; si el RPC no llega a
+estar activo, el codigo comun no intenta hacer `cacheioOpen()` y no puede quedarse
+esperando un servidor inexistente. Ademas, NJEMU solo stagea/carga `cacheio` en
+MVS cuando el boot device usa la familia BDM/FatFs (`mass:` o MX4SIO), evitando
+reservar sus ~66 KiB de IOP RAM en `host:`, HDD o CD, donde el ioctl de extents no
+es aplicable.
+
+Validacion realizada hasta ahora:
+
+- build Desktop MVS con `CACHE_IO_PROFILE=ON`: compila y enlaza;
+- build PS2 MVS con `CACHE_IO_PROFILE=ON`: compila, enlaza y copia el nuevo
+  `ps2_drivers.irximg` junto al ELF;
+- `ps2_drivers_irximg_check`: pasa;
+- `ps2_drivers_irximg_stage_check`: pasa;
+- el archivo externo sigue sin payloads IRX embebidos en la libreria EE.
+
+Pendiente antes de aceptar la ruta:
+
+1. comparar byte a byte miles de bloques de 64 KiB contra la lectura POSIX;
+2. ejecutar el nuevo backend con Metal Slug 3 en PCSX2;
+3. medir comandos SCSI por miss;
+4. repetir correctitud y latencia en PS2 real, incluyendo fichero fragmentado,
+   sleep/resume y errores de dispositivo.
+
 ### Fase 0 - Baseline e instrumentacion
 
 Sin optimizaciones funcionales.
@@ -1500,6 +1577,11 @@ No cambiar LRU.
 2. repetir exactamente el mismo trace;
 3. probar FastSeek/CLMT como experimento separado.
 
+El branch `fast_cache` ya contiene la integracion necesaria para crear el CLMT,
+pero el `ffconf.h` actual mantiene `FF_USE_FASTSEEK=0`, por lo que ese codigo no
+esta activo todavia. Incluso activandolo, FastSeek ataca el recorrido de la cadena
+FAT durante `lseek`; no elimina el splitting por cluster de `f_read()`.
+
 Objetivo: cuantificar por separado:
 
 ```
@@ -1530,6 +1612,9 @@ compare byte-for-byte with POSIX pread equivalent
 
 Hacer miles de offsets pseudoaleatorios y comparar hashes/datos.
 
+Estado: implementacion y build completados; la prueba runtime aislada sigue
+pendiente.
+
 ### Fase 4 - ps2_drivers
 
 1. embeber el nuevo IRX;
@@ -1537,6 +1622,8 @@ Hacer miles de offsets pseudoaleatorios y comparar hashes/datos.
 3. inicializacion/deinicializacion;
 4. gestionar errores y fallback;
 5. no acoplarlo especificamente a MVS.
+
+Estado: completada a nivel de empaquetado, API, dependencias y checks de imagen.
 
 ### Fase 5 - NJEMU storage abstraction
 
@@ -1554,6 +1641,9 @@ common cache code
 MVS raw cache pasa por esta abstraccion.
 
 Mantener ZIP/folder legacy sin cambios.
+
+Estado: implementada y validada en build Desktop/PS2. Falta la validacion runtime
+del backend PS2 y del fallback en consola/emulador.
 
 ### Fase 6 - Benchmark integrado
 
@@ -1647,7 +1737,8 @@ Hallazgos:
 - raw C-ROM persistente;
 - miss = lseek + read;
 - LRU no parece ser el primer cuello;
-- PS2 ya configura fileXio a 64 KiB;
+- PS2 conserva deliberadamente el buffer fileXio por defecto de 16 KiB: subirlo
+  a 64 KiB resulto poco fiable en hardware real;
 - perfil PS2 puede dedicar hasta 20 MiB al cache.
 
 ### ps2_drivers
@@ -1685,7 +1776,8 @@ common/external_deps/fatfs/
 Hallazgos:
 
 - lseek/read son RPC separadas;
-- FileXio 64 KiB ya esta correctamente configurado por NJEMU;
+- NJEMU conserva fileXio con su buffer por defecto de 16 KiB; `cacheio` usa un
+  buffer IOP propio de 64 KiB para la ruta directa experimental;
 - FastSeek FatFs esta desactivado;
 - f_read corta por clusters;
 - BDM cache es 128 KiB en bloques de 4 KiB;
@@ -1713,9 +1805,13 @@ cluster size: 512 B
 
 Aun asi, la pila actual puede transformar un unico miss de 64 KiB en muchas operaciones FAT y aproximadamente 16 comandos SCSI de datos frios.
 
-La mejor direccion tecnica parece ser conservar el cache de NJEMU y darle a PS2 una primitiva de random-read que respete los extents fisicos del fichero.
+La implementacion actual conserva el cache de NJEMU y le da a PS2 una primitiva
+de random-read que respeta los extents fisicos del fichero. La direccion tecnica
+esta implementada; falta demostrar con runtime y hardware que el beneficio compensa
+el coste adicional de IOP RAM y complejidad.
 
-PS2SDK ya contiene casi todas las piezas para hacerlo sin inventar un filesystem nuevo.
+PS2SDK contenia casi todas las piezas para hacerlo sin inventar un filesystem
+nuevo; el prototipo `cacheio` las compone ahora en una ruta read-only dedicada.
 
 El orden recomendado es:
 
