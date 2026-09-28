@@ -537,3 +537,31 @@ Final validation status:
 R10 itself deliberately stops at measurement. Its runtime-memory improvement
 comes from empirical allocation-shape probing, not from changing optimization
 flags or removing assets.
+## Post-S1/S2 compression baseline (2026-09-28)
+
+After `af8b608` (`Unify PNG and compression backends`), the full
+`GUI=ON SAVE_STATE=ON COMMAND_LIST=ON ADHOC=OFF` PSP/PS2 matrix measures:
+
+| Platform | Target | `.text` | `.rodata` | `.data` | `.bss` | Runtime image | ELF | PRX/PBP |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| PSP | CPS1 | 802,188 | 94,300 | 290,384 | 2,306,828 | 3,497,392 | 2,991,700 | 1,421,186 / 1,431,254 |
+| PSP | CPS2 | 739,400 | 88,084 | 18,656 | 1,767,740 | 2,617,400 | 2,494,784 | 988,778 / 998,363 |
+| PSP | MVS | 827,608 | 87,172 | 22,288 | 1,954,812 | 2,895,768 | 2,672,616 | 1,099,586 / 1,108,855 |
+| PSP | NCDZ | 810,224 | 126,092 | 10,176 | 1,913,244 | 2,863,512 | 2,666,432 | 1,095,766 / 1,104,157 |
+| PS2 | CPS1 | 931,976 | 101,676 | 294,360 | 2,076,496 | 3,404,568 | 3,343,784 | - |
+| PS2 | CPS2 | 856,400 | 95,100 | 22,344 | 1,538,480 | 2,512,384 | 2,928,036 | - |
+| PS2 | MVS | 959,744 | 94,164 | 25,992 | 1,725,792 | 2,805,752 | 3,090,440 | - |
+| PS2 | NCDZ | 905,960 | 133,332 | 13,840 | 1,683,072 | 2,736,264 | 3,196,216 | - |
+
+Relative to `docs/S0_POST_VITA_BASELINE.md`, PSP runtime images are smaller by
+43,188 / 43,048 / 43,652 / 67,336 bytes for CPS1/CPS2/MVS/NCDZ respectively.
+PS2 runtime images are smaller by 412,048 / 412,600 / 412,584 / 431,456 bytes;
+most of the PS2-only delta is the external-IRX migration documented below.
+
+The installed mainstream miniz remains intentionally unmodified. `nm -S` on
+the MVS full builds shows that its static archive still contributes 24 ZIP
+writer symbols totaling 24,896 bytes on PSP and 24,884 bytes on PS2, despite
+NJEMU runtime ZIP access being read-only. This is now a measured opportunity,
+not an action item: NJEMU will keep using the mainstream package rather than a
+custom/lean miniz variant. The same binaries contain no libz compression symbol
+family; PNG/save-state/CRC use miniz directly.

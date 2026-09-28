@@ -328,6 +328,12 @@ size increase.
 
 ### S3 - Introduce lean miniz package variants
 
+**Status: deferred by design (2026-09-28).** NJEMU will use the existing
+mainstream miniz packages rather than introduce lean package variants. Current
+post-S2 MVS measurements show about 24.9 KiB of ZIP-writer symbols still linked
+on each console, so the opportunity is understood and can be revisited if the
+size/RAM trade-off becomes material enough to justify another package flavor.
+
 After S2 makes miniz the sole compression backend, reduce what the static miniz
 library contributes to each build.
 
