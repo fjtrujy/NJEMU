@@ -963,6 +963,11 @@ if(PLATFORM STREQUAL "PSVITA")
         list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
     endif()
 
+    # Room after the text segment for the SCE module data that vita-elf-create
+    # appends (vitasdk/vita-toolchain#303): recent binutils may place the data
+    # segment right behind it.
+    target_link_options(${TARGET} PRIVATE "-Wl,--defsym=__sce_headroom=0x10000")
+
     vita_create_self(${TARGET}.self ${TARGET})
     vita_create_vpk(${TARGET}.vpk ${VITA_TITLEID_${TARGET}} ${TARGET}.self
         VERSION "${VITA_VERSION_MAJOR}.${VITA_VERSION_MINOR}"
