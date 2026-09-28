@@ -823,12 +823,29 @@ if (PLATFORM STREQUAL "DESKTOP")
     endif()
     target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
+    find_file(PS2_DRIVERS_IRX_IMAGE
+        NAMES ps2_drivers.irximg
+        HINTS "$ENV{PS2SDK}/ports/share/ps2_drivers"
+        NO_DEFAULT_PATH
+    )
+    if(NOT PS2_DRIVERS_IRX_IMAGE)
+        message(FATAL_ERROR
+            "ps2_drivers.irximg was not found under the installed PS2SDK ports tree")
+    endif()
+
     target_link_libraries(${TARGET} PUBLIC
         patches
         gskit
         dmakit
-        ps2_drivers
+        ps2_drivers_img
         "-ldebug"
+    )
+
+    add_custom_command(TARGET ${TARGET} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PS2_DRIVERS_IRX_IMAGE}"
+            "$<TARGET_FILE_DIR:${TARGET}>/ps2_drivers.irximg"
+        COMMENT "Staging ps2_drivers.irximg beside the PS2 ELF"
     )
 elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
@@ -1189,6 +1206,7 @@ if(PLATFORM STREQUAL "PSP")
     install(FILES ${CMAKE_BINARY_DIR}/EBOOT.PBP DESTINATION .)
 elseif(PLATFORM STREQUAL "PS2")
     install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
+    install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
 elseif(PLATFORM STREQUAL "PSVITA")
     install(FILES ${CMAKE_BINARY_DIR}/${TARGET}.vpk DESTINATION .)
 else()

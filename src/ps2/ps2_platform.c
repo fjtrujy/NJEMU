@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
+#include <ps2_drivers_img.h>
 
 typedef struct ps2_platform {
 } ps2_platform_t;
@@ -28,13 +29,34 @@ static void reset_IOP()
     while (!SifIopSync()) {}
 }
 
-static void prepare_IOP()
+static bool stage_drivers_before_iop_reset(void)
 {
+	const uint32_t application_requirements =
+		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
+	int result;
+
+	result = ps2_drivers_img_stage_default_for_current_boot(
+		application_requirements);
+	if (result != PS2_DRIVERS_IMG_OK) {
+		printf("[ps2_drivers] IRX staging failed: %s (%d)\n",
+			ps2_drivers_img_error_string(result), result);
+		return false;
+	}
+
+	return true;
+}
+
+static bool prepare_IOP()
+{
+	if (!stage_drivers_before_iop_reset())
+		return false;
+
     reset_IOP();
     SifInitRpc(0);
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check();
     sbv_patch_fileio();
+	return true;
 }
 
 static bool init_drivers()
@@ -62,8 +84,13 @@ static void *ps2_init(void) {
 	if (ps2 == NULL)
 		return NULL;
 
-    prepare_IOP();
+	if (!prepare_IOP()) {
+		free(ps2);
+		return NULL;
+	}
 	if (!init_drivers()) {
+		ps2_drivers_img_discard_staged();
+		ps2_drivers_img_forget_source();
 		free(ps2);
 		return NULL;
 	}
@@ -74,7 +101,9 @@ static void *ps2_init(void) {
 static void ps2_free(void *data) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
 
-    deinit_drivers();
+	deinit_drivers();
+	ps2_drivers_img_discard_staged();
+	ps2_drivers_img_forget_source();
 
 	free(ps2);
 }

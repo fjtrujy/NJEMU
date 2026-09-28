@@ -351,7 +351,7 @@ The following should remain `-O3` unless profiling proves otherwise:
 - mixer/audio synthesis loops;
 - per-frame cache/address translation paths.
 
-## 10. PS2 IRX externalization baseline
+## 10. PS2 IRX externalization
 
 The deferred `ps2_drivers` work is now available as an external-IRX-image
 provider. Before switching NJEMU to that flavor, a fresh representative MVS
@@ -410,25 +410,67 @@ bytes total). The payload arrays alone account for 93.6% of the baseline
 measure of the migration.
 
 The runtime requirement audit is narrower than staging the complete external
-image. NJEMU always needs audio (`PS2_DRIVER_REQ_AUDIO`) and, after platform
+image. NJEMU itself needs only audio (`PS2_DRIVER_REQ_AUDIO`) and, after platform
 initialization, joystick/multitap input (`PS2_DRIVER_REQ_JOYSTICK`). The
-filesystem layer uses `init_only_boot_ps2_filesystem_driver()`, so the boot
-device can be classified before the IOP reset with the same
-`getBootDeviceID(getcwd(...))` helper used by `ps2_drivers` itself:
+filesystem layer continues to use `init_only_boot_ps2_filesystem_driver()`.
 
-| Boot device family | Filesystem requirements to stage |
-| --- | --- |
-| `host*` / unknown | `FILEXIO` |
-| `mc*` | `FILEXIO | MEMCARD` |
-| `cdrom*` / `cdfs*` | `FILEXIO | CDFS` |
-| `mass*` / `mx4sio*` | `FILEXIO | USB | MX4SIO` |
-| `hdd*` | `FILEXIO | POWEROFF | HDD` |
+NJEMU does not duplicate the boot-device-to-filesystem policy. Before resetting
+the IOP it calls:
 
-The external provider expands those top-level requirements to their transitive
-IRX dependencies and deduplicates them. No PS2 network driver is initialized by
-NJEMU in this configuration, so `NETMAN`, `SMAP`, `EEIP`, and `IOPIP` are not
-requirements. This keeps the temporary pre-reset staging peak specific to the
-actual boot path instead of using `PS2_DRIVER_REQ_FILESYSTEM_ALL`.
+```c
+ps2_drivers_img_stage_default_for_current_boot(
+    PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK);
+```
+
+`ps2_drivers` therefore owns the current-working-directory lookup, boot-device
+detection, filesystem requirement selection, transitive dependency expansion,
+deduplication, and the default relative `ps2_drivers.irximg` path. No PS2
+network driver is initialized by NJEMU in this configuration, so `NETMAN`,
+`SMAP`, `EEIP`, and `IOPIP` are not application requirements.
+
+The representative MVS build after switching to `libps2_drivers_img.a` is:
+
+| Metric | Embedded baseline | External image | Delta |
+| --- | ---: | ---: | ---: |
+| ELF file | 3,504,216 | 3,129,888 | -374,328 |
+| `.text` | 983,976 | 988,680 | +4,704 |
+| `.rodata` | 101,236 | 102,404 | +1,168 |
+| `.data` | 407,272 | 25,992 | -381,280 |
+| `.bss` | 1,725,792 | 1,725,792 | 0 |
+| GNU `size` runtime image | 3,218,336 | 2,842,928 | **-375,408** |
+
+`mips64r5900el-ps2-elf-nm -S -t d` reports no embedded `*_irx` payload
+arrays or `size_*_irx` metadata in the external-image ELF. The copied
+`ps2_drivers.irximg` is 547,456 bytes and is byte-identical to the image
+installed by `ps2_drivers`; it is deployment data rather than a monolithic EE
+allocation.
+
+The old ELF carried 381,016 bytes of IRX payload arrays. The external provider
+adds a small amount of code/read-only data, so the measured steady-state loaded
+reduction is:
+
+```text
+381,016 B embedded IRX payloads
+- 5,608 B net provider/parser overhead
+= 375,408 B steady-state EE image recovered
+```
+
+For the PCSX2 `host:` launch used for validation, the current-boot filesystem
+path plus audio and joystick requirements stage seven modules totaling 101,003
+bytes before the IOP reset. This is a temporary peak specific to that launch
+device, not a permanent cost or a universal filesystem maximum. The provider
+releases each EE IRX payload after `SifExecModuleBuffer()`; NJEMU verifies after
+joystick initialization that both staged module count and staged bytes are zero
+before video/UI startup continues.
+
+PCSX2 validation of the final representative ELF confirms the NJEMU IOP reset
+followed by external registration of `iomanx`, `libsd`, `audsrv`,
+`sio2man`, `mtapman`, and `padman`, then normal NTSC GS setup. No staging
+failure or platform/input/video initialization failure was reported. A
+Windjammers archive was available in an older test deployment and was copied
+only to a temporary deployment for a ROM smoke attempt, but macOS denied the
+synthetic keyboard events needed to drive the GUI, so this session does not
+claim a new ROM-load/cache-allocation measurement.
 
 Existing runtime diagnostics relevant to the post-migration comparison are the
 startup `[memory]` snapshot and the MVS `[memory_plan]` retained-allocation
@@ -484,9 +526,11 @@ Final validation status:
    (32 KiB on PSP) for games that do not implement the stars layer.
 3. Further RAM work should only resume when a new candidate can shorten
    lifetime or remove storage without adding work to CPU/render/audio hot paths.
-4. **Baseline captured:** PS2 IRX externalization is now provided by
-   `ps2_drivers`; the representative embedded baseline is recorded in section 10
-   before NJEMU switches link flavors.
+4. **Completed:** PS2 now uses the external `ps2_drivers` IRX image. The
+   representative MVS build removes all embedded IRX arrays and recovers
+   **375,408 bytes** of loaded EE image. NJEMU expresses only its audio/input
+   needs; `ps2_drivers` owns boot-device filesystem requirements and dependency
+   expansion.
 5. **Deferred:** selective `-Os`; keep the current optimization policy for this
    phase.
 
