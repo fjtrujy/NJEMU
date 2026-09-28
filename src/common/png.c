@@ -2,14 +2,14 @@
 
 	png.c
 
-    PS Vita PNG format image I/O functions. (based on M.A.M.E. PNG functions)
+	Common PNG format image I/O functions. (based on M.A.M.E. PNG functions)
 
 ***************************************************************************/
 
 #include <fcntl.h>
 #include <math.h>
 #include <stdint.h>
-#include <zlib.h>
+#include <miniz.h>
 #include "emucfg.h"
 #include "common/cache.h"
 #include "common/ui_text_driver.h"
@@ -313,7 +313,7 @@ static int png_inflate_image(struct png_info *p)
 {
 	uint32_t res = 0, i, has_filter = 0;
 	unsigned long fbuff_size;
-	z_stream stream;
+	mz_stream stream;
 
 	fbuff_size = p->height * (p->rowbytes + 1);
 
@@ -325,20 +325,20 @@ static int png_inflate_image(struct png_info *p)
 	}
 
 	stream.next_in   = p->zimage;
-	stream.avail_in  = (uInt)p->compressed_length;
-	stream.next_out  = (Bytef *)p->fimage;
+	stream.avail_in  = (unsigned int)p->compressed_length;
+	stream.next_out  = (unsigned char *)p->fimage;
 	stream.avail_out = fbuff_size;
 	stream.zalloc    = (alloc_func)png_zcalloc;
 	stream.zfree     = (free_func)png_zcfree;
 	stream.opaque    = (voidpf)0;
 
-	if (inflateInit(&stream) == Z_OK)
+	if (mz_inflateInit(&stream) == MZ_OK)
 	{
-		if (inflate(&stream, Z_FINISH) == Z_STREAM_END)
+		if (mz_inflate(&stream, MZ_FINISH) == MZ_STREAM_END)
 		{
 			res = 1;
 		}
-		inflateEnd(&stream);
+		mz_inflateEnd(&stream);
 	}
 
 	png_free(p->zimage);
@@ -401,7 +401,7 @@ static int png_read_file(int fd, struct png_info *p)
 
 		str_chunk_type[4] = 0; /* terminate string */
 
-		crc = crc32(0, str_chunk_type, 4);
+		crc = (uint32_t)mz_crc32(0, (const unsigned char *)str_chunk_type, 4);
 		chunk_type = convert_from_network_order(str_chunk_type);
 
 		if (chunk_length)
@@ -418,7 +418,7 @@ static int png_read_file(int fd, struct png_info *p)
 				return 0;
 			}
 
-			crc = crc32(crc, chunk_data, chunk_length);
+			crc = (uint32_t)mz_crc32(crc, chunk_data, chunk_length);
 		}
 		else
 			chunk_data = NULL;
@@ -716,12 +716,12 @@ static int write_chunk(int fd, uint32_t chunk_type, uint8_t *chunk_data, uint32_
 	written += write(fd, v, 4);
 
 	/* calculate crc */
-	crc = crc32(0, v, 4);
+	crc = (uint32_t)mz_crc32(0, v, 4);
 	if (chunk_length > 0)
 	{
 		/* write data */
 		written += write(fd, chunk_data, chunk_length);
-		crc = crc32(crc, chunk_data, chunk_length);
+		crc = (uint32_t)mz_crc32(crc, chunk_data, chunk_length);
 	}
 	convert_to_network_order(crc, v);
 
@@ -790,7 +790,7 @@ static int png_write_datastream(int fd, struct png_info *p)
 static int png_deflate_image(struct png_info *p)
 {
 	unsigned long zbuff_size;
-	z_stream stream;
+	mz_stream stream;
 
 	zbuff_size = (p->height * (p->rowbytes + 1)) * 1.1 + 12;
 
@@ -800,7 +800,7 @@ static int png_deflate_image(struct png_info *p)
 		return 0;
 	}
 
-	stream.next_in   = (Bytef*)p->image;
+	stream.next_in   = (const unsigned char *)p->image;
 	stream.avail_in  = p->height * (p->rowbytes + 1);//
 	stream.next_out  = p->zimage;
 	stream.avail_out = zbuff_size;
@@ -808,15 +808,15 @@ static int png_deflate_image(struct png_info *p)
 	stream.zfree     = (free_func)png_zcfree;
 	stream.opaque    = (voidpf)0;
 
-	if (deflateInit(&stream, Z_DEFAULT_COMPRESSION) == Z_OK)
+	if (mz_deflateInit(&stream, MZ_DEFAULT_COMPRESSION) == MZ_OK)
 	{
-		if (deflate(&stream, Z_FINISH) == Z_STREAM_END)
+		if (mz_deflate(&stream, MZ_FINISH) == MZ_STREAM_END)
 		{
-			deflateEnd(&stream);
+			mz_deflateEnd(&stream);
 			p->compressed_length = stream.total_out;
 			return 1;
 		}
-		deflateEnd(&stream);
+		mz_deflateEnd(&stream);
 	}
 
 	errormsg(1);
@@ -844,24 +844,32 @@ static int png_create_datastream(int fd)
 	dst = p.image;
 	uint16_t *vptr, *src;
 
-	vptr = (uint16_t *)malloc((size_t)SCR_WIDTH * SCR_HEIGHT * sizeof(uint16_t));
-	if (!vptr) {
-		png_free(p.image);
-		return 0;
-	}
+	if (video_driver->readFrame != NULL) {
+		vptr = (uint16_t *)malloc((size_t)SCR_WIDTH * SCR_HEIGHT * sizeof(uint16_t));
+		if (!vptr) {
+			png_free(p.image);
+			return 0;
+		}
 
-	if (video_driver->readFrame == NULL || !video_driver->readFrame(video_data,
-		COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
-		0, 0, SCR_WIDTH, SCR_HEIGHT, vptr, SCR_WIDTH)) {
-		free(vptr);
-		png_free(p.image);
-		return 0;
+		if (!video_driver->readFrame(video_data,
+			COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
+			0, 0, SCR_WIDTH, SCR_HEIGHT, vptr, SCR_WIDTH)) {
+			free(vptr);
+			png_free(p.image);
+			return 0;
+		}
+	} else {
+		vptr = (uint16_t *)video_driver->frameAddr(video_data,
+			COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER, 0, 0);
+		if (!vptr) {
+			png_free(p.image);
+			return 0;
+		}
 	}
 
 	for (y = 0; y < p.height; y++)
 	{
-		/* readFrame() above writes a tightly packed SCR_WIDTH destination. */
-		src = &vptr[y * SCR_WIDTH];
+		src = &vptr[y * (video_driver->readFrame != NULL ? SCR_WIDTH : BUF_WIDTH)];
 
 		*dst++ = 0;
 		for (x = 0; x < p.width; x++)
@@ -873,7 +881,8 @@ static int png_create_datastream(int fd)
 		}
 	}
 
-	free(vptr);
+	if (video_driver->readFrame != NULL)
+		free(vptr);
 
 	if (png_deflate_image(&p) == 0)
 		goto cleanup;
@@ -906,7 +915,7 @@ int save_png(const char *path)
 	{
 		if ((res = png_add_text("Software", APPNAME_STR " " VERSION_STR)))
 		{
-			if ((res = png_add_text("System", "PS Vita")))
+			if ((res = png_add_text("System", PLATFORM_STR)))
 			{
 				if ((res = png_write_sig(fd)))
 				{

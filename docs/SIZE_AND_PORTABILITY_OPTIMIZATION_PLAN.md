@@ -233,6 +233,11 @@ these baselines.
 
 ### S1 - Unify PNG codec in `src/common/`
 
+**Status: complete (2026-09-28).** The four platform copies were replaced by
+`src/common/png.c`. Screenshot readback now uses the common video-driver
+contract, decoded NCDZ images use the common staging/copy path, and the
+PSP/PS2 `avail_out` pointer bug was removed with the consolidation.
+
 Replace:
 
 ```text
@@ -287,6 +292,13 @@ Add focused host tests for:
 no measurable gameplay cost, and console binary size no larger than baseline.
 
 ### S2 - Make miniz the sole NJEMU compression/CRC backend
+
+**Status: complete (2026-09-28).** PNG, save states and CRC callers now use the
+miniz API directly and NJEMU no longer links libz. A frozen zlib-stream
+compatibility test covers existing save-state DEFLATE compatibility. In the
+representative full PS2/MVS build, removing the second compression stack
+reduced the ELF from 3,130,260 to 3,090,432 bytes and the GNU-size runtime
+image by 37,536 bytes; linked compression symbols are now `mz_*` only.
 
 Migrate remaining libz users to the miniz zlib-compatible API or narrow miniz
 primitives:

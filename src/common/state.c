@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <time.h>
-#include <zlib.h>
+#include <miniz.h>
 #include "emucfg.h"
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
@@ -368,7 +368,7 @@ int state_save(int slot)
 		}
 		memset(outbuf, 0, outsize);
 
-		if (compress(outbuf, &outsize, inbuf, insize) != Z_OK)
+		if (mz_compress(outbuf, &outsize, inbuf, insize) != MZ_OK)
 		{
 			strcpy(error_mes, TEXT(COULD_NOT_COMPRESS_STATE_DATA));
 			free(inbuf);
@@ -548,7 +548,7 @@ int state_load(int slot)
 		}
 		memset(outbuf, 0, outsize);
 
-		if (uncompress(outbuf, &outsize, inbuf, insize) != Z_OK)
+		if (mz_uncompress(outbuf, &outsize, inbuf, insize) != MZ_OK)
 		{
 			strcpy(error_mes, TEXT(COULD_NOT_UNCOMPRESS_STATE_DATA));
 			free(inbuf);

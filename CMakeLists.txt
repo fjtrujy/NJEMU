@@ -384,12 +384,12 @@ else()
         common/ui.c
         common/ui_menu.c
         common/config.c
+        common/png.c
     )
 
     # GUI source files (platform-specific UI drawing driver)
     set(OS_SRC ${OS_SRC}
         ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
-        ${PLATFORM_LOWER}/png.c
     )
 
     # Icon files (target-specific, shared across platforms)
@@ -651,10 +651,15 @@ target_include_directories(${TARGET} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
-# Keep miniz's usage requirements local to the ZIP implementation. Public
-# domain headers deliberately do not expose miniz types.
+# Keep miniz's usage requirements local to implementation files that consume
+# compression/CRC APIs. Public domain headers deliberately do not expose miniz
+# types.
 set_source_files_properties(
     src/common/zip_archive.c
+    src/common/png.c
+    src/common/state.c
+    src/common/filer.c
+    src/ncdz/memintrf.c
     PROPERTIES
     INCLUDE_DIRECTORIES "${MINIZ_INCLUDE_DIRS}"
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
@@ -930,11 +935,6 @@ if (LIB_MAD)
     )
 endif()
 
-# Add common libraries
-target_link_libraries(${TARGET} PUBLIC
-    z
-)
-
 # The GUI PNG implementation uses libm functions such as ceil().  Darwin
 # provides them through libSystem, but Linux requires an explicit -lm.
 if(PLATFORM STREQUAL "DESKTOP" AND NOT APPLE)
@@ -1054,6 +1054,22 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         "$<LINK_ONLY:${NJEMU_MINIZ_TARGET}>"
     )
     add_test(NAME zip_archive_tests COMMAND zip_archive_tests)
+
+    add_executable(compression_compat_tests
+        tests/compression_compat_tests.c
+    )
+    target_include_directories(compression_compat_tests PRIVATE
+        ${MINIZ_INCLUDE_DIRS}
+    )
+    if(MINIZ_COMPILE_DEFINITIONS)
+        target_compile_definitions(compression_compat_tests PRIVATE
+            ${MINIZ_COMPILE_DEFINITIONS}
+        )
+    endif()
+    target_link_libraries(compression_compat_tests PRIVATE
+        "$<LINK_ONLY:${NJEMU_MINIZ_TARGET}>"
+    )
+    add_test(NAME compression_compat_tests COMMAND compression_compat_tests)
 
     add_executable(frame_pacing_tests
         tests/frame_pacing_tests.c

@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <zlib.h>
+#include <miniz.h>
 #include <sys/stat.h>
 #include "emucfg.h"
 #include "common/emulator_runtime.h"
@@ -432,7 +432,7 @@ static void check_neocd_bios(void)
 		read(fd, temp_mem, 0x80000);
 		close(fd);
 
-		if (crc32(0, temp_mem, 0x80000) != 0xdf9de490)
+		if (mz_crc32(0, temp_mem, 0x80000) != 0xdf9de490)
 			bios_error = 2;
 	}
 	else bios_error = 1;

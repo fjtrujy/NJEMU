@@ -13,7 +13,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
-#include <zlib.h>
+#include <miniz.h>
 #include "ncdz.h"
 #include "common/cmdlist.h"
 #include "common/emulator_runtime.h"
@@ -278,7 +278,7 @@ static int load_bios(void)
 		read(fd, memory_region_user1, 0x80000);
 		close(fd);
 
-		if (crc32(0, memory_region_user1, 0x80000) == 0xdf9de490)
+		if (mz_crc32(0, memory_region_user1, 0x80000) == 0xdf9de490)
 		{
 			uint16_t *mem16 = (uint16_t *)memory_region_user1;
 
@@ -311,7 +311,7 @@ static int load_bios(void)
 				read(fd, memory_region_gfx3, 0x20000);
 				close(fd);
 
-				if (crc32(0, memory_region_gfx3, 0x20000) == 0x5a86cff2)
+				if (mz_crc32(0, memory_region_gfx3, 0x20000) == 0x5a86cff2)
 				{
 					return build_zoom_tables();
 				}
