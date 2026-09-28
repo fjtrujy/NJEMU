@@ -12,6 +12,15 @@
 #include "common/emulator_options.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
+#include "mvs/wide_debug.h"
+#if defined(DESKTOP)
+#include "common/runtime_paths.h"
+#include "mvs/wide_profile.h"
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#endif
 
 /******************************************************************************
 	Renderer state
@@ -23,7 +32,15 @@ typedef struct mvs_presentation_size
 	int16_t height;
 } mvs_presentation_size_t;
 
-static const RECT mvs_src_clip = { 24, 16, 24 + 304, 16 + 224 };
+#define MVS_STRETCH_16_9_OPTION	5
+
+static bool mvs_wide_active;
+#if defined(DESKTOP)
+static bool mvs_wide_supported;
+static bool mvs_wide_warning_emitted;
+static mvs_wide_profile_t *mvs_wide_profile;
+static char mvs_wide_error[192];
+#endif
 
 /* option_stretch semantics shared with common/menu/mvs.c.  The backend owns
  * physical output size; non-OFF presets scale from NJEMU's 480x272 logical
@@ -50,9 +67,118 @@ static uint16_t spr_count;
 static bool spr_disabled;
 static uint16_t *clut;
 
+static int mvs_true_wide_forced(void)
+{
+#if defined(DESKTOP)
+	static int forced = -1;
+
+	if (forced < 0)
+	{
+		const char *value = getenv("NJEMU_MVS_TRUE_WIDE");
+		forced = value != NULL && value[0] != '\0' && value[0] != '0';
+	}
+	return forced;
+#else
+	return 0;
+#endif
+}
+
+int mvs_true_wide_enabled(void)
+{
+	return mvs_wide_active;
+}
+
+void mvs_wide_exit(void)
+{
+#if defined(DESKTOP)
+	free(mvs_wide_profile);
+	mvs_wide_profile = NULL;
+	mvs_wide_supported = false;
+#endif
+	mvs_wide_active = false;
+}
+
+void mvs_wide_init(void)
+{
+	mvs_wide_exit();
+#if defined(DESKTOP)
+	char path[PATH_MAX];
+	const char *directory = getenv("NJEMU_MVS_PROFILE_DIR");
+	const char *experimental = getenv("NJEMU_MVS_ALLOW_EXPERIMENTAL");
+	int length, program_mode;
+	mvs_wide_warning_emitted = false;
+#if !RELEASE
+	mvs_wide_debug_init();
+#endif
+	if (strspn(game_name, "abcdefghijklmnopqrstuvwxyz0123456789_-") != strlen(game_name))
+	{
+		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "invalid game identifier");
+		return;
+	}
+	length = directory && *directory ? snprintf(path, sizeof(path), "%s/%s.ini", directory, game_name) :
+		snprintf(path, sizeof(path), "%swidescreen/%s.ini", launchDir, game_name);
+	if (length < 0 || (size_t)length >= sizeof(path))
+	{
+		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "profile path too long");
+		return;
+	}
+	mvs_wide_profile = mvs_wide_profile_load(path, mvs_wide_error, sizeof(mvs_wide_error));
+	if (!mvs_wide_profile) return;
+	if (strcmp(mvs_wide_profile->game, game_name) || mvs_wide_profile->ngh != neogeo_ngh)
+	{
+		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "profile belongs to a different game/NGH");
+		return;
+	}
+	if (mvs_wide_profile->status == MVS_WIDE_PROFILE_DRAFT ||
+		(mvs_wide_profile->status == MVS_WIDE_PROFILE_EXPERIMENTAL &&
+		(!experimental || strcmp(experimental, "1"))))
+	{
+		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "draft or experimental profile not authorized");
+		return;
+	}
+	program_mode = mvs_wide_profile_check(mvs_wide_profile,
+		(const uint16_t *)memory_region_cpu1, memory_length_cpu1,
+		mvs_wide_error, sizeof(mvs_wide_error));
+	mvs_wide_supported = program_mode == 0;
+	if (program_mode == 1)
+		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "program was already patched before profile initialization");
+#endif
+}
+
+void mvs_wide_update(void)
+{
+#if defined(DESKTOP)
+	bool requested;
+
+	requested = option_stretch == MVS_STRETCH_16_9_OPTION ||
+		mvs_true_wide_forced();
+	if (requested == mvs_wide_active || mvs_wide_warning_emitted)
+		return;
+	if (!mvs_wide_supported ||
+		!mvs_wide_profile_apply(mvs_wide_profile, (uint16_t *)memory_region_cpu1,
+			memory_length_cpu1, requested, mvs_wide_error, sizeof(mvs_wide_error)))
+	{
+		printf("[MVS_WIDE] %s: %s; mode change not applied.\n", game_name, mvs_wide_error);
+		mvs_wide_warning_emitted = true;
+		return;
+	}
+	mvs_wide_active = requested;
+	printf("[MVS_WIDE] %s: %s; profile %s%s.\n", game_name,
+		requested ? "400x225 viewport" : "Native viewport",
+		requested ? "enabled" : "restored",
+		mvs_wide_profile->viewport_only ? " (viewport only)" : "");
+#endif
+}
+
+const mvs_view_geometry_t *mvs_get_view_geometry(void)
+{
+	return mvs_view_geometry_for_mode(mvs_true_wide_enabled());
+}
+
 static RECT mvs_presentation_rect(void)
 {
-	int option = option_stretch;
+	int option = mvs_true_wide_enabled() ?
+		MVS_STRETCH_16_9_OPTION : option_stretch;
 	int output_width = SCR_WIDTH;
 	int output_height = SCR_HEIGHT;
 	int width;
@@ -67,7 +193,9 @@ static RECT mvs_presentation_rect(void)
 
 	width = mvs_presentation_sizes[option].width;
 	height = mvs_presentation_sizes[option].height;
-	if (option != 0)
+	if (mvs_true_wide_enabled())
+		mvs_wide_fit_output(output_width, output_height, &width, &height);
+	else if (option != 0)
 		video_scale_logical_size(output_width, output_height,
 			width, height, &width, &height);
 
@@ -133,6 +261,8 @@ void blit_reset(void)
 
 void blit_start(int start, int end)
 {
+	const mvs_view_geometry_t *view = mvs_get_view_geometry();
+
 	spr_vertex_count = 0;
 	spr_count = 0;
 
@@ -148,15 +278,27 @@ void blit_start(int start, int end)
 		video_driver->beginFrame(video_data);
 		video_driver->startWorkFrame(video_data,
 			CNVCOL15TO32(video_palette[4095]));
-		video_driver->scissor(video_data, 24, 16, 336, 240);
+		video_driver->scissor(video_data,
+			(uint16_t)view->render_left, (uint16_t)view->render_top,
+			(uint16_t)view->render_right, (uint16_t)view->render_bottom);
 	}
 }
 
 void blit_finish(void)
 {
+	const mvs_view_geometry_t *view = mvs_get_view_geometry();
+	RECT src_clip = {
+		(int16_t)view->source_left,
+		(int16_t)view->source_top,
+		(int16_t)view->source_right,
+		(int16_t)view->source_bottom
+	};
 	RECT dst_clip = mvs_presentation_rect();
-	video_driver->transferWorkFrame(video_data, (RECT *)&mvs_src_clip, &dst_clip);
+	video_driver->transferWorkFrame(video_data, &src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
+#if defined(DESKTOP) && !RELEASE
+	mvs_wide_debug_frame();
+#endif
 }
 
 void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)

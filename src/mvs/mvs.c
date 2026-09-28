@@ -117,6 +117,7 @@ static int neogeo_init(void)
 
 	neogeo_driver_init();
 	neogeo_video_init();
+	mvs_wide_init();
 
 	msg_printf(TEXT(DONE2));
 	msg_screen_clear();
@@ -189,6 +190,7 @@ static void neogeo_exit(void)
 	int32_t fd;
 	char path[PATH_MAX];
 
+	mvs_wide_exit();
 	video_driver->clearScreen(video_data);
 
 	ui_popup_reset();
@@ -301,7 +303,9 @@ static void neogeo_run(void)
 			}
 
 			apply_cheat();//davex
-			
+
+			/* Change ROM clipping only between emulated frames. */
+			mvs_wide_update();
 			timer_update_cpu();
 			update_screen();
 			update_inputport();

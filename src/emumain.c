@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -275,6 +276,46 @@ static uint32_t emu_test_frame_limit(void)
 #endif
 }
 
+static bool emu_test_fast(void)
+{
+#if defined(DESKTOP)
+	const char *value = getenv("NJEMU_TEST_FAST");
+	return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+#else
+	return false;
+#endif
+}
+
+static bool emu_test_frame_limit_reached(void)
+{
+#if defined(DESKTOP)
+	static uint32_t elapsed_frames;
+	static uint64_t start_us;
+	uint32_t frame_limit = emu_test_frame_limit();
+
+	if (frame_limit == 0)
+		return false;
+
+	if (elapsed_frames == 0)
+		start_us = ticker_driver->currentUs(ticker_data);
+	elapsed_frames++;
+	if (elapsed_frames == frame_limit && elapsed_frames > 1)
+	{
+		const uint64_t duration_us = ticker_driver->currentUs(ticker_data) - start_us;
+		/* One summary only for an explicitly frame-limited test. Loading is
+		 * excluded, and N samples cover N-1 emulated frame intervals. */
+		printf("[test] %u frame intervals in %.3fs: %.2f emulated fps "
+			"(frameskip=%d, audio=%d, speedlimit=%d)\n",
+			(unsigned int)(elapsed_frames - 1), duration_us / 1000000.0,
+			duration_us ? (elapsed_frames - 1) * 1000000.0 / duration_us : 0.0,
+			frameskip, option_sound_enable, option_speedlimit);
+	}
+	return elapsed_frames >= frame_limit;
+#else
+	return false;
+#endif
+}
+
 
 /*--------------------------------------------------------
 	Initialize Frameskip
@@ -352,11 +393,8 @@ void update_screen(void)
 
 	frames_displayed++;
 	frames_since_last_fps++;
-	{
-		uint32_t test_frame_limit = emu_test_frame_limit();
-		if (test_frame_limit != 0 && frames_displayed >= test_frame_limit)
-			Loop = LOOP_EXIT;
-	}
+	if (emu_test_frame_limit_reached())
+		Loop = LOOP_EXIT;
 
 	if (!skipped_it)
 	{
@@ -561,6 +599,13 @@ int main(int argc, char *argv[]) {
 	option_sound_volume = 10;
 	option_stretch = 0;
 	show_frames_each_second = 0;
+	if (emu_test_fast())
+	{
+		option_speedlimit = 0;
+		option_sound_enable = 0;
+		option_autoframeskip = 0;
+		option_frameskip = FRAMESKIP_LEVELS - 1;
+	}
 #if defined(BUILD_NCDZ)
 	option_mp3_enable = 1;
 	option_mp3_volume = 10;

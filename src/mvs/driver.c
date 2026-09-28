@@ -12,6 +12,9 @@
 #endif
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
+#include "common/runtime_paths.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "common/memory_sizes.h"
@@ -593,8 +596,256 @@ static inline uint16_t get_videoram_data(void)
 	Write data to VRAM ($3c0003)
 ------------------------------------------------------*/
 
+#if defined(DESKTOP) && !RELEASE
+#define MVS_WIDE_SCB4_TRACE_MAX_PC	128
+#define MVS_WIDE_SCB4_TRACE_TOP_PC	8
+#define MVS_WIDE_SCB4_TRACE_FRAMES	60
+
+typedef struct mvs_wide_scb4_trace_entry
+{
+	uint32_t pc;
+	uint32_t writes;
+	uint16_t min_sprite;
+	uint16_t max_sprite;
+	uint16_t min_x;
+	uint16_t max_x;
+	uint32_t sample_a4;
+	uint16_t sample_pool_first;
+	uint16_t sample_pool_last;
+	uint16_t min_span;
+	uint16_t max_span;
+	uint8_t has_pool;
+} mvs_wide_scb4_trace_entry_t;
+
+static mvs_wide_scb4_trace_entry_t
+	mvs_wide_scb4_trace[MVS_WIDE_SCB4_TRACE_MAX_PC];
+static uint32_t mvs_wide_scb4_trace_start_frame;
+static uint32_t mvs_wide_scb4_trace_dropped;
+static uint16_t mvs_wide_scb4_trace_count;
+static uint8_t mvs_wide_scb4_trace_active;
+static uint32_t mvs_wide_scb4_detail_frame = UINT32_MAX;
+static uint8_t mvs_wide_scb4_detail_done;
+
+static int mvs_wide_scb4_trace_requested(void)
+{
+	static int enabled = -1;
+
+	if (enabled < 0)
+	{
+		const char *value = getenv("NJEMU_MVS_TRACE_SCB4");
+		enabled = value != NULL && value[0] != '\0' && value[0] != '0';
+	}
+	return enabled;
+}
+
+static void mvs_wide_scb4_trace_clear(void)
+{
+	memset(mvs_wide_scb4_trace, 0, sizeof(mvs_wide_scb4_trace));
+	mvs_wide_scb4_trace_count = 0;
+	mvs_wide_scb4_trace_dropped = 0;
+}
+
+static void mvs_wide_scb4_trace_flush(uint32_t end_frame)
+{
+	uint8_t emitted[MVS_WIDE_SCB4_TRACE_MAX_PC];
+	int rank;
+
+	if (mvs_wide_scb4_trace_count == 0)
+		return;
+
+	memset(emitted, 0, sizeof(emitted));
+	printf("[MVS_WIDE][SCB4] frames %u-%u: %u writer PCs",
+		(unsigned int)mvs_wide_scb4_trace_start_frame,
+		(unsigned int)end_frame,
+		(unsigned int)mvs_wide_scb4_trace_count);
+	if (mvs_wide_scb4_trace_dropped)
+		printf(", %u writes from overflow PCs",
+			(unsigned int)mvs_wide_scb4_trace_dropped);
+	printf("\n");
+
+	for (rank = 0;
+		rank < MVS_WIDE_SCB4_TRACE_TOP_PC &&
+			rank < (int)mvs_wide_scb4_trace_count;
+		rank++)
+	{
+		int best = -1;
+		uint16_t i;
+
+		for (i = 0; i < mvs_wide_scb4_trace_count; i++)
+		{
+			if (!emitted[i] &&
+				(best < 0 ||
+				 mvs_wide_scb4_trace[i].writes >
+				 mvs_wide_scb4_trace[best].writes))
+				best = i;
+		}
+		if (best < 0)
+			break;
+
+		emitted[best] = 1;
+		printf("  PC=%06x writes=%u sprites=%u..%u x=%u..%u\n",
+			(unsigned int)(mvs_wide_scb4_trace[best].pc & 0x00ffffff),
+			(unsigned int)mvs_wide_scb4_trace[best].writes,
+			(unsigned int)mvs_wide_scb4_trace[best].min_sprite,
+			(unsigned int)mvs_wide_scb4_trace[best].max_sprite,
+			(unsigned int)mvs_wide_scb4_trace[best].min_x,
+			(unsigned int)mvs_wide_scb4_trace[best].max_x);
+		if (mvs_wide_scb4_trace[best].has_pool)
+		{
+			printf("    A4=%06x sprite_pool=%u..%u span=%u..%u\n",
+				(unsigned int)(mvs_wide_scb4_trace[best].sample_a4 &
+					0x00ffffff),
+				(unsigned int)mvs_wide_scb4_trace[best].sample_pool_first,
+				(unsigned int)mvs_wide_scb4_trace[best].sample_pool_last,
+				(unsigned int)mvs_wide_scb4_trace[best].min_span,
+				(unsigned int)mvs_wide_scb4_trace[best].max_span);
+		}
+	}
+
+	mvs_wide_scb4_trace_clear();
+}
+
+static void mvs_wide_scb4_trace_write(uint16_t offset, uint16_t data)
+{
+	uint32_t frame;
+	uint32_t pc;
+	uint32_t a4;
+	uint16_t sprite;
+	uint16_t x;
+	uint16_t i;
+
+	if (!mvs_true_wide_enabled() || !mvs_wide_scb4_trace_requested())
+	{
+		if (mvs_wide_scb4_trace_active)
+		{
+			mvs_wide_scb4_trace_active = 0;
+			mvs_wide_scb4_trace_clear();
+		}
+		return;
+	}
+
+	frame = frames_displayed;
+	if (!mvs_wide_scb4_trace_active)
+	{
+		mvs_wide_scb4_trace_active = 1;
+		mvs_wide_scb4_trace_start_frame = frame;
+		mvs_wide_scb4_trace_clear();
+		printf("[MVS_WIDE][SCB4] tracing %s VRAM writers\n", game_name);
+	}
+	else if (frame < mvs_wide_scb4_trace_start_frame)
+	{
+		mvs_wide_scb4_trace_start_frame = frame;
+		mvs_wide_scb4_trace_clear();
+	}
+	else if (frame - mvs_wide_scb4_trace_start_frame >=
+				MVS_WIDE_SCB4_TRACE_FRAMES)
+	{
+		mvs_wide_scb4_trace_flush(frame ? frame - 1 : 0);
+		mvs_wide_scb4_trace_start_frame = frame;
+	}
+
+	pc = m68000_get_current_instruction_pc();
+	sprite = (uint16_t)(offset - NEOGEO_VRAM_SCB4);
+	x = (uint16_t)((data >> 7) & 0x01ff);
+
+	for (i = 0; i < mvs_wide_scb4_trace_count; i++)
+	{
+		if (mvs_wide_scb4_trace[i].pc == pc)
+			break;
+	}
+
+	if (i == mvs_wide_scb4_trace_count)
+	{
+		if (mvs_wide_scb4_trace_count >= MVS_WIDE_SCB4_TRACE_MAX_PC)
+		{
+			mvs_wide_scb4_trace_dropped++;
+			return;
+		}
+
+		mvs_wide_scb4_trace[i].pc = pc;
+		mvs_wide_scb4_trace[i].min_sprite = sprite;
+		mvs_wide_scb4_trace[i].max_sprite = sprite;
+		mvs_wide_scb4_trace[i].min_x = x;
+		mvs_wide_scb4_trace[i].max_x = x;
+		mvs_wide_scb4_trace[i].min_span = 0xffff;
+		mvs_wide_scb4_trace_count++;
+	}
+
+	mvs_wide_scb4_trace[i].writes++;
+	a4 = m68000_get_reg(M68K_A4) & 0x00ffffff;
+	/* Read only aligned work RAM. These fields are sprite allocation indices,
+	 * not X coordinates; tracing must not read side-effectful I/O addresses. */
+	if (neogeo_ngh == NGH_mslug3 && (pc == 0x00dee0 || pc == 0x0110f0) &&
+		a4 >= 0x100000 && a4 <= 0x10fff8 && !(a4 & 1))
+	{
+		uint32_t a2 = m68000_get_reg(M68K_A2) & 0x00ffffff;
+		uint32_t a3 = m68000_get_reg(M68K_A3) & 0x00ffffff;
+		uint16_t pool_first = m68000_read_memory_16(a4 + 4);
+		uint16_t pool_last = m68000_read_memory_16(a4 + 6);
+		uint16_t d5 = (uint16_t)m68000_get_reg(M68K_D5);
+		uint16_t d6 = (uint16_t)m68000_get_reg(M68K_D6);
+		uint16_t span = pool_first < pool_last ?
+			(uint16_t)(pool_last - pool_first) : (uint16_t)(pool_first - pool_last);
+
+		mvs_wide_scb4_trace[i].sample_a4 = a4;
+		mvs_wide_scb4_trace[i].sample_pool_first = pool_first;
+		mvs_wide_scb4_trace[i].sample_pool_last = pool_last;
+		if (!mvs_wide_scb4_trace[i].has_pool ||
+			span < mvs_wide_scb4_trace[i].min_span)
+			mvs_wide_scb4_trace[i].min_span = span;
+		if (!mvs_wide_scb4_trace[i].has_pool ||
+			span > mvs_wide_scb4_trace[i].max_span)
+			mvs_wide_scb4_trace[i].max_span = span;
+		mvs_wide_scb4_trace[i].has_pool = 1;
+
+		if (!mvs_wide_scb4_detail_done)
+		{
+			if (mvs_wide_scb4_detail_frame == UINT32_MAX)
+			{
+				mvs_wide_scb4_detail_frame = frame;
+				printf("[MVS_WIDE][SCB4_DETAIL] frame=%u\n",
+					(unsigned int)frame);
+			}
+
+			if (frame == mvs_wide_scb4_detail_frame)
+			{
+				printf("  PC=%06x sprite=%u x=%u D5=%04x D6=%u "
+					"A2=%06x A3=%06x sprite_pool=%u..%u\n",
+					(unsigned int)(pc & 0x00ffffff),
+					(unsigned int)sprite,
+					(unsigned int)x,
+					(unsigned int)d5,
+					(unsigned int)d6,
+					(unsigned int)a2,
+					(unsigned int)a3,
+					(unsigned int)pool_first,
+					(unsigned int)pool_last);
+			}
+			else
+			{
+				mvs_wide_scb4_detail_done = 1;
+			}
+		}
+	}
+	if (sprite < mvs_wide_scb4_trace[i].min_sprite)
+		mvs_wide_scb4_trace[i].min_sprite = sprite;
+	if (sprite > mvs_wide_scb4_trace[i].max_sprite)
+		mvs_wide_scb4_trace[i].max_sprite = sprite;
+	if (x < mvs_wide_scb4_trace[i].min_x)
+		mvs_wide_scb4_trace[i].min_x = x;
+	if (x > mvs_wide_scb4_trace[i].max_x)
+		mvs_wide_scb4_trace[i].max_x = x;
+}
+#endif
+
 static inline void set_videoram_data(uint16_t data)
 {
+#if defined(DESKTOP) && !RELEASE
+	if (videoram_offset >= NEOGEO_VRAM_SCB4 &&
+		videoram_offset < NEOGEO_VRAM_SPRLIST)
+		mvs_wide_scb4_trace_write(videoram_offset, data);
+#endif
+
 	neogeo_videoram[videoram_offset] = data;
 
 	/* auto increment/decrement the current offset - A15 is NOT effected */

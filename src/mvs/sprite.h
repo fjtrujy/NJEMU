@@ -9,9 +9,17 @@
 #ifndef MVS_SPRITE_H
 #define MVS_SPRITE_H
 
+#include "mvs/wide.h"
+
 #define SPRITE_BLANK		0x00
 #define SPRITE_TRANSPARENT	0x01
 #define SPRITE_OPAQUE		0x02
+
+void mvs_wide_init(void);
+void mvs_wide_exit(void);
+void mvs_wide_update(void);
+int mvs_true_wide_enabled(void);
+const mvs_view_geometry_t *mvs_get_view_geometry(void);
 
 void blit_clear_all_sprite(void);
 void blit_set_spr_clear_flag(void);

@@ -92,11 +92,11 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 	desktop->renderer = renderer;
 
 	desktop->blendMode = SDL_ComposeCustomBlendMode(
-		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA, 
-		SDL_BLENDFACTOR_SRC_ALPHA, 
-		SDL_BLENDOPERATION_ADD, 
-		SDL_BLENDFACTOR_ZERO, 
-		SDL_BLENDFACTOR_ZERO, 
+		SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+		SDL_BLENDFACTOR_SRC_ALPHA,
+		SDL_BLENDOPERATION_ADD,
+		SDL_BLENDFACTOR_ZERO,
+		SDL_BLENDFACTOR_ZERO,
 		SDL_BLENDOPERATION_ADD
 	);
 
@@ -379,8 +379,15 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
 		}
 	}
     
-    SDL_SetRenderTarget(desktop->renderer, NULL);
-    SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
+	SDL_SetRenderTarget(desktop->renderer, NULL);
+	/* The window backbuffer is not persistent across SDL_RenderPresent.
+	 * Reset window-local state and cover everything outside the new game
+	 * rectangle, including letterbox bars and the previous mode's image. */
+	SDL_RenderSetViewport(desktop->renderer, NULL);
+	SDL_RenderSetClipRect(desktop->renderer, NULL);
+	SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 255);
+	SDL_RenderClear(desktop->renderer);
+	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
 
 	// if (!desktop->draw_extra_info) {
 	// 	return;

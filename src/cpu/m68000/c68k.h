@@ -147,6 +147,9 @@ extern c68k_struc C68K;
 extern int32_t m68000_ICountBk;
 extern uint32_t BusErrHandling;
 extern uint32_t BusErrAdr;
+#if defined(BUILD_MVS) && defined(DESKTOP) && !RELEASE
+extern uint32_t C68k_Current_Instruction_PC;
+#endif
 
 /* 68K core function declaration */
 

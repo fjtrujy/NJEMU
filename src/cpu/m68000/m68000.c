@@ -143,6 +143,13 @@ int m68000_execute(int cycles)
 	return C68k_Exec(&C68K, cycles);
 }
 
+#if defined(BUILD_MVS) && defined(DESKTOP) && !RELEASE
+uint32_t m68000_get_current_instruction_pc(void)
+{
+	return C68k_Current_Instruction_PC;
+}
+#endif
+
 
 /*--------------------------------------------------------
 	CPU Execution (NEOGEO CDZ only: for load screen)

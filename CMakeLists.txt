@@ -485,6 +485,12 @@ if (${TARGET} STREQUAL "MVS")
         mvs/sprite_common.h
         mvs/sprite_common.c
         mvs/sprite.c
+        mvs/wide.h
+        mvs/wide.c
+        mvs/wide_profile.h
+        mvs/wide_profile.c
+        mvs/wide_debug.h
+        mvs/wide_debug.c
         mvs/pd4990a.h
         mvs/pd4990a.c
         mvs/neocrypt.c
@@ -992,6 +998,47 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_executable(desktop_presentation_tests
+        tests/desktop_presentation_tests.c
+        src/desktop/desktop_video.c
+        src/desktop/desktop_frame_dump.c
+    )
+    target_include_directories(desktop_presentation_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src ${SDL2_INCLUDE_DIRS}
+    )
+    target_compile_definitions(desktop_presentation_tests PRIVATE
+        BUILD_${TARGET} DESKTOP
+    )
+    target_link_libraries(desktop_presentation_tests PRIVATE ${NJEMU_SDL2_TARGET})
+    add_test(NAME desktop_presentation_tests COMMAND desktop_presentation_tests)
+    set_tests_properties(desktop_presentation_tests PROPERTIES
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;NJEMU_DUMP_FRAMES="
+    )
+
+    if(${TARGET} STREQUAL "MVS")
+        add_executable(mvs_wide_tests
+            tests/mvs_wide_tests.c
+            src/mvs/wide.c
+            src/mvs/wide_profile.c
+        )
+        target_include_directories(mvs_wide_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        add_test(NAME mvs_wide_tests COMMAND mvs_wide_tests)
+        target_compile_definitions(mvs_wide_tests PRIVATE
+            TEST_PROFILE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/mvs/widescreen"
+        )
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME widescreen_tool_tests
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/widescreen_tool_tests.py
+                    --runtime-validator $<TARGET_FILE:mvs_wide_tests>
+            )
+            set_tests_properties(widescreen_tool_tests PROPERTIES
+                ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1"
+            )
+        endif()
+    endif()
+
     if(${TARGET} STREQUAL "NCDZ")
         add_executable(resource_source_tests
             tests/resource_source_tests.c

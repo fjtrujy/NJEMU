@@ -217,6 +217,7 @@ typedef struct gld_program {
 typedef struct desktop_gl_video {
 	SDL_Window *window;
 	SDL_GLContext context;
+	int swap_interval_request;
 
 	gld_layer_t *layers;
 	uint8_t layer_count;
@@ -665,6 +666,7 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 	if (!gld_load_functions())
 		goto fail;
 	SDL_GL_SetSwapInterval(1);
+	g->swap_interval_request = 1;
 	printf("desktop_gl: %s / %s\n", gl.GetString(GL_RENDERER), gl.GetString(GL_VERSION));
 
 	if (!gld_create_programs(g) || !gld_create_layers(g, layer_textures, layer_textures_count))
@@ -795,7 +797,15 @@ static void desktop_gl_flipScreen(void *data, bool vsync)
 {
 	desktop_gl_video_t *g = data;
 
-	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+	const int interval = vsync ? 1 : 0;
+	/* Changing context presentation state can synchronize the graphics
+	 * driver. Do it when the option changes, not once per displayed frame. */
+	if (g->swap_interval_request != interval) {
+		if (SDL_GL_SetSwapInterval(interval) != 0)
+			printf("desktop_gl: cannot set swap interval %d: %s\n",
+				interval, SDL_GetError());
+		g->swap_interval_request = interval;
+	}
 	SDL_GL_SwapWindow(g->window);
 	gld_reset_frame(g);
 
