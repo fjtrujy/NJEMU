@@ -58,12 +58,13 @@ jobs:
       run: |
         apk add build-base git bash cmake python3
 
-    # Temporary cacheio dependencies for PS2 hardware validation.
-    - name: Checkout PS2SDK fast_cache
+    # libbdm correctness fix intended for a future upstream PS2SDK PR.
+    # cacheio itself is owned and built by ps2_drivers.
+    - name: Checkout PS2SDK BDM cache fix
       uses: actions/checkout@v7
       with:
-        repository: ps2dev/ps2sdk
-        ref: fast_cache
+        repository: fjtrujy/ps2sdk
+        ref: bdm-cache-read-ahead-fix
         path: .ci-deps/ps2sdk
         persist-credentials: false
 
@@ -74,8 +75,6 @@ jobs:
         git rev-parse HEAD
         make -j "$(getconf _NPROCESSORS_ONLN)"
         make install
-        test -s "$PS2SDK/iop/irx/cacheio.irx"
-        test -s "$PS2SDK/ee/lib/libcacheio.a"
 
     - name: Checkout ps2_drivers njemu
       uses: actions/checkout@v7
@@ -98,7 +97,9 @@ jobs:
           ps2_drivers_img_payload_check
         cmake --install .ci-deps/ps2_drivers/build
         test -s "$PS2SDK/ports/lib/libps2_drivers_img.a"
+        test -s "$PS2SDK/ports/include/cacheio.h"
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
+        test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_bootstrap.elf"
 
     - name: Compile project
       run: |
