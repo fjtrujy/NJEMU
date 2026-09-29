@@ -1991,22 +1991,32 @@ NJEMU intenta despues abrir `mass:/NJEMU-MVS/ps2_drivers.irximg`, IOMAN solo
 conoce `tty:`, `rom:`, `cdrom:` y `mc:`. Por tanto el fallo ocurre antes del reset
 propio de NJEMU y no es evidencia de agotamiento de IOP RAM.
 
-Para soportar loaders que hacen ese reset, `ps2_drivers` dispone ahora de un
-bootstrap USB opt-in separado de `libps2_drivers_img.a`. NJEMU lo enlaza solo con
-el flavor external-IRX. El helper intenta primero el staging normal; si el fichero
-no abre y el propio `cwd` bajo `mass:` tampoco reaparece, carga temporalmente
-`iomanX + fileXio + bdm + bdmfs_fatfs + usbd + usbmass_bd`, inicializa fileXio,
-espera a que `mass:` vuelva a ser accesible y repite el staging. `fileXioInit()`
-cambia las operaciones de path de libcglue a fileXio, por lo que el segundo
-`fopen()` ya atraviesa IomanX/BDM. El reset normal que NJEMU hace justo despues
-descarta este stack temporal antes de cargar los IRX staged definitivos.
+La atribucion temporal se verifico contra el codigo: el log de `main` en
+`emumain.c` es la primera instruccion de la funcion, `platform_driver->init()` se
+invoca mas tarde, el unico `SifIopReset()` de NJEMU esta dentro del backend PS2 y
+el startup de PS2SDK no contiene otro reset. Por ello ese primer reboot es externo
+a NJEMU en esta ejecucion (el loader es el candidato directo), aunque esto no
+implica que toda version o configuracion del loader tenga obligatoriamente la
+misma politica.
+
+Para soportar loaders que hacen ese reset, `ps2_drivers` dispone ahora de
+`ps2_drivers_irximg_bootstrap.elf`, separado tanto de `libps2_drivers_img.a` como
+del ELF real de NJEMU. El bootstrap contiene solamente
+`iomanX + fileXio + bdm + bdmfs_fatfs + usbd + usbmass_bd`, recupera `mass:` y
+carga el engine indicado en `elf_path.ini` mediante
+`LoadELFFromFileWithPartitionNoReset()`. Por tanto el engine recibe control con
+el filesystem de arranque aun vivo, puede stagear `ps2_drivers.irximg` y solo
+entonces ejecuta su reset IOP definitivo.
 
 Con el toolchain actual los seis payloads embebidos suman 102758 bytes en EE. Sus
 secciones IOP text/data/bss suman 131513 bytes y BDM reserva ademas 128 KiB para
 su cache del dispositivo raw; esa presion IOP solo existe durante el bootstrap.
-`libps2_drivers_img.a` conserva su garantia de no contener payloads IRX; el coste
-se limita al archivo `libps2_drivers_img_bootstrap.a`. Los builds y checks pasan,
-incluido MVS PS2 external-IRX, pero queda pendiente confirmar el arranque completo
+`libps2_drivers_img.a` y el ELF real conservan su garantia de no contener esos
+payloads IRX; el coste se limita al ELF bootstrap, cuya memoria EE deja de ser
+relevante tras el handoff. Los builds y checks pasan, incluido MVS PS2
+external-IRX. NJEMU genera `BOOT.ELF`, `ps2_drivers.irximg` y `elf_path.ini` junto
+al engine; el install genera el mismo layout y ajusta `elf_path.ini` al nombre
+instalado (`MVS.elf`, por ejemplo). Queda pendiente confirmar el arranque completo
 desde `mass:` con el loader que provoca el reset pre-entry.
 
 ## 31. Validacion diferencial dentro de NJEMU
@@ -2030,3 +2040,56 @@ El flag es solo diagnostico y esta desactivado por defecto: reserva un buffer
 adicional de 64 KiB y duplica cada lectura acelerada con una lectura POSIX. La
 precarga MVS tambien deja ahora de publicar bloques C-ROM/PCM como validos cuando
 la lectura subyacente falla.
+
+## 32. Metal Slug 3: congelacion visual observada durante la validacion
+
+Durante las pruebas prolongadas de MSLUG3 en PS2/PCSX2 se observo un sintoma
+independiente del rendimiento de cache: el juego puede quedar visualmente
+congelado mientras la musica continua y la insercion de una moneda sigue
+produciendo su efecto de sonido.
+
+La investigacion se aparca por ahora, pero las pruebas realizadas permiten
+separarla de `cacheio` con bastante confianza:
+
+- Una build de control con toda la aceleracion de cache deshabilitada y solo
+  POSIX reprodujo la congelacion. Por tanto `cacheio` no es condicion necesaria
+  para el fallo.
+- Un watchdog independiente mostro que el bucle principal seguia avanzando
+  despues de la congelacion visual, aproximadamente a 59-60 frames/s.
+- Los contadores persistentes alrededor de `ps2_flipScreen()` permanecieron
+  iguales (`flip == wait == queue == done`), descartando un bloqueo observado en
+  `gsKit_wait_finish()`, `gsKit_queue_exec()` o el flip del GS.
+- La instrumentacion posterior mostro que `timer_update_cpu()`, M68000, Z80 y
+  VBlank continuaban avanzando. El PC del M68000 tambien cambiaba despues del
+  fallo (por ejemplo `0x00034048`, `0x00014888`, `0x00005cdc`, `0x00005ce2`,
+  `0x000251b6`), por lo que no se observo un hang general del CPU emulado.
+- El audio del juego continua y la entrada de moneda sigue siendo procesada al
+  menos hasta producir su sonido. La imagen congelada es un frame coherente del
+  juego, no corrupcion grafica evidente.
+
+Una ejecucion representativa despues de la congelacion siguio pasando de
+`timer=14230`, `m68k=56668`, `z80=56674`, `vblank=14229` a `timer=16007`,
+`m68k=63667`, `z80=63673`, `vblank=16006`, mientras todas las operaciones de
+presentacion GS completaban.
+
+### Interpretacion actual
+
+El sintoma no debe tratarse como evidencia de un deadlock de I/O, del main loop
+o del GS. La hipotesis pendiente es un estado incorrecto dentro de la emulacion
+MVS/Metal Slug 3: por ejemplo logica de juego esperando una condicion emulada,
+estado de IRQ/timer/raster, o generacion del contenido de video. Que el PC del
+M68000 cambie no excluye que el juego este ejecutando un bucle valido pero
+esperando indefinidamente una condicion de hardware emulado.
+
+### Si se retoma
+
+No repetir primero la instrumentacion de cacheio o GS. El siguiente corte util
+es observar el estado IRQ1/VBlank, IRQ2/display-position y sus acknowledges,
+junto con la trayectoria del PC M68000 alrededor del instante del fallo. Si ese
+estado sigue siendo coherente, instrumentar `neogeo_screenrefresh()` y la
+produccion de sprites/FIX para distinguir estado de juego congelado de contenido
+de video congelado.
+
+La instrumentacion temporal usada para aislar este problema (watchdog, contadores
+GS/CPU/render y switches CMake de control POSIX/C-ROM/PCM) se retiro al aparcar la
+investigacion; este documento conserva los resultados necesarios para retomarla.
