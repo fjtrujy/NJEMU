@@ -58,6 +58,48 @@ jobs:
       run: |
         apk add build-base git bash cmake python3
 
+    # Temporary cacheio dependencies for PS2 hardware validation.
+    - name: Checkout PS2SDK fast_cache
+      uses: actions/checkout@v7
+      with:
+        repository: ps2dev/ps2sdk
+        ref: fast_cache
+        path: .ci-deps/ps2sdk
+        persist-credentials: false
+
+    - name: Build and install PS2SDK
+      working-directory: .ci-deps/ps2sdk
+      run: |
+        export PS2SDKSRC="$PWD"
+        git rev-parse HEAD
+        make -j "$(getconf _NPROCESSORS_ONLN)"
+        make install
+        test -s "$PS2SDK/iop/irx/cacheio.irx"
+        test -s "$PS2SDK/ee/lib/libcacheio.a"
+
+    - name: Checkout ps2_drivers njemu
+      uses: actions/checkout@v7
+      with:
+        repository: fjtrujy/ps2_drivers
+        ref: njemu
+        path: .ci-deps/ps2_drivers
+        persist-credentials: false
+
+    - name: Build, validate and install ps2_drivers
+      run: |
+        git -C .ci-deps/ps2_drivers rev-parse HEAD
+        cmake -S .ci-deps/ps2_drivers -B .ci-deps/ps2_drivers/build \
+          -DCMAKE_TOOLCHAIN_FILE="$PS2DEV/share/ps2dev.cmake" \
+          -DBUILD_SAMPLES=OFF
+        cmake --build .ci-deps/ps2_drivers/build \
+          --parallel "$(getconf _NPROCESSORS_ONLN)"
+        cmake --build .ci-deps/ps2_drivers/build --target \
+          ps2_drivers_irximg_check ps2_drivers_irximg_stage_check \
+          ps2_drivers_img_payload_check
+        cmake --install .ci-deps/ps2_drivers/build
+        test -s "$PS2SDK/ports/lib/libps2_drivers_img.a"
+        test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
+
     - name: Compile project
       run: |
         mkdir build
