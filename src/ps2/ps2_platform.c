@@ -18,7 +18,9 @@
 #include <unistd.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
+#if defined(PS2_FAST_CACHE)
 #include <ps2_cacheio_driver.h>
+#endif
 #include <ps2_boot_device.h>
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
@@ -27,8 +29,10 @@
 typedef struct ps2_platform {
 } ps2_platform_t;
 
+#if defined(PS2_FAST_CACHE)
 static bool cacheio_driver_initialized;
 static bool cacheio_driver_requested;
+#endif
 
 static void reset_IOP()
 {
@@ -45,7 +49,7 @@ static bool stage_drivers_before_iop_reset(void)
 		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
 	int result;
 
-#if (EMU_SYSTEM == MVS)
+#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
 	{
 		uint32_t boot_requirements = 0u;
 
@@ -68,7 +72,7 @@ static bool stage_drivers_before_iop_reset(void)
 
 	return true;
 #else
-#if (EMU_SYSTEM == MVS)
+#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
 	char cwd[FILENAME_MAX];
 	enum BootDeviceIDs boot_device = BOOT_DEVICE_UNKNOWN;
 
@@ -102,7 +106,7 @@ static bool prepare_IOP()
 static bool init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
-#if (EMU_SYSTEM == MVS)
+#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
 	if (cacheio_driver_requested) {
 		enum CACHEIO_INIT_STATUS cacheio_status = init_cacheio_driver(false);
 		if (cacheio_status == CACHEIO_INIT_STATUS_OK) {
@@ -118,7 +122,7 @@ static bool init_drivers()
 	}
 #endif
 	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
-#if (EMU_SYSTEM == MVS)
+#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
 		if (cacheio_driver_initialized) {
 			ps2_cache_storage_set_available(false);
 			deinit_cacheio_driver(false);
@@ -138,7 +142,7 @@ static bool init_drivers()
 static void deinit_drivers()
 {
 	deinit_audio_driver();
-#if (EMU_SYSTEM == MVS)
+#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
 	if (cacheio_driver_initialized) {
 		ps2_cache_storage_set_available(false);
 		deinit_cacheio_driver(false);

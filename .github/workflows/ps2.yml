@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }} IRXIMG=${{ matrix.external_irx }}
+    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }} IRXIMG=${{ matrix.external_irx }} FAST_CACHE=${{ matrix.fast_cache }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,6 +23,7 @@ jobs:
         save_state: [OFF] #TODO: OFF
         gui: [OFF, ON]
         external_irx: [OFF]
+        fast_cache: [OFF]
         exclude:
           - target: NCDZ
             adhoc: ON
@@ -41,24 +42,28 @@ jobs:
             save_state: ON
             gui: ON
             external_irx: OFF
+            fast_cache: ON
           - target: CPS2
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
             external_irx: ON
+            fast_cache: ON
           - target: MVS
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
             external_irx: OFF
+            fast_cache: ON
           - target: MVS
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
             external_irx: ON
+            fast_cache: ON
           - target: NCDZ
             command_list: ON
             adhoc: OFF
@@ -71,12 +76,14 @@ jobs:
             save_state: OFF
             gui: OFF
             external_irx: ON
+            fast_cache: OFF
           - target: CPS2
             command_list: OFF
             adhoc: OFF
             save_state: OFF
             gui: OFF
             external_irx: ON
+            fast_cache: OFF
       fail-fast: false
 
     container: ps2dev/ps2dev:latest
@@ -142,6 +149,7 @@ jobs:
           -DSAVE_STATE=${{ matrix.save_state }} \
           -DGUI=${{ matrix.gui }} \
           -DPS2_EXTERNAL_IRX_IMAGE=${{ matrix.external_irx }} \
+          -DPS2_FAST_CACHE=${{ matrix.fast_cache }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
         cmake --install .
@@ -154,5 +162,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}-irximg_${{ matrix.external_irx }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}-irximg_${{ matrix.external_irx }}-fast_cache_${{ matrix.fast_cache }}
         path: build/install/
