@@ -4,7 +4,9 @@
 #include <libpad.h>
 #include <libmtap.h>
 #include <ps2_joystick_driver.h>
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
+#endif
 #include "common/input_driver.h"
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
@@ -181,12 +183,15 @@ static void *ps2_init(void)
 		return NULL;
 
 	if (init_joystick_driver(true) < 0) {
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 		ps2_drivers_img_discard_staged();
 		ps2_drivers_img_forget_source();
+#endif
 		free(ps2);
 		return NULL;
 	}
 
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 	if (ps2_drivers_img_staged_modules() != 0u ||
 		ps2_drivers_img_staged_bytes() != 0u) {
 		printf("[ps2_drivers] startup left staged modules=%u bytes=%u\n",
@@ -200,6 +205,7 @@ static void *ps2_init(void)
 	}
 
 	ps2_drivers_img_forget_source();
+#endif
 
 	memset(joyInfo, 0, sizeof(joyInfo));
 

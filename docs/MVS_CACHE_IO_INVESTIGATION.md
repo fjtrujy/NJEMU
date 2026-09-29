@@ -1981,3 +1981,52 @@ experimento independiente; cola de decodificacion diferida con una lectura en
 vuelo; luego lookahead si la espera residual lo justifica. Comparar frame time
 p95/p99, espera residual, peticiones duplicadas evitadas, bytes no utilizados y
 memoria adicional, ademas de screenshots deterministas y escenas con raster effects.
+
+## 30. Bootstrap de `mass:` tras reset del ELF loader
+
+La validacion de NJEMU con el flavor `PS2_EXTERNAL_IRX_IMAGE=ON` descubrio una
+restriccion de arranque independiente del rendimiento de `cacheio`. El log de
+PCSX2 muestra un `Get Reboot Request From EE` antes de entrar en `main()`; cuando
+NJEMU intenta despues abrir `mass:/NJEMU-MVS/ps2_drivers.irximg`, IOMAN solo
+conoce `tty:`, `rom:`, `cdrom:` y `mc:`. Por tanto el fallo ocurre antes del reset
+propio de NJEMU y no es evidencia de agotamiento de IOP RAM.
+
+Para soportar loaders que hacen ese reset, `ps2_drivers` dispone ahora de un
+bootstrap USB opt-in separado de `libps2_drivers_img.a`. NJEMU lo enlaza solo con
+el flavor external-IRX. El helper intenta primero el staging normal; si el fichero
+no abre y el propio `cwd` bajo `mass:` tampoco reaparece, carga temporalmente
+`iomanX + fileXio + bdm + bdmfs_fatfs + usbd + usbmass_bd`, inicializa fileXio,
+espera a que `mass:` vuelva a ser accesible y repite el staging. `fileXioInit()`
+cambia las operaciones de path de libcglue a fileXio, por lo que el segundo
+`fopen()` ya atraviesa IomanX/BDM. El reset normal que NJEMU hace justo despues
+descarta este stack temporal antes de cargar los IRX staged definitivos.
+
+Con el toolchain actual los seis payloads embebidos suman 102758 bytes en EE. Sus
+secciones IOP text/data/bss suman 131513 bytes y BDM reserva ademas 128 KiB para
+su cache del dispositivo raw; esa presion IOP solo existe durante el bootstrap.
+`libps2_drivers_img.a` conserva su garantia de no contener payloads IRX; el coste
+se limita al archivo `libps2_drivers_img_bootstrap.a`. Los builds y checks pasan,
+incluido MVS PS2 external-IRX, pero queda pendiente confirmar el arranque completo
+desde `mass:` con el loader que provoca el reset pre-entry.
+
+## 31. Validacion diferencial dentro de NJEMU
+
+Los artefactos graficos observados al ejecutar Metal Slug 3 con la ruta acelerada
+requieren separar `cacheio` del bookkeeping de la cache de NJEMU. El standalone
+ya habia comparado correctamente los 1024 bloques de 64 KiB del `crom` y 4096
+lecturas pseudoaleatorias contra POSIX, pero no ejercitaba el LRU de NJEMU.
+
+`CACHE_IO_VALIDATE_ACCELERATED=ON` añade un oracle temporal a
+`mvs_cache_read_block()`: despues de cada `cacheioReadAt()` correcto conserva los
+64 KiB acelerados, vuelve a leer el mismo offset mediante POSIX y compara ambos
+buffers byte a byte. El buffer que consume el emulador queda deliberadamente con
+los datos POSIX de referencia. Una divergencia imprime `MISMATCH` con fichero,
+bloque, offset, primer byte distinto y ambos valores. Si no hay divergencias y
+los artefactos persisten, la investigacion debe continuar en el estado/LRU de
+NJEMU; si los artefactos desaparecen o aparece `MISMATCH`, hay que volver a la
+ruta `cacheio` con el bloque concreto como reproducer.
+
+El flag es solo diagnostico y esta desactivado por defecto: reserva un buffer
+adicional de 64 KiB y duplica cada lectura acelerada con una lectura POSIX. La
+precarga MVS tambien deja ahora de publicar bloques C-ROM/PCM como validos cuando
+la lectura subyacente falla.

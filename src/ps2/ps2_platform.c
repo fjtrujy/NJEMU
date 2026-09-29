@@ -15,10 +15,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <ps2_filesystem_driver.h>
 #include <ps2_audio_driver.h>
 #include <ps2_cacheio_driver.h>
+#include <ps2_boot_device.h>
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
+#endif
 
 typedef struct ps2_platform {
 } ps2_platform_t;
@@ -36,6 +40,7 @@ static void reset_IOP()
 
 static bool stage_drivers_before_iop_reset(void)
 {
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 	uint32_t application_requirements =
 		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
 	int result;
@@ -54,7 +59,7 @@ static bool stage_drivers_before_iop_reset(void)
 	}
 #endif
 
-	result = ps2_drivers_img_stage_default_for_current_boot(
+	result = ps2_drivers_img_stage_default_for_current_boot_with_usb_bootstrap(
 		application_requirements);
 	if (result != PS2_DRIVERS_IMG_OK) {
 		printf("[ps2_drivers] IRX staging failed: %s (%d)\n",
@@ -63,10 +68,36 @@ static bool stage_drivers_before_iop_reset(void)
 	}
 
 	return true;
+#else
+#if (EMU_SYSTEM == MVS)
+	char cwd[FILENAME_MAX];
+	enum BootDeviceIDs boot_device = BOOT_DEVICE_UNKNOWN;
+
+	if (getcwd(cwd, sizeof(cwd)) != NULL)
+		boot_device = getBootDeviceID(cwd);
+	cacheio_driver_requested =
+		boot_device == BOOT_DEVICE_MASS ||
+		boot_device == BOOT_DEVICE_MASS0 ||
+		boot_device == BOOT_DEVICE_MASS1 ||
+		boot_device == BOOT_DEVICE_MX4SIO ||
+		boot_device == BOOT_DEVICE_MX4SIO0 ||
+		boot_device == BOOT_DEVICE_MX4SIO1;
+#endif
+	return true;
+#endif
 }
 
 static bool prepare_IOP()
 {
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
+	/* Some ELF loaders reset the IOP before transferring control, which drops
+	 * mass:. Enable module-buffer loading on that temporary IOP so the optional
+	 * ps2_drivers USB bootstrap can remount the launch device long enough to
+	 * stage ps2_drivers.irximg. The normal reset below discards that bootstrap. */
+	SifInitRpc(0);
+	sbv_patch_enable_lmb();
+#endif
+
 	if (!stage_drivers_before_iop_reset())
 		return false;
 
@@ -137,8 +168,10 @@ static void *ps2_init(void) {
 		return NULL;
 	}
 	if (!init_drivers()) {
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 		ps2_drivers_img_discard_staged();
 		ps2_drivers_img_forget_source();
+#endif
 		free(ps2);
 		return NULL;
 	}
@@ -150,8 +183,10 @@ static void ps2_free(void *data) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
 
 	deinit_drivers();
+#if defined(PS2_EXTERNAL_IRX_IMAGE)
 	ps2_drivers_img_discard_staged();
 	ps2_drivers_img_forget_source();
+#endif
 
 	free(ps2);
 }

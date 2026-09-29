@@ -84,6 +84,8 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
+option(CACHE_IO_VALIDATE_ACCELERATED "Validate accelerated MVS cache reads against POSIX" OFF)
+option(PS2_EXTERNAL_IRX_IMAGE "PS2: load ps2_drivers IRXs from an external image" OFF)
 option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
 option(USE_DESKTOP_GL "Desktop: OpenGL 3.3 video backend (test bench for the Vita renderers)" OFF)
@@ -119,6 +121,10 @@ endif()
 
 if (CACHE_IO_FORCE_SEEK)
     add_definitions(-DCACHE_IO_FORCE_SEEK=1)
+endif()
+
+if (CACHE_IO_VALIDATE_ACCELERATED)
+    add_definitions(-DCACHE_IO_VALIDATE_ACCELERATED=1)
 endif()
 
 if (PSVITA_VIDEO_STATS AND PLATFORM STREQUAL "PSVITA")
@@ -833,30 +839,37 @@ if (PLATFORM STREQUAL "DESKTOP")
     endif()
     target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
-    find_file(PS2_DRIVERS_IRX_IMAGE
-        NAMES ps2_drivers.irximg
-        HINTS "$ENV{PS2SDK}/ports/share/ps2_drivers"
-        NO_DEFAULT_PATH
-    )
-    if(NOT PS2_DRIVERS_IRX_IMAGE)
-        message(FATAL_ERROR
-            "ps2_drivers.irximg was not found under the installed PS2SDK ports tree")
-    endif()
-
     target_link_libraries(${TARGET} PUBLIC
         patches
         gskit
         dmakit
-        ps2_drivers_img
         "-ldebug"
     )
+    if(PS2_EXTERNAL_IRX_IMAGE)
+        find_file(PS2_DRIVERS_IRX_IMAGE
+            NAMES ps2_drivers.irximg
+            HINTS "$ENV{PS2SDK}/ports/share/ps2_drivers"
+            NO_DEFAULT_PATH
+        )
+        if(NOT PS2_DRIVERS_IRX_IMAGE)
+            message(FATAL_ERROR
+                "ps2_drivers.irximg was not found under the installed PS2SDK ports tree")
+        endif()
 
-    add_custom_command(TARGET ${TARGET} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${PS2_DRIVERS_IRX_IMAGE}"
-            "$<TARGET_FILE_DIR:${TARGET}>/ps2_drivers.irximg"
-        COMMENT "Staging ps2_drivers.irximg beside the PS2 ELF"
-    )
+        target_compile_definitions(${TARGET} PRIVATE PS2_EXTERNAL_IRX_IMAGE=1)
+        target_link_libraries(${TARGET} PUBLIC
+            ps2_drivers_img_bootstrap
+            ps2_drivers_img
+        )
+        add_custom_command(TARGET ${TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PS2_DRIVERS_IRX_IMAGE}"
+                "$<TARGET_FILE_DIR:${TARGET}>/ps2_drivers.irximg"
+            COMMENT "Staging ps2_drivers.irximg beside the PS2 ELF"
+        )
+    else()
+        target_link_libraries(${TARGET} PUBLIC ps2_drivers)
+    endif()
 elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
     # defines PATH_MAX as 4096: provide the same value to the whole build.
@@ -1227,7 +1240,9 @@ if(PLATFORM STREQUAL "PSP")
     install(FILES ${CMAKE_BINARY_DIR}/EBOOT.PBP DESTINATION .)
 elseif(PLATFORM STREQUAL "PS2")
     install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
-    install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
+    if(PS2_EXTERNAL_IRX_IMAGE)
+        install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
+    endif()
 elseif(PLATFORM STREQUAL "PSVITA")
     install(FILES ${CMAKE_BINARY_DIR}/${TARGET}.vpk DESTINATION .)
 else()

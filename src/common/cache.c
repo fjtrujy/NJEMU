@@ -138,6 +138,9 @@ static int64_t cache_file_pos;
 static int64_t pcm_file_pos;
 static int cache_storage_handle = -1;
 static int pcm_storage_handle = -1;
+#ifdef CACHE_IO_VALIDATE_ACCELERATED
+static uint8_t ALIGN16_DATA cache_validation_buffer[CACHE_BLOCK_SIZE];
+#endif
 
 static int cachefile_open_resolved(int type, char *resolved_path, size_t resolved_size)
 {
@@ -403,6 +406,40 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 			dst, CACHE_BLOCK_SIZE);
 		if (bytes == CACHE_BLOCK_SIZE)
 		{
+#ifdef CACHE_IO_VALIDATE_ACCELERATED
+			ssize_t reference_bytes;
+			size_t mismatch;
+
+			memcpy(cache_validation_buffer, dst, CACHE_BLOCK_SIZE);
+			if (lseek(fd, offset, SEEK_SET) < 0)
+			{
+				printf("[cache-io-validate] %s block=%u offset=%lld reference seek failed\n",
+					name, (unsigned int)block, (long long)offset);
+				*known_pos = -1;
+				return 0;
+			}
+			reference_bytes = read(fd, dst, CACHE_BLOCK_SIZE);
+			if (reference_bytes != CACHE_BLOCK_SIZE)
+			{
+				printf("[cache-io-validate] %s block=%u offset=%lld reference read=%d\n",
+					name, (unsigned int)block, (long long)offset, (int)reference_bytes);
+				*known_pos = -1;
+				return 0;
+			}
+			*known_pos = offset + CACHE_BLOCK_SIZE;
+
+			for (mismatch = 0; mismatch < CACHE_BLOCK_SIZE; ++mismatch)
+			{
+				if (cache_validation_buffer[mismatch] != dst[mismatch])
+					break;
+			}
+			if (mismatch != CACHE_BLOCK_SIZE)
+			{
+				printf("[cache-io-validate] MISMATCH %s block=%u offset=%lld byte=%u accelerated=%02x posix=%02x\n",
+					name, (unsigned int)block, (long long)offset,
+					(unsigned int)mismatch, cache_validation_buffer[mismatch], dst[mismatch]);
+			}
+#endif
 #ifdef CACHE_IO_PROFILE
 			if (runtime_miss)
 			{
@@ -654,15 +691,16 @@ static int fill_cache(void)
 		while (i < num_cache)
 		{
 			p = head;
-			p->block = block;
-			blocks[block] = p->idx;
-
-			mvs_cache_read_block((int32_t)cache_fd, &cache_storage_handle,
+			if (!mvs_cache_read_block((int32_t)cache_fd, &cache_storage_handle,
 				&cache_file_pos, block, &GFX_MEMORY[p->idx << BLOCK_SHIFT], "crom"
 #ifdef CACHE_IO_PROFILE
 				, &crom_io_profile, 0
 #endif
-			);
+			))
+				return 0;
+
+			p->block = block;
+			blocks[block] = p->idx;
 
 				cache_rotate_head_to_tail(&head, &tail);
 			i++;
@@ -712,17 +750,18 @@ static int fill_cache(void)
 		block = 0;
 
 			while (i < num_pcm_cache)
-		{
-			p = pcm_head;
-			p->block = block;
-			pcm_blocks[block] = p->idx;
-
-			mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
-				block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
+			{
+				p = pcm_head;
+				if (!mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
+					block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
 #ifdef CACHE_IO_PROFILE
-				, &pcm_io_profile, 0
+					, &pcm_io_profile, 0
 #endif
-			);
+				))
+					return 0;
+
+				p->block = block;
+				pcm_blocks[block] = p->idx;
 
 				cache_rotate_head_to_tail(&pcm_head, &pcm_tail);
 			i++;
