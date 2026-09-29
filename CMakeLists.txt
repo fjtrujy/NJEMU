@@ -839,6 +839,15 @@ if (PLATFORM STREQUAL "DESKTOP")
     endif()
     target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
+    # The classic PS2 executable is directly launchable, so identify it as an
+    # ELF.  External-image builds deliberately keep the real engine extensionless
+    # so BOOT.ELF remains the obvious entry point for users and launchers.
+    if(PS2_EXTERNAL_IRX_IMAGE)
+        set_target_properties(${TARGET} PROPERTIES SUFFIX "")
+    else()
+        set_target_properties(${TARGET} PROPERTIES SUFFIX ".ELF")
+    endif()
+
     target_link_libraries(${TARGET} PUBLIC
         patches
         gskit
@@ -1255,13 +1264,15 @@ endif()
 if(PLATFORM STREQUAL "PSP")
     install(FILES ${CMAKE_BINARY_DIR}/EBOOT.PBP DESTINATION .)
 elseif(PLATFORM STREQUAL "PS2")
-    install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
     if(PS2_EXTERNAL_IRX_IMAGE)
+        install(PROGRAMS "$<TARGET_FILE:${TARGET}>" DESTINATION .)
         install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
         install(PROGRAMS "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}" DESTINATION . RENAME BOOT.ELF)
         install(CODE
-            "file(WRITE \"\${CMAKE_INSTALL_PREFIX}/elf_path.ini\" \"${TARGET}.elf\\n\")"
+            "file(WRITE \"\${CMAKE_INSTALL_PREFIX}/elf_path.ini\" \"${TARGET}\\n\")"
         )
+    else()
+        install(PROGRAMS "$<TARGET_FILE:${TARGET}>" DESTINATION .)
     endif()
 elseif(PLATFORM STREQUAL "PSVITA")
     install(FILES ${CMAKE_BINARY_DIR}/${TARGET}.vpk DESTINATION .)

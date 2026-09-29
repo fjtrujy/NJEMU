@@ -41,12 +41,24 @@ jobs:
             save_state: ON
             gui: ON
             external_irx: OFF
+          - target: CPS2
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            external_irx: ON
           - target: MVS
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
             external_irx: OFF
+          - target: MVS
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            external_irx: ON
           - target: NCDZ
             command_list: ON
             adhoc: OFF
@@ -54,6 +66,12 @@ jobs:
             gui: ON
             external_irx: OFF
           - target: MVS
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            external_irx: ON
+          - target: CPS2
             command_list: OFF
             adhoc: OFF
             save_state: OFF
