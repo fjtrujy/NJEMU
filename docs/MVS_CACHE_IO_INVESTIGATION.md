@@ -1834,3 +1834,150 @@ La primera implementacion deberia centrarse en demostrar una meta simple y medib
 ```
 
 para un fichero contiguo como el `crom` de Metal Slug 3.
+
+## 28. Continuacion de validacion 2026-09-29
+
+Se verificaron los commits integrados de los tres repositorios. El trabajo
+pendiente no era crear `cacheio`, sino validar su runtime. Se conservaron los
+cambios existentes de `bd_cache.c` y la muestra `cacheio_compare_sample`.
+
+La muestra ahora compara tambien cada lectura aleatoria byte a byte con POSIX,
+ademas del CRC secuencial, alterna el orden de ambos lectores y acumula ticks de
+I/O excluyendo comparaciones, CRC y reporting. El target
+`cacheio_compare_runtime` actualiza el `irximg` junto al ELF aunque solo cambie un
+IRX: el anterior POST_BUILD no se ejecutaba cuando el ELF no reenlazaba.
+
+Validacion de build: `cacheio.irx`, `libcacheio.a`, BDM y la muestra compilan;
+`ps2_drivers_irximg_check` y `ps2_drivers_irximg_stage_check` pasan. La imagen
+runtime se comparo con la recien generada. Se instalo el BDM de esta rama en el
+PS2SDK local para que el empaquetado use el cambio pendiente de read-ahead.
+
+PCSX2 2.9.91 se lanzo con el ELF de prueba y la imagen USB configurada. El log
+`/tmp/cacheio-pcsx2.log` registra una pausa tras el reinicio IOP, antes de crear
+el informe de la muestra. La pausa inicial se resolvio mas tarde; los resultados finales figuran abajo.
+El acceso Computer Use no estaba concedido; se solicito reanudar/ver el dialogo
+al usuario. El ELF se reconstruyo despues del lanzamiento, por lo que la nueva
+version requiere reiniciar la prueba.
+
+No se modificaron los recursos de NJEMU ni los ficheros de `/Volumes/USB`.
+La imagen esta montada read-only en macOS. Sigue pendiente medir comandos SCSI,
+ficheros fragmentados, errores/desconexion, sleep/resume y el fallback integrado.
+Resolver el dispositivo por nombre y numero en cada lectura no demuestra que un
+medio reconectado sea el mismo: la identidad/generacion del medio sigue siendo
+un punto de revision antes de aceptar reconexion con handles abiertos.
+
+El test host `ps2sdk/iop/fs/libbdm/tests/test_bd_cache.py` compila el `bd_cache.c`
+real contra un dispositivo simulado con errores inyectados. Pasa los casos de
+cache hit, read-ahead fuera de fin de medio con fallback, errores y lecturas
+cortas, invalidacion por escritura y lectura directa. Es evidencia del manejo
+de errores BDM, no de la causa del fallo anterior de bloque 70 ni del runtime
+USB. Se ejecuto sin sanitizers: el intento con ASan/UBSan no termino y se cancelo.
+
+
+### Resultados runtime completados en esta sesion
+
+PCSX2 reanudo la primera prueba. Resultado guardado en
+`ps2_drivers/samples/cacheio_compare_sample/results/pcsx2-2026-09-29-correctness.txt`:
+
+- 1024/1024 bloques de 64 KiB (64 MiB) coinciden byte a byte con POSIX;
+- 4096/4096 lecturas aleatorias cacheio coinciden con los CRC de referencia;
+- el diagnostico POSIX de bloque 70 y el recorrido completo pasan con el BDM
+  modificado. No se ejecuto un A/B contra BDM sin modificar: no atribuir todavia
+  la causa del antiguo fallo a read-ahead.
+
+Una segunda ejecucion con el ELF actualizado, `-nogui` y 64 iteraciones repitio
+el recorrido completo y comparo los 64 bloques aleatorios tambien byte a byte.
+Termino con `RESULT: PASS code=0`. Informe guardado en
+`ps2_drivers/samples/cacheio_compare_sample/results/pcsx2-2026-09-29-paired64.txt`.
+
+| Ruta | Ticks totales (147456000/s) | Media por lectura de 64 KiB |
+| --- | ---: | ---: |
+| POSIX seek + read | 2983336448 | 316.13 ms |
+| cacheio read-at | 171380736 | 18.16 ms |
+
+Relacion observada: aproximadamente 17.41x en esta prueba PCSX2. Es una sola
+muestra determinista de 64 offsets despues del recorrido secuencial, con orden
+alternado y caches calientes; no es p95/p99, cold-cache ni una medicion en PS2
+real. El coste de apertura/GET_FRAGLIST no esta incluido. Los tiempos proceden
+del reloj EE emulado, no del tiempo de pared del proceso.
+
+La correctitud de la imagen actual queda mucho mejor sustentada y el beneficio
+medido justifica continuar. Aun no se ha medido el numero de comandos SCSI, ni
+se han validado en esta sesion gameplay NJEMU, fallback, fragmentacion o cambios
+de medio. El siguiente experimento debe instrumentar SCSI y repetir un A/B con
+el mismo trace, seguido de hardware real.
+
+## 29. Investigacion de overlap asincrono del renderer MVS
+
+Revision posterior a las pruebas: propuesta de arquitectura, aun no implementada.
+
+### Dependencia real y punto de espera
+
+`src/mvs/sprite.c:mvs_decode_sprite_tile()` llama a `read_cache(code << 7)` y
+consume inmediatamente los 128 bytes del tile para expandirlos a 256 bytes
+indexados. `blit_draw_spr()` copia el resultado al atlas EE antes de construir
+los vertices. `blit_finish_spr()` llama a `uploadMem()` antes de encolar los
+sprites. Por tanto, cambiar un RPC a NOWAIT sin cambiar este flujo no es correcto.
+
+El deadline inicial recomendado es resolver las decodificaciones pendientes antes
+del primer upload del atlas afectado en `blit_finish_spr()`. No esperar simplemente
+hasta `flipScreen()`: la CPU necesita antes los datos para decodificar, y el backend
+sincroniza la cache EE al preparar el upload. Ademas, `vidhrdw.c` llama a
+`draw_sprites()` tanto en refresh completo como en actualizaciones parciales por
+scanlines. Conservar cada batch, sus atributos y el orden original de dibujado.
+
+### Primer prototipo acotado
+
+1. Separar solicitud y consumo mediante submit/poll/wait en el storage driver
+   opcional. Conservar el camino sincronico para plataformas sin soporte.
+2. Usar inicialmente una sola peticion RPC en vuelo. El cliente actual tiene
+   un solo buffer de protocolo y el servidor un solo buffer IOP de 64 KiB.
+   El buffer de comando, respuesta y destino deben permanecer vivos hasta
+   completar RPC/DMA; no basta con cambiar el flag de sceSifCallRpc.
+3. En un atlas miss, reservar un slot de textura, registrar code/attr/destino y
+   pedir el bloque C-ROM sin esperar. Continuar construyendo vertices y procesando
+   tiles residentes. Compartir peticiones para tiles del mismo bloque (512 tiles
+   de 128 bytes por bloque de 64 KiB).
+4. Recoger completions durante la construccion; decodificar los tiles pendientes
+   cuyo bloque ya este listo y empezar la siguiente peticion. Mantener una cola
+   limitada y drenar cuando se llene.
+5. Antes de subir el atlas de ese batch, esperar solo los trabajos restantes.
+   Reordenar la preparacion de texturas no debe reordenar los draws.
+6. Introducir estados EMPTY/LOADING/READY/FAILED y pinning/refcounts para impedir
+   reutilizar bloques que aun reciben DMA o tienen consumidores pendientes. El
+   codigo sincronico actual publica `blocks[new_block]` antes de leer: eso no
+   puede significar READY en una version asincrona. Aplicar una distincion igual
+   al atlas, para que un segundo acceso no confunda un tile pendiente con uno listo.
+7. Ante error completar/drain del DMA antes del fallback POSIX; cerrar, resetear,
+   cargar estado o suspender requiere drenar las peticiones antes de liberar memoria.
+
+El overlap inicial es con trabajo EE independiente del mismo batch, no con la
+emulacion de un frame futuro. Si varios misses ocupan mas tiempo que ese trabajo,
+seguira existiendo espera. Una sola lectura medida de ~18 ms ya consume alrededor
+de un frame a 60 Hz: la mejora real dependera de anticipacion y del numero de
+misses, no solo de usar NOWAIT. La doble memoria IOP puede evaluarse despues;
+no es necesaria para solapar una lectura IOP con trabajo EE.
+
+### Otras oportunidades sustentadas por el codigo
+
+- `blit_finish_spr()` sube cada atlas utilizado una vez por batch, incluso si no
+  hubo tiles nuevos; `ps2_uploadMem()` sube el atlas entero. Medir uploads y bytes,
+  y probar dirty flags por atlas antes de introducir subidas parciales por tile.
+  Invalidar dirty/residencia correctamente en clear/reset/recreacion de VRAM y
+  conservar las dependencias DMA entre batches.
+- `spr_get_sprite()` mantiene un cache de tiles decodificados independiente del
+  cache C-ROM, y toca el LRU C-ROM una vez por frame para un tile residente.
+  Medir si retener esos bloques aporta futuras decodificaciones o desplaza datos
+  mas utiles; no modificar esa politica sin un trace comparativo.
+- Lookahead de bloques requeridos por tiles realmente ausentes del atlas tiene
+  mas informacion que prefetch ciego de N+1. Un prepass debe respetar clipping,
+  autoanimacion y cada actualizacion parcial; evitar duplicar sus reglas.
+- Prediccion por frame previo, tamanos de bloque menores y cambios LRU son
+  experimentos posteriores. Medir bytes efectivamente usados por bloque de 64 KiB
+  antes de aumentar prefetch o cambiar el formato de cache.
+
+Orden recomendado: contadores de misses/atlas/uploads y SCSI; dirty atlas como
+experimento independiente; cola de decodificacion diferida con una lectura en
+vuelo; luego lookahead si la espera residual lo justifica. Comparar frame time
+p95/p99, espera residual, peticiones duplicadas evitadas, bytes no utilizados y
+memoria adicional, ademas de screenshots deterministas y escenas con raster effects.
