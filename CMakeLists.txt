@@ -855,17 +855,33 @@ elseif(PLATFORM STREQUAL "PS2")
             message(FATAL_ERROR
                 "ps2_drivers.irximg was not found under the installed PS2SDK ports tree")
         endif()
+        find_file(PS2_DRIVERS_IRXIMG_BOOTSTRAP
+            NAMES ps2_drivers_irximg_bootstrap.elf
+            HINTS "$ENV{PS2SDK}/ports/share/ps2_drivers"
+            NO_DEFAULT_PATH
+        )
+        if(NOT PS2_DRIVERS_IRXIMG_BOOTSTRAP)
+            message(FATAL_ERROR
+                "ps2_drivers_irximg_bootstrap.elf was not found under the installed PS2SDK ports tree")
+        endif()
 
         target_compile_definitions(${TARGET} PRIVATE PS2_EXTERNAL_IRX_IMAGE=1)
-        target_link_libraries(${TARGET} PUBLIC
-            ps2_drivers_img_bootstrap
-            ps2_drivers_img
+        target_link_libraries(${TARGET} PUBLIC ps2_drivers_img)
+        file(GENERATE
+            OUTPUT "$<TARGET_FILE_DIR:${TARGET}>/elf_path.ini"
+            CONTENT "$<TARGET_FILE_NAME:${TARGET}>\n"
         )
         add_custom_command(TARGET ${TARGET} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${PS2_DRIVERS_IRX_IMAGE}"
                 "$<TARGET_FILE_DIR:${TARGET}>/ps2_drivers.irximg"
             COMMENT "Staging ps2_drivers.irximg beside the PS2 ELF"
+        )
+        add_custom_command(TARGET ${TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}"
+                "$<TARGET_FILE_DIR:${TARGET}>/BOOT.ELF"
+            COMMENT "Staging BOOT.ELF and target configuration beside the PS2 ELF"
         )
     else()
         target_link_libraries(${TARGET} PUBLIC ps2_drivers)

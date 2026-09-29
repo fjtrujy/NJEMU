@@ -59,8 +59,7 @@ static bool stage_drivers_before_iop_reset(void)
 	}
 #endif
 
-	result = ps2_drivers_img_stage_default_for_current_boot_with_usb_bootstrap(
-		application_requirements);
+	result = ps2_drivers_img_stage_default_for_current_boot(application_requirements);
 	if (result != PS2_DRIVERS_IMG_OK) {
 		printf("[ps2_drivers] IRX staging failed: %s (%d)\n",
 			ps2_drivers_img_error_string(result), result);
@@ -89,15 +88,6 @@ static bool stage_drivers_before_iop_reset(void)
 
 static bool prepare_IOP()
 {
-#if defined(PS2_EXTERNAL_IRX_IMAGE)
-	/* Some ELF loaders reset the IOP before transferring control, which drops
-	 * mass:. Enable module-buffer loading on that temporary IOP so the optional
-	 * ps2_drivers USB bootstrap can remount the launch device long enough to
-	 * stage ps2_drivers.irximg. The normal reset below discards that bootstrap. */
-	SifInitRpc(0);
-	sbv_patch_enable_lmb();
-#endif
-
 	if (!stage_drivers_before_iop_reset())
 		return false;
 
