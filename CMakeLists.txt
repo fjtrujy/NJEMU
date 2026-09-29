@@ -1258,6 +1258,10 @@ elseif(PLATFORM STREQUAL "PS2")
     install(PROGRAMS ${CMAKE_BINARY_DIR}/${TARGET} DESTINATION . RENAME ${TARGET}.elf)
     if(PS2_EXTERNAL_IRX_IMAGE)
         install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
+        install(PROGRAMS "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}" DESTINATION . RENAME BOOT.ELF)
+        install(CODE
+            "file(WRITE \"\${CMAKE_INSTALL_PREFIX}/elf_path.ini\" \"${TARGET}.elf\\n\")"
+        )
     endif()
 elseif(PLATFORM STREQUAL "PSVITA")
     install(FILES ${CMAKE_BINARY_DIR}/${TARGET}.vpk DESTINATION .)
