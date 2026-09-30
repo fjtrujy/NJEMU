@@ -27,8 +27,4 @@ thread_driver_t *const thread_driver = &thread_psvita;
 ticker_driver_t *const ticker_driver = &ticker_psvita;
 video_driver_t *const video_driver = &video_psvita;
 
-#ifdef GUI
 const ui_draw_driver_t *const ui_draw_driver = &psvita_ui_draw_driver;
-#else
-const ui_draw_driver_t *const ui_draw_driver = &null_ui_draw_driver;
-#endif

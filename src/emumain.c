@@ -173,7 +173,10 @@ static void show_fps(bool draw)
 		frames_per_second);
 
 #if !defined(GUI)
-	printf("%s\n", buf);
+	/* NO_GUI now suppresses menus only; avoid the old per-frame console output
+	 * when the FPS HUD is being drawn. */
+	if (!draw)
+		printf("%s\n", buf);
 #endif
 	if (!draw)
 		return;

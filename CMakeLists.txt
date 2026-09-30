@@ -240,6 +240,11 @@ set(WARNING_OPTIONS
 # Platform-specific toolchains and intentional stubs may need narrowly scoped
 # warning exceptions. Keep these local instead of hiding warning classes from
 # the whole project.
+# The legacy INI tables intentionally use short aggregate initializers; omitted
+# fields are zero/default by design. Keep that convention local to config.c.
+set_source_files_properties(src/common/config.c PROPERTIES
+    COMPILE_OPTIONS "-Wno-missing-field-initializers"
+)
 if (PLATFORM STREQUAL "PSP")
     set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
         COMPILE_OPTIONS "-Wno-strict-aliasing"
@@ -394,54 +399,49 @@ if (SAVE_STATE)
     )
 endif()
 
+# Configuration and drawing are runtime services, not menu ownership.  NO_GUI
+# only bypasses the interactive menus; games still use their normal INI settings
+# and overlays such as ShowFPS still use the regular UI renderer.
+set(COMMON_SRC ${COMMON_SRC}
+    common/font/graphic.c
+    common/font/ascii_14p.c
+    common/font/font_s.c
+    common/font/bshadow.c
+    common/font/command.c
+    common/font/ascii_14.c
+    common/font/latin1_14.c
+    common/font/gbk_s14_runtime.h
+    common/font/gbk_s14_runtime.c
+    common/ui_draw.c
+    common/config.c
+)
+set(OS_SRC ${OS_SRC}
+    ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
+)
+
+# Icon glyphs are also consumed by target loading/progress paths.
+if (${TARGET} STREQUAL "CPS1" OR ${TARGET} STREQUAL "CPS2")
+    set(ICON_PREFIX "cps")
+elseif (${TARGET} STREQUAL "MVS")
+    set(ICON_PREFIX "mvs")
+elseif (${TARGET} STREQUAL "NCDZ")
+    set(ICON_PREFIX "ncdz")
+endif()
+set(COMMON_SRC ${COMMON_SRC}
+    common/icon/${ICON_PREFIX}_s.c
+    common/icon/${ICON_PREFIX}_l.c
+)
+
 if (NOT GUI)
     set(COMMON_SRC ${COMMON_SRC}
         common/no_gui.c
     )
 else()
-    # Font data files (shared across all platforms)
-    set(COMMON_SRC ${COMMON_SRC}
-        common/font/graphic.c
-        common/font/ascii_14p.c
-        common/font/font_s.c
-        common/font/bshadow.c
-        common/font/command.c
-        common/font/ascii_14.c
-        common/font/latin1_14.c
-        common/font/gbk_s14_runtime.h
-        common/font/gbk_s14_runtime.c
-    )
-
-    # UI drawing primitives (portable core)
-    set(COMMON_SRC ${COMMON_SRC}
-        common/ui_draw.c
-    )
-
-    # GUI source files (portable code now in common/)
+    # Interactive GUI sources.
     set(COMMON_SRC ${COMMON_SRC}
         common/ui.c
         common/ui_menu.c
-        common/config.c
         common/png.c
-    )
-
-    # GUI source files (platform-specific UI drawing driver)
-    set(OS_SRC ${OS_SRC}
-        ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
-    )
-
-    # Icon files (target-specific, shared across platforms)
-    if (${TARGET} STREQUAL "CPS1" OR ${TARGET} STREQUAL "CPS2")
-        set(ICON_PREFIX "cps")
-    elseif (${TARGET} STREQUAL "MVS")
-        set(ICON_PREFIX "mvs")
-    elseif (${TARGET} STREQUAL "NCDZ")
-        set(ICON_PREFIX "ncdz")
-    endif()
-
-    set(COMMON_SRC ${COMMON_SRC}
-        common/icon/${ICON_PREFIX}_s.c
-        common/icon/${ICON_PREFIX}_l.c
     )
 endif()
 
@@ -739,28 +739,26 @@ add_custom_command(
 )
 add_custom_target(translation_packs ALL DEPENDS ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}")
 add_dependencies(${TARGET} translation_packs)
-if(GUI)
-    set_source_files_properties("${UI_UNICODE_GLYPH_SOURCE}" PROPERTIES GENERATED TRUE)
-    target_sources(${TARGET} PRIVATE "${UI_UNICODE_GLYPH_SOURCE}")
+set_source_files_properties("${UI_UNICODE_GLYPH_SOURCE}" PROPERTIES GENERATED TRUE)
+target_sources(${TARGET} PRIVATE "${UI_UNICODE_GLYPH_SOURCE}")
 
-    set(GBK_FONT_ASSET "${CMAKE_BINARY_DIR}/font/gbk_s14.bin")
-    add_custom_command(
-        OUTPUT "${GBK_FONT_ASSET}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/font"
-        COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
-            --source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
-            --table-source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
-            --output "${GBK_FONT_ASSET}"
-        DEPENDS
-            "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
-            "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
-            "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
-        VERBATIM
-    )
-    add_custom_target(font_assets ALL DEPENDS "${GBK_FONT_ASSET}")
-    add_dependencies(${TARGET} font_assets)
-endif()
+set(GBK_FONT_ASSET "${CMAKE_BINARY_DIR}/font/gbk_s14.bin")
+add_custom_command(
+    OUTPUT "${GBK_FONT_ASSET}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/font"
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+        --source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
+        --table-source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
+        --output "${GBK_FONT_ASSET}"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+        "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
+        "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
+    VERBATIM
+)
+add_custom_target(font_assets ALL DEPENDS "${GBK_FONT_ASSET}")
+add_dependencies(${TARGET} font_assets)
 
 # Sanitizers are intentionally selectable independently. AddressSanitizer is
 # useful for lifecycle/ownership testing, while UndefinedBehaviorSanitizer can

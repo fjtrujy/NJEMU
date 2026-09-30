@@ -22,21 +22,6 @@
 #include "ncdz/resource_source.h"
 #endif
 
-
-UI_PALETTE ui_palette[UI_PAL_MAX] =
-{
-	{ 255, 255, 255 },	// UI_PAL_TITLE
-	{ 255, 255, 255 },	// UI_PAL_SELECT
-	{ 180, 180, 180 },	// UI_PAL_NORMAL
-	{ 255, 255,  64 },	// UI_PAL_INFO
-	{ 255,  64,  64 },	// UI_PAL_WARNING
-	{  48,  48,  48 },	// UI_PAL_BG1
-	{   0,   0, 160 },	// UI_PAL_BG2
-	{   0,   0,   0 },	// UI_PAL_FRAME
-	{  40,  40,  40 },	// UI_PAL_FILESEL1
-	{ 120, 120, 120 }	// UI_PAL_FILESEL2
-};
-
 int cheat_num = 0;
 gamecheat_t* gamecheat[MAX_CHEATS];
 
@@ -87,10 +72,6 @@ void load_background(int number)
 }
 
 int ui_show_popup(int draw) {
-	return 0;
-}
-
-int ui_output_update(void) {
 	return 0;
 }
 
@@ -148,43 +129,7 @@ void file_browser(void) {
 #endif
 }
 
-void small_font_print(int sx, int sy, const char *s, int bg) {
-
-}
-
-void uifont_print_center(int sy, int r, int g, int b, const char *s) {
-
-}
-
-void uifont_print_shadow(int sx, int sy, int r, int g, int b, const char *s) {
-
-}
-
-void textfont_print(int sx, int sy, int r, int g, int b, const char *s, int flag) {
-	printf("textfont_print: %s\n", s);
-}
-
-int uifont_get_string_width(const char *s) {
-	return 1;
-}
-
-void uifont_print_shadow_center(int sy, int r, int g, int b, const char *s) {
-	printf("uifont_print_shadow_center: %s\n", s);
-}
-
-void uifont_print(int sx, int sy, int r, int g, int b, const char *s) {
-	printf("uifont_print: %s\n", s);
-}
-
-void small_icon_shadow(int sx, int sy, int r, int g, int b, int no) {
-
-}
-
 void show_background(void) {
-
-}
-
-void boxfill_alpha(int sx, int sy, int ex, int ey, int r, int g, int b, int alpha) {
 
 }
 
@@ -214,23 +159,4 @@ void ui_popup(const char *text, ...) {
 
 int help(int number) {
 	return 0;
-}
-
-void save_gamecfg(const char *name) {
-
-}
-
-int ui_init(void) {
-	return 1;
-}
-
-void ui_exit(void) {
-}
-
-void load_gamecfg(const char *name) {
-
-}
-
-void small_icon(int sx, int sy, int r, int g, int b, int no) {
-
 }
