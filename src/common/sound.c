@@ -49,6 +49,8 @@ struct sound_t *sound = &sound_info;
 static int32_t sound_update_thread(uint32_t args, void *argp)
 {
 	int flip = 0;
+	(void)args;
+	(void)argp;
 
 	while (sound_active)
 	{

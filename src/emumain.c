@@ -409,7 +409,6 @@ void update_screen(void)
 		if (frameskip_counter == 0)
 		{
 			float seconds_elapsed = (float)(curr - last_skipcount0_time)/ 1000000.0;
-			float frames_per_sec = (float)frames_since_last_fps / seconds_elapsed;
 
 			frames_per_second = ((float)rendered_frames_since_last_fps / seconds_elapsed);
 			game_speed_percent = (frames_per_second / (float)FPS) * 100;

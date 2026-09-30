@@ -29,7 +29,16 @@
 #include "common/filer.h"
 #include "common/config.h"
 
-void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
+static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length; i += 2)
+	{
+		uint8_t tmp = data[i];
+		data[i] = data[i + 1];
+		data[i + 1] = tmp;
+	}
+}
 
 /******************************************************************************
 	Global Variables
@@ -111,7 +120,7 @@ static int neogeo_init(void)
 		{
 			read(fd, neogeo_sram16, 0x2000);
 			close(fd);
-			swab(neogeo_sram16, neogeo_sram16, 0x2000);
+			byte_swap_pairs_in_place((uint8_t *)neogeo_sram16, 0x2000);
 		}
 	}
 
@@ -212,7 +221,7 @@ static void neogeo_exit(void)
 		sprintf(path, "%snvram/%s.nv", launchDir, game_name);
 		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 		{
-			swab(neogeo_sram16, neogeo_sram16, 0x2000);
+			byte_swap_pairs_in_place((uint8_t *)neogeo_sram16, 0x2000);
 			write(fd, neogeo_sram16, 0x2000);
 			close(fd);
 		}
