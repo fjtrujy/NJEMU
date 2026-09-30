@@ -26,7 +26,7 @@ static const char *inifile_name = "njemu.ini";
 static cfg_type gamecfg_ncdz[] =
 {
 	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_PERFORMANCE,	"PSPClock",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
+	{ CFG_PERFORMANCE,	"PerformanceLevel",			&platform_performance_level,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	PLATFORM_PERFORMANCE_LEVEL_HIGHEST,	POWER_CAP_PERFORMANCE },
 
 	{ CFG_NONE,	"[Emulation Settings]", },
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	},

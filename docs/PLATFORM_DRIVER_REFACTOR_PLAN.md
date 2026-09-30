@@ -463,8 +463,8 @@ Candidate model:
 
 - battery status: supported/unsupported + percentage/charging;
 - performance profiles: optional list/level selected by common UI/config;
-- common `platform_performance_level` naming instead of `PSPClock` internally;
-- migration compatibility for existing INI key `PSPClock` if required.
+- common `platform_performance_level` naming internally and `PerformanceLevel` on disk;
+- platform-neutral persisted input names and no platform-specific paths in `njemu.ini`.
 
 Desktop and PS2 should use a common no-op backend or unsupported capability rather
 than allocate empty objects and return invented values.

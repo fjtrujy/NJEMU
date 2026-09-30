@@ -86,12 +86,12 @@ enum
 	PAD_DOWN,
 	PAD_LEFT,
 	PAD_RIGHT,
-	PAD_CIRCLE,
-	PAD_CROSS,
-	PAD_SQUARE,
-	PAD_TRIANGLE,
-	PAD_LTRIGGER,
-	PAD_RTRIGGER,
+	PAD_BUTTON_1,
+	PAD_BUTTON_2,
+	PAD_BUTTON_3,
+	PAD_BUTTON_4,
+	PAD_SHOULDER_LEFT,
+	PAD_SHOULDER_RIGHT,
 	PAD_START,
 	PAD_SELECT,
 	PAD_MAX
@@ -152,8 +152,6 @@ static cfg_type default_options[] =
 
 static cfg2_type default_options2[] =
 {
-	{ CFG_NONE,	"[Directory Settings]", 				},
-	{ CFG_STR,	"StartupDir", startupDir,	PATH_MAX	},
 	{ CFG_NONE, NULL, }
 };
 
@@ -177,19 +175,19 @@ typedef struct padname_t
 
 static const PADNAME pad_name[13] =
 {
-	{ 0,					"PAD_NONE"		},
-	{ PLATFORM_PAD_UP,			"PAD_UP"		},
-	{ PLATFORM_PAD_DOWN,		"PAD_DOWN"		},
-	{ PLATFORM_PAD_LEFT,		"PAD_LEFT"		},
-	{ PLATFORM_PAD_RIGHT,		"PAD_RIGHT"		},
-	{ PLATFORM_PAD_B2,		"PAD_CROSS"		},
-	{ PLATFORM_PAD_B1,		"PAD_CIRCLE"	},
-	{ PLATFORM_PAD_B3,		"PAD_SQUARE"	},
-	{ PLATFORM_PAD_B4,	"PAD_TRIANGLE"	},
-	{ PLATFORM_PAD_START,		"PAD_START"		},
-	{ PLATFORM_PAD_SELECT,		"PAD_SELECT"	},
-	{ PLATFORM_PAD_L,	"PAD_LTRIGGER"	},
-	{ PLATFORM_PAD_R,	"PAD_RTRIGGER"	}
+	{ 0,					"NONE"		},
+	{ PLATFORM_PAD_UP,			"UP"		},
+	{ PLATFORM_PAD_DOWN,		"DOWN"		},
+	{ PLATFORM_PAD_LEFT,		"LEFT"		},
+	{ PLATFORM_PAD_RIGHT,		"RIGHT"		},
+	{ PLATFORM_PAD_B2,		"BUTTON_2"		},
+	{ PLATFORM_PAD_B1,		"BUTTON_1"	},
+	{ PLATFORM_PAD_B3,		"BUTTON_3"	},
+	{ PLATFORM_PAD_B4,	"BUTTON_4"	},
+	{ PLATFORM_PAD_START,		"START"		},
+	{ PLATFORM_PAD_SELECT,		"SELECT"	},
+	{ PLATFORM_PAD_L,	"SHOULDER_LEFT"	},
+	{ PLATFORM_PAD_R,	"SHOULDER_RIGHT"	}
 };
 
 
@@ -227,20 +225,11 @@ static int get_config_performance_level(char *str)
 {
 	int value = atoi(str);
 
-	/* Accept both NJEMU's historical level indices and old MHz-style values. */
-	switch (value)
-	{
-	case 222: return PLATFORM_PERFORMANCE_LEVEL_LOWEST;
-	case 266: return PLATFORM_PERFORMANCE_LEVEL_1;
-	case 300: return PLATFORM_PERFORMANCE_LEVEL_2;
-	case 333: return PLATFORM_PERFORMANCE_LEVEL_HIGHEST;
-	default:
-		if (value < PLATFORM_PERFORMANCE_LEVEL_LOWEST)
-			return PLATFORM_PERFORMANCE_LEVEL_LOWEST;
-		if (value > power_get_highest_performance_level())
-			return power_get_highest_performance_level();
-		return value;
-	}
+	if (value < PLATFORM_PERFORMANCE_LEVEL_LOWEST)
+		return PLATFORM_PERFORMANCE_LEVEL_LOWEST;
+	if (value > power_get_highest_performance_level())
+		return power_get_highest_performance_level();
+	return value;
 }
 
 
