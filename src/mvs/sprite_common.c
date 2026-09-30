@@ -21,7 +21,7 @@ uint16_t fix_texture_num;
 
 SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
 SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
-SPRITE *spr_free_head;
+SPRITE *spr_free_head[SPR_TEXTURE_LAYERS];
 uint16_t spr_texture_num;
 
 int clear_spr_texture;
@@ -177,24 +177,31 @@ int spr_get_sprite(uint32_t key)
 	Register sprite in SPR texture
 ------------------------------------------------------------------------*/
 
-int spr_insert_sprite(uint32_t key)
+int spr_insert_sprite(uint32_t key, uint8_t preferred_layer)
 {
 	uint16_t hash = key & SPR_HASH_MASK;
 	SPRITE *p = spr_head[hash];
-	SPRITE *q = spr_free_head;
+	SPRITE *q = NULL;
+	uint8_t attempt;
 
+	for (attempt = 0; attempt < SPR_TEXTURE_LAYERS; attempt++)
+	{
+		uint8_t layer = (uint8_t)((preferred_layer + attempt) % SPR_TEXTURE_LAYERS);
+		if (spr_free_head[layer])
+		{
+			q = spr_free_head[layer];
+			spr_free_head[layer] = q->next;
+			break;
+		}
+	}
 	if (!q) return -1;
-
-	spr_free_head = spr_free_head->next;
 
 	q->next = NULL;
 	q->key  = key;
 	q->used = frames_displayed;
 
 	if (!p)
-	{
 		spr_head[hash] = q;
-	}
 	else
 	{
 		while (p->next) p = p->next;
@@ -202,7 +209,6 @@ int spr_insert_sprite(uint32_t key)
 	}
 
 	spr_texture_num++;
-
 	return q->index;
 }
 
@@ -230,15 +236,15 @@ void spr_delete_sprite(void)
 				if (!prev_p)
 				{
 					spr_head[i] = p->next;
-					p->next = spr_free_head;
-					spr_free_head = p;
+					p->next = spr_free_head[p->index / SPR_TEXTURE_LAYER_SIZE];
+					spr_free_head[p->index / SPR_TEXTURE_LAYER_SIZE] = p;
 					p = spr_head[i];
 				}
 				else
 				{
 					prev_p->next = p->next;
-					p->next = spr_free_head;
-					spr_free_head = p;
+					p->next = spr_free_head[p->index / SPR_TEXTURE_LAYER_SIZE];
+					spr_free_head[p->index / SPR_TEXTURE_LAYER_SIZE] = p;
 					p = prev_p->next;
 				}
 			}
@@ -285,11 +291,14 @@ void blit_clear_spr_sprite(void)
 {
 	int i;
 
-	for (i = 0; i < SPR_TEXTURE_SIZE - 1; i++)
-		spr_data[i].next = &spr_data[i + 1];
-
-	spr_data[i].next = NULL;
-	spr_free_head = &spr_data[0];
+	for (i = 0; i < SPR_TEXTURE_SIZE; i++)
+	{
+		int layer = i / SPR_TEXTURE_LAYER_SIZE;
+		int layer_end = (layer + 1) * SPR_TEXTURE_LAYER_SIZE - 1;
+		spr_data[i].next = i < layer_end ? &spr_data[i + 1] : NULL;
+	}
+	for (i = 0; i < SPR_TEXTURE_LAYERS; i++)
+		spr_free_head[i] = &spr_data[i * SPR_TEXTURE_LAYER_SIZE];
 
 	memset(spr_head, 0, sizeof(SPRITE *) * SPR_HASH_SIZE);
 

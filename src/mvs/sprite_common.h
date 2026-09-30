@@ -30,7 +30,9 @@
 #define TILE_8x8_PER_LINE	(BUF_WIDTH/8)
 #define TILE_16x16_PER_LINE	(BUF_WIDTH/16)
 
-#define SPR_TEXTURE_SIZE	((BUF_WIDTH/16)*((TEXTURE_HEIGHT*3)/16))
+#define SPR_TEXTURE_LAYER_SIZE	((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
+#define SPR_TEXTURE_LAYERS	3
+#define SPR_TEXTURE_SIZE	(SPR_TEXTURE_LAYER_SIZE * SPR_TEXTURE_LAYERS)
 #define SPR_HASH_MASK		0x7ff
 #define SPR_HASH_SIZE		0x800
 #define SPR_MAX_SPRITES		0x3000
@@ -60,7 +62,7 @@ extern uint16_t fix_texture_num;
 
 extern SPRITE ALIGN16_DATA *spr_head[SPR_HASH_SIZE];
 extern SPRITE ALIGN16_DATA spr_data[SPR_TEXTURE_SIZE];
-extern SPRITE *spr_free_head;
+extern SPRITE *spr_free_head[SPR_TEXTURE_LAYERS];
 extern uint16_t spr_texture_num;
 extern int clear_spr_texture;
 extern int clear_fix_texture;
@@ -77,7 +79,7 @@ int fix_insert_sprite(uint32_t key);
 void fix_delete_sprite(void);
 
 int spr_get_sprite(uint32_t key);
-int spr_insert_sprite(uint32_t key);
+int spr_insert_sprite(uint32_t key, uint8_t preferred_layer);
 void spr_delete_sprite(void);
 
 void blit_clear_fix_sprite(void);

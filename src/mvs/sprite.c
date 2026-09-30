@@ -242,7 +242,8 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 				return;
 			}
 		}
-		idx = (int16_t)spr_insert_sprite(MAKE_SPR_KEY(code, attr));
+		idx = (int16_t)spr_insert_sprite(MAKE_SPR_KEY(code, attr),
+			(uint8_t)((code / SPR_TEXTURE_LAYER_SIZE) % SPR_TEXTURE_LAYERS));
 		if (idx < 0) return;
 
 		layer = (uint8_t)(TEXTURE_LAYER_SPR0 + (idx >> 10));
