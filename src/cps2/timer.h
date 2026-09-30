@@ -30,7 +30,7 @@
 #define SUSPEND_REASON_DISABLE	0x0010
 #define SUSPEND_ANY_REASON		((uint32_t)-1)
 
-#define TIMER_CALLBACK(name)	void name(int param)
+#define TIMER_CALLBACK(name)	void name(int param __attribute__((unused)))
 
 void timer_reset(void);
 void timer_set(int which, float duration, int param, void (*callback)(int param));

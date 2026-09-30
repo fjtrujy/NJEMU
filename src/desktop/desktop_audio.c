@@ -47,6 +47,7 @@ static void desktop_free(void *data) {
 }
 
 static int32_t desktop_volumeMax(void *data) {
+	(void)data;
 	return 32767;
 }
 
@@ -86,6 +87,7 @@ static bool desktop_chSRCReserve(void *data, uint16_t samples, int32_t frequency
 }
 
 static bool desktop_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
+	(void)channels;
     desktop_audio_t *desktop = (desktop_audio_t*)data;
     
     /* MP3 channel - 44.1kHz stereo 16-bit */
@@ -129,6 +131,7 @@ static void desktop_release(void *data) {
 }
 
 static void desktop_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
+	(void)volume;
     desktop_audio_t *desktop = (desktop_audio_t*)data;
 
     if (!desktop->device || !desktop->stream) {

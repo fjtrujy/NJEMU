@@ -293,17 +293,6 @@ static void draw_sprites(uint32_t start, uint32_t end, int min_y, int max_y)
 }
 
 
-static inline int sprite_on_scanline(int scanline, int y, int rows)
-{
-	/* check if the current scanline falls inside this sprite,
-       two possible scenerios, wrap around or not */
-	int max_y = (y + rows - 1) & 0x1ff;
-
-	return (((max_y >= y) &&  (scanline >= y) && (scanline <= max_y)) ||
-			((max_y <  y) && ((scanline >= y) || (scanline <= max_y))));
-}
-
-
 /*------------------------------------------------------
 	SPR Sprite Drawing (priority order / for ssrpg)
 ------------------------------------------------------*/

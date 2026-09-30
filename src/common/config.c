@@ -138,21 +138,21 @@ static int ini_version;
 
 static cfg_type default_options[] =
 {
-	{ CFG_NONE,	"[System Settings]", },
-	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   },
+	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   , 0},
 #if (EMU_SYSTEM == MVS)
-	{ CFG_NONE,	"[Emulation Settings]", },
-	{ CFG_INT,	"NeogeoBIOS",		&neogeo_bios,	-1,	BIOS_MAX-1 },
+	{ CFG_NONE,	"[Emulation Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"NeogeoBIOS",		&neogeo_bios,	-1,	BIOS_MAX-1 , 0},
 #elif (EMU_SYSTEM == NCDZ)
-	{ CFG_NONE,	"[Emulation Settings]", },
-	{ CFG_INT,	"NeogeoRegion",		&neogeo_region,	1,	2	},
+	{ CFG_NONE,	"[Emulation Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"NeogeoRegion",		&neogeo_region,	1,	2	, 0},
 #endif
-	{ CFG_NONE, NULL, }
+	{ CFG_NONE, NULL, 0, 0, 0, 0}
 };
 
 static cfg2_type default_options2[] =
 {
-	{ CFG_NONE, NULL, }
+	{ CFG_NONE, NULL, NULL, 0}
 };
 
 #define INCLUDE_CONFIG_STRUCT
@@ -530,7 +530,6 @@ void load_settings(void)
 		}
 #endif
 
-		sprintf(startupDir, "%sroms", launchDir);
 
 		sprintf(inipath, "%s%s", launchDir, inifile_name);
 		remove(inipath);

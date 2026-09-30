@@ -55,6 +55,7 @@ void showmenu(void)
 }
 
 int draw_battery_status(int draw) {
+	(void)draw;
 	return 0;	
 }
 
@@ -68,10 +69,12 @@ void show_exit_screen(void) {
 
 void load_background(int number)
 {
+	(void)number;
 
 }
 
 int ui_show_popup(int draw) {
+	(void)draw;
 	return 0;
 }
 
@@ -138,25 +141,31 @@ void ui_popup_reset(void) {
 }
 
 void draw_dialog(int sx, int sy, int ex, int ey) {
+	(void)sx; (void)sy; (void)ex; (void)ey;
 
 }
 
 int save_png(const char *path) {
+	(void)path;
 	return 0;
 }
 
 void msg_screen_init(int wallpaper, int icon, const char *title) {
+	(void)wallpaper; (void)icon; (void)title;
 
 }
 
 void draw_scrollbar(int sx, int sy, int ex, int ey, int disp_lines, int total_lines, int current_line) {
+	(void)sx; (void)sy; (void)ex; (void)ey; (void)disp_lines; (void)total_lines; (void)current_line;
 
 }
 
 void ui_popup(const char *text, ...) {
+	(void)text;
 
 }
 
 int help(int number) {
+	(void)number;
 	return 0;
 }

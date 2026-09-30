@@ -145,7 +145,7 @@ struct cacheinfo_t MVS_cacheinfo[] =
 	{ "samsho2k2","samsho2",  0, 0, 0 },
 	{ "samsho4k", "samsho4",  0, 0, 0 },
 	{ "shocktroa","shocktro", 0, 0, 0 },
-	{ NULL }
+	{ 0 }
 };
 
 

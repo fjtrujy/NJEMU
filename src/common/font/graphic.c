@@ -113,5 +113,6 @@ int graphic_font_get_gryph(struct font_t *font, uint16_t code)
 
 int graphic_font_get_pitch(uint16_t code)
 {
+	(void)code;
 	return 14;
 }

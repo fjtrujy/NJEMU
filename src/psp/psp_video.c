@@ -206,7 +206,8 @@ static void psp_free(void *data)
 		Wait for VSYNC
 --------------------------------------------------------*/
 
-static void psp_waitVsync(void *data) { 
+static void psp_waitVsync(void *data) {
+	(void)data;
 	sceDisplayWaitVblankStart(); 
 }
 
@@ -311,6 +312,7 @@ static void psp_getOutputSize(void *data, int *width, int *height)
 
 static void psp_scissor(void *data, uint16_t left, uint16_t top, uint16_t right, uint16_t bottom)
 {
+	(void)data;
 	sceGuScissor(left, top, right - left, bottom - top);
 }
 
@@ -702,6 +704,8 @@ static void psp_uploadMem(void *data, uint8_t textureIndex)
 
 static void psp_uploadClut(void *data, uint16_t *clut, uint8_t bank_index)
 {
+	(void)data;
+	(void)bank_index;
 	/* Flush the actual CLUT bank pointer that will be used by sceGuClutLoad */
 	size_t size = 256 * sizeof(uint16_t);
 	sceKernelDcacheWritebackRange(clut, size);
@@ -841,12 +845,14 @@ static void psp_blitPointVertices(void *data, uint32_t points_count,
 
 static void psp_enableDepthTest(void *data)
 {
+	(void)data;
 	sceGuEnable(GU_DEPTH_TEST);
 	sceGuDepthMask(GU_FALSE);
 }
 
 static void psp_disableDepthTest(void *data)
 {
+	(void)data;
 	sceGuDisable(GU_DEPTH_TEST);
 	sceGuDepthMask(GU_TRUE);
 }
@@ -861,6 +867,7 @@ static void psp_clearDepthBuffer(void *data)
 
 static void psp_clearColorBuffer(void *data)
 {
+	(void)data;
 	sceGuClearColor(0);
 	sceGuClear(GU_COLOR_BUFFER_BIT | GU_FAST_CLEAR_BIT);
 }
@@ -880,6 +887,7 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
+	(void)data;
 	video_sprite_vertex_t *vertices;
 
 	if (!tex) return;
@@ -923,6 +931,7 @@ static void psp_drawUISprite(void *data, void *tex, int tex_format, int tex_swiz
 static void psp_drawUILine(void *data,
 	int x1, int y1, int x2, int y2, uint32_t color)
 {
+	(void)data;
 	Vertex16 *vertices;
 	int has_alpha = ((color >> 24) & 0xff) != 0xff;
 
@@ -958,6 +967,7 @@ static void psp_drawUILineGradient(void *data,
 	int x1, int y1, int x2, int y2,
 	uint32_t color1, uint32_t color2)
 {
+	(void)data;
 	Vertex16 *vertices;
 
 	sceGuDisable(GU_TEXTURE_2D);
@@ -991,6 +1001,7 @@ static void psp_drawUILineGradient(void *data,
 static void psp_drawUIRect(void *data,
 	int x, int y, int w, int h, uint32_t color)
 {
+	(void)data;
 	Vertex16 *vertices;
 
 	sceGuDisable(GU_TEXTURE_2D);
@@ -1038,6 +1049,7 @@ static void psp_drawUIRect(void *data,
 static void psp_fillUIRect(void *data,
 	int x, int y, int w, int h, uint32_t color)
 {
+	(void)data;
 	Vertex16 *vertices;
 	int has_alpha = ((color >> 24) & 0xff) != 0xff;
 
@@ -1088,6 +1100,7 @@ static void psp_fillUIRectGradient(void *data,
 	int x, int y, int w, int h,
 	uint32_t color1, uint32_t color2, int direction)
 {
+	(void)data;
 	Vertex16 *vertices;
 
 	sceGuDisable(GU_TEXTURE_2D);

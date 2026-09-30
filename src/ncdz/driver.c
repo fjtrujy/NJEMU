@@ -967,12 +967,6 @@ static inline WRITE16_HANDLER( exmem_latch_clear_w )
 	Set uploading flag ($ff0161)
 ------------------------------------------------------*/
 
-static inline WRITE16_HANDLER( upload_executing_w )
-{
-	upload_executing = data & 0xff;
-}
-
-
 /*------------------------------------------------------
 	Z80 reset / enable ($ff0183)
 ------------------------------------------------------*/

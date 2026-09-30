@@ -53,10 +53,10 @@
 #include "ncdz/ncdz.h"
 #endif
 
-#define MENU_BLANK	{ LF, }
-#define MENU_BLANK_POWER(capability)	{ LF, NULL, 0, 0, { 0 }, capability }
-#define MENU_RETURN	{ RETURN_TO_MAIN_MENU, }
-#define MENU_END	{ EOM, }
+#define MENU_BLANK	{ .label = LF }
+#define MENU_BLANK_POWER(capability)	{ .label = LF, .required_power_capabilities = (capability) }
+#define MENU_RETURN	{ .label = RETURN_TO_MAIN_MENU }
+#define MENU_END	{ .label = EOM }
 
 /*------------------------------------------------------
 	DAVEX: VARIABLES GLOBALES DE CHEATS
@@ -486,6 +486,7 @@ static int menu_gamecfg(void)
 
 
 int add_new_cheat(int type, char *cheat_name, gamecheat_t** new_cheat){
+	(void)type;
     gamecheat_t *cheat;
     int i;
 
@@ -566,6 +567,7 @@ int add_new_cheat_option(char *label, gamecheat_t* cheat,cheat_option_t** new_ch
 }
 
 int add_new_cheat_value(int cpu, int address, int value, cheat_option_t *cheat_option){
+	(void)cpu;
 	
 	cheat_value_t *cheat_value;
 	
@@ -937,10 +939,11 @@ int menu_cheatcfg(void)
 	{
 		a_cheat = gamecheat[c];
 
-    if( a_cheat->cheat_name == NULL)
+		if (a_cheat->cheat_name == NULL)
+		{
+			return 0;
+		}
 
-		return 0;
-    else
 		cheatcfg[c].label     = (const char*)a_cheat->cheat_name;
 		cheatcfg[c].value     = &(a_cheat->curr_option);
 		cheatcfg[c].flag      = CFG_CONTINUE;
@@ -2591,7 +2594,9 @@ void showmenu(void)
 	int rows = ui_layout_visible_rows(40, 32);
 	int i, update = 1;
 	int mainmenu_num = 0;
+#ifdef SAVE_STATE
 	char buf[128];
+#endif
 	menu_t mainmenu[MENU_MAX_ITEMS];
 
 #ifdef SAVE_STATE

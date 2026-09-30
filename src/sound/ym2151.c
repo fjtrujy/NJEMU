@@ -681,6 +681,7 @@ static void envelope_KONKOFF(FM_OPM *op, int v)
 
 void timer_callback_2151_a(int param)
 {
+	(void)param;
 	timer_adjust(YM2151_TIMERA, ym2151->timer_A_time[ym2151->timer_A_index], 0, timer_callback_2151_a);
 	ym2151->timer_A_index_old = ym2151->timer_A_index;
 
@@ -697,6 +698,7 @@ void timer_callback_2151_a(int param)
 
 void timer_callback_2151_b(int param)
 {
+	(void)param;
 	timer_adjust(YM2151_TIMERB, ym2151->timer_B_time[ym2151->timer_B_index], 0, timer_callback_2151_b);
 	ym2151->timer_B_index_old = ym2151->timer_B_index;
 

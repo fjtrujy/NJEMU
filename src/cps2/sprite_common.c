@@ -589,6 +589,7 @@ void blit_update_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
+	(void)x; (void)y;
 	uint32_t key = MAKE_KEY(code, attr);
 	SPRITE *p = scroll1_head[key & SCROLL1_HASH_MASK];
 
@@ -616,6 +617,7 @@ void blit_update_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
+	(void)x;
 	if (y > clip_min_y - 16 && y < clip_max_y)
 	{
 		uint32_t key = MAKE_KEY(code, attr);
@@ -646,6 +648,7 @@ void blit_update_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 
 void blit_update_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 {
+	(void)x; (void)y;
 	uint32_t key = MAKE_KEY(code, attr);
 	SPRITE *p = scroll3_head[key & SCROLL3_HASH_MASK];
 

@@ -114,11 +114,14 @@ static void errormsg(int number)
 #define ALLOC_SAVE_SIZE	((400 + 1024) * 1024)
 
 static int left_mem;
+#ifdef SAVE_STATE
 static int alloc_size;
+#endif
 static uint8_t *next_ptr;
 
 static void png_mem_init(int flag)
 {
+	(void)flag;
 #ifdef SAVE_STATE
 	if (GFX_MEMORY)
 	{
@@ -177,13 +180,15 @@ static void png_free(void *ptr)
 	}
 }
 
-static voidpf png_zcalloc(voidpf opaque, unsigned items, unsigned size)
+static voidpf png_zcalloc(voidpf opaque, size_t items, size_t size)
 {
+	(void)opaque;
 	return png_alloc(items * size);
 }
 
 static void png_zcfree(voidpf opaque, voidpf ptr)
 {
+	(void)opaque;
 	png_free(ptr);
 }
 
@@ -328,8 +333,8 @@ static int png_inflate_image(struct png_info *p)
 	stream.avail_in  = (unsigned int)p->compressed_length;
 	stream.next_out  = (unsigned char *)p->fimage;
 	stream.avail_out = fbuff_size;
-	stream.zalloc    = (alloc_func)png_zcalloc;
-	stream.zfree     = (free_func)png_zcfree;
+	stream.zalloc    = png_zcalloc;
+	stream.zfree     = png_zcfree;
 	stream.opaque    = (voidpf)0;
 
 	if (mz_inflateInit(&stream) == MZ_OK)
@@ -411,7 +416,7 @@ static int png_read_file(int fd, struct png_info *p)
 				errormsg(0);
 				return 0;
 			}
-			if (png_read(chunk_data, chunk_length, fd) != chunk_length)
+			if ((uint32_t)png_read(chunk_data, chunk_length, fd) != chunk_length)
 			{
 				errormsg(2);
 				free(chunk_data);
@@ -538,6 +543,7 @@ static int png_read_file(int fd, struct png_info *p)
 
 int load_png(const char *name, int number)
 {
+	(void)number;
 	struct png_info p;
 	int fd;
 	uint32_t res = 0;
@@ -804,8 +810,8 @@ static int png_deflate_image(struct png_info *p)
 	stream.avail_in  = p->height * (p->rowbytes + 1);//
 	stream.next_out  = p->zimage;
 	stream.avail_out = zbuff_size;
-	stream.zalloc    = (alloc_func)png_zcalloc;
-	stream.zfree     = (free_func)png_zcfree;
+	stream.zalloc    = png_zcalloc;
+	stream.zfree     = png_zcfree;
 	stream.opaque    = (voidpf)0;
 
 	if (mz_deflateInit(&stream, MZ_DEFAULT_COMPRESSION) == MZ_OK)

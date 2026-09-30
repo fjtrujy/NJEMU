@@ -115,7 +115,7 @@ struct driver_t CPS2_driver[] =
 	{ "hsf2",     CPS2_KLUDGE_SSF2T,   1,   0x00, { COIN_NONE } },
 	{ "jyangoku", 0,                   0,   0x00, { COIN_NONE } },
 #endif
-	{ NULL }
+	{ 0 }
 };
 
 struct driver_t *driver;

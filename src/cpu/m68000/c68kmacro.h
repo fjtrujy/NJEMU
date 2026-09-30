@@ -49,8 +49,8 @@
 #define READSX_REG_16(A)		MAKE_INT_16(A)
 #define READSX_REG_32(A)		MAKE_INT_32(A)
 
-#define WRITE_REG_8(A, D)		*(uint8_t *)(&A) = D
-#define WRITE_REG_16(A, D)		*(uint16_t *)(&A) = D
+#define WRITE_REG_8(A, D)		(A) = ((A) & UINT32_C(0xffffff00)) | (uint8_t)(D)
+#define WRITE_REG_16(A, D)		(A) = ((A) & UINT32_C(0xffff0000)) | (uint16_t)(D)
 #define WRITE_REG_32(A, D)		A = D
 
 #define READ_IMM_8()			(*(uint8_t *)PC)

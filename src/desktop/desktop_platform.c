@@ -44,7 +44,9 @@ static void desktop_free(void *data) {
 }
 
 static void desktop_main(void *data, int argc, char *argv[]) {
-	desktop_platform_t *desktop = (desktop_platform_t*)data;
+	(void)data;
+	(void)argc;
+	(void)argv;
     
 	getcwd(screenshotDir, sizeof(screenshotDir));
     strcat(screenshotDir, "/PICTURE");

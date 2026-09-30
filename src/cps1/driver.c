@@ -351,7 +351,7 @@ struct driver_t CPS1_driver[] =
 	{"sfzbch",     NOBATTRY, 0,                    GFX_SFZCH    },
 	{"wofch",      NOBATTRY, 0,                    GFX_WOF      },
 	{"ganbare",    NOBATTRY, 0,                    GFX_SFZCH    },
-	{NULL}
+	{0}
 };
 
 struct driver_t *driver;

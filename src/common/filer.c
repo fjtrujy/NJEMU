@@ -182,8 +182,6 @@ void find_state_file(uint8_t *slot)
 #include <ctype.h>
 #include "common/memory_sizes.h"
 
-void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
-
 #define MAX_ENTRY 1024
 #define MAX_GAMES 512
 
@@ -292,7 +290,7 @@ static void title_draw_spr(int sx, int sy, uint8_t *spr, uint16_t *palette, int 
 	Load title_x.sys
 --------------------------------------------------------*/
 
-static int load_title(const char *path, resource_source_type_t source_type, int number)
+static int load_title(const char *path, resource_source_type_t source_type)
 {
 	int i, region, tileno, x, y, found = 0;
 	resource_source_t source = {0};
@@ -342,10 +340,9 @@ static int load_title(const char *path, resource_source_type_t source_type, int 
 	}
 	resource_source_close(&source);
 
-	swab((uint8_t *)palette, (uint8_t *)palette, 0x5a0);
-
 	for (i = 0; i < 0x5a0 >> 1; i++)
 	{
+		palette[i] = (uint16_t)((palette[i] >> 8) | (palette[i] << 8));
 		int r = ((palette[i] >> 7) & 0x1e) | ((palette[i] >> 14) & 0x01);
 		int g = ((palette[i] >> 3) & 0x1e) | ((palette[i] >> 13) & 0x01);
 		int b = ((palette[i] << 1) & 0x1e) | ((palette[i] >> 12) & 0x01);
@@ -701,6 +698,7 @@ static void checkStartupDir(void)
 
 static int set_file_flags(const char *path, int number)
 {
+	(void)path;
 #if (EMU_SYSTEM == NCDZ)
 	if (files[number]->type == FTYPE_ZIP)
 	{
@@ -1029,12 +1027,17 @@ void file_browser(void)
 	logo(32, 5, UI_COLOR(UI_PAL_TITLE));
 
 	{
-		static const char *const splash_lines[] = {
-			APPNAME_STR " " VERSION_STR,
-			"for " PLATFORM_STR,
+		char version_line[64];
+		char platform_line[64];
+		const char *splash_lines[] = {
+			version_line,
+			platform_line,
 			"NJ (https://fjtrujy.github.io/NJEMU/)",
 			"2011-2026 (https://github.com/fjtrujy/NJEMU)"
 		};
+
+		snprintf(version_line, sizeof(version_line), "%s %s", APPNAME_STR, VERSION_STR);
+		snprintf(platform_line, sizeof(platform_line), "for %s", PLATFORM_STR);
 		int splash_width = 0;
 		int dialog_half_width;
 
@@ -1230,9 +1233,8 @@ void file_browser(void)
 								else
 									sprintf(path, "%s/%s", curr_dir, files[sel]->name);
 
-									if (!load_title(path,
-										flag == 2 ? RESOURCE_SOURCE_ZIP : RESOURCE_SOURCE_DIRECTORY,
-										sel))
+								if (!load_title(path,
+									flag == 2 ? RESOURCE_SOURCE_ZIP : RESOURCE_SOURCE_DIRECTORY))
 								{
 									files[sel]->flag &= ~GAME_HAS_TITLE;
 									title_image = -1;

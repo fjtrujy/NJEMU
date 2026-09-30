@@ -16,6 +16,7 @@
 
 void YM2151_sh_start(int type)
 {
+	(void)type;
 	YM2151Init(3579545, cps1_sound_interrupt);
 	OKIM6295Init(1000000, 1);
 }

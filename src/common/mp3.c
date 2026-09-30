@@ -276,6 +276,8 @@ static void MP3Update(void)
 
 static int32_t MP3Thread(uint32_t args, void *argp)
 {
+	(void)args;
+	(void)argp;
 	while (mp3_active)
 	{
 		thread_driver->sleepThread(mp3_thread);

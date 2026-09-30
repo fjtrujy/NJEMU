@@ -98,7 +98,7 @@ static void desktop_waitThreadEnd(void *data) {
 }
 
 static void desktop_wakeupThread(void *data) {
-	desktop_thread_t *desktop = (desktop_thread_t*)data;
+	(void)data;
 }
 
 static void desktop_deleteThread(void *data) {
@@ -107,20 +107,23 @@ static void desktop_deleteThread(void *data) {
 }
 
 static void desktop_resumeThread(void *data) {
-	desktop_thread_t *desktop = (desktop_thread_t*)data;
+	(void)data;
 }
 
 static void desktop_suspendThread(void *data) {
-	desktop_thread_t *desktop = (desktop_thread_t*)data;
+	(void)data;
 }
 
 static void desktop_sleepThread(void *data) {
+	(void)data;
 }
 
 static void desktop_yieldThread(void) {
 }
 
 static void desktop_exitThread(void *data, int32_t exitCode) {
+	(void)data;
+	(void)exitCode;
 }
 
 thread_driver_t thread_desktop = {

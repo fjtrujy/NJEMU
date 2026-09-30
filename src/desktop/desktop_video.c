@@ -220,6 +220,7 @@ static void desktop_free(void *data)
 
 static void desktop_waitVsync(void *data)
 {
+	(void)data;
 }
 
 
@@ -253,11 +254,13 @@ static void desktop_flipScreen(void *data, bool vsync)
 
 static void desktop_beginFrame(void *data)
 {
+	(void)data;
 	/* No-op: SDL2 doesn't use command lists */
 }
 
 static void desktop_endFrame(void *data)
 {
+	(void)data;
 	/* No-op: SDL2 doesn't use command lists */
 }
 
@@ -268,6 +271,7 @@ static void desktop_endFrame(void *data)
 
 static void *desktop_frameAddr(void *data, int frameIndex, int x, int y)
 {
+	(void)data; (void)frameIndex; (void)x; (void)y;
 	return NULL;
 }
 
@@ -476,6 +480,7 @@ static void desktop_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
+	(void)data; (void)dstIndex; (void)dst_rect; (void)srcIndex; (void)src_rect;
 }
 
 
@@ -485,6 +490,7 @@ static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *s
 
 static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
+	(void)data; (void)dstIndex; (void)dst_rect; (void)srcIndex; (void)src_rect;
 }
 
 
@@ -494,6 +500,8 @@ static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT 
 
 static void desktop_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
+	(void)dstIndex; (void)dst_rect; (void)src_rect;
+	(void)data; (void)srcIndex;
 }
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -629,9 +637,11 @@ static void desktop_blitSpriteVertices(void *data, uint8_t textureIndex,
 }
 
 static void desktop_uploadMem(void *data, uint8_t textureIndex) {
+	(void)data; (void)textureIndex;
 }
 
 static void desktop_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
+	(void)bank_index; (void)clut; (void)data;
 }
 
 static void desktop_blitPointVertices(void *data, uint32_t points_count,
@@ -650,18 +660,22 @@ static void desktop_blitPointVertices(void *data, uint32_t points_count,
 }
 
 static void desktop_enableDepthTest(void *data) {
+	(void)data;
 	// No-op: depth test not needed on desktop yet
 }
 
 static void desktop_disableDepthTest(void *data) {
+	(void)data;
 	// No-op: depth test not needed on desktop yet
 }
 
 static void desktop_clearDepthBuffer(void *data) {
+	(void)data;
 	// No-op: depth buffer not used on desktop yet
 }
 
 static void desktop_clearColorBuffer(void *data) {
+	(void)data;
 	// No-op: color buffer clear within scissor not needed on desktop yet
 }
 
@@ -863,4 +877,5 @@ video_driver_t video_desktop = {
 	desktop_fillUIRect,
 	desktop_fillUIRectGradient,
 	desktop_setUIScissor,
+	NULL, // prepareSpriteVertices
 };

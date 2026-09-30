@@ -141,6 +141,7 @@ void blit_reset(void)
 
 void blit_start(int start, int end)
 {
+	(void)end;
 	spr_vertex_count = 0;
 	spr_count = 0;
 

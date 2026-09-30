@@ -18,6 +18,7 @@ static void psp_free(void *data) {
 }
 
 static int32_t psp_volumeMax(void *data) {
+	(void)data;
 	return PSP_AUDIO_VOLUME_MAX;
 }
 
@@ -41,10 +42,13 @@ static void psp_release(void *data) {
 }
 
 static void psp_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
+	(void)data;
+	(void)size;
 	sceAudioSRCOutputBlocking(volume, buffer);
 }
 
 static void psp_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
+	(void)size;
 	psp_audio_t *psp = (psp_audio_t*)data;
 	sceAudioOutputPannedBlocking(psp->channel, leftvol, rightvol, buffer);
 }

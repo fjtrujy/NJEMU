@@ -900,10 +900,6 @@ static inline uint8_t FM_STATUS_FLAG(FM_ST *ST)
 	}
 	return ST->status;
 }
-static inline void FM_BUSY_SET(FM_ST *ST,int busyclock )
-{
-	ST->BusyExpire = FM_GET_TIME_NOW() + (ST->TimerBase * busyclock);
-}
 #define FM_BUSY_CLEAR(ST) ((ST)->BusyExpire = 0)
 #else
 #define FM_STATUS_FLAG(ST) ((ST)->status)
@@ -1034,6 +1030,7 @@ static inline void set_det_mul(FM_ST *ST,FM_CH *CH,FM_SLOT *SLOT,int v)
 /* set total level */
 static inline void set_tl(FM_CH *CH,FM_SLOT *SLOT , int v)
 {
+	(void)CH;
 	SLOT->tl = (v&0x7f)<<(ENV_BITS-7); /* 7bit TL */
 }
 
@@ -1100,12 +1097,9 @@ static inline void set_sl_rr(FM_SLOT *SLOT,int v)
 static inline void advance_lfo(FM_OPN *OPN)
 {
 	uint8_t pos;
-	uint8_t prev_pos;
 
 	if (OPN->lfo_inc)	/* LFO enabled ? */
 	{
-		prev_pos = OPN->lfo_cnt >> LFO_SH & 127;
-
 		OPN->lfo_cnt += OPN->lfo_inc;
 
 		pos = (OPN->lfo_cnt >> LFO_SH) & 127;
@@ -1126,7 +1120,6 @@ static inline void advance_lfo(FM_OPN *OPN)
 		}
 
 		/* PM works with 4 times slower clock */
-		prev_pos >>= 2;
 		pos >>= 2;
 		/* update PM when LFO output changes */
 		/*if (prev_pos != pos)*/ /* can't use global lfo_pm for this optimization, must be chip->lfo_pm instead*/
@@ -2236,6 +2229,7 @@ static void OPNB_ADPCMA_calc_chan_static(int c, ADPCMA *ch)
 static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 #endif
 {
+	(void)c;
 	uint32_t step;
 	uint8_t  data;
 
@@ -2292,6 +2286,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 #if (EMU_SYSTEM == MVS)
 static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 {
+	(void)c;
 	uint32_t step;
 	uint8_t  data;
 

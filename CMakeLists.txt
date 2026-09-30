@@ -232,44 +232,7 @@ set(WARNING_OPTIONS
     -Wall
     -Wextra
     -Werror
-    # Emulator callback/handler signatures intentionally expose parameters that
-    # individual implementations do not always consume.
-    -Wno-unused-parameter
 )
-
-# Platform-specific toolchains and intentional stubs may need narrowly scoped
-# warning exceptions. Keep these local instead of hiding warning classes from
-# the whole project.
-# The legacy INI tables intentionally use short aggregate initializers; omitted
-# fields are zero/default by design. Keep that convention local to config.c.
-set_source_files_properties(src/common/config.c PROPERTIES
-    COMPILE_OPTIONS "-Wno-missing-field-initializers"
-)
-if (PLATFORM STREQUAL "PSP")
-    set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
-        COMPILE_OPTIONS "-Wno-strict-aliasing"
-    )
-elseif (PLATFORM STREQUAL "PS2")
-    list(APPEND WARNING_OPTIONS
-        -Wno-unused-variable
-        -Wno-unknown-pragmas
-        -Wno-restrict
-        -Wno-strict-aliasing
-        -Wno-format
-    )
-elseif (PLATFORM STREQUAL "DESKTOP")
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        list(APPEND WARNING_OPTIONS
-            -Wno-unused-result
-        )
-    else()
-        list(APPEND WARNING_OPTIONS
-            -Wno-unused-command-line-argument
-            -Wno-invalid-source-encoding
-            -Wno-shorten-64-to-32
-        )
-    endif()
-endif()
 
 # Common source files
 set(COMMON_SRC
