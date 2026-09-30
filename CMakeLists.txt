@@ -808,8 +808,8 @@ else()
     # build/cps1 is not only the wrong runtime layout, it also collides with the
     # CPS1 executable on case-insensitive filesystems such as default macOS.
     # These entries may be edited by the user or written by the emulator.
-    # Compare lower-cased names so legacy files such as MVSPSP.INI are also
-    # recognized on case-sensitive hosts.
+    # Compare lower-cased names so mutable entries are recognized consistently
+    # on case-sensitive hosts.
     set(MUTABLE_RESOURCE_ENTRIES
         "config"
         "memcard"
@@ -818,10 +818,6 @@ else()
         "picture"
         "game_name.ini"
         "njemu.ini"
-        "cps1psp.ini"
-        "cps2psp.ini"
-        "mvspsp.ini"
-        "ncdzpsp.ini"
         "command.dat"
         "backup.bin"
     )

@@ -492,7 +492,6 @@ void load_settings(void)
 {
 	int i;
 	char path[PATH_MAX];
-	int loaded_legacy = 0;
 
 	for (i = 0; default_options[i].name; i++)
 	{
@@ -517,19 +516,9 @@ void load_settings(void)
 
 	if (load_inifile(path, default_options, default_options2) == 0)
 	{
-		char legacy_path[PATH_MAX];
-
-		sprintf(legacy_path, "%s%s", launchDir, legacy_inifile_name);
-		if (load_inifile(legacy_path, default_options, default_options2) == 0)
-		{
-			save_settings();
-			return;
-		}
-
-		loaded_legacy = 1;
+		save_settings();
 	}
-
-	if (ini_version != INIVERSION)
+	else if (ini_version != INIVERSION)
 	{
 		char inipath[PATH_MAX];
 
@@ -559,11 +548,6 @@ void load_settings(void)
 		delete_files("nvram", "nv");
 		delete_files("config", "ini");
 
-		save_settings();
-	}
-	else if (loaded_legacy)
-	{
-		/* Persist PSP-era settings under the platform-neutral filename. */
 		save_settings();
 	}
 }

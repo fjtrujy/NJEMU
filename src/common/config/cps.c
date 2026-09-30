@@ -14,10 +14,8 @@
 
 #if (EMU_SYSTEM == CPS1)
 static const char *inifile_name = "njemu.ini";
-static const char *legacy_inifile_name = "cps1psp.ini";
 #else
 static const char *inifile_name = "njemu.ini";
-static const char *legacy_inifile_name = "cps2psp.ini";
 #endif
 
 #elif defined(INCLUDE_CONFIG_STRUCT)
