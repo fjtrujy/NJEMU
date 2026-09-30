@@ -368,6 +368,7 @@ void update_screen(void)
 			(int)((float)frameskip_counter * TICKS_PER_FRAME);
 		bool sync_flip = frame_pacing_should_sync_flip(
 			option_speedlimit != 0, option_vsync != 0, curr, target);
+		bool scheduler_blocked = sync_flip;
 
 		/* With software pacing but no useful VBlank wait, reach the emulation
 		 * deadline before presenting. If VSync is useful, present first: waiting
@@ -376,16 +377,14 @@ void update_screen(void)
 		{
 			uint64_t delay = frame_pacing_sleep_us(true, curr, target);
 			if (delay != 0)
+			{
 				usleep(delay);
+				scheduler_blocked = true;
+			}
 		}
 
 		video_driver->flipScreen(video_data, sync_flip);
 		curr = ticker_driver->currentUs(ticker_data);
-
-		/* An uncapped, unsynchronized frame has no natural blocking point.
-		 * Give cooperative schedulers a chance to run audio/worker threads. */
-		if (!option_speedlimit && !option_vsync)
-			thread_driver->yieldThread();
 
 		/* A synchronous flip blocks until VBlank. Re-sample the clock before
 		 * applying the software limit so that VSync time is never counted twice. */
@@ -395,9 +394,15 @@ void update_screen(void)
 			if (delay != 0)
 			{
 				usleep(delay);
+				scheduler_blocked = true;
 				curr = ticker_driver->currentUs(ticker_data);
 			}
 		}
+
+		/* Falling behind the frame deadline can remove every natural blocking
+		 * point even with the limiter enabled. Yield explicitly in that case. */
+		if (!scheduler_blocked)
+			thread_driver->yieldThread();
 
 		rendered_frames_since_last_fps++;
 

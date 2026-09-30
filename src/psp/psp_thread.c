@@ -58,6 +58,10 @@ static void psp_sleepThread(void *data) {
 }
 
 static void psp_yieldThread(void) {
+	int priority = sceKernelGetThreadCurrentPriority();
+
+	if (priority >= 0)
+		sceKernelRotateThreadReadyQueue(priority);
 }
 
 static void psp_exitThread(void *data, int32_t exitCode) {
