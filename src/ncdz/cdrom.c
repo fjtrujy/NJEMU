@@ -11,6 +11,7 @@
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/ui_draw.h"
@@ -177,7 +178,7 @@ static void show_loading_image(void)
 
 	video_driver->clearScreen(video_data);
 
-	sprintf(path, "%sdata/%s", launchDir, "loading.png");
+	if (!path_format(path, sizeof(path), "%sdata/%s", launchDir, "loading.png")) return;
 
 #if defined(GUI)
 	if (load_png(path, -1) == 0) 

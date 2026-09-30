@@ -14,6 +14,7 @@
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "ncdz/resource_source.h"
 #include "common/palette_convert.h"
 
@@ -135,7 +136,7 @@ int neogeo_check_game(void)
 		strcpy(game_name, default_name);
 		game_index = 0;
 
-		sprintf(path, "%sIPL.TMP", launchDir);
+		if (!path_format(path, sizeof(path), "%sIPL.TMP", launchDir)) return 0;
 
 		if (!resource_source_stat(&ncdz_game_source, "IPL.TXT", &info) ||
 			info.size > memory_length_cpu1)

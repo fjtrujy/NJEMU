@@ -18,6 +18,7 @@
 #include <psp2/system_param.h>
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 
 /* The app itself is read-only (app0:). Everything the emulator reads or writes
  * relative to its launch directory lives in ux0:data/<target>/. */
@@ -118,8 +119,8 @@ static void psvita_main(void *data, int argc, char *argv[])
 	if (chdir(base) != 0)
 		printf("psvita: cannot enter %s\n", base);
 
-	snprintf(launchDir, sizeof(launchDir), "%s/", base);
-	snprintf(screenshotDir, sizeof(screenshotDir), "%s/pict", base);
+	if (!path_format(launchDir, sizeof(launchDir), "%s/", base)) launchDir[0] = '\0';
+	if (!path_format(screenshotDir, sizeof(screenshotDir), "%s/pict", base)) screenshotDir[0] = '\0';
 }
 
 static bool psvita_queryMemoryInfo(void *data, platform_memory_info_t *out)

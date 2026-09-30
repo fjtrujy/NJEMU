@@ -24,6 +24,7 @@ static void psvita_ticker_free(void *data) {
 }
 
 static uint64_t psvita_currentUs(void *data) {
+	(void)data;
 	return sceKernelGetProcessTimeWide();
 }
 

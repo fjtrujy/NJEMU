@@ -20,6 +20,7 @@
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "cps1/sound_io.h"
 
 
@@ -671,7 +672,7 @@ static void cps1_nvram_read_write(int read_or_write)
 	char path[PATH_MAX];
 	int fd;
 
-	sprintf(path, "%snvram/%s.nv", launchDir, game_name);
+	if (!path_format(path, sizeof(path), "%snvram/%s.nv", launchDir, game_name)) return;
 
 	if (read_or_write)
 	{

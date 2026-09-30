@@ -11,6 +11,7 @@
 #include "common/emulator_runtime.h"
 #include "common/filer.h"
 #include "common/mp3.h"
+#include "common/path_utils.h"
 #include <stdio.h>
 
 
@@ -86,7 +87,7 @@ void cdda_play(int track)
 		{
 			char path[PATH_MAX];
 
-			sprintf(path, "%s/%s", mp3_dir, fname);
+			if (!path_format(path, sizeof(path), "%s/%s", mp3_dir, fname)) return;
 			mp3_play(path);
 			autoframeskip_reset();
 		}
@@ -306,7 +307,7 @@ STATE_LOAD( cdda )
 			{
 				char path[PATH_MAX];
 
-				sprintf(path, "%s/%s", mp3_dir, fname);
+				if (!path_format(path, sizeof(path), "%s/%s", mp3_dir, fname)) return;
 				mp3_seek_set(path, frame);
 			}
 			else

@@ -148,6 +148,7 @@ static void ps2_suspendThread(void *data) {
 }
 
 static void ps2_sleepThread(void *data) {
+	(void)data;
 	SleepThread();
 }
 

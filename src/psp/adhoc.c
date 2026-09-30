@@ -676,7 +676,7 @@ static int adhocStartP2P(void)
 	sprintf(message, TEXT(CONNECTING_TO_x), Server ? TEXT(CLIENT) : TEXT(SERVER));
 	adhoc_init_progress(4, message);
 
-	if ((error = sceNetAdhocctlConnect(g_ssid)) == 0)
+	if ((error = sceNetAdhocctlConnect((const char *)g_ssid)) == 0)
 	{
 		update_progress();
 		do

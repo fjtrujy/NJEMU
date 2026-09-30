@@ -22,6 +22,7 @@
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -108,14 +109,14 @@ static int neogeo_init(void)
 	if (!adhoc_enable)
 #endif
 	{
-		sprintf(path, "%smemcard/%s.bin", launchDir, game_name);
+		if (!path_format(path, sizeof(path), "%smemcard/%s.bin", launchDir, game_name)) return 0;
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
 			read(fd, neogeo_memcard, 0x800);
 			close(fd);
 		}
 
-		sprintf(path, "%snvram/%s.nv", launchDir, game_name);
+		if (!path_format(path, sizeof(path), "%snvram/%s.nv", launchDir, game_name)) return 0;
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
 			read(fd, neogeo_sram16, 0x2000);
@@ -211,14 +212,14 @@ static void neogeo_exit(void)
 	if (!adhoc_enable)
 #endif
 	{
-		sprintf(path, "%smemcard/%s.bin", launchDir, game_name);
+		if (!path_format(path, sizeof(path), "%smemcard/%s.bin", launchDir, game_name)) return;
 		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 		{
 			write(fd, neogeo_memcard, 0x800);
 			close(fd);
 		}
 
-		sprintf(path, "%snvram/%s.nv", launchDir, game_name);
+		if (!path_format(path, sizeof(path), "%snvram/%s.nv", launchDir, game_name)) return;
 		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 		{
 			byte_swap_pairs_in_place((uint8_t *)neogeo_sram16, 0x2000);

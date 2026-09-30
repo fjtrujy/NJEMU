@@ -14,6 +14,7 @@
 #include "common/input_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/sound.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
@@ -246,7 +247,7 @@ void load_commandlist(const char *game_name, const char *parent_name)
 	num_lines = 0;
 	num_items = 0;
 
-	sprintf(path, "%scommand.dat", launchDir);
+	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return;
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
@@ -572,7 +573,7 @@ void free_commandlist(void)
 
 void commandlist(int flag)
 {
-	int x, y, alpha;
+	int x, y, alpha = 0;
 	int update = 1, menu_counter = 0;
 #if (EMU_SYSTEM == NCDZ)
 	int mp3_paused = 0;
@@ -878,7 +879,10 @@ void commandlist(int flag)
 
 int commandlist_size_reduction(void)
 {
-	int fd_zip, fd_cmd, fd_out;
+#if (EMU_SYSTEM != NCDZ)
+	int fd_zip;
+#endif
+	int fd_cmd, fd_out;
 	char path[PATH_MAX], path2[PATH_MAX];
 	char *p, linebuf[512], rom_name[512][16];//256
 	int i, j, l, found = 0, total_roms = 0;
@@ -895,11 +899,11 @@ int commandlist_size_reduction(void)
 	}
 	total_roms = 97;
 #else
-	sprintf(path, "%szipname." EXT, launchDir);
+	if (!path_format(path, sizeof(path), "%szipname." EXT, launchDir)) return 0;
 	fd_zip = open(path, O_RDONLY);
 	if (fd_zip < 0)
 	{
-		sprintf(path, "%szipnamej." EXT, launchDir);
+		if (!path_format(path, sizeof(path), "%szipnamej." EXT, launchDir)) return 0;
 		fd_zip = open(path, O_RDONLY);
 		if (fd_zip < 0)
 		{
@@ -915,7 +919,7 @@ int commandlist_size_reduction(void)
 	close(fd_zip);
 #endif
 
-	sprintf(path, "%scommand.dat", launchDir);
+	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return 0;
 	fd_cmd = open(path, O_RDONLY);
 	if (fd_cmd < 0)
 		return 0;
@@ -1084,7 +1088,7 @@ int commandlist_size_reduction(void)
 	}
 
 	// Create backup filename
-	sprintf(path2, "%scommand.org", launchDir);
+	if (!path_format(path2, sizeof(path2), "%scommand.org", launchDir)) return 0;
 
 	remove(path2);
 

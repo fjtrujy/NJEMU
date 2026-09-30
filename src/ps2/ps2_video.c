@@ -157,6 +157,7 @@ static int32_t finish_sema_id = -1;
 
 static int finish_handler(int reason)
 {
+	(void)reason;
 	if (GS_CSR_FINISH && finish_sema_id >= 0) {
 		iSignalSema(finish_sema_id);
 	}
@@ -298,10 +299,7 @@ void gsKit_custom_clear(GSGLOBAL *gsGlobal, gs_rgbaq color, uint16_t width, uint
 	u8 PrevZState;
 	u8 PrevAlphaTestState;
 	int PrevAlphaState;
-	u8 strips;
-	u8 remain;
 	u8 index;
-	u32 pos;
 	u8 slices = (width + 63)/ 64;
 	u32 count = (slices * 2) + 1;
 	u128 flat_content[count];
@@ -472,11 +470,11 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
 {
 	*tw = 31 - (lzw(Texture->Width) + 1);
-	if(Texture->Width > (1<<*tw))
+	if(Texture->Width > (u32)(1U << *tw))
 		(*tw)++;
 
 	*th = 31 - (lzw(Texture->Height) + 1);
-	if(Texture->Height > (1<<*th))
+	if(Texture->Height > (u32)(1U << *th))
 		(*th)++;
 }
 
@@ -692,8 +690,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}
-	printf("CLUT VRAM: %p (banks=%d, entries/bank=%d, height=%d, size/bank=%u)\n",
-		   vram_cluts, ps2->clut_bank_count, ps2->clut_entries_per_bank, ps2->clut_bank_height, clut_vram_size);
+	printf("CLUT VRAM: %p (banks=%d, entries/bank=%d, height=%d, size/bank=%lu)\n",
+		   vram_cluts, ps2->clut_bank_count, ps2->clut_entries_per_bank, ps2->clut_bank_height, (unsigned long)clut_vram_size);
 	ps2->clut_vram_size = clut_vram_size;
 	ps2->vram_cluts = vram_cluts;
 
@@ -812,6 +810,7 @@ static void ps2_beginFrame(void *data)
 
 static void ps2_endFrame(void *data)
 {
+	(void)data;
 	/* No-op: gsKit queue is executed in flipScreen */
 }
 
@@ -845,7 +844,7 @@ static void *ps2_frameAddr(void *data, int frameIndex, int x, int y)
 	if (!texture || !texture->Mem)
 		return NULL;
 
-	if (x < 0 || y < 0 || x >= texture->Width || y >= texture->Height)
+	if (x < 0 || y < 0 || (u32)x >= texture->Width || (u32)y >= texture->Height)
 		return NULL;
 
 	return (uint8_t *)texture->Mem +
@@ -927,7 +926,6 @@ static void ps2_clearFrame(void *data, int index)
 
 static void ps2_fillFrame(void *data, int frameIndex, uint32_t color)
 {
-	ps2_video_t *ps2 = (ps2_video_t*)data;
 	gs_rgbaq rgbaq_color = color_to_RGBAQ(
 		(color >> 0) & 0xFF,
 		(color >> 8) & 0xFF,
@@ -1066,7 +1064,7 @@ int ps2_video_read_frame(void *data, int frame_index,
 	if (source.PSM != GS_PSM_CT16)
 		return 0;
 
-	if (x < 0 || y < 0 || x + width > source.Width || y + height > source.Height)
+	if (x < 0 || y < 0 || (u32)(x + width) > source.Width || (u32)(y + height) > source.Height)
 		return 0;
 
 	/* ps2_screenshot derives BITBLTBUF.SBW from its Width argument, so the
@@ -1326,7 +1324,7 @@ static void ps2_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_re
 
 static void ps2_uploadMem(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
-	if (!ps2 || textureIndex >= ps2->tex_layers_count)
+	if (!ps2 || (int)textureIndex >= ps2->tex_layers_count)
 		return;
 
 	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
@@ -1367,12 +1365,12 @@ static void ps2_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 	uint8_t *dst;
 	int row;
 
-	if (!ps2 || textureIndex >= ps2->tex_layers_count || !pixels ||
+	if (!ps2 || (int)textureIndex >= ps2->tex_layers_count || !pixels ||
 	    width <= 0 || height <= 0 || srcPitch < width)
 		return;
 	tex = ps2->tex_layers[textureIndex].texture;
 	if (!tex || !tex->Mem || tex->PSM != GS_PSM_T8 ||
-	    x < 0 || y < 0 || x + width > tex->Width || y + height > tex->Height)
+	    x < 0 || y < 0 || (u32)(x + width) > tex->Width || (u32)(y + height) > tex->Height)
 		return;
 	dst = (uint8_t *)tex->Mem;
 	for (row = 0; row < height; row++)
@@ -1388,12 +1386,12 @@ static void ps2_writeDirectTextureRect(void *data, uint8_t textureIndex,
 	uint16_t *dst;
 	int row;
 
-	if (!ps2 || textureIndex >= ps2->tex_layers_count || !pixels ||
+	if (!ps2 || (int)textureIndex >= ps2->tex_layers_count || !pixels ||
 	    width <= 0 || height <= 0 || srcPitch < width)
 		return;
 	tex = ps2->tex_layers[textureIndex].texture;
 	if (!tex || !tex->Mem || tex->PSM != GS_PSM_CT16 ||
-	    x < 0 || y < 0 || x + width > tex->Width || y + height > tex->Height)
+	    x < 0 || y < 0 || (u32)(x + width) > tex->Width || (u32)(y + height) > tex->Height)
 		return;
 	dst = (uint16_t *)tex->Mem;
 	for (row = 0; row < height; row++)
@@ -1407,7 +1405,7 @@ static GSTEXTURE *ps2_prepareSpriteTexture(ps2_video_t *ps2,
 	GSTEXTURE *tex;
 	bool is_indexed;
 
-	if (!ps2 || textureIndex >= ps2->tex_layers_count)
+	if (!ps2 || (int)textureIndex >= ps2->tex_layers_count)
 		return NULL;
 	tex = ps2->tex_layers[textureIndex].texture;
 	if (!tex || tex->Vram == GSKIT_ALLOC_ERROR)
@@ -1991,4 +1989,5 @@ video_driver_t video_ps2 = {
 	ps2_fillUIRect,
 	ps2_fillUIRectGradient,
 	ps2_setUIScissor,
+	NULL,
 };

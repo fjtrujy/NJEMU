@@ -36,6 +36,12 @@
 #endif
 
 #if USE_CACHE
+static inline void cache_read_legacy(int fd, void *buffer, size_t size)
+{
+	ssize_t bytes_read = read(fd, buffer, size);
+	(void)bytes_read;
+}
+
 #define BLOCK_MASK			0xffff
 #define BLOCK_SHIFT			16			// 16
 #define BLOCK_NOT_CACHED	0xffff
@@ -153,12 +159,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_INFO:
 		if (use_parent_crom && use_parent_srom && use_parent_vrom)
 		{
-			sprintf(path, "%s/%s_cache/cache_info", cache_dir, parent_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", cache_dir, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		else
 		{
-			sprintf(path, "%s/%s_cache/cache_info", cache_dir, game_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", cache_dir, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -166,12 +172,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_CROM:
 		if (use_parent_crom)
 		{
-			sprintf(path, "%s/%s_cache/crom", cache_dir, parent_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", cache_dir, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			sprintf(path, "%s/%s_cache/crom", cache_dir, game_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", cache_dir, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -179,12 +185,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_SROM:
 		if (use_parent_srom)
 		{
-			sprintf(path, "%s/%s_cache/srom", cache_dir, parent_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", cache_dir, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			sprintf(path, "%s/%s_cache/srom", cache_dir, game_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", cache_dir, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -192,12 +198,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_VROM:
 		if (use_parent_vrom)
 		{
-			sprintf(path, "%s/%s_cache/vrom", cache_dir, parent_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", cache_dir, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			sprintf(path, "%s/%s_cache/vrom", cache_dir, game_name);
+			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", cache_dir, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -256,7 +262,7 @@ size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
 
 	if (use_parent && parent_name[0])
 	{
-		sprintf(path, "%s/%s_cache.zip", cache_dir, parent_name);
+		if (!path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, parent_name)) return 0;
 		if (zip_archive_open(&archive, path))
 		{
 			if (zip_entry_open(&archive, name, &entry))
@@ -271,7 +277,7 @@ size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
 		}
 	}
 
-	sprintf(path, "%s/%s_cache.zip", cache_dir, game_name);
+	if (!path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, game_name)) return 0;
 	if (!zip_archive_open(&archive, path))
 		return 0;
 
@@ -536,11 +542,6 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 #if (EMU_SYSTEM == MVS)
 
 
-static inline void cache_read_legacy(int fd, void *buffer, size_t size)
-{
-	ssize_t bytes_read = read(fd, buffer, size);
-	(void)bytes_read;
-}
 /*------------------------------------------------------
 	Read PCM Cache
 ------------------------------------------------------*/
@@ -1231,7 +1232,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 
 		if (use_parent_crom && parent_name[0])
 		{
-			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, parent_name);
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, parent_name)) return 0;
 			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
 		}

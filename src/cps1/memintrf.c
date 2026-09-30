@@ -26,6 +26,7 @@
 #include "common/memory_sizes.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -337,7 +338,7 @@ static int load_rom_info(const char *game_name)
 	machine_init_type    = 0;
 	machine_screen_type  = 0;
 
-	sprintf(path, "%srominfo.cps1", launchDir);
+	if (!path_format(path, sizeof(path), "%srominfo.cps1", launchDir)) return 0;
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
@@ -680,8 +681,8 @@ int memory_init(void)
 	if (load_rom_sound1() == 0) return 0;
 	if (load_rom_user1() == 0) return 0;
 
-	static_ram1 = (uint8_t *)cps1_ram - 0xff0000;
-	static_ram2 = (uint8_t *)cps1_gfxram - 0x900000;
+	static_ram1 = (uint8_t *)cps1_ram;
+	static_ram2 = (uint8_t *)cps1_gfxram;
 
 	qsound_sharedram1 = &memory_region_cpu2[0xc000];
 	qsound_sharedram2 = &memory_region_cpu2[0xf000];
@@ -798,12 +799,12 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 	switch (offset >> 16)
 	{
 	case 0xff:
-		return READ_BYTE(static_ram1, offset);
+		return READ_BYTE(static_ram1, (offset - 0xff0000));
 
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		return READ_BYTE(static_ram2, offset);
+		return READ_BYTE(static_ram2, (offset - 0x900000));
 
 	case 0xf0:
 		return qsound_rom_r(offset >> 1, mem_mask) >> shift;
@@ -888,12 +889,12 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 	switch (offset >> 16)
 	{
 	case 0xff:
-		return READ_WORD(static_ram1, offset);
+		return READ_WORD(static_ram1, (offset - 0xff0000));
 
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		return READ_WORD(static_ram2, offset);
+		return READ_WORD(static_ram2, (offset - 0x900000));
 
 	case 0xf0:
 		return qsound_rom_r(offset >> 1, 0);
@@ -976,13 +977,13 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 	switch (offset >> 16)
 	{
 	case 0xff:
-		WRITE_BYTE(static_ram1, offset, data);
+		WRITE_BYTE(static_ram1, (offset - 0xff0000), data);
 		return;
 
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		WRITE_BYTE(static_ram2, offset, data);
+		WRITE_BYTE(static_ram2, (offset - 0x900000), data);
 		return;
 
 	case 0x80:
@@ -1052,11 +1053,11 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		WRITE_WORD(static_ram2, offset, data);
+		WRITE_WORD(static_ram2, offset - 0x900000, data);
 		return;
 
 	case 0xff:
-		WRITE_WORD(static_ram1, offset, data);
+		WRITE_WORD(static_ram1, offset - 0xff0000, data);
 		return;
 
 	case 0x80:

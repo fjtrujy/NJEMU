@@ -17,6 +17,7 @@
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/state.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
@@ -312,7 +313,7 @@ int state_save(int slot)
 	uint32_t size;
 #endif
 
-	sprintf(path, "%sstate/%s.sv%d", launchDir, game_name, slot);
+	if (!path_format(path, sizeof(path), "%sstate/%s.sv%d", launchDir, game_name, slot)) return 0;
 	remove(path);
 
 	sprintf(buf, TEXT(STATE_SAVING), game_name, slot);
@@ -389,7 +390,7 @@ int state_save(int slot)
 	}
 #else
 	{
-	#ifndef ADHOC
+	#if !defined(ADHOC) && USE_CACHE
 		int state_buffer_uses_cache = 0;
 	#endif
 #ifdef ADHOC
@@ -507,7 +508,7 @@ int state_load(int slot)
 	unsigned long insize, outsize;
 #endif
 
-	sprintf(path, "%sstate/%s.sv%d", launchDir, game_name, slot);
+	if (!path_format(path, sizeof(path), "%sstate/%s.sv%d", launchDir, game_name, slot)) return 0;
 
 #if (EMU_SYSTEM == MVS)
 	state_reload_bios = 0;
@@ -680,6 +681,7 @@ int state_load(int slot)
 
 		case MACHINE_pang3:
 			state_load_eeprom(fd);
+			/* fall through */
 
 		default:
 			state_load_ym2151(fd);
@@ -773,7 +775,7 @@ int state_load_thumbnail(int slot)
 
 	clear_thumbnail();
 
-	sprintf(path, "%sstate/%s.sv%d", launchDir, game_name, slot);
+	if (!path_format(path, sizeof(path), "%sstate/%s.sv%d", launchDir, game_name, slot)) return 0;
 
 	fd = open(path, O_RDONLY);
 	if (fd >= 0)
@@ -790,8 +792,8 @@ int state_load_thumbnail(int slot)
 		current_state_version = current_version_str[7] - '0';
 		state_version = stver_str[7] - '0';
 
-		sprintf(date_str, "%04d/%02d/%02d", t.year, t.month, t.day);
-		sprintf(time_str, "%02d:%02d:%02d", t.hour, t.minutes, t.seconds);
+		snprintf(date_str, sizeof(date_str), "%04u/%02u/%02u", (unsigned)t.year, (unsigned)(uint8_t)t.month, (unsigned)(uint8_t)t.day);
+		snprintf(time_str, sizeof(time_str), "%02u:%02u:%02u", (unsigned)(uint8_t)t.hour, (unsigned)(uint8_t)t.minutes, (unsigned)(uint8_t)t.seconds);
 
 		return 1;
 	}

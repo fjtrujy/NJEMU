@@ -46,6 +46,20 @@ endif()
 # Get platform name lower case, used to include platform specific files
 string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
 
+# ps2dev.cmake injects SDK/gsKit headers into CMAKE_C_FLAGS with -I. Treat
+# those third-party headers as system headers so -Werror remains strict for
+# NJEMU without promoting dependency warnings to build failures.
+if (PLATFORM STREQUAL "PS2")
+    foreach(PS2_SYSTEM_INCLUDE
+            "$ENV{PS2SDK}/ee/include"
+            "$ENV{PS2SDK}/common/include"
+            "$ENV{PS2DEV}/gsKit/include"
+            "$ENV{PS2SDK}/ports/include")
+        string(REPLACE "-I${PS2_SYSTEM_INCLUDE}" "-isystem ${PS2_SYSTEM_INCLUDE}"
+               CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+    endforeach()
+endif()
+
 # Add platform to compiler definitions
 add_definitions(-D${PLATFORM})
 add_definitions(-DPLATFORM_STR="${PLATFORM}")
@@ -829,7 +843,7 @@ if (PLATFORM STREQUAL "DESKTOP")
 elseif(PLATFORM STREQUAL "PS2")
     # PS2SDK/gsKit headers are external dependencies. Keep -Werror strict for
     # NJEMU sources without promoting warnings inside third-party headers.
-    target_include_directories(${TARGET} SYSTEM PRIVATE
+    target_include_directories(${TARGET} SYSTEM BEFORE PRIVATE
         "$ENV{PS2SDK}/ee/include"
         "$ENV{PS2SDK}/common/include"
         "$ENV{PS2SDK}/ee/libcglue/include"

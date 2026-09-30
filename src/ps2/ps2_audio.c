@@ -80,6 +80,7 @@ static void ps2_free(void *data) {
 }
 
 static int32_t ps2_volumeMax(void *data) {
+	(void)data;
 	return MAX_VOLUME;
 }
 
@@ -90,14 +91,14 @@ static bool ps2_chSRCReserve(void *data, uint16_t samples, int32_t frequency, ui
 	format.freq = frequency;
 	format.channels = channels;
 
-	printf("PS2 Audio: Reserving SRC channel - samples=%d, freq=%d, channels=%d\n", 
-	       samples, frequency, channels);
+	printf("PS2 Audio: Reserving SRC channel - samples=%u, freq=%ld, channels=%u\n",
+	       (unsigned)samples, (long)frequency, (unsigned)channels);
 
 	ps2->channel = audsrv_set_format(&format);
 	ps2->samples = samples;
 	ps2->is_mp3_channel = false;
 	
-	printf("PS2 Audio: audsrv_set_format returned channel=%d\n", ps2->channel);
+	printf("PS2 Audio: audsrv_set_format returned channel=%ld\n", (long)ps2->channel);
 	
 	if (ps2->channel >= 0) {
 		audsrv_set_volume(MAX_VOLUME);
@@ -110,6 +111,7 @@ static bool ps2_chSRCReserve(void *data, uint16_t samples, int32_t frequency, ui
 }
 
 static bool ps2_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
+	(void)channels;
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
 	ee_sema_t sema;
 	
@@ -244,6 +246,7 @@ static void apply_game_volume(int16_t *buffer, uint32_t sample_count, int32_t vo
 }
 
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
+	(void)data;
 	uint32_t sample_count = size / sizeof(int16_t);
 	uint32_t num_samples = size / sizeof(int16_t) / 2; /* Stereo samples */
 
@@ -259,6 +262,7 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 }
 
 static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
+	(void)data;
 	int16_t *src = (int16_t*)buffer;
 	uint32_t num_samples = size / sizeof(int16_t);
 	uint32_t i;

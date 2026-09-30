@@ -28,6 +28,7 @@
 #include "common/loadrom.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -1292,7 +1293,7 @@ static int load_rom_info(const char *game_name)
 	if (strcmp(game_name, "fatfursa") == 0)
 		rominfo_name = "fatfurspa";
 
-	sprintf(path, "%srominfo.mvs", launchDir);
+	if (!path_format(path, sizeof(path), "%srominfo.mvs", launchDir)) return 0;
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{

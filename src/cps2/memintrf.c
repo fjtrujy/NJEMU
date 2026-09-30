@@ -28,6 +28,7 @@
 #include "common/loadrom.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -445,7 +446,7 @@ static int load_rom_info(const char *game_name)
 	machine_init_type    = 0;
 	machine_screen_type  = 0;
 
-	sprintf(path, "%srominfo.cps2", launchDir);
+	if (!path_format(path, sizeof(path), "%srominfo.cps2", launchDir)) return 0;
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
@@ -882,10 +883,10 @@ int memory_init(void)
 	}
 	if (load_rom_gfx1() == 0) return 0;
 
-	static_ram1 = (uint8_t *)cps1_ram    - 0xff0000;
-	static_ram2 = (uint8_t *)cps1_gfxram - 0x900000;
-	static_ram3 = (uint8_t *)cps2_ram    - 0x660000;
-	static_ram4 = (uint8_t *)cps2_output - 0x400000;
+	static_ram1 = (uint8_t *)cps1_ram;
+	static_ram2 = (uint8_t *)cps1_gfxram;
+	static_ram3 = (uint8_t *)cps2_ram;
+	static_ram4 = (uint8_t *)cps2_output;
 	static_ram5 = (uint8_t *)cps2_objram[0];
 	static_ram6 = (uint8_t *)cps2_objram[1];
 
@@ -945,13 +946,13 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 	switch (offset >> 16)
 	{
 	case 0x40:
-		return READ_BYTE(static_ram4, offset);
+		return READ_BYTE(static_ram4, (offset - 0x400000));
 
 	case 0x61:
 		return qsound_sharedram1_r(offset >> 1, mem_mask) >> shift;
 
 	case 0x66:
-		return READ_BYTE(static_ram3, offset);
+		return READ_BYTE(static_ram3, (offset - 0x660000));
 
 	case 0x70:
 		if (offset & 0x8000)
@@ -982,10 +983,10 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		return READ_BYTE(static_ram2, offset);
+		return READ_BYTE(static_ram2, (offset - 0x900000));
 
 	case 0xff:
-		return READ_BYTE(static_ram1, offset);
+		return READ_BYTE(static_ram1, (offset - 0xff0000));
 	}
 
 	return 0xff;
@@ -1008,13 +1009,13 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 	switch (offset >> 16)
 	{
 	case 0x40:
-		return READ_WORD(static_ram4, offset);
+		return READ_WORD(static_ram4, (offset - 0x400000));
 
 	case 0x61:
 		return qsound_sharedram1_r(offset >> 1, 0);
 
 	case 0x66:
-		return READ_WORD(static_ram3, offset);
+		return READ_WORD(static_ram3, (offset - 0x660000));
 
 	case 0x70:
 		if (offset & 0x8000)
@@ -1045,10 +1046,10 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		return READ_WORD(static_ram2, offset);
+		return READ_WORD(static_ram2, (offset - 0x900000));
 
 	case 0xff:
-		return READ_WORD(static_ram1, offset);
+		return READ_WORD(static_ram1, (offset - 0xff0000));
 	}
 
 	return 0xffff;
@@ -1072,7 +1073,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 #if !RELEASE
 		if (!phoenix_edition)
 #endif
-			WRITE_BYTE(static_ram4, offset, data);
+			WRITE_BYTE(static_ram4, (offset - 0x400000), data);
 		return;
 
 	case 0x61:
@@ -1080,7 +1081,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 		return;
 
 	case 0x66:
-		WRITE_BYTE(static_ram3, offset, data);
+		WRITE_BYTE(static_ram3, (offset - 0x660000), data);
 		return;
 
 	case 0x70:
@@ -1120,7 +1121,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		WRITE_BYTE(static_ram2, offset, data);
+		WRITE_BYTE(static_ram2, (offset - 0x900000), data);
 		return;
 
 	case 0xff:
@@ -1130,12 +1131,12 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 			if (offset >= 0xfffff0)
 			{
 				offset -= 0xbffff0;
-				WRITE_BYTE(static_ram4, offset, data);
+				WRITE_BYTE(static_ram4, (offset - 0x400000), data);
 				return;
 			}
 		}
 #endif
-		WRITE_BYTE(static_ram1, offset, data);
+		WRITE_BYTE(static_ram1, (offset - 0xff0000), data);
 		return;
 	}
 }
@@ -1155,7 +1156,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 #if !RELEASE
 		if (!phoenix_edition)
 #endif
-			WRITE_WORD(static_ram4, offset, data);
+			WRITE_WORD(static_ram4, (offset - 0x400000), data);
 		return;
 
 	case 0x61:
@@ -1163,7 +1164,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 		return;
 
 	case 0x66:
-		WRITE_WORD(static_ram3, offset, data);
+		WRITE_WORD(static_ram3, (offset - 0x660000), data);
 		return;
 
 	case 0x70:
@@ -1200,7 +1201,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 	case 0x90:
 	case 0x91:
 	case 0x92:
-		WRITE_WORD(static_ram2, offset, data);
+		WRITE_WORD(static_ram2, (offset - 0x900000), data);
 		return;
 
 	case 0xff:
@@ -1210,12 +1211,12 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 			if (offset >= 0xfffff0)
 			{
 				offset -= 0xbffff0;
-				WRITE_WORD(static_ram4, offset, data);
+				WRITE_WORD(static_ram4, (offset - 0x400000), data);
 				return;
 			}
 		}
 #endif
-		WRITE_WORD(static_ram1, offset, data);
+		WRITE_WORD(static_ram1, (offset - 0xff0000), data);
 		return;
 	}
 }

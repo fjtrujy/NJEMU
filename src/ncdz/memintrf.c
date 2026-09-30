@@ -20,6 +20,7 @@
 #include "common/loadrom.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -270,7 +271,7 @@ static int load_bios(void)
 	const char *lorom_name = "000-lo.lo";
 	char path[PATH_MAX];
 
-	sprintf(path, "%s%s", launchDir, bios_name);
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, bios_name)) return 0;
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
@@ -303,7 +304,7 @@ static int load_bios(void)
 			mem16[0xa87c >> 1] = 0x0010;
 			mem16[0xa87e >> 1] = 0xfdae;
 
-			sprintf(path, "%s%s", launchDir, lorom_name);
+			if (!path_format(path, sizeof(path), "%s%s", launchDir, lorom_name)) return 0;
 
 			if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 			{
@@ -399,7 +400,7 @@ int memory_init(void)
 		int32_t fd;
 		char path[PATH_MAX];
 
-		sprintf(path, "%s%s", launchDir, "backup.bin");
+		if (!path_format(path, sizeof(path), "%s%s", launchDir, "backup.bin")) return 0;
 
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
@@ -421,7 +422,7 @@ void memory_shutdown(void)
 	int32_t fd;
 	char path[PATH_MAX];
 
-	sprintf(path, "%s%s", launchDir, "backup.bin");
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, "backup.bin")) return;
 
 	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{

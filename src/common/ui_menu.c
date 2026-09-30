@@ -20,6 +20,7 @@
 #include "common/filer.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/sound.h"
 #include "common/state.h"
 #include "common/ui_defs.h"
@@ -742,7 +743,7 @@ void cheats_load_file(char *fn);
 
 void cheats_load(void){
 
-    char fn[512];
+    char fn[PATH_MAX];
     char buff[ MAX_BUFF];
 		int fd;
 		char include_fn[50];
@@ -752,7 +753,7 @@ void cheats_load(void){
     //Si ya hay elementos, no agregar mas a la funcion
 		if( cheat_num > 0) return;
 
-		sprintf(fn, "%scheats/%s.ini", launchDir, game_name);
+		if (!path_format(fn, sizeof(fn), "%scheats/%s.ini", launchDir, game_name)) return;
 
     fd = open(fn, O_RDONLY);
     if( fd < 0)
@@ -801,7 +802,7 @@ void cheats_load(void){
     				include_fn[i++] = *(buff_ptr++);
     			}
 
-    			sprintf(fn, "%scheats/%s.ini", launchDir, include_fn);
+			if (!path_format(fn, sizeof(fn), "%scheats/%s.ini", launchDir, include_fn)) { close(fd); return; }
     	}
     	}
     }
@@ -2365,7 +2366,7 @@ static void state_delete_slot(void)
 	{
 		char path[PATH_MAX];
 
-		sprintf(path, "%sstate/%s.sv%d", launchDir, game_name, state_sel);
+		if (!path_format(path, sizeof(path), "%sstate/%s.sv%d", launchDir, game_name, state_sel)) return;
 		if (remove(path) < 0)
 		{
 			ui_popup(TEXT(FAILD_TO_DELETE_FILEx), strrchr(path, '/') + 1);

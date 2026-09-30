@@ -148,8 +148,8 @@ void find_state_file(uint8_t *slot)
 	int len;
 	char path[PATH_MAX], pattern[16];
 
-	sprintf(path, "%sstate", launchDir);
-	sprintf(pattern, "%s.sv", game_name);
+	if (!path_format(path, sizeof(path), "%sstate", launchDir)) return;
+	if (!path_format(pattern, sizeof(pattern), "%s.sv", game_name)) return;
 
 	len = strlen(pattern);
 	dp = opendir(path);
@@ -407,7 +407,7 @@ static void check_neocd_bios(void)
 		return;
 	}
 
-	sprintf(path, "%s%s", launchDir, "neocd.bin");
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, "neocd.bin")) { free(temp_mem); bios_error = 1; return; }
 
 	fd = open(path, O_RDONLY);
 	if (fd >= 0)
@@ -1122,7 +1122,7 @@ void file_browser(void)
 #if (EMU_SYSTEM != NCDZ)
 			strcpy(game_dir, curr_dir);
 #if USE_CACHE
-			sprintf(cache_dir, "%scache", launchDir);
+			if (!path_format(cache_dir, sizeof(cache_dir), "%scache", launchDir)) { run_emulation = 0; continue; }
 #endif
 			strcpy(game_name, files[sel]->name);
 			*strchr(game_name, '.') = '\0';
