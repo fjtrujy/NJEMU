@@ -31,8 +31,8 @@
 #define TILE_16x16_PER_LINE	(BUF_WIDTH/16)
 
 #define SPR_TEXTURE_SIZE	((BUF_WIDTH/16)*((TEXTURE_HEIGHT*3)/16))
-#define SPR_HASH_MASK		0x1ff
-#define SPR_HASH_SIZE		0x200
+#define SPR_HASH_MASK		0x7ff
+#define SPR_HASH_SIZE		0x800
 #define SPR_MAX_SPRITES		0x3000
 
 /******************************************************************************
