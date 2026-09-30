@@ -117,6 +117,9 @@ static void desktop_suspendThread(void *data) {
 static void desktop_sleepThread(void *data) {
 }
 
+static void desktop_yieldThread(void) {
+}
+
 static void desktop_exitThread(void *data, int32_t exitCode) {
 }
 
@@ -132,5 +135,6 @@ thread_driver_t thread_desktop = {
 	desktop_resumeThread,
 	desktop_suspendThread,
 	desktop_sleepThread,
+	desktop_yieldThread,
 	desktop_exitThread
 };

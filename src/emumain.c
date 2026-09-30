@@ -30,6 +30,7 @@
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
 #include "common/sound.h"
+#include "common/thread_driver.h"
 #include "common/ticker_driver.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
@@ -380,6 +381,11 @@ void update_screen(void)
 
 		video_driver->flipScreen(video_data, sync_flip);
 		curr = ticker_driver->currentUs(ticker_data);
+
+		/* An uncapped, unsynchronized frame has no natural blocking point.
+		 * Give cooperative schedulers a chance to run audio/worker threads. */
+		if (!option_speedlimit && !option_vsync)
+			thread_driver->yieldThread();
 
 		/* A synchronous flip blocks until VBlank. Re-sample the clock before
 		 * applying the software limit so that VSync time is never counted twice. */

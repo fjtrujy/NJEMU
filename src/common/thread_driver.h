@@ -29,6 +29,8 @@ typedef struct thread_driver
 	void (*resumeThread)(void *data);
 	void (*suspendThread)(void *data);
 	void (*sleepThread)(void *data);
+	/* Gives the platform scheduler an opportunity to run other ready work. */
+	void (*yieldThread)(void);
 	void (*exitThread)(void *data, int32_t exit_code);
 } thread_driver_t;
 

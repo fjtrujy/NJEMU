@@ -111,6 +111,9 @@ static void psvita_sleepThread(void *data) {
 	// Not commonly used
 }
 
+static void psvita_yieldThread(void) {
+}
+
 static void psvita_exitThread(void *data, int32_t exitCode) {
 	// Not commonly used
 }
@@ -127,5 +130,6 @@ thread_driver_t thread_psvita = {
 	psvita_resumeThread,
 	psvita_suspendThread,
 	psvita_sleepThread,
+	psvita_yieldThread,
 	psvita_exitThread,
 };

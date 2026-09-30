@@ -151,6 +151,16 @@ static void ps2_sleepThread(void *data) {
 	SleepThread();
 }
 
+static void ps2_yieldThread(void)
+{
+	ee_thread_status_t status;
+
+	/* The EE kernel does not time-slice ready threads automatically. Query the
+	 * running thread so this remains correct if its application priority changes. */
+	if (ReferThreadStatus(TH_SELF, &status) >= 0)
+		RotateThreadReadyQueue(status.current_priority);
+}
+
 static void ps2_exitThread(void *data, int32_t exitCode) {
 	/* The wrapper must signal endSemaId before exiting, so the common
 	 * exitThread() hook intentionally does not call ExitThread() directly. */
@@ -170,5 +180,6 @@ thread_driver_t thread_ps2 = {
 	ps2_resumeThread,
 	ps2_suspendThread,
 	ps2_sleepThread,
+	ps2_yieldThread,
 	ps2_exitThread
 };

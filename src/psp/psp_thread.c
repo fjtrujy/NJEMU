@@ -57,6 +57,9 @@ static void psp_sleepThread(void *data) {
 	sceKernelSleepThread();
 }
 
+static void psp_yieldThread(void) {
+}
+
 static void psp_exitThread(void *data, int32_t exitCode) {
 	sceKernelExitThread(exitCode);
 }
@@ -73,5 +76,6 @@ thread_driver_t thread_psp = {
 	psp_resumeThread,
 	psp_suspendThread,
 	psp_sleepThread,
+	psp_yieldThread,
 	psp_exitThread
 };
