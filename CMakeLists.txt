@@ -224,22 +224,29 @@ endif()
 
 # Common Warning options
 set(WARNING_OPTIONS
+    -Wall
+    -Wextra
     -Werror
-    -Wno-unused-but-set-variable
-    -Wno-unused-function
-    -Wno-deprecated-declarations
+    # Emulator callback/handler signatures intentionally expose parameters that
+    # individual implementations do not always consume.
+    -Wno-unused-parameter
 )
 
-# Disable some warnigns based in platform
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    list(APPEND WARNING_OPTIONS
-        -Wno-format-overflow
-    )
-endif()
-
+# Platform-specific toolchains and intentional stubs may need narrowly scoped
+# warning exceptions. Keep these local instead of hiding warning classes from
+# the whole project.
 if (PLATFORM STREQUAL "PSP")
-    list(APPEND WARNING_OPTIONS
-        -Wno-unused-variable
+    set_source_files_properties(src/emumain.c src/common/cache.c src/common/filer.c src/common/loadrom.c src/mvs/mvs.c src/mvs/memintrf.c src/ncdz/cdda.c src/ncdz/cdrom.c src/cps1/driver.c src/cps1/memintrf.c src/cps2/driver.c src/cps2/memintrf.c src/ncdz/driver.c src/ncdz/memintrf.c PROPERTIES
+        COMPILE_OPTIONS "-Wno-format-overflow;-Wno-format-truncation"
+    )
+    set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
+        COMPILE_OPTIONS "-Wno-strict-aliasing"
+    )
+    set_property(SOURCE src/cps1/memintrf.c APPEND PROPERTY
+        COMPILE_OPTIONS "-Wno-array-bounds"
+    )
+    set_property(SOURCE src/cps2/memintrf.c APPEND PROPERTY
+        COMPILE_OPTIONS "-Wno-array-bounds"
     )
 elseif (PLATFORM STREQUAL "PS2")
     list(APPEND WARNING_OPTIONS
@@ -621,7 +628,6 @@ if (${TARGET} STREQUAL "NCDZ")
         ncdz/sprite_common.c
         ncdz/sprite.c
         ncdz/sprite.h
-        ncdz/startup.c
         ncdz/timer.c
         ncdz/timer.h
         ncdz/vidhrdw.c
