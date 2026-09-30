@@ -240,9 +240,6 @@ set(WARNING_OPTIONS
 # warning exceptions. Keep these local instead of hiding warning classes from
 # the whole project.
 if (PLATFORM STREQUAL "PSP")
-    set_source_files_properties(src/emumain.c src/common/cache.c src/common/filer.c src/common/loadrom.c src/mvs/mvs.c src/mvs/memintrf.c src/ncdz/cdda.c src/ncdz/cdrom.c src/cps1/driver.c src/cps1/memintrf.c src/cps2/driver.c src/cps2/memintrf.c src/ncdz/driver.c src/ncdz/memintrf.c PROPERTIES
-        COMPILE_OPTIONS "-Wno-format-overflow;-Wno-format-truncation"
-    )
     set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
         COMPILE_OPTIONS "-Wno-strict-aliasing"
     )
