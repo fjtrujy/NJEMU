@@ -50,6 +50,7 @@ static int EEPROM_command_match(const char *buf, const char *cmd, int len)
 			case '0':
 			case '1':
 				if (b != c)	return 0;
+			/* fall through */
 			case 'X':
 			case 'x':
 				buf++;

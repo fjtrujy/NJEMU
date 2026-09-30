@@ -20,9 +20,19 @@
 #include <string.h>
 #include "common/zip_archive.h"
 
-void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
-
 #if (EMU_SYSTEM != NCDZ)
+
+static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length; i += 2)
+	{
+		uint8_t tmp = data[i];
+		data[i] = data[i + 1];
+		data[i + 1] = tmp;
+	}
+}
+
 
 /******************************************************************************
 	Local Variables
@@ -205,7 +215,7 @@ _continue:
 	#endif
 
 		if (rom[idx].type == ROM_WORDSWAP)
-			swab(&mem[offset], &mem[offset], rom[idx].length);
+			byte_swap_pairs_in_place(&mem[offset], rom[idx].length);
 	}
 	else
 	{

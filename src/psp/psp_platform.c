@@ -43,6 +43,8 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 static SceKernelCallbackFunction PowerCallback(int unknown, int pwrflags, void *arg)
 {
 	int cbid;
+	(void)unknown;
+	(void)arg;
 
 	if (pwrflags & PSP_POWER_CB_POWER_SWITCH)
 	{
@@ -67,6 +69,8 @@ static SceKernelCallbackFunction PowerCallback(int unknown, int pwrflags, void *
 static int CallbackThread(SceSize args, void *argp)
 {
 	int cbid;
+	(void)args;
+	(void)argp;
 
 	cbid = sceKernelCreateCallback("Power Callback", (void *)PowerCallback, NULL);
 	scePowerRegisterCallback(0, cbid);

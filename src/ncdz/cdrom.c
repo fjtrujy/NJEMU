@@ -22,6 +22,17 @@
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
+static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length; i += 2)
+	{
+		uint8_t tmp = data[i];
+		data[i] = data[i + 1];
+		data[i + 1] = tmp;
+	}
+}
+
 /******************************************************************************
 	Global Variables
 ******************************************************************************/
@@ -309,7 +320,7 @@ static void upload_file(int fileno, uint32_t offset, uint32_t length)
 		break;
 
 	case PAT_TYPE:
-		swab(cdrom_cache, cdrom_cache, length);
+		byte_swap_pairs_in_place(cdrom_cache, length);
 		neogeo_apply_patch((uint16_t *)cdrom_cache, file->bank, file->offset);
 		break;
 
@@ -733,7 +744,7 @@ int cdrom_process_ipl(void)
 				if (!resource_file_close(&resource))
 					return 0;
 
-				swab(mem, mem, length);
+				byte_swap_pairs_in_place(mem, length);
 			}
 		}
 	}
@@ -920,7 +931,7 @@ void cdrom_load_files(void)
 		swab(memory_region_cpu1 + offset, file->name, 16);
 
 		for (i = 0; file->name[i]; i++)
-			if (!isprint(file->name[i]))
+			if (!isprint((unsigned char)file->name[i]))
 				break;
 
 		if ((p = strchr(file->name, ';')) != NULL) *p = '\0';

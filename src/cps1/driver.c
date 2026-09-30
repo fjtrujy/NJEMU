@@ -646,7 +646,11 @@ static struct EEPROM_interface qsound_eeprom_interface =
 	8,		/* data bits */
 	"0110",	/*  read command */
 	"0101",	/* write command */
-	"0111"	/* erase command */
+	"0111",	/* erase command */
+	NULL,	/* lock command */
+	NULL,	/* unlock command */
+	0,		/* multi-read */
+	0		/* reset delay */
 };
 
 static struct EEPROM_interface pang3_eeprom_interface =
@@ -655,7 +659,11 @@ static struct EEPROM_interface pang3_eeprom_interface =
 	16,		/* data bits */
 	"0110",	/*  read command */
 	"0101",	/* write command */
-	"0111"	/* erase command */
+	"0111",	/* erase command */
+	NULL,	/* lock command */
+	NULL,	/* unlock command */
+	0,		/* multi-read */
+	0		/* reset delay */
 };
 
 static void cps1_nvram_read_write(int read_or_write)

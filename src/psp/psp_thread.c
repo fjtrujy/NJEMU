@@ -54,6 +54,7 @@ static void psp_suspendThread(void *data) {
 }
 
 static void psp_sleepThread(void *data) {
+	(void)data;
 	sceKernelSleepThread();
 }
 
@@ -65,6 +66,7 @@ static void psp_yieldThread(void) {
 }
 
 static void psp_exitThread(void *data, int32_t exitCode) {
+	(void)data;
 	sceKernelExitThread(exitCode);
 }
 

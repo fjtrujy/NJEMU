@@ -97,21 +97,6 @@ char *find_file(char *pattern, char *path)
 
 
 /*--------------------------------------------------------
-	Check File Existence
---------------------------------------------------------*/
-
-int file_exist(const char *path)
-{
-	uint32_t fd;
-
-	fd = open(path, O_RDONLY, 0777);
-	close(fd);
-
-	return ((fd >= 0) ? 1 : 0);
-}
-
-
-/*--------------------------------------------------------
 	Delete Files Matching Specified Pattern
 --------------------------------------------------------*/
 

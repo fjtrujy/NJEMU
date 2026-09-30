@@ -77,6 +77,7 @@ static uint8_t ALIGN16_DATA SZHVC_sub[2*256*256];
 
 static int32_t Cz80_Interrupt_Callback(int32_t line)
 {
+	(void)line;
 	return 0xff;
 }
 

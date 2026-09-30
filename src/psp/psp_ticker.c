@@ -21,6 +21,7 @@ static void psp_free(void *data) {
 }
 
 static uint64_t psp_currentUs(void *data) {
+	(void)data;
 	return sceKernelGetSystemTimeWide();
 }
 

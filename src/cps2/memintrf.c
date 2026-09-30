@@ -8,6 +8,7 @@
 
 #include <fcntl.h>
 #include <limits.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -520,26 +521,26 @@ static int load_rom_info(const char *game_name)
 			{
 				if (str_cmp(&linebuf[1], "REGION(") == 0)
 				{
-					char *size, *type, *flag;
+					char *size, *type;
 
 					strtok(&linebuf[1], " ");
 					size = strtok(NULL, " ,");
 					type = strtok(NULL, " ,");
-					flag = strtok(NULL, " ");
+					(void)strtok(NULL, " ");
 
 					if (strcmp(type, "CPU1") == 0)
 					{
-						sscanf(size, "%x", &memory_length_cpu1);
+						sscanf(size, "%" SCNx32, &memory_length_cpu1);
 						region = REGION_CPU1;
 					}
 					else if (strcmp(type, "CPU2") == 0)
 					{
-						sscanf(size, "%x", &memory_length_cpu2);
+						sscanf(size, "%" SCNx32, &memory_length_cpu2);
 						region = REGION_CPU2;
 					}
 						else if (strcmp(type, "GFX1") == 0)
 						{
-							sscanf(size, "%x", &memory_length_gfx1);
+							sscanf(size, "%" SCNx32, &memory_length_gfx1);
 							/* Always retain the GFX ROM description. The runtime
 							 * memory plan decides later whether these entries are
 							 * loaded directly or served from the streaming cache. */
@@ -547,12 +548,12 @@ static int load_rom_info(const char *game_name)
 					}
 					else if (strcmp(type, "SOUND1") == 0)
 					{
-						sscanf(size, "%x", &memory_length_sound1);
+						sscanf(size, "%" SCNx32, &memory_length_sound1);
 						region = REGION_SOUND1;
 					}
 					else if (strcmp(type, "USER1") == 0)
 					{
-						sscanf(size, "%x", &memory_length_user1);
+						sscanf(size, "%" SCNx32, &memory_length_user1);
 						region = REGION_SKIP;
 					}
 					else
@@ -577,10 +578,10 @@ static int load_rom_info(const char *game_name)
 					switch (region)
 					{
 					case REGION_CPU1:
-						sscanf(type, "%x", &cpu1rom[num_cpu1rom].type);
-						sscanf(offset, "%x", &cpu1rom[num_cpu1rom].offset);
-						sscanf(length, "%x", &cpu1rom[num_cpu1rom].length);
-						sscanf(crc, "%x", &cpu1rom[num_cpu1rom].crc);
+						sscanf(type, "%" SCNx32, &cpu1rom[num_cpu1rom].type);
+						sscanf(offset, "%" SCNx32, &cpu1rom[num_cpu1rom].offset);
+						sscanf(length, "%" SCNx32, &cpu1rom[num_cpu1rom].length);
+						sscanf(crc, "%" SCNx32, &cpu1rom[num_cpu1rom].crc);
 						cpu1rom[num_cpu1rom].group = 0;
 						cpu1rom[num_cpu1rom].skip = 0;
 						if (name) strcpy(cpu1rom[num_cpu1rom].name, name);
@@ -588,10 +589,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 					case REGION_CPU2:
-						sscanf(type, "%x", &cpu2rom[num_cpu2rom].type);
-						sscanf(offset, "%x", &cpu2rom[num_cpu2rom].offset);
-						sscanf(length, "%x", &cpu2rom[num_cpu2rom].length);
-						sscanf(crc, "%x", &cpu2rom[num_cpu2rom].crc);
+						sscanf(type, "%" SCNx32, &cpu2rom[num_cpu2rom].type);
+						sscanf(offset, "%" SCNx32, &cpu2rom[num_cpu2rom].offset);
+						sscanf(length, "%" SCNx32, &cpu2rom[num_cpu2rom].length);
+						sscanf(crc, "%" SCNx32, &cpu2rom[num_cpu2rom].crc);
 						cpu2rom[num_cpu2rom].group = 0;
 						cpu2rom[num_cpu2rom].skip = 0;
 						if (name) strcpy(cpu2rom[num_cpu2rom].name, name);
@@ -599,10 +600,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 						case REGION_GFX1:
-						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
-						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
-						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
-						sscanf(crc, "%x", &gfx1rom[num_gfx1rom].crc);
+						sscanf(type, "%" SCNx32, &gfx1rom[num_gfx1rom].type);
+						sscanf(offset, "%" SCNx32, &gfx1rom[num_gfx1rom].offset);
+						sscanf(length, "%" SCNx32, &gfx1rom[num_gfx1rom].length);
+						sscanf(crc, "%" SCNx32, &gfx1rom[num_gfx1rom].crc);
 						gfx1rom[num_gfx1rom].group = 0;
 						gfx1rom[num_gfx1rom].skip = 0;
 						if (name) strcpy(gfx1rom[num_gfx1rom].name, name);
@@ -610,10 +611,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 					case REGION_SOUND1:
-						sscanf(type, "%x", &snd1rom[num_snd1rom].type);
-						sscanf(offset, "%x", &snd1rom[num_snd1rom].offset);
-						sscanf(length, "%x", &snd1rom[num_snd1rom].length);
-						sscanf(crc, "%x", &snd1rom[num_snd1rom].crc);
+						sscanf(type, "%" SCNx32, &snd1rom[num_snd1rom].type);
+						sscanf(offset, "%" SCNx32, &snd1rom[num_snd1rom].offset);
+						sscanf(length, "%" SCNx32, &snd1rom[num_snd1rom].length);
+						sscanf(crc, "%" SCNx32, &snd1rom[num_snd1rom].crc);
 						snd1rom[num_snd1rom].group = 0;
 						snd1rom[num_snd1rom].skip = 0;
 						if (name) strcpy(snd1rom[num_snd1rom].name, name);
@@ -641,10 +642,10 @@ static int load_rom_info(const char *game_name)
 					switch (region)
 					{
 					case REGION_CPU1:
-						sscanf(type, "%x", &cpu1rom[num_cpu1rom].type);
-						sscanf(offset, "%x", &cpu1rom[num_cpu1rom].offset);
-						sscanf(length, "%x", &cpu1rom[num_cpu1rom].length);
-						sscanf(crc, "%x", &cpu1rom[num_cpu1rom].crc);
+						sscanf(type, "%" SCNx32, &cpu1rom[num_cpu1rom].type);
+						sscanf(offset, "%" SCNx32, &cpu1rom[num_cpu1rom].offset);
+						sscanf(length, "%" SCNx32, &cpu1rom[num_cpu1rom].length);
+						sscanf(crc, "%" SCNx32, &cpu1rom[num_cpu1rom].crc);
 						sscanf(group, "%x", &cpu1rom[num_cpu1rom].group);
 						sscanf(skip, "%x", &cpu1rom[num_cpu1rom].skip);
 						if (name) strcpy(cpu1rom[num_cpu1rom].name, name);
@@ -652,10 +653,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 					case REGION_CPU2:
-						sscanf(type, "%x", &cpu2rom[num_cpu2rom].type);
-						sscanf(offset, "%x", &cpu2rom[num_cpu2rom].offset);
-						sscanf(length, "%x", &cpu2rom[num_cpu2rom].length);
-						sscanf(crc, "%x", &cpu2rom[num_cpu2rom].crc);
+						sscanf(type, "%" SCNx32, &cpu2rom[num_cpu2rom].type);
+						sscanf(offset, "%" SCNx32, &cpu2rom[num_cpu2rom].offset);
+						sscanf(length, "%" SCNx32, &cpu2rom[num_cpu2rom].length);
+						sscanf(crc, "%" SCNx32, &cpu2rom[num_cpu2rom].crc);
 						sscanf(group, "%x", &cpu2rom[num_cpu2rom].group);
 						sscanf(skip, "%x", &cpu2rom[num_cpu2rom].skip);
 						if (name) strcpy(cpu2rom[num_cpu2rom].name, name);
@@ -663,10 +664,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 						case REGION_GFX1:
-						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
-						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
-						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
-						sscanf(crc, "%x", &gfx1rom[num_gfx1rom].crc);
+						sscanf(type, "%" SCNx32, &gfx1rom[num_gfx1rom].type);
+						sscanf(offset, "%" SCNx32, &gfx1rom[num_gfx1rom].offset);
+						sscanf(length, "%" SCNx32, &gfx1rom[num_gfx1rom].length);
+						sscanf(crc, "%" SCNx32, &gfx1rom[num_gfx1rom].crc);
 						sscanf(group, "%x", &gfx1rom[num_gfx1rom].group);
 						sscanf(skip, "%x", &gfx1rom[num_gfx1rom].skip);
 						if (name) strcpy(gfx1rom[num_gfx1rom].name, name);
@@ -674,10 +675,10 @@ static int load_rom_info(const char *game_name)
 						break;
 
 					case REGION_SOUND1:
-						sscanf(type, "%x", &snd1rom[num_snd1rom].type);
-						sscanf(offset, "%x", &snd1rom[num_snd1rom].offset);
-						sscanf(length, "%x", &snd1rom[num_snd1rom].length);
-						sscanf(crc, "%x", &snd1rom[num_snd1rom].crc);
+						sscanf(type, "%" SCNx32, &snd1rom[num_snd1rom].type);
+						sscanf(offset, "%" SCNx32, &snd1rom[num_snd1rom].offset);
+						sscanf(length, "%" SCNx32, &snd1rom[num_snd1rom].length);
+						sscanf(crc, "%" SCNx32, &snd1rom[num_snd1rom].crc);
 						sscanf(group, "%x", &snd1rom[num_snd1rom].group);
 						sscanf(skip, "%x", &snd1rom[num_snd1rom].skip);
 						if (name) strcpy(snd1rom[num_snd1rom].name, name);

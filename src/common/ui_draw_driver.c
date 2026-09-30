@@ -17,6 +17,7 @@
 
 static void *null_init(void *video_data)
 {
+	(void)video_data;
 	return NULL;
 }
 

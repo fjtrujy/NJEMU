@@ -765,7 +765,7 @@ It doesn't start from 0, and it's the upper half of a 128kB bank.
 static const struct game_keys keys_table[] =
 {
 	// name                 key               upper                  watchdog
-	{ "dead",     { 0xffffffff,0xffffffff },  /*(1)*/ },    // ffff ffff ffff
+	{ "dead",     { 0xffffffff,0xffffffff }, 0 /*(1)*/ },    // ffff ffff ffff
 	{ "ssf2",     { 0x23456789,0xabcdef01 }, 0x400000 },    // 0838 0007 2000  btst    #7,$2000
 	{ "ssf2u",    { 0x12345678,0x9abcdef0 }, 0x400000 },    // 0838 0007 2000  btst    #7,$2000
 	{ "ssf2a",    { 0x3456789a,0xbcdef012 }, 0x400000 },    // 0838 0007 2000  btst    #7,$2000
@@ -982,7 +982,7 @@ static const struct game_keys keys_table[] =
 	{ "sfz3jr2",  { 0x7d49f803,0x0cbe2d79 }, 0x100000 },    // 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfz3a",    { 0x990b9301,0xa4e42c7e }, 0x100000 },    // 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
 	{ "sfz3ar1",  { 0x990b9301,0xa4e42c7e }, 0x100000 },    // 0C80 1C62 F5A8  cmpi.l  #$1C62F5A8,D0
-	{ "jyangoku", { 0x6ca42ae6,0x92f63f59 },  /*?*/   },    // 0C80 3652 1573  cmpi.l  #$36521573,D0
+	{ "jyangoku", { 0x6ca42ae6,0x92f63f59 }, 0 /*?*/ },    // 0C80 3652 1573  cmpi.l  #$36521573,D0
 	{ "hsf2",     { 0x5a369ddd,0xfea3189c }, 0x100000 },    // 0838 0007 2000  btst    #7,$2000
 	{ "hsf2a",    { 0xb8ed3630,0xaae30a3d }, 0x100000 },    // 0838 0007 2000  btst    #7,$2000
 	{ "hsf2j",    { 0x65d82fe0,0xdbb83e47 }, 0x100000 },    // 0838 0007 2000  btst    #7,$2000

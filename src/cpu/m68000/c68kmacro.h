@@ -197,7 +197,7 @@
 		CPU->IRQLine = 0;													\
 		SWAP_SP()															\
 		res = CPU->Interrupt_CallBack(adr);									\
-		if (res < 0) { \
+		if ((int32_t)res < 0) { \
 			res = adr + 24; \
 		} \
 		EXCEPTION(res)														\

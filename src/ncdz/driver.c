@@ -19,6 +19,17 @@
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
 
+static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length; i += 2)
+	{
+		uint8_t tmp = data[i];
+		data[i] = data[i + 1];
+		data[i + 1] = tmp;
+	}
+}
+
 #define IRQ1CTRL_ENABLE				0x10
 #define IRQ1CTRL_LOAD_RELATIVE		0x20
 #define IRQ1CTRL_AUTOLOAD_VBLANK	0x40
@@ -201,7 +212,7 @@ int neogeo_check_game(void)
 			!resource_file_close(&file))
 			return 0;
 
-		swab(memory_region_cpu1, memory_region_cpu1, 0x110);
+		byte_swap_pairs_in_place(memory_region_cpu1, 0x110);
 		memcpy(neogeo_game_vectors, memory_region_cpu1, 0x100);
 
 		NGH_number = m68000_read_memory_16(0x108);

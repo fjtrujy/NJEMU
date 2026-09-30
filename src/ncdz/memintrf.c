@@ -92,9 +92,9 @@ uint8_t neogeo_memcard[0x2000];
 static uint8_t *memory_allocate(int type, uint32_t length)
 {
 	uint8_t *mem;
-	const char *region_name[6] =
+	const char *region_name[7] =
 	{
-		"CPU1","CPU2","GFX1","GFX2","SOUND1","USER1"
+		"CPU1","CPU2","GFX1","GFX2","GFX3","SOUND1","USER1"
 	};
 
 	if ((mem = malloc(length)) == NULL)
@@ -396,7 +396,7 @@ int memory_init(void)
 	power_set_performance_level(platform_performance_level);
 
 	{
-		uint32_t fd;
+		int32_t fd;
 		char path[PATH_MAX];
 
 		sprintf(path, "%s%s", launchDir, "backup.bin");
