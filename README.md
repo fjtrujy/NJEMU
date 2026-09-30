@@ -261,7 +261,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/CPS1PSP/              (or CPS2PSP/)
 ├── EBOOT.PBP                   # Main executable
-├── cps1psp.ini                 # Settings (auto-created)
+├── njemu.ini                    # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
 ├── zipname.cps1                # English game names (REQUIRED)
 ├── zipnamej.cps1               # Japanese game names (optional)
@@ -279,7 +279,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/MVSPSP/
 ├── EBOOT.PBP                   # Main executable
-├── mvspsp.ini                  # Settings (auto-created)
+├── njemu.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
 ├── zipname.mvs                 # English game names (REQUIRED)
 ├── zipnamej.mvs                # Japanese game names (optional)
@@ -299,7 +299,7 @@ All folders are automatically created on first launch.
 ```
 /PSP/GAME/NCDZPSP/
 ├── EBOOT.PBP                   # Main executable
-├── ncdzpsp.ini                 # Settings (auto-created)
+├── njemu.ini                    # Settings (auto-created)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # CD-ROM images
 │   └── [Game Name]/            # Game folder

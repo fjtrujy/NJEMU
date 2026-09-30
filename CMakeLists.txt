@@ -817,6 +817,7 @@ else()
         "state"
         "picture"
         "game_name.ini"
+        "njemu.ini"
         "cps1psp.ini"
         "cps2psp.ini"
         "mvspsp.ini"

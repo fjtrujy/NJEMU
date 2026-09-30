@@ -12,7 +12,8 @@
 	ini Filename
 ******************************************************************************/
 
-static const char *inifile_name = "ncdzpsp.ini";
+static const char *inifile_name = "njemu.ini";
+static const char *legacy_inifile_name = "ncdzpsp.ini";
 
 #elif defined(INCLUDE_CONFIG_STRUCT)
 
