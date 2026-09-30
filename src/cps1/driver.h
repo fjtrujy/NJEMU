@@ -80,6 +80,8 @@ enum
 	INPTYPE_pnickj,		// 35
 	INPTYPE_pang3,		// 36
 	INPTYPE_sfzch,		// 37
+	INPTYPE_wofch,
+	INPTYPE_wofch3p,
 #if !RELEASE
 	INPTYPE_knightsh,	// 38
 	INPTYPE_wofh,		// 39
@@ -88,9 +90,7 @@ enum
 	INPTYPE_dinoh,		// 42
 	INPTYPE_kodh,		// 43
 	INPTYPE_punisherbz,	// 44
-	INPTYPE_wofch,		// 45
 	INPTYPE_wofhfh,		// 46
-	INPTYPE_wofch3p,	// 47
 #endif
 	INPTYPE_MAX			// MAX
 };

@@ -67,6 +67,7 @@ static gamecfg2_t gamecfg_vertical[] =
 	MENU_END
 };
 #if (EMU_SYSTEM == CPS1)
+#if !RELEASE
 static gamecfg2_t gamecfg_mercs[] =
 {
 #if ENABLE_RASTER_OPTION
@@ -92,6 +93,7 @@ static gamecfg2_t gamecfg_mercs[] =
 	MENU_RETURN,
 	MENU_END
 };
+#endif
 
 static gamecfg2_t gamecfg_qsound[] =
 {
@@ -129,7 +131,11 @@ static gamecfg2_t gamecfg_qsound[] =
 	}
 #endif
 #if (EMU_SYSTEM == CPS1)
-	if (machine_screen_type && machine_driver_type != MACHINE_mercs)
+	if (machine_screen_type
+#if !RELEASE
+		&& machine_driver_type != MACHINE_mercs
+#endif
+	)
 	{
 		gamecfg2 = gamecfg_vertical;
 
@@ -149,10 +155,12 @@ static gamecfg2_t gamecfg_qsound[] =
 	if (option_controller >= input_max_players)
 		option_controller = INPUT_PLAYER1;
 #if (EMU_SYSTEM == CPS1)
+#if !RELEASE
 	if (machine_driver_type == MACHINE_mercs)   //mercs controller3 fix
 	{
 		gamecfg2 = gamecfg_mercs;
 	}
+#endif
 #endif
 #elif defined(INCLUDE_KEYCFG_STRUCT)
 
@@ -378,6 +386,7 @@ static keycfg2_t keycfg_sfzch[] =
 	MENU_END
 };
 
+#if !RELEASE
 static keycfg2_t keycfg_wofch[] =
 {
 	{ INPUT_UP,         KEYCFG_BUTTON, P1_UP       },
@@ -411,7 +420,9 @@ static keycfg2_t keycfg_wofch[] =
 	MENU_RETURN,
 	MENU_END
 };
+#endif
 
+#if !RELEASE
 static keycfg2_t keycfg_wofch3p[] =
 {
 	{ INPUT_UP,         KEYCFG_BUTTON, P1_UP       },
@@ -445,6 +456,7 @@ static keycfg2_t keycfg_wofch3p[] =
 	MENU_RETURN,
 	MENU_END
 };
+#endif
 
 static keycfg2_t keycfg_forgottn[] =
 {
@@ -579,6 +591,7 @@ static keycfg2_t keycfg_pzloop2[] =
 		keycfg2 = keycfg_sfzch;
 		break;
 
+#if !RELEASE
 	case INPTYPE_wofch:
 		keycfg2 = keycfg_wofch;
 		break;
@@ -586,6 +599,7 @@ static keycfg2_t keycfg_pzloop2[] =
 	case INPTYPE_wofch3p:
 		keycfg2 = keycfg_wofch3p;
 		break;
+#endif
 
 	case INPTYPE_cworld2j:
 	case INPTYPE_qad:

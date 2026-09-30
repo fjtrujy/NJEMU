@@ -624,6 +624,7 @@ static cfg_type gamecfg_sfzch[] =
 	{ CFG_NONE, NULL, 0, 0, 0, 0}
 };
 
+#if !RELEASE
 static cfg_type gamecfg_wofch[] =
 {
 	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
@@ -687,7 +688,9 @@ static cfg_type gamecfg_wofch[] =
 
 	{ CFG_NONE, NULL, 0, 0, 0, 0}
 };
+#endif
 
+#if !RELEASE
 static cfg_type gamecfg_wofch3p[] =
 {
 	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
@@ -751,6 +754,7 @@ static cfg_type gamecfg_wofch3p[] =
 
 	{ CFG_NONE, NULL, 0, 0, 0, 0}
 };
+#endif
 #else
 static cfg_type gamecfg_progear[] =
 {
@@ -907,6 +911,7 @@ static cfg_type gamecfg_pzloop2[] =
 		gamecfg = gamecfg_sfzch;
 		break;
 
+#if !RELEASE
 	case INPTYPE_wofch:
 		gamecfg = gamecfg_wofch;
 		break;
@@ -914,6 +919,7 @@ static cfg_type gamecfg_pzloop2[] =
 	case INPTYPE_wofch3p:
 		gamecfg = gamecfg_wofch3p;
 		break;
+#endif
 
 	case INPTYPE_cworld2j:
 	case INPTYPE_qad:

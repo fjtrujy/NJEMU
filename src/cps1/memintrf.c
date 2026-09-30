@@ -705,6 +705,7 @@ int memory_init(void)
 		}
 		memset(memory_region_user2, 0, CPS1_USER2_SIZE);
 	}
+#if !RELEASE
 	else if (machine_driver_type == MACHINE_wofhfh)
 	{
 		machine_sound_type = SOUND_YM2151_CPS1;
@@ -713,6 +714,7 @@ int memory_init(void)
 
 		memory_region_user2 = memory_region_cpu2;
 	}
+#endif
 	else
 	{
 		machine_sound_type = SOUND_YM2151_CPS1;

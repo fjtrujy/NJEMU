@@ -18,9 +18,7 @@ extern uint8_t *memory_region_cpu2;
 extern uint8_t *memory_region_gfx1;
 extern uint8_t *memory_region_sound1;
 extern uint8_t *memory_region_user1;
-#if !RELEASE
 extern uint8_t *memory_region_user2;
-#endif
 extern uint8_t *memory_region_user3;
 
 extern uint32_t memory_length_cpu1;
@@ -28,9 +26,7 @@ extern uint32_t memory_length_cpu2;
 extern uint32_t memory_length_gfx1;
 extern uint32_t memory_length_sound1;
 extern uint32_t memory_length_user1;
-#if !RELEASE
 extern uint32_t memory_length_user2;
-#endif
 extern uint32_t memory_length_user3;
 
 extern uint8_t cps1_ram[0x10000];
