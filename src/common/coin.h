@@ -9,6 +9,7 @@
 #ifndef COIN_COUNTER_H
 #define COIN_COUNTER_H
 
+#include "emucfg.h"
 #include "common/state.h"
 
 void coin_counter_reset(void);
