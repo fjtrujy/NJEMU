@@ -827,6 +827,15 @@ if (PLATFORM STREQUAL "DESKTOP")
     endif()
     target_link_libraries(${TARGET} PUBLIC ${NJEMU_SDL2_TARGET})
 elseif(PLATFORM STREQUAL "PS2")
+    # PS2SDK/gsKit headers are external dependencies. Keep -Werror strict for
+    # NJEMU sources without promoting warnings inside third-party headers.
+    target_include_directories(${TARGET} SYSTEM PRIVATE
+        "$ENV{PS2SDK}/ee/include"
+        "$ENV{PS2SDK}/common/include"
+        "$ENV{PS2SDK}/ee/libcglue/include"
+        "$ENV{PS2DEV}/gsKit/include"
+    )
+
     # The classic PS2 executable is directly launchable, so identify it as an
     # ELF.  External-image builds deliberately keep the real engine extensionless
     # so BOOT.ELF remains the obvious entry point for users and launchers.

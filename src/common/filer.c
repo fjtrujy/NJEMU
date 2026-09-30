@@ -1421,7 +1421,11 @@ void file_browser(void)
 							}
 							else
 							{
-								sprintf(game_dir, "%s/%s", curr_dir, zipped_rom);
+								if (!path_format(game_dir, sizeof(game_dir), "%s/%s", curr_dir, zipped_rom))
+									{
+										launch = 0;
+										continue;
+									}
 								resource_source_close(&ncdz_game_source);
 								if (!resource_source_open_zip(&ncdz_game_source, game_dir))
 									launch = 0;

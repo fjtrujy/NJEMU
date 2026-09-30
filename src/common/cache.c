@@ -535,6 +535,12 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 
 #if (EMU_SYSTEM == MVS)
 
+
+static inline void cache_read_legacy(int fd, void *buffer, size_t size)
+{
+	ssize_t bytes_read = read(fd, buffer, size);
+	(void)bytes_read;
+}
 /*------------------------------------------------------
 	Read PCM Cache
 ------------------------------------------------------*/
@@ -667,7 +673,7 @@ static int folder_cache_open(int number)
 ------------------------------------------------------*/
 
 #define folder_cache_load(offs)									\
-	read(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
+	cache_read_legacy(cache_fd, &GFX_MEMORY[offs << 16], CACHE_BLOCK_SIZE);	\
 	close(cache_fd);											\
 	cache_fd = -1;
 
@@ -782,7 +788,7 @@ static int fill_cache(void)
 				blocks[block] = p->idx;
 
 				lseek(cache_fd, block_offset[block], SEEK_SET);
-				read(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+				cache_read_legacy(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 
 				cache_rotate_head_to_tail(&head, &tail);
 				i++;
@@ -888,7 +894,7 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 		);
 #else
 		lseek((int32_t)cache_fd, block_offset[new_block], SEEK_SET);
-		read((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
+		cache_read_legacy((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
 	#endif
 	}
 	else
@@ -1200,11 +1206,11 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	if ((fd = cachefile_open(CACHE_INFO)) >= 0)
 	{
 		cache_type = CACHE_RAWFILE;
-		read(fd, version_str, 8);
+		cache_read_legacy(fd, version_str, 8);
 
 		if (strcmp(version_str, "MVS_" CACHE_VERSION) == 0)
 		{
-			read(fd, gfx_pen_usage[2], memory_length_gfx3 / 128);
+			cache_read_legacy(fd, gfx_pen_usage[2], memory_length_gfx3 / 128);
 			found = 1;
 		}
 		close(fd);
@@ -1334,7 +1340,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		found = 1;
 		cache_type = CACHE_ZIPFILE;
 
-		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, game_name)) found = 0;
 		if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 		{
 			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, cache_parent_name)) { found = 0; }
@@ -1377,14 +1383,14 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 
 	if (cache_type == CACHE_RAWFILE)
 	{
-		read(cache_fd, version_str, 8);
+		cache_read_legacy(cache_fd, version_str, 8);
 
 		if (strcmp(version_str, "CPS2" CACHE_VERSION) == 0)
 		{
-			read(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
-			read(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
-			read(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
-			read(cache_fd, block_offset, MAX_CACHE_BLOCKS * sizeof(uint32_t));
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
+			cache_read_legacy(cache_fd, block_offset, MAX_CACHE_BLOCKS * sizeof(uint32_t));
 		}
 		else
 		{
@@ -1428,14 +1434,14 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	else /* CACHE_FOLDER */
 	{
 		/* cache_fd is already open from the folder detection above */
-		read(cache_fd, version_str, 8);
+		cache_read_legacy(cache_fd, version_str, 8);
 
 		if (strcmp(version_str, "CPS2" CACHE_VERSION) == 0)
 		{
-			read(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
-			read(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
-			read(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
-			read(cache_fd, block_empty, MAX_CACHE_BLOCKS);
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE08], gfx_total_elements[TILE08]);
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE16], gfx_total_elements[TILE16]);
+			cache_read_legacy(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
+			cache_read_legacy(cache_fd, block_empty, MAX_CACHE_BLOCKS);
 			close(cache_fd);
 			cache_fd = -1;
 		}
@@ -1754,7 +1760,7 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 	int32_t fd;
 	char path[PATH_MAX];
 
-	sprintf(path, "%sstate/cache.tmp", launchDir);
+	if (!path_format(path, sizeof(path), "%sstate/cache.tmp", launchDir)) return NULL;
 
 	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{
@@ -1771,14 +1777,14 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 
 void cache_free_state_buffer(int32_t size)
 {
-	uint32_t fd;
+	int32_t fd;
 	char path[PATH_MAX];
 
-	sprintf(path, "%sstate/cache.tmp", launchDir);
+	if (!path_format(path, sizeof(path), "%sstate/cache.tmp", launchDir)) return;
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
-		read(fd, GFX_MEMORY, size);
+		cache_read_legacy(fd, GFX_MEMORY, size);
 		close(fd);
 	}
 	remove(path);

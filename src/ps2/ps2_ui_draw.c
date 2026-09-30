@@ -186,15 +186,15 @@ static void *ps2_ui_draw_init(void *video_data)
 }
 
 /* Round w/h up to the next gsKit-friendly size (multiple of 8 minimum). */
-static int round_tex_dim(int v) { return (v + 7) & ~7; }
+static u32 round_tex_dim(int v) { return (v + 7) & ~7; }
 
 static int ensure_vram(ps2_ui_texture_t *tex)
 {
 	if (!ps2_ui.gsGlobal) return 0;
 	if (tex->width == 0 || tex->height == 0) return 0;
 
-	int want_w = round_tex_dim(tex->width);
-	int want_h = round_tex_dim(tex->height);
+	u32 want_w = round_tex_dim(tex->width);
+	u32 want_h = round_tex_dim(tex->height);
 
 	if (tex->texture.Vram == 0 ||
 	    tex->texture.Width  < want_w ||
@@ -304,8 +304,8 @@ static void expand_buffer_to_upload(ps2_ui_texture_t *tex)
 
 	int w = tex->texture.Width;
 	int h = tex->width  ? tex->height : 0;  /* sanity */
-	int copy_h = tex->height < tex->texture.Height ? tex->height : tex->texture.Height;
-	int copy_w = tex->width  < tex->texture.Width  ? tex->width  : tex->texture.Width;
+	int copy_h = tex->height < (int)tex->texture.Height ? tex->height : (int)tex->texture.Height;
+	int copy_w = tex->width < (int)tex->texture.Width ? tex->width : (int)tex->texture.Width;
 	int y;
 
 	for (y = 0; y < copy_h; y++)
@@ -389,7 +389,7 @@ static void ps2_ui_draw_clearTexture(void *data, int slot, int w, int h, int pit
 {
 	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	ps2_ui_texture_t *tex;
-	int x, y;
+	int y;
 
 	if (slot < 0 || slot >= UI_TEXTURE_MAX ||
 	    w <= 0 || h <= 0 || pitch < w ||
@@ -481,7 +481,7 @@ static bool ps2_ui_draw_prepareTextureDraw(void *data, int slot,
 	if (tex->buffer_valid && (!tex->vram_valid || slot == UI_TEXTURE_FONT))
 	{
 		if (slot == UI_TEXTURE_FONT && su == 0 && sv == 0 &&
-		    sw > 0 && sh > 0 && sw <= gst->Width && sh <= gst->Height)
+		    sw > 0 && sh > 0 && sw <= (int)gst->Width && sh <= (int)gst->Height)
 		{
 			size_t upload_size = (size_t)sw * sh * sizeof(uint32_t);
 			expand_region_to_upload(tex, tex->upload_buffer, sw, sh);

@@ -16,6 +16,7 @@
 #include "common/input_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_text_driver.h"
 
 #ifdef ADHOC
@@ -501,7 +502,7 @@ void load_settings(void)
 	}
 #endif
 
-	sprintf(path, "%s%s", launchDir, inifile_name);
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, inifile_name)) return;
 
 	if (load_inifile(path, default_options, default_options2) == 0)
 	{
@@ -531,7 +532,7 @@ void load_settings(void)
 #endif
 
 
-		sprintf(inipath, "%s%s", launchDir, inifile_name);
+		if (!path_format(inipath, sizeof(inipath), "%s%s", launchDir, inifile_name)) return;
 		remove(inipath);
 		delete_files("nvram", "nv");
 		delete_files("config", "ini");
@@ -549,7 +550,7 @@ void save_settings(void)
 {
 	char path[PATH_MAX];
 
-	sprintf(path, "%s%s", launchDir, inifile_name);
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, inifile_name)) return;
 
 	save_inifile(path, default_options, default_options2);
 }
@@ -565,7 +566,7 @@ void load_gamecfg(const char *name)
 	char path[PATH_MAX];
 	cfg_type *gamecfg;
 
-	sprintf(path, "%sconfig/%s.ini", launchDir, name);
+	if (!path_format(path, sizeof(path), "%sconfig/%s.ini", launchDir, name)) return;
 
 	memset(input_map, 0, sizeof(input_map));
 
@@ -620,7 +621,7 @@ void save_gamecfg(const char *name)
 	char path[PATH_MAX];
 	cfg_type *gamecfg;
 
-	sprintf(path, "%sconfig/%s.ini", launchDir, name);
+	if (!path_format(path, sizeof(path), "%sconfig/%s.ini", launchDir, name)) return;
 
 #define INCLUDE_SETUP_CONFIG_STRUCT
 

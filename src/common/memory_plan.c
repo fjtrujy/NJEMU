@@ -126,7 +126,7 @@ memory_tier_t memory_plan_tier_for_cacheable_budget(uint64_t cacheable_budget_by
 }
 
 const char *memory_plan_tier_name(memory_tier_t tier) {
-	if (tier < 0 || tier >= MEMORY_TIER_COUNT) {
+	if (tier >= MEMORY_TIER_COUNT) {
 		return "UNKNOWN";
 	}
 	return tier_policies[tier].name;
