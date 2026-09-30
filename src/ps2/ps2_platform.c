@@ -26,6 +26,8 @@
 #include <ps2_drivers_img.h>
 #endif
 
+#define PS2_MAIN_THREAD_PRIORITY 0x20
+
 typedef struct ps2_platform {
 } ps2_platform_t;
 
@@ -189,10 +191,18 @@ static void ps2_main(void *data, int argc, char *argv[]) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
 	char picture_dir[PATH_MAX];
 	const char *system_dir;
+	int priority_result;
 
 	(void)ps2;
 	(void)argc;
 	(void)argv;
+
+	/* PS2SDK's InitThread() promotes the startup thread to priority 1. Restore
+	 * an application priority so NJEMU's audio and worker threads can preempt
+	 * the emulation loop even when neither VSync nor frame limiting blocks it. */
+	priority_result = ChangeThreadPriority(GetThreadId(), PS2_MAIN_THREAD_PRIORITY);
+	if (priority_result < 0)
+		printf("Failed to set PS2 main thread priority: %d\n", priority_result);
 
 	if (snprintf(picture_dir, sizeof(picture_dir), "%sPICTURE", launchDir) >=
 		(int)sizeof(picture_dir)) {
