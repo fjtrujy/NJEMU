@@ -205,6 +205,15 @@ list(APPEND COMMON_FLAGS
     -fdata-sections
 )
 
+# PSP runs on the Allegrex CPU. Target it explicitly instead of GCC's MIPS-I
+# default so instruction selection and scheduling match the real hardware.
+if (PLATFORM STREQUAL "PSP")
+    list(APPEND COMMON_FLAGS
+        -march=allegrex
+        -mtune=allegrex
+    )
+endif()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     list(APPEND COMMON_FLAGS
         -fsingle-precision-constant
