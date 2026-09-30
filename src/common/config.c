@@ -52,7 +52,10 @@ static void fd_printf(int fd, const char *fmt, ...)
 	va_start(args, fmt);
 	n = vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-	if (n > 0) write(fd, buf, n);
+	if (n > 0) {
+		ssize_t written = write(fd, buf, (size_t)n);
+		(void)written;
+	}
 }
 
 /* Read one line from fd into buf (up to size-1 chars); returns bytes read or 0 on EOF */

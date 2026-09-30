@@ -53,6 +53,7 @@ static void psvita_audio_free(void *data) {
 }
 
 static int32_t psvita_audio_volumeMax(void *data) {
+	(void)data;
 	return SCE_AUDIO_VOLUME_0DB;
 }
 

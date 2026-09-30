@@ -876,6 +876,7 @@ int adhoc_send_state(uint32_t *frame)
 
 	case MACHINE_pang3:
 		state_save_eeprom();
+		/* fall through */
 
 	default:
 		state_save_ym2151();
@@ -977,6 +978,7 @@ retry:
 
 	case MACHINE_pang3:
 		state_load_eeprom();
+		/* fall through */
 
 	default:
 		state_load_ym2151();

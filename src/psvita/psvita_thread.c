@@ -18,6 +18,7 @@ typedef struct psvita_thread {
 } psvita_thread_t;
 
 static int childThread(SceSize args, void *argp) {
+	(void)args;
 	int32_t res;
 	psvita_thread_t *psvita = *(psvita_thread_t **)argp;
 	sceKernelWaitSema(psvita->start_sema, 1, NULL);
@@ -85,7 +86,7 @@ static void psvita_waitThreadEnd(void *data) {
 }
 
 static void psvita_wakeupThread(void *data) {
-	psvita_thread_t *psvita = (psvita_thread_t*)data;
+	(void)data;
 	// Not commonly used
 }
 
@@ -98,16 +99,17 @@ static void psvita_deleteThread(void *data) {
 }
 
 static void psvita_resumeThread(void *data) {
-	psvita_thread_t *psvita = (psvita_thread_t*)data;
+	(void)data;
 	// Not commonly used
 }
 
 static void psvita_suspendThread(void *data) {
-	psvita_thread_t *psvita = (psvita_thread_t*)data;
+	(void)data;
 	// Not commonly used
 }
 
 static void psvita_sleepThread(void *data) {
+	(void)data;
 	// Not commonly used
 }
 
@@ -115,6 +117,8 @@ static void psvita_yieldThread(void) {
 }
 
 static void psvita_exitThread(void *data, int32_t exitCode) {
+	(void)data;
+	(void)exitCode;
 	// Not commonly used
 }
 
