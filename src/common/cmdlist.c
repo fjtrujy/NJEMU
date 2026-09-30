@@ -886,9 +886,9 @@ int commandlist_size_reduction(void)
 	char path[PATH_MAX], path2[PATH_MAX];
 	char *p, linebuf[512], rom_name[512][16];//256
 	int i, j, l, found = 0, total_roms = 0;
-	int num_games, charset, progress;
+	int charset, progress;
 	int header_end, body_start, body_end;
-	int line = 0, line2 = 0, num_cmd;
+	int line = 0;
 	int org_size, new_size;
 	char *textbuf = NULL, **line_ptr = NULL;
 
@@ -928,7 +928,6 @@ int commandlist_size_reduction(void)
 	ui_popup_reset();
 	msg_screen_init(WP_CMDLIST, ICON_COMMANDDAT, TEXT(COMMAND_DAT_SIZE_REDUCTION));
 
-	num_games  = 0;
 	header_end = -1;
 	body_start = -1;
 	body_end   = -1;
@@ -1018,7 +1017,6 @@ int commandlist_size_reduction(void)
 							// Record first $info
 							body_start = line;
 						}
-						num_games++;
 						found = 1;
 					}
 				}
@@ -1110,8 +1108,6 @@ int commandlist_size_reduction(void)
 	}
 
 	l = 0;
-	line2 = 0;
-	num_cmd = 0;
 	progress = INFO_SEEK;
 
 	msg_printf("\n");
@@ -1125,7 +1121,6 @@ int commandlist_size_reduction(void)
 		else
 			fd_printf(fd_out, "$charset=latin1\r\n");
 
-		line2++;
 	}
 
 	// Copy header
@@ -1138,8 +1133,7 @@ int commandlist_size_reduction(void)
 			if (strncasecmp(linebuf, "$charset", 8) != 0)
 			{
 				fd_printf(fd_out, "%s\r\n", linebuf);
-				line2++;
-			}
+					}
 		}
 	}
 
@@ -1222,9 +1216,7 @@ int commandlist_size_reduction(void)
 							msg_printf(TEXT(COPYING_x), rom_name[i]);
 							fd_printf(fd_out, "$info=%s\r\n", name);
 							progress = CMD_SEEK;
-							num_cmd++;
-							line2++;
-						}
+											}
 					}
 				}
 			}
@@ -1236,8 +1228,7 @@ int commandlist_size_reduction(void)
 				// Command start
 				progress = END_SEEK;
 				fd_printf(fd_out, "$cmd\r\n");
-				line2++;
-			}
+					}
 			else if (!strncasecmp(linebuf, "$info", 5))
 			{
 				// Next command - go back 1 line
@@ -1253,14 +1244,12 @@ int commandlist_size_reduction(void)
 				// Command end
 				progress = CMD_SEEK;
 				fd_printf(fd_out, "$end\r\n");
-				line2++;
-			}
+					}
 			else
 			{
 				// Command list contents - output as-is
 				fd_printf(fd_out, "%s\r\n", linebuf);
-				line2++;
-			}
+					}
 			break;
 		}
 	}
@@ -1274,8 +1263,7 @@ int commandlist_size_reduction(void)
 		{
 			strcpy(linebuf, line_ptr[l]);
 			fd_printf(fd_out, "%s\r\n", linebuf);
-			line2++;
-		}
+			}
 	}
 
 	close(fd_out);

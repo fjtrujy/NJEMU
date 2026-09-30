@@ -39,11 +39,11 @@
 #define state_load_double(v, n)	{ memcpy(v, state_buffer, 8 * n); state_buffer += 8 * n; }
 #define state_load_skip(n)		state_buffer += n;
 #else
-#define state_load_byte(v, n)	read(fd, v, 1*n);
-#define state_load_word(v, n)	read(fd, v, 2*n);
-#define state_load_long(v, n)	read(fd, v, 4*n);
-#define state_load_float(v, n)	read(fd, v, 4*n);
-#define state_load_double(v, n)	read(fd, v, 8*n);
+#define state_load_byte(v, n)	{ ssize_t state_read_result = read(fd, v, 1 * (n)); (void)state_read_result; }
+#define state_load_word(v, n)	{ ssize_t state_read_result = read(fd, v, 2 * (n)); (void)state_read_result; }
+#define state_load_long(v, n)	{ ssize_t state_read_result = read(fd, v, 4 * (n)); (void)state_read_result; }
+#define state_load_float(v, n)	{ ssize_t state_read_result = read(fd, v, 4 * (n)); (void)state_read_result; }
+#define state_load_double(v, n)	{ ssize_t state_read_result = read(fd, v, 8 * (n)); (void)state_read_result; }
 #define state_load_skip(n)		lseek(fd, n, SEEK_CUR);
 #endif
 
