@@ -223,7 +223,7 @@ void EEPROM_set_clock_line(int state)
 
 void EEPROM_load(int fd)
 {
-	read(fd, eeprom_data, EEPROM_SIZE);
+	{ ssize_t io_result = read(fd, eeprom_data, EEPROM_SIZE); (void)io_result; }
 }
 
 
@@ -233,7 +233,7 @@ void EEPROM_load(int fd)
 
 void EEPROM_save(int fd)
 {
-	write(fd, eeprom_data, EEPROM_SIZE);
+	{ ssize_t io_result = write(fd, eeprom_data, EEPROM_SIZE); (void)io_result; }
 }
 
 

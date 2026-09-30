@@ -276,7 +276,7 @@ static int load_bios(void)
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
 		msg_printf(TEXT(LOADING), bios_name);
-		read(fd, memory_region_user1, 0x80000);
+		{ ssize_t io_result = read(fd, memory_region_user1, 0x80000); (void)io_result; }
 		close(fd);
 
 		if (mz_crc32(0, memory_region_user1, 0x80000) == 0xdf9de490)
@@ -309,7 +309,7 @@ static int load_bios(void)
 			if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 			{
 				msg_printf(TEXT(LOADING), lorom_name);
-				read(fd, memory_region_gfx3, 0x20000);
+				{ ssize_t io_result = read(fd, memory_region_gfx3, 0x20000); (void)io_result; }
 				close(fd);
 
 				if (mz_crc32(0, memory_region_gfx3, 0x20000) == 0x5a86cff2)
@@ -404,7 +404,7 @@ int memory_init(void)
 
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
-			read(fd, neogeo_memcard, 0x2000);
+			{ ssize_t io_result = read(fd, neogeo_memcard, 0x2000); (void)io_result; }
 			close(fd);
 		}
 	}
@@ -426,7 +426,7 @@ void memory_shutdown(void)
 
 	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{
-		write(fd, neogeo_memcard, 0x2000);
+		{ ssize_t io_result = write(fd, neogeo_memcard, 0x2000); (void)io_result; }
 		close(fd);
 	}
 

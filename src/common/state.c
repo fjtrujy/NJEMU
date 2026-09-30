@@ -235,7 +235,7 @@ static void load_thumbnail(int fd)
 	{
 		for (x = 0; x < w; x++)
 		{
-			read(fd, &dst[x], 2);
+			{ ssize_t io_result = read(fd, &dst[x], 2); (void)io_result; }
 		}
 		dst += BUF_WIDTH;
 	}
@@ -341,7 +341,7 @@ int state_save(int slot)
 		save_thumbnail();
 		update_progress();
 
-		write(fd, inbuf, (size_t)(state_buffer - inbuf));
+		{ ssize_t io_result = write(fd, inbuf, (size_t)(state_buffer - inbuf)); (void)io_result; }
 		update_progress();
 
 		memset(inbuf, 0, STATE_BUFFER_SIZE);
@@ -379,8 +379,8 @@ int state_save(int slot)
 		free(inbuf);
 		update_progress();
 
-		write(fd, &outsize, 4);
-		write(fd, outbuf, outsize);
+		{ ssize_t io_result = write(fd, &outsize, 4); (void)io_result; }
+		{ ssize_t io_result = write(fd, outbuf, outsize); (void)io_result; }
 		close(fd);
 		free(outbuf);
 		update_progress();
@@ -455,7 +455,7 @@ int state_save(int slot)
 		update_progress();
 
 		size = (uint32_t)(state_buffer - state_buffer_base);
-		write(fd, state_buffer_base, size);
+		{ ssize_t io_result = write(fd, state_buffer_base, size); (void)io_result; }
 		close(fd);
 		update_progress();
 
@@ -527,7 +527,7 @@ int state_load(int slot)
 		lseek(fd, (8+16) + (152*112*2), SEEK_SET);
 		update_progress();
 
-		read(fd, &insize, 4);
+		{ ssize_t io_result = read(fd, &insize, 4); (void)io_result; }
 		if ((inbuf = malloc(insize)) == NULL)
 		{
 			strcpy(error_mes, TEXT(COULD_NOT_ALLOCATE_STATE_BUFFER));
@@ -537,7 +537,7 @@ int state_load(int slot)
 		memset(inbuf, 0, insize);
 		update_progress();
 
-		read(fd, inbuf, insize);
+		{ ssize_t io_result = read(fd, inbuf, insize); (void)io_result; }
 		close(fd);
 		update_progress();
 
@@ -596,7 +596,7 @@ int state_load(int slot)
 
 		size = lseek(fd, 0, SEEK_END);
 		lseek(fd, 0, SEEK_SET);
-		read(fd, state_buffer_base, size);
+		{ ssize_t io_result = read(fd, state_buffer_base, size); (void)io_result; }
 		close(fd);
 
 		state_buffer = state_buffer_base;
@@ -784,8 +784,8 @@ int state_load_thumbnail(int slot)
 
 		memset(stver_str, 0, 16);
 
-		read(fd, stver_str, 8);
-		read(fd, &t, 16);
+		{ ssize_t io_result = read(fd, stver_str, 8); (void)io_result; }
+		{ ssize_t io_result = read(fd, &t, 16); (void)io_result; }
 		load_thumbnail(fd);
 		close(fd);
 

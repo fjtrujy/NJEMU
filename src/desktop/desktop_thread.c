@@ -79,7 +79,7 @@ static bool desktop_createThread(void *data, const char *name, int32_t (*threadF
     if (!desktop->thread)
         goto error;
 
-	return true;
+    return true;
 
 error:
 	cleanupThread(desktop);

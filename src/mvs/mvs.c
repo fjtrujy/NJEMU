@@ -112,14 +112,14 @@ static int neogeo_init(void)
 		if (!path_format(path, sizeof(path), "%smemcard/%s.bin", launchDir, game_name)) return 0;
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
-			read(fd, neogeo_memcard, 0x800);
+			{ ssize_t io_result = read(fd, neogeo_memcard, 0x800); (void)io_result; }
 			close(fd);
 		}
 
 		if (!path_format(path, sizeof(path), "%snvram/%s.nv", launchDir, game_name)) return 0;
 		if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 		{
-			read(fd, neogeo_sram16, 0x2000);
+			{ ssize_t io_result = read(fd, neogeo_sram16, 0x2000); (void)io_result; }
 			close(fd);
 			byte_swap_pairs_in_place((uint8_t *)neogeo_sram16, 0x2000);
 		}
@@ -215,7 +215,7 @@ static void neogeo_exit(void)
 		if (!path_format(path, sizeof(path), "%smemcard/%s.bin", launchDir, game_name)) return;
 		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 		{
-			write(fd, neogeo_memcard, 0x800);
+			{ ssize_t io_result = write(fd, neogeo_memcard, 0x800); (void)io_result; }
 			close(fd);
 		}
 
@@ -223,7 +223,7 @@ static void neogeo_exit(void)
 		if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 		{
 			byte_swap_pairs_in_place((uint8_t *)neogeo_sram16, 0x2000);
-			write(fd, neogeo_sram16, 0x2000);
+			{ ssize_t io_result = write(fd, neogeo_sram16, 0x2000); (void)io_result; }
 			close(fd);
 		}
 

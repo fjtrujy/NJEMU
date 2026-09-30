@@ -772,7 +772,7 @@ static int load_rom_gfx2(void)
 		if (fd >= 0)
 		{
 			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
-			read(fd, memory_region_gfx2, memory_length_gfx2);
+			{ ssize_t io_result = read(fd, memory_region_gfx2, memory_length_gfx2); (void)io_result; }
 			close(fd);
 		}
 		else
@@ -1007,7 +1007,7 @@ static int load_rom_sound1(void)
 		if (fd >= 0)
 		{
 			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));
-			read(fd, memory_region_sound1, memory_length_sound1);
+			{ ssize_t io_result = read(fd, memory_region_sound1, memory_length_sound1); (void)io_result; }
 			close(fd);
 		}
 		else
@@ -1306,7 +1306,7 @@ static int load_rom_info(const char *game_name)
 			return 3;	// Quick and dirty
 		}
 
-		read(fd, buf, size);
+		{ ssize_t io_result = read(fd, buf, size); (void)io_result; }
 		close(fd);
 
 		i = 0;

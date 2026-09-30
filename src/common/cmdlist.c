@@ -52,7 +52,7 @@ static void fd_printf(int fd, const char *fmt, ...)
 	va_start(args, fmt);
 	n = vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-	if (n > 0) write(fd, buf, n);
+	if (n > 0) { ssize_t io_result = write(fd, buf, (size_t)n); (void)io_result; }
 }
 
 static ssize_t fd_readline(int fd, char *buf, size_t size)
@@ -263,7 +263,7 @@ void load_commandlist(const char *game_name, const char *parent_name)
 	}
 	size = (int)file_size;
 
-	read(fd, buf, (size_t)size);
+	{ ssize_t io_result = read(fd, buf, (size_t)size); (void)io_result; }
 	close(fd);
 
 	// Line feed code check
@@ -393,7 +393,7 @@ retry:
 
 	fd = open(path, O_RDONLY);
 	lseek(fd, start, SEEK_SET);
-	read(fd, cmdbuf, size);
+	{ ssize_t io_result = read(fd, cmdbuf, size); (void)io_result; }
 	close(fd);
 
 	// Character code check
@@ -1063,7 +1063,7 @@ int commandlist_size_reduction(void)
 	memset(textbuf, 0, org_size + 1);
 
 	lseek(fd_cmd, 0, SEEK_SET);
-	read(fd_cmd, textbuf, org_size);
+	{ ssize_t io_result = read(fd_cmd, textbuf, org_size); (void)io_result; }
 	close(fd_cmd);
 
 	if (charset == CHARSET_DEFAULT)

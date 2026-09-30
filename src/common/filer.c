@@ -412,7 +412,7 @@ static void check_neocd_bios(void)
 	fd = open(path, O_RDONLY);
 	if (fd >= 0)
 	{
-		read(fd, temp_mem, 0x80000);
+		{ ssize_t io_result = read(fd, temp_mem, 0x80000); (void)io_result; }
 		close(fd);
 
 		if (mz_crc32(0, temp_mem, 0x80000) != 0xdf9de490)

@@ -48,7 +48,8 @@ static void desktop_main(void *data, int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
     
-	getcwd(screenshotDir, sizeof(screenshotDir));
+	if (getcwd(screenshotDir, sizeof(screenshotDir)) == NULL)
+		return;
     strcat(screenshotDir, "/PICTURE");
     mkdir(screenshotDir, 0777);
 #if	(EMU_SYSTEM == CPS1)

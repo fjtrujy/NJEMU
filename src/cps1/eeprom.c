@@ -286,12 +286,12 @@ void EEPROM_set_clock_line(int state)
 
 void EEPROM_load(int fd)
 {
-	read(fd, eeprom_data, (1 << intf->address_bits) * intf->data_bits / 8);
+	{ ssize_t io_result = read(fd, eeprom_data, (1 << intf->address_bits) * intf->data_bits / 8); (void)io_result; }
 }
 
 void EEPROM_save(int fd)
 {
-	write(fd, eeprom_data, (1 << intf->address_bits) * intf->data_bits / 8);
+	{ ssize_t io_result = write(fd, eeprom_data, (1 << intf->address_bits) * intf->data_bits / 8); (void)io_result; }
 }
 
 uint8_t EEPROM_read_data(uint32_t address)

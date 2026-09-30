@@ -154,7 +154,7 @@ int neogeo_check_game(void)
 		{
 			return 0;
 		}
-		write(posix_fd, memory_region_cpu1, i);
+		{ ssize_t io_result = write(posix_fd, memory_region_cpu1, i); (void)io_result; }
 		close(posix_fd);
 
 		posix_fd = open(path, O_RDONLY);

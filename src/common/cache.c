@@ -1765,7 +1765,7 @@ uint8_t *cache_alloc_state_buffer(int32_t size)
 
 	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{
-		write(fd, GFX_MEMORY, size);
+		{ ssize_t io_result = write(fd, GFX_MEMORY, size); (void)io_result; }
 		close(fd);
 		return GFX_MEMORY;
 	}

@@ -459,7 +459,7 @@ static int load_rom_info(const char *game_name)
 			return 3;	// Shortcut
 		}
 
-		read(fd, buf, size);
+		{ ssize_t io_result = read(fd, buf, size); (void)io_result; }
 		close(fd);
 
 		i = 0;
