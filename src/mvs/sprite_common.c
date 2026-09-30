@@ -158,7 +158,7 @@ int spr_get_sprite(uint32_t key)
 
 	while (p)
 	{
-		if (p->key == key)
+		if (__builtin_expect(p->key == key, 1))
 		{
 			if (p->used != frames_displayed)
 			{
