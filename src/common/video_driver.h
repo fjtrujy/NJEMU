@@ -186,6 +186,12 @@ typedef struct video_driver
 	 * callback above which uses edge coordinates. */
 	void (*setUIScissor)(void *data, int x, int y, int w, int h);
 
+	/* Optional cache-coherency preparation for a contiguous sprite vertex array.
+	 * Backends that require CPU/GPU cache synchronization can flush once before
+	 * a renderer emits many sub-batches from the same array. */
+	void (*prepareSpriteVertices)(void *data, uint32_t vertices_count,
+		const video_sprite_vertex_t *vertices);
+
 } video_driver_t;
 
 extern video_driver_t *const video_driver;

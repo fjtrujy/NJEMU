@@ -208,6 +208,8 @@ void blit_draw_fix(int x, int y, uint32_t code, uint16_t attr)
 void blit_finish_fix(void)
 {
 	if (!fix_vertex_count) return;
+	if (video_driver->prepareSpriteVertices)
+		video_driver->prepareSpriteVertices(video_data, fix_vertex_count, vertices_fix);
 	if (tex_fix_changed) {
 		video_driver->uploadMem(video_data, TEXTURE_LAYER_FIX);
 		tex_fix_changed = false;
@@ -298,6 +300,8 @@ void blit_finish_spr(void)
 	uint16_t sprite;
 
 	if (!spr_count) return;
+	if (video_driver->prepareSpriteVertices)
+		video_driver->prepareSpriteVertices(video_data, spr_vertex_count, vertices_spr);
 	flags = *pflags;
 	texture_layer = (uint8_t)(TEXTURE_LAYER_SPR0 + (flags & 3));
 	clut_tmp = &clut[flags & 0xf00];

@@ -51,6 +51,8 @@ typedef struct psp_video
 
 	texture_layer_t *current_tex_layer;
 	uint16_t *current_clut;
+	uintptr_t prepared_vertices_start;
+	uintptr_t prepared_vertices_end;
 	int frame_active;  /* assert: beginFrame/endFrame called exactly once per frame */
 } psp_video_t;
 
@@ -788,6 +790,19 @@ static void psp_bindSpriteTexture(psp_video_t *psp, uint8_t textureIndex,
 	}
 }
 
+static void psp_prepareSpriteVertices(void *data, uint32_t vertices_count,
+	const video_sprite_vertex_t *vertices)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	size_t size;
+
+	if (!psp || !vertices || vertices_count == 0) return;
+	size = vertices_count * sizeof(video_sprite_vertex_t);
+	sceKernelDcacheWritebackRange(vertices, size);
+	psp->prepared_vertices_start = (uintptr_t)vertices;
+	psp->prepared_vertices_end = (uintptr_t)vertices + size;
+}
+
 static void psp_blitSpriteVertices(void *data, uint8_t textureIndex,
 	const uint16_t *clut, uint8_t bank_index,
 	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
@@ -798,8 +813,13 @@ static void psp_blitSpriteVertices(void *data, uint8_t textureIndex,
 	    vertices_count == 0)
 		return;
 
-	sceKernelDcacheWritebackRange(vertices,
-		vertices_count * sizeof(video_sprite_vertex_t));
+	{
+		uintptr_t start = (uintptr_t)vertices;
+		uintptr_t end = start + vertices_count * sizeof(video_sprite_vertex_t);
+		if (start < psp->prepared_vertices_start || end > psp->prepared_vertices_end)
+			sceKernelDcacheWritebackRange(vertices,
+				vertices_count * sizeof(video_sprite_vertex_t));
+	}
 	psp_bindSpriteTexture(psp, textureIndex, clut);
 	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
 }
@@ -1173,4 +1193,5 @@ video_driver_t video_psp = {
 	psp_fillUIRect,
 	psp_fillUIRectGradient,
 	psp_setUIScissor,
+	psp_prepareSpriteVertices,
 };
