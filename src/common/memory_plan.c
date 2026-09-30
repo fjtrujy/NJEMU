@@ -14,6 +14,12 @@
 #define KIB_BYTES (1024ull)
 #define MIB_BYTES (1024ull * 1024ull)
 
+/* PS2 can trade post-cache heap headroom for more graphics cache. Other
+ * platforms retain the existing policy; CRITICAL/VERY_HIGH stay unchanged. */
+#ifndef PS2_CACHE_RESERVE_KB
+#define PS2_CACHE_RESERVE_KB 2048
+#endif
+
 typedef struct cache_region_policy {
 	uint32_t floor_kb;
 	uint32_t weight;
@@ -50,7 +56,7 @@ static const memory_tier_policy_t tier_policies[MEMORY_TIER_COUNT] = {
 	[MEMORY_TIER_LOW] = {
 		.name = "LOW",
 		.min_cacheable_mb = 6,
-		.safety_reserve_kb = 2048,
+		.safety_reserve_kb = PS2_CACHE_RESERVE_KB,
 		.cps2_gfx = { 4096, 1, 0 },
 		.mvs_crom = { 4096, 3, 0 },
 		.mvs_pcm = { 1024, 1, 3072 },
@@ -58,7 +64,7 @@ static const memory_tier_policy_t tier_policies[MEMORY_TIER_COUNT] = {
 	[MEMORY_TIER_MEDIUM] = {
 		.name = "MEDIUM",
 		.min_cacheable_mb = 12,
-		.safety_reserve_kb = 2048,
+		.safety_reserve_kb = PS2_CACHE_RESERVE_KB,
 		.cps2_gfx = { 8192, 1, 0 },
 		.mvs_crom = { 8192, 4, 0 },
 		.mvs_pcm = { 2048, 1, 3072 },
@@ -66,7 +72,7 @@ static const memory_tier_policy_t tier_policies[MEMORY_TIER_COUNT] = {
 	[MEMORY_TIER_HIGH] = {
 		.name = "HIGH",
 		.min_cacheable_mb = 24,
-		.safety_reserve_kb = 2048,
+		.safety_reserve_kb = PS2_CACHE_RESERVE_KB,
 		.cps2_gfx = { 8192, 1, 0 },
 		.mvs_crom = { 12288, 5, 0 },
 		.mvs_pcm = { 3072, 1, 3072 },

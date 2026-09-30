@@ -2093,3 +2093,65 @@ de video congelado.
 La instrumentacion temporal usada para aislar este problema (watchdog, contadores
 GS/CPU/render y switches CMake de control POSIX/C-ROM/PCM) se retiro al aparcar la
 investigacion; este documento conserva los resultados necesarios para retomarla.
+
+## 33. PS2: reserva de heap configurable para pruebas de hardware
+
+`PS2_CACHE_RESERVE_KB` permite seleccionar 1024 (nuevo default PS2) o 2048
+(comportamiento anterior) para los tiers LOW/MEDIUM/HIGH. CRITICAL conserva
+1 MiB y VERY_HIGH conserva 4 MiB; las otras plataformas mantienen su politica.
+
+La reserva no es un buffer permanente de I/O: el allocator comprueba y retiene
+ese espacio al dimensionar los caches, y el loader lo libera para allocations
+posteriores de setup/runtime. Reducirlo permite dar mas RAM al cache, pero reduce
+el margen de heap para esas operaciones. No se ha demostrado aun que 1 MiB sea
+suficiente para todos los juegos, menus y configuraciones PS2.
+
+Con un presupuesto simulado fijo de 13632 KiB, equivalente al screenshot de
+MSLUG3, los tests del allocator real producen:
+
+- reserva 2048 KiB: C-ROM 8512 KiB, PCM 3072 KiB;
+- reserva 1024 KiB: C-ROM 9536 KiB, PCM 3072 KiB.
+
+Son 16 slots graficos adicionales de 64 KiB (149 frente a 133, +12%). Es una
+prediccion condicionada a que el heap permita esa forma de allocation; la prueba
+no garantiza el mismo incremento en un heap fragmentado de consola. Los tests
+incluyen un limite de bloque contiguo para comprobar que no se sobrepasa.
+
+Para comparar en hardware usar `-DPS2_CACHE_RESERVE_KB=1024` y `=2048` manteniendo
+las demas opciones iguales. Verificar carga, la misma seccion del juego, entrada
+y salida del menu y carga de otro juego. Si aparecen fallos de allocation o
+inestabilidad, volver a 2048. La ganancia de capacidad no es una promesa de
+mejora proporcional de FPS ni reemplaza anticipacion/overlap de I/O.
+
+## 34. PS2 MVS: evitar uploads de atlas sin cambios
+
+`PS2_DIRTY_SPRITE_UPLOADS=ON` (default) activa dirty flags persistentes por atlas
+SPR en el renderer comun MVS, solo para la build PS2. Cada tile decodificado
+marca su atlas; `blit_finish_spr()` sube el atlas antes del primer draw que lo
+usa solamente si hay nuevos pixels. Los batches raster posteriores vuelven a
+subir un atlas si se modifica; los frames con hits de textura reutilizan VRAM.
+El orden de los draws y la actualizacion de CLUT no cambian. `blit_reset()`
+invalida el bookkeeping y el borrado de cache de tiles provoca nuevas escrituras.
+`-DPS2_DIRTY_SPRITE_UPLOADS=OFF` restaura uploads por batch para comparar.
+
+Tambien se adelanta el rechazo de sprites cuando el batch esta lleno, antes del
+lookup/decode, evitando lecturas C-ROM para un sprite que no se iba a dibujar.
+
+Los tests compilan `sprite.c` y `sprite_common.c` reales con un backend simulado
+que comprueba los pixels residentes al dibujar. Se ejecutan con el modo nuevo y
+con el anterior: cubren hits entre frames, nuevos tiles entre batches raster,
+cambios de banco de paleta, orden al alternar atlas, invalidacion, limite del
+batch y reset. Pasan ambos tests y los tres tests del plan/reserva de memoria.
+La build PS2 MVS con GUI, fast cache, IRX embebidos y reserva de 1 MiB compila.
+
+El ahorro corresponde a transferencias EE->GS, no a latencia USB/MX4SIO. Cada
+atlas SPR T8 de 512x512 cuesta 256 KiB por upload completo evitado. No hay aun
+una cifra medida de mejora de FPS. No se ha implementado I/O asincrono en este
+cambio: requiere la cola de decodes y estados de cache descritos en la seccion 29.
+
+Validacion retomada el 2026-09-30: pasan los seis tests seleccionados de renderer,
+plan/reserva e informacion de memoria de plataforma. El ELF generado es
+`build_ps2_mvs_reserve1m/MVS.ELF`, con dirty uploads y fast cache activados,
+reserva de 1024 KiB e IRX embebidos. La prueba anterior en PCSX2 solo llego al
+splash mediante `host:`; no confirma arranque de MSLUG3, gameplay ni rendimiento
+de USB/MX4SIO. Queda pendiente esa validacion de runtime.

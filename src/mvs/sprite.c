@@ -39,6 +39,11 @@ static const mvs_presentation_size_t mvs_presentation_sizes[6] =
 };
 
 static bool tex_fix_changed;
+#ifdef MVS_DIRTY_SPRITE_UPLOADS
+/* Persists across frames and raster batches: queued texture uploads leave the
+ * atlas resident. Pixel writes below mark only the affected atlas dirty. */
+static bool tex_spr_changed[TEXTURE_LAYER_COUNT];
+#endif
 static video_sprite_vertex_t __attribute__((aligned(64)))
 	vertices_fix[FIX_MAX_SPRITES * 2];
 static video_sprite_vertex_t __attribute__((aligned(64)))
@@ -128,6 +133,9 @@ void blit_reset(void)
 	clut = (uint16_t *)&video_palettebank[palette_bank];
 	video_driver->uploadClut(video_data, clut, palette_bank);
 	tex_fix_changed = false;
+#ifdef MVS_DIRTY_SPRITE_UPLOADS
+	memset(tex_spr_changed, 1, sizeof(tex_spr_changed));
+#endif
 	blit_clear_all_sprite();
 }
 
@@ -210,11 +218,15 @@ void blit_finish_fix(void)
 
 void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 {
-	int16_t idx = (int16_t)spr_get_sprite(MAKE_SPR_KEY(code, attr));
+	int16_t idx;
 	video_sprite_vertex_t *vertices;
 	uint16_t local_idx;
 
-	if (spr_disabled) return;
+	/* Do not load/decode a tile that cannot be added to this batch. */
+	if (spr_disabled || spr_vertex_count + 2 > SPR_MAX_SPRITES * 2 ||
+		spr_count >= SPR_MAX_SPRITES)
+		return;
+	idx = (int16_t)spr_get_sprite(MAKE_SPR_KEY(code, attr));
 
 	if (idx < 0) {
 		uint8_t pixels[16 * 16] __attribute__((aligned(4)));
@@ -238,10 +250,11 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 		mvs_decode_sprite_tile(pixels, code, attr);
 		video_driver->writeIndexedTextureRect(video_data, layer,
 			atlas_x, atlas_y, 16, 16, pixels, 16);
+#ifdef MVS_DIRTY_SPRITE_UPLOADS
+		tex_spr_changed[layer] = true;
+#endif
 	}
 
-	if (spr_vertex_count + 2 > SPR_MAX_SPRITES * 2 || spr_count >= SPR_MAX_SPRITES)
-		return;
 	vertices = &vertices_spr[spr_vertex_count];
 	spr_vertex_count += 2;
 	spr_flags[spr_count++] = (uint16_t)((idx >> 10) | ((attr & 0xf000) >> 4));
@@ -261,6 +274,17 @@ void blit_draw_spr(int x, int y, int w, int h, uint32_t code, uint16_t attr)
 	vertices[1].y += (int16_t)h;
 }
 
+static void upload_sprite_atlas(uint8_t layer)
+{
+#ifdef MVS_DIRTY_SPRITE_UPLOADS
+	if (!tex_spr_changed[layer]) return;
+#endif
+	video_driver->uploadMem(video_data, layer);
+#ifdef MVS_DIRTY_SPRITE_UPLOADS
+	tex_spr_changed[layer] = false;
+#endif
+}
+
 void blit_finish_spr(void)
 {
 	uint16_t flags;
@@ -278,7 +302,7 @@ void blit_finish_spr(void)
 	texture_layer = (uint8_t)(TEXTURE_LAYER_SPR0 + (flags & 3));
 	clut_tmp = &clut[flags & 0xf00];
 	mem_uploaded[texture_layer] = true;
-	video_driver->uploadMem(video_data, texture_layer);
+	upload_sprite_atlas(texture_layer);
 
 	for (sprite = 0; sprite < spr_count; sprite++) {
 		if (flags != *pflags) {
@@ -294,7 +318,7 @@ void blit_finish_spr(void)
 			clut_tmp = &clut[flags & 0xf00];
 			if (!mem_uploaded[texture_layer]) {
 				mem_uploaded[texture_layer] = true;
-				video_driver->uploadMem(video_data, texture_layer);
+				upload_sprite_atlas(texture_layer);
 			}
 		}
 

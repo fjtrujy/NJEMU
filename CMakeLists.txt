@@ -86,6 +86,18 @@ option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
 option(CACHE_IO_VALIDATE_ACCELERATED "Validate accelerated MVS cache reads against POSIX" OFF)
 option(PS2_FAST_CACHE "PS2: enable accelerated cache I/O for MVS/CPS2" ON)
+option(PS2_DIRTY_SPRITE_UPLOADS "PS2 MVS: upload sprite atlases only when their pixels change" ON)
+if(PS2_DIRTY_SPRITE_UPLOADS AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
+    add_definitions(-DMVS_DIRTY_SPRITE_UPLOADS=1)
+endif()
+set(PS2_CACHE_RESERVE_KB "1024" CACHE STRING "PS2: heap reserve for LOW/MEDIUM/HIGH cache tiers (1024 or 2048 KiB)")
+set_property(CACHE PS2_CACHE_RESERVE_KB PROPERTY STRINGS 1024 2048)
+if(PLATFORM STREQUAL "PS2")
+    if(NOT PS2_CACHE_RESERVE_KB MATCHES "^(1024|2048)$")
+        message(FATAL_ERROR "PS2_CACHE_RESERVE_KB must be 1024 or 2048")
+    endif()
+    add_definitions(-DPS2_CACHE_RESERVE_KB=${PS2_CACHE_RESERVE_KB})
+endif()
 option(PS2_EXTERNAL_IRX_IMAGE "PS2: load ps2_drivers IRXs from an external image" OFF)
 option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
@@ -1059,6 +1071,22 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    if("${TARGET}" STREQUAL "MVS")
+        foreach(UPLOAD_MODE IN ITEMS dirty legacy)
+            add_executable(mvs_sprite_upload_${UPLOAD_MODE}_tests
+                tests/mvs_sprite_upload_tests.c
+                src/mvs/sprite.c
+                src/mvs/sprite_common.c)
+            target_include_directories(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/src)
+            if(UPLOAD_MODE STREQUAL "dirty")
+                target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
+                    MVS_DIRTY_SPRITE_UPLOADS=1)
+            endif()
+            add_test(NAME mvs_sprite_upload_${UPLOAD_MODE}_tests
+                COMMAND mvs_sprite_upload_${UPLOAD_MODE}_tests)
+        endforeach()
+    endif()
     if(${TARGET} STREQUAL "NCDZ")
         add_executable(resource_source_tests
             tests/resource_source_tests.c
@@ -1210,6 +1238,20 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 	add_test(NAME memory_plan_tests COMMAND memory_plan_tests)
+
+	foreach(RESERVE_KB IN ITEMS 1024 2048)
+		add_executable(memory_reserve_${RESERVE_KB}_tests
+			tests/memory_reserve_tests.c
+			src/common/memory_plan.c
+			src/common/platform_memory_info.c
+		)
+		target_include_directories(memory_reserve_${RESERVE_KB}_tests PRIVATE
+			${CMAKE_CURRENT_SOURCE_DIR}/src)
+		target_compile_definitions(memory_reserve_${RESERVE_KB}_tests PRIVATE
+			PS2_CACHE_RESERVE_KB=${RESERVE_KB})
+		add_test(NAME memory_reserve_${RESERVE_KB}_tests
+			COMMAND memory_reserve_${RESERVE_KB}_tests)
+	endforeach()
 
 	add_executable(palette_convert_tests
 		tests/palette_convert_tests.c
