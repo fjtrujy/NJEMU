@@ -243,12 +243,6 @@ if (PLATFORM STREQUAL "PSP")
     set_source_files_properties(src/cpu/m68000/c68k.c PROPERTIES
         COMPILE_OPTIONS "-Wno-strict-aliasing"
     )
-    set_property(SOURCE src/cps1/memintrf.c APPEND PROPERTY
-        COMPILE_OPTIONS "-Wno-array-bounds"
-    )
-    set_property(SOURCE src/cps2/memintrf.c APPEND PROPERTY
-        COMPILE_OPTIONS "-Wno-array-bounds"
-    )
 elseif (PLATFORM STREQUAL "PS2")
     list(APPEND WARNING_OPTIONS
         -Wno-unused-variable
