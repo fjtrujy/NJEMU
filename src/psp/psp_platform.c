@@ -177,20 +177,6 @@ static void psp_main(void *data, int argc, char *argv[]) {
 	SetupCallbacks();
 }
 
-static bool psp_queryMemoryInfo(void *data, platform_memory_info_t *out) {
-	(void)data;
-	if (out == NULL) {
-		return false;
-	}
-
-	memset(out, 0, sizeof(*out));
-	out->free_bytes = (uint64_t)pspSdkTotalFreeUserMemSize();
-	out->largest_free_block_bytes = (uint64_t)sceKernelMaxFreeMemSize();
-	out->capabilities = PLATFORM_MEMORY_CAP_QUERY_FREE | PLATFORM_MEMORY_CAP_QUERY_LARGEST_BLOCK;
-	platform_memory_info_normalize(out);
-	return true;
-}
-
 static ui_language_t psp_getSystemLanguage(void *data) {
 	int language = PSP_SYSTEMPARAM_LANGUAGE_ENGLISH;
 	(void)data;
@@ -217,6 +203,6 @@ platform_driver_t platform_psp = {
 	psp_init,
 	psp_free,
 	psp_main,
-	psp_queryMemoryInfo,
+	NULL,
 	psp_getSystemLanguage,
 };
