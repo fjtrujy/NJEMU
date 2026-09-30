@@ -32,6 +32,8 @@ typedef struct desktop_video {
 	uint8_t *texturesMem;
 	SDL_Texture *sdl_texture_scrbitmap;
 	uint8_t *scrbitmap;
+	uint16_t *ui_scratch;
+	SDL_Texture *sdl_texture_ui_scratch;
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint32_t presented_frames;	/* NJEMU_DUMP_FRAMES numbering */
@@ -119,6 +121,18 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 		return NULL;
 	}
 	memset(desktop->scrbitmap, 0, scrbitmapSize);
+	desktop->ui_scratch = (uint16_t *)calloc(BUF_WIDTH * 160, sizeof(uint16_t));
+	desktop->sdl_texture_ui_scratch = SDL_CreateTexture(desktop->renderer,
+		SDL_PIXELFORMAT_ABGR1555, SDL_TEXTUREACCESS_STREAMING, BUF_WIDTH, 160);
+	if (!desktop->ui_scratch || !desktop->sdl_texture_ui_scratch) {
+		printf("Could not allocate UI scratch: %s\n", SDL_GetError());
+		free(desktop->ui_scratch);
+		free(desktop->scrbitmap);
+		SDL_DestroyRenderer(desktop->renderer);
+		SDL_DestroyWindow(desktop->window);
+		free(desktop);
+		return NULL;
+	}
 
 	size_t totalTextureSize = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
@@ -181,6 +195,12 @@ static void desktop_exit(desktop_video_t *desktop) {
 	desktop->tex_layers = NULL;
 	desktop->tex_layers_count = 0;
 
+	if (desktop->sdl_texture_ui_scratch) {
+		SDL_DestroyTexture(desktop->sdl_texture_ui_scratch);
+		desktop->sdl_texture_ui_scratch = NULL;
+	}
+	free(desktop->ui_scratch);
+	desktop->ui_scratch = NULL;
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
@@ -271,8 +291,11 @@ static void desktop_endFrame(void *data)
 
 static void *desktop_frameAddr(void *data, int frameIndex, int x, int y)
 {
-	(void)data; (void)frameIndex; (void)x; (void)y;
-	return NULL;
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	if (!desktop || frameIndex != COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER ||
+		x < 0 || y < 0 || x >= BUF_WIDTH || y >= 160)
+		return NULL;
+	return desktop->ui_scratch + (size_t)y * BUF_WIDTH + x;
 }
 
 static void desktop_getOutputSize(void *data, int *width, int *height)
@@ -444,32 +467,73 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
 
 }
 
+static int desktop_capture_to_scratch(desktop_video_t *desktop, RECT *src_rect, RECT *dst_rect, int rotate)
+{
+	int sw = src_rect->right - src_rect->left;
+	int sh = src_rect->bottom - src_rect->top;
+	int dw = dst_rect->right - dst_rect->left;
+	int dh = dst_rect->bottom - dst_rect->top;
+	uint16_t *pixels;
+	SDL_Rect src = { src_rect->left, src_rect->top, sw, sh };
+
+	if (dw <= 0 || dh <= 0 || dst_rect->left < 0 || dst_rect->top < 0 ||
+		dst_rect->right > BUF_WIDTH || dst_rect->bottom > 160)
+		return 0;
+	pixels = (uint16_t *)malloc((size_t)sw * sh * sizeof(uint16_t));
+	if (!pixels) return 0;
+	SDL_SetRenderTarget(desktop->renderer, desktop->sdl_texture_scrbitmap);
+	if (SDL_RenderReadPixels(desktop->renderer, &src, SDL_PIXELFORMAT_ABGR1555,
+		pixels, sw * (int)sizeof(uint16_t)) != 0) {
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		free(pixels);
+		return 0;
+	}
+	SDL_SetRenderTarget(desktop->renderer, NULL);
+	for (int y = 0; y < dh; y++) {
+		uint16_t *dst = desktop->ui_scratch +
+			(size_t)(dst_rect->top + y) * BUF_WIDTH + dst_rect->left;
+		for (int x = 0; x < dw; x++) {
+			int sx, sy;
+			if (rotate) {
+				sx = (y * sw) / dh;
+				sy = sh - 1 - (x * sh) / dw;
+			} else {
+				sx = (x * sw) / dw;
+				sy = (y * sh) / dh;
+			}
+			dst[x] = pixels[(size_t)sy * sw + sx];
+		}
+	}
+	free(pixels);
+	return 1;
+}
+
+static void desktop_draw_scratch(desktop_video_t *desktop, RECT *src_rect, RECT *dst_rect)
+{
+	SDL_Rect src = { src_rect->left, src_rect->top, src_rect->right - src_rect->left, src_rect->bottom - src_rect->top };
+	SDL_Rect dst = { dst_rect->left, dst_rect->top, dst_rect->right - dst_rect->left, dst_rect->bottom - dst_rect->top };
+	SDL_UpdateTexture(desktop->sdl_texture_ui_scratch, NULL, desktop->ui_scratch,
+		BUF_WIDTH * (int)sizeof(uint16_t));
+	SDL_SetRenderTarget(desktop->renderer, NULL);
+	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_ui_scratch, &src, &dst);
+}
+
 static void desktop_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	desktop_video_t *desktop = (desktop_video_t*)data;
-	SDL_Rect src = { src_rect->left, src_rect->top,
-	                 src_rect->right - src_rect->left,
-	                 src_rect->bottom - src_rect->top };
-	SDL_Rect dst = { dst_rect->left, dst_rect->top,
-	                 dst_rect->right - dst_rect->left,
-	                 dst_rect->bottom - dst_rect->top };
+	SDL_Rect src = { src_rect->left, src_rect->top, src_rect->right - src_rect->left, src_rect->bottom - src_rect->top };
+	SDL_Rect dst = { dst_rect->left, dst_rect->top, dst_rect->right - dst_rect->left, dst_rect->bottom - dst_rect->top };
 
-	/* The only meaningful copies in the UI flow are
-	 * DRAW_FRAME_BUFFER -> SCREEN_BITMAP (load_background) and similar
-	 * scrbitmap -> screen movements. Both treat scrbitmap as the source
-	 * offscreen canvas; the screen is the renderer's default target. */
-	if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
-	    dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
-	{
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		desktop_capture_to_scratch(desktop, src_rect, dst_rect, 0);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER) {
+		desktop_draw_scratch(desktop, src_rect, dst_rect);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
 		SDL_SetRenderTarget(desktop->renderer, NULL);
 		SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
-	}
-	else if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
-	         dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER)
-	{
-		/* Copying screen back to work frame: rare; leave a no-op for
-		 * now since we cannot read back from the SDL window framebuffer
-		 * without SDL_RenderReadPixels. */
 	}
 }
 
@@ -490,7 +554,10 @@ static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *s
 
 static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	(void)data; (void)dstIndex; (void)dst_rect; (void)srcIndex; (void)src_rect;
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+		desktop_capture_to_scratch(desktop, src_rect, dst_rect, 1);
 }
 
 
@@ -500,8 +567,10 @@ static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT 
 
 static void desktop_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
-	(void)dstIndex; (void)dst_rect; (void)src_rect;
-	(void)data; (void)srcIndex;
+	desktop_video_t *desktop = (desktop_video_t *)data;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER)
+		desktop_draw_scratch(desktop, src_rect, dst_rect);
 }
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))

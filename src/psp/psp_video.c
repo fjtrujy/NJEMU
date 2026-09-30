@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <string.h>
 
 /******************************************************************************
@@ -26,6 +27,8 @@ static const ScePspIMatrix4 dither_matrix = {
 	{12, 4, 14, 6},
 	{3, 11, 1, 9},
 	{15, 7, 13, 5}};
+
+#define PSP_VIDEO_UI_SCRATCH_HEIGHT 160
 
 static int pixel_format = GU_PSM_5551;
 
@@ -47,6 +50,7 @@ typedef struct psp_video
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint8_t *texturesMem;
+	uint16_t *ui_scratch; /* legacy CT16 GUI/state scratch, kept out of EDRAM */
 	uint16_t *clut_base;
 
 	texture_layer_t *current_tex_layer;
@@ -72,6 +76,12 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 {
 	psp_video_t *psp = (psp_video_t *)calloc(1, sizeof(psp_video_t));
 	psp->clut_base = clut_info->base;
+	psp->ui_scratch = (uint16_t *)memalign(64, BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
+	if (!psp->ui_scratch) {
+		free(psp);
+		return NULL;
+	}
+	memset(psp->ui_scratch, 0, BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
 	uint32_t framesize = BUF_WIDTH * SCR_HEIGHT * 2;
 	uint8_t *vram_base = (uint8_t *)sceGeEdramGetAddr();
 	uintptr_t offset = 0;
@@ -199,6 +209,8 @@ static void psp_free(void *data)
 	psp_video_t *psp = (psp_video_t *)data;
 
 	psp_exit();
+	free(psp->ui_scratch);
+	free(psp->tex_layers);
 	free(psp);
 }
 
@@ -276,7 +288,11 @@ void psp_video_sync_ui_scratch(void *data)
 
 static inline uint16_t *psp_uncachedFrameAddr(void *frame)
 {
-	return (uint16_t *)((uintptr_t)frame | 0x44000000u);
+	/* EDRAM frame handles are relative offsets. Main-RAM scratch pointers are
+	 * already valid GE addresses and must not be remapped into EDRAM. */
+	if ((uintptr_t)frame < sceGeEdramGetSize())
+		return (uint16_t *)((uintptr_t)frame | 0x44000000u);
+	return (uint16_t *)frame;
 }
 
 static void *psp_resolveFrame(psp_video_t *psp, int index) {
@@ -287,6 +303,8 @@ static void *psp_resolveFrame(psp_video_t *psp, int index) {
 		return (void *)psp->draw_frame;
 	case COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP:
 		return (void *)psp->scrbitmap;
+	case COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER:
+		return psp->ui_scratch;
 	default:
 		return (void *)psp->tex_layers[index - COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER].buffer;
 	}
@@ -301,6 +319,30 @@ static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 	psp_video_t *psp = (psp_video_t *)data;
 	void *frame = psp_resolveFrame(psp, frameIndex);
 	return (void *)((uintptr_t)frame + ((x + (y << 9)) << 1));
+}
+
+static int psp_readFrame(void *data, int frameIndex, int x, int y,
+	int width, int height, uint16_t *dst, int dstPitch)
+{
+	psp_video_t *psp = (psp_video_t *)data;
+	uint16_t *src;
+	int row;
+
+	if (!psp || frameIndex != COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER ||
+		!dst || x < 0 || y < 0 || width <= 0 || height <= 0 ||
+		x + width > BUF_WIDTH || y + height > PSP_VIDEO_UI_SCRATCH_HEIGHT || dstPitch < width)
+		return 0;
+
+	/* The GE writes the CT16 scratch in main RAM. Invalidate CPU cache lines
+	 * before serializing a thumbnail so stale cache contents cannot leak into
+	 * the save-state image. state_make_thumbnail() has completed its GU list
+	 * before the save menu can request this readback. */
+	sceKernelDcacheInvalidateRange(psp->ui_scratch, BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
+	src = psp->ui_scratch + (size_t)y * BUF_WIDTH + x;
+	for (row = 0; row < height; row++)
+		memcpy(dst + (size_t)row * dstPitch, src + (size_t)row * BUF_WIDTH,
+			(size_t)width * sizeof(uint16_t));
+	return 1;
 }
 
 static void psp_getOutputSize(void *data, int *width, int *height)
@@ -395,6 +437,8 @@ static void psp_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 	void *src_ptr = psp_resolveFrame(psp, srcIndex);
 	void *dst_ptr = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+		sceKernelDcacheWritebackRange(psp->ui_scratch, BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
 	video_sprite_vertex_t *vertices;
 
 	sw = src_rect->right - src_rect->left;
@@ -1177,7 +1221,7 @@ video_driver_t video_psp = {
 	psp_beginFrame,
 	psp_endFrame,
 	psp_frameAddr,
-	NULL, // readFrame: PSP surfaces are directly CPU-addressable
+	psp_readFrame,
 	psp_getOutputSize,
 	psp_scissor,
 	psp_clearScreen,
