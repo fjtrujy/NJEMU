@@ -10,6 +10,7 @@
 #include "common/cache.h"
 #include "sprite_common.h"
 #include "common/emulator_options.h"
+#include "common/display_mode.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
 
@@ -17,26 +18,7 @@
 	Renderer state
 ******************************************************************************/
 
-typedef struct mvs_presentation_size
-{
-	int16_t width;
-	int16_t height;
-} mvs_presentation_size_t;
-
 static const RECT mvs_src_clip = { 24, 16, 24 + 304, 16 + 224 };
-
-/* option_stretch semantics shared with common/menu/mvs.c.  The backend owns
- * physical output size; non-OFF presets scale from NJEMU's 480x272 logical
- * presentation space and are centered in that output. */
-static const mvs_presentation_size_t mvs_presentation_sizes[6] =
-{
-	{ 304, 224 },	/* OFF/native 19:14 */
-	{ 320, 240 },	/* 4:3 */
-	{ 360, 270 },	/* 4:3 */
-	{ 366, 270 },	/* 19:14 */
-	{ 420, 270 },	/* 14:9 */
-	{ 480, 270 }	/* 16:9 */
-};
 
 static bool tex_fix_changed;
 #ifdef MVS_DIRTY_SPRITE_UPLOADS
@@ -55,26 +37,21 @@ static uint16_t spr_count;
 static bool spr_disabled;
 static uint16_t *clut;
 
-static RECT mvs_presentation_rect(void)
+static RECT mvs_presentation_rect(int native_width, int native_height)
 {
-	int option = option_stretch;
 	int output_width = SCR_WIDTH;
 	int output_height = SCR_HEIGHT;
 	int width;
 	int height;
 	RECT rect;
+	display_mode_t mode = (display_mode_t)option_display_mode;
 
-	if (option < 0 || option >= (int)(sizeof(mvs_presentation_sizes) /
-			sizeof(mvs_presentation_sizes[0])))
-		option = 0;
+	if (mode < DISPLAY_MODE_ORIGINAL_SIZE || mode >= DISPLAY_MODE_COUNT)
+		mode = DISPLAY_MODE_ORIGINAL_ASPECT;
 	if (video_driver->getOutputSize)
 		video_driver->getOutputSize(video_data, &output_width, &output_height);
-
-	width = mvs_presentation_sizes[option].width;
-	height = mvs_presentation_sizes[option].height;
-	if (option != 0)
-		video_scale_logical_size(output_width, output_height,
-			width, height, &width, &height);
+	display_mode_size(mode, output_width, output_height,
+		native_width, native_height, &width, &height);
 
 	rect.left = (int16_t)((output_width - width) / 2);
 	rect.top = (int16_t)((output_height - height) / 2);
@@ -163,7 +140,7 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	RECT dst_clip = mvs_presentation_rect();
+	RECT dst_clip = mvs_presentation_rect(304, 224);
 	video_driver->transferWorkFrame(video_data, (RECT *)&mvs_src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
 }

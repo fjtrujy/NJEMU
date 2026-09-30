@@ -6,7 +6,7 @@ extern int option_autoframeskip;
 extern int option_frameskip;
 extern int option_speedlimit;
 extern int option_vsync;
-extern int option_stretch;
+extern int option_display_mode;
 
 extern int option_sound_enable;
 extern int option_samplerate;

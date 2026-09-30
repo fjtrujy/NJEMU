@@ -10,7 +10,7 @@
 #include "common/video_driver.h"
 
 uint32_t frames_displayed;
-int option_stretch;
+int option_display_mode;
 uint8_t palette_bank;
 uint16_t video_palettebank[2][4096];
 uint16_t *video_palette = video_palettebank[0];

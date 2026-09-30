@@ -17,7 +17,6 @@ static const char *inifile_name = "njemu.ini";
 #elif defined(INCLUDE_CONFIG_STRUCT)
 
 #define DEFAULT_SAMPLERATE	1	// 22050Hz
-#define DEFAULT_STRETCH		PLATFORM_NEOGEO_DEFAULT_STRETCH
 
 /******************************************************************************
 	˜‹ÔìÌå
@@ -34,7 +33,7 @@ static cfg_type gamecfg_mvs[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -106,7 +105,7 @@ static cfg_type gamecfg_irrmaze[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	0	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -179,7 +178,7 @@ static cfg_type gamecfg_popbounc[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	0	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -252,7 +251,7 @@ static cfg_type gamecfg_vliner[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	0	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -327,7 +326,7 @@ static cfg_type gamecfg_jockeygp[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		DEFAULT_STRETCH,	5	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	0	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -388,7 +387,6 @@ static cfg_type gamecfg_jockeygp[] =
 	{ CFG_NONE, NULL, 0, 0, 0, 0}
 };
 
-#undef DEFAULT_STRETCH
 
 #elif defined(INCLUDE_SETUP_CONFIG_STRUCT)
 

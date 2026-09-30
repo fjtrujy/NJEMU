@@ -41,7 +41,7 @@ static cfg_type gamecfg_2buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -104,7 +104,7 @@ static cfg_type gamecfg_2buttons_rot[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"RotateScreen",			&cps_rotate_screen,		1,	1	, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -166,7 +166,7 @@ static cfg_type gamecfg_3buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -235,7 +235,7 @@ static cfg_type gamecfg_3buttons_rot[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"RotateScreen",			&cps_rotate_screen,		1,	1	, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -294,7 +294,7 @@ static cfg_type gamecfg_4buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -363,7 +363,7 @@ static cfg_type gamecfg_6buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -434,7 +434,7 @@ static cfg_type gamecfg_quiz[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -508,7 +508,7 @@ static cfg_type gamecfg_forgottn[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -567,7 +567,7 @@ static cfg_type gamecfg_sfzch[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -635,7 +635,7 @@ static cfg_type gamecfg_wofch[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -699,7 +699,7 @@ static cfg_type gamecfg_wofch3p[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -762,7 +762,7 @@ static cfg_type gamecfg_progear[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -822,7 +822,7 @@ static cfg_type gamecfg_pzloop2[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"StretchScreen",		&option_stretch,		4,	4	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_BOOL,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	1	, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},

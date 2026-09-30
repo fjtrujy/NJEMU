@@ -1029,16 +1029,13 @@ void file_browser(void)
 
 	{
 		char version_line[64];
-		char platform_line[64];
 		const char *splash_lines[] = {
 			version_line,
-			platform_line,
 			"NJ (https://fjtrujy.github.io/NJEMU/)",
 			"2011-2026 (https://github.com/fjtrujy/NJEMU)"
 		};
 
 		snprintf(version_line, sizeof(version_line), "%s %s", APPNAME_STR, VERSION_STR);
-		snprintf(platform_line, sizeof(platform_line), "for %s", PLATFORM_STR);
 		int splash_width = 0;
 		int dialog_half_width;
 
@@ -1061,8 +1058,6 @@ void file_browser(void)
 	}
 	uifont_print_shadow_center(ui_layout_center_y() - 30,
 		255,255,120, APPNAME_STR " " VERSION_STR);
-	uifont_print_shadow_center(ui_layout_center_y() - 7,
-		255,255,255, "for " PLATFORM_STR);
 	uifont_print_shadow_center(ui_layout_center_y() + 6,
 		200,200,200, "NJ (https://fjtrujy.github.io/NJEMU/)");
 	uifont_print_shadow_center(ui_layout_center_y() + 20,

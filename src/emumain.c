@@ -80,7 +80,7 @@ int option_speedlimit;
 int option_autoframeskip;
 int option_frameskip;
 int option_vsync;
-int option_stretch;
+int option_display_mode;
 
 int option_sound_enable;
 int option_samplerate;

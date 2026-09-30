@@ -7,8 +7,8 @@ int main(void)
 {
 	/* Stable sentinels across the namespace, including all normalized groups. */
 	assert(EOM == 0);
-	assert(STRETCH_320X224_4_3 == 71);
-	assert(STRETCH_480X270_16_9 == 77);
+	assert(DISPLAY_ORIGINAL_SIZE == 71);
+	assert(DISPLAY_RESERVED_3 == 77);
 	assert(INPUT_BUTTON_1 == 159);
 	assert(INPUT_BUTTON_A == 165);
 	assert(AUTOFIRE_1 == 175);

@@ -14,6 +14,7 @@
 #include "sprite_common.h"
 #include "common/cache.h"
 #include "common/emulator_options.h"
+#include "common/display_mode.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
 
@@ -31,45 +32,23 @@ static void blit_render_object_zb(int start_pri, int end_pri);
 	Renderer state and portable helpers
 ******************************************************************************/
 
-typedef struct cps_presentation_size
-{
-	int16_t width;
-	int16_t height;
-} cps_presentation_size_t;
-
 static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
 
-/* option_stretch semantics shared with common/menu/cps.c. The final entry is
- * reserved for the rotated CPS presentation path. */
-static const cps_presentation_size_t cps_presentation_sizes[6] =
-{
-	{ 384, 224 },	/* OFF/native */
-	{ 360, 270 },	/* 4:3 */
-	{ 384, 270 },	/* 24:17 */
-	{ 466, 272 },	/* 12:7 */
-	{ 480, 270 },	/* 16:9 */
-	{ 204, 272 }	/* rotated 3:4 */
-};
-
-static RECT cps_presentation_rect(int option, bool scale_logical)
+static RECT cps_presentation_rect(int native_width, int native_height)
 {
 	int output_width = SCR_WIDTH;
 	int output_height = SCR_HEIGHT;
 	int width;
 	int height;
 	RECT rect;
+	display_mode_t mode = (display_mode_t)option_display_mode;
 
-	if (option < 0 || option >= (int)(sizeof(cps_presentation_sizes) /
-			sizeof(cps_presentation_sizes[0])))
-		option = 0;
+	if (mode < DISPLAY_MODE_ORIGINAL_SIZE || mode >= DISPLAY_MODE_COUNT)
+		mode = DISPLAY_MODE_ORIGINAL_ASPECT;
 	if (video_driver->getOutputSize)
 		video_driver->getOutputSize(video_data, &output_width, &output_height);
-
-	width = cps_presentation_sizes[option].width;
-	height = cps_presentation_sizes[option].height;
-	if (scale_logical)
-		video_scale_logical_size(output_width, output_height,
-			width, height, &width, &height);
+	display_mode_size(mode, output_width, output_height,
+		native_width, native_height, &width, &height);
 
 	rect.left = (int16_t)((output_width - width) / 2);
 	rect.top = (int16_t)((output_height - height) / 2);
@@ -275,13 +254,13 @@ void blit_finish(void)
 			video_driver->clearFrame(video_data,
 				COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 		}
-		dst_clip = cps_presentation_rect(5, true);
+		dst_clip = cps_presentation_rect(224, 384);
 		video_driver->copyRectRotate(video_data,
 			COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
 			COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
 			&cps_src_clip, &dst_clip);
 	} else {
-		dst_clip = cps_presentation_rect(option_stretch, option_stretch != 0);
+		dst_clip = cps_presentation_rect(384, 224);
 		if (cps_flip_screen)
 			video_driver->copyRectFlip(video_data,
 				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
