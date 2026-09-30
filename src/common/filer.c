@@ -22,6 +22,7 @@
 #include "common/platform_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -124,8 +125,8 @@ void delete_files(const char *dirname, const char *pattern)
 			{
 				char path2[PATH_MAX];
 
-				sprintf(path2, "%s/%s", path, entry->d_name);
-				remove(path2);
+				if (path_format(path2, sizeof(path2), "%s/%s", path, entry->d_name))
+					remove(path2);
 			}
 		}
 	}
@@ -449,25 +450,25 @@ static int load_zipname(void)
 
 	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_JAPANESE)
 	{
-		sprintf(path, "%szipnamej." EXT, launchDir);
+		if (!path_format(path, sizeof(path), "%szipnamej." EXT, launchDir)) return 0;
 		fd = open(path, O_RDONLY);
 		if (fd >= 0) { close(fd); found = 1; }
 	}
 	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_SIMPLIFIED)
 	{
-		sprintf(path, "%szipnamech1." EXT, launchDir);
+		if (!path_format(path, sizeof(path), "%szipnamech1." EXT, launchDir)) return 0;
 		fd = open(path, O_RDONLY);
 		if (fd >= 0) { close(fd); found = 1; }
 	}
 	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_TRADITIONAL)
 	{
-		sprintf(path, "%szipnamech2." EXT, launchDir);
+		if (!path_format(path, sizeof(path), "%szipnamech2." EXT, launchDir)) return 0;
 		fd = open(path, O_RDONLY);
 		if (fd >= 0) { close(fd); found = 1; }
 	}
 	if (!found)
 	{
-		sprintf(path, "%szipname." EXT, launchDir);
+		if (!path_format(path, sizeof(path), "%szipname." EXT, launchDir)) return 0;
 	}
 	fd = open(path, O_RDONLY);
 	if (fd < 0)

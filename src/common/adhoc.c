@@ -57,6 +57,8 @@ static volatile int adhoc_active;
 
 static int32_t adhoc_update_inputport(uint32_t args, void *argp)
 {
+	(void)args;
+	(void)argp;
 	int error = 0;
 
 	adhoc_update = 0;

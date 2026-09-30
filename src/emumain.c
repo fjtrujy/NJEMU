@@ -29,6 +29,7 @@
 #include "common/platform_memory_info.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/sound.h"
 #include "common/thread_driver.h"
 #include "common/ticker_driver.h"
@@ -552,7 +553,7 @@ void save_snapshot(void)
 		while (1)
 		{
 			int fd;
-			sprintf(path, "%s/%s_%02d.png", screenshotDir, game_name, snap_no);
+			if (!path_format(path, sizeof(path), "%s/%s_%02d.png", screenshotDir, game_name, snap_no)) return;
 			fd = open(path, O_RDONLY);
 			if (fd < 0) break;
 			close(fd);
@@ -560,7 +561,7 @@ void save_snapshot(void)
 		}
 	}
 
-	sprintf(path, "%s/%s_%02d.png", screenshotDir, game_name, snap_no);
+	if (!path_format(path, sizeof(path), "%s/%s_%02d.png", screenshotDir, game_name, snap_no)) return;
 	if (save_png(path))
 		ui_popup(TEXT(SNAPSHOT_SAVED_AS_x_PNG), game_name, snap_no++);
 

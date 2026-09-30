@@ -15,6 +15,7 @@
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ticker_driver.h"
 #include "common/ui_text_driver.h"
 #include "common/ui.h"
@@ -649,10 +650,11 @@ static int folder_cache_open(int number)
 	};
 	char fname[PATH_MAX];
 
-	sprintf(fname, "%s/%c%c%c", spr_cache_name,
+	if (!path_format(fname, sizeof(fname), "%s/%c%c%c", spr_cache_name,
 		cnv_table[(number >> 8) & 0x0f],
 		cnv_table[(number >> 4) & 0x0f],
-		cnv_table[ number       & 0x0f]);
+		cnv_table[ number       & 0x0f]))
+		return 0;
 
 	cache_fd = open(fname, O_RDONLY, 0777);
 
@@ -1230,7 +1232,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 
 		if (!found)
 		{
-			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, game_name)) { found = 0; }
 			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
 		}
@@ -1316,10 +1318,10 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	cache_type = CACHE_RAWFILE;
 
 	/* Try raw file format: {game}.cache */
-	sprintf(spr_cache_name, "%s/%s.cache", cache_dir, game_name);
+	if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", cache_dir, game_name)) { found = 0; }
 	if ((cache_fd = open(spr_cache_name, O_RDONLY, 0777)) < 0)
 	{
-		sprintf(spr_cache_name, "%s/%s.cache", cache_dir, cache_parent_name);
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", cache_dir, cache_parent_name)) { found = 0; }
 		if ((cache_fd = open(spr_cache_name, O_RDONLY, 0777)) < 0)
 		{
 			found = 0;
@@ -1335,7 +1337,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, game_name);
 		if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 		{
-			sprintf(spr_cache_name, "%s/%s_cache.zip", cache_dir, cache_parent_name);
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, cache_parent_name)) { found = 0; }
 			if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 			{
 				found = 0;
@@ -1351,12 +1353,12 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		found = 1;
 		cache_type = CACHE_FOLDER;
 
-		sprintf(spr_cache_name, "%s/%s_cache", cache_dir, game_name);
-		sprintf(path, "%s/cache_info", spr_cache_name);
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", cache_dir, game_name)) { found = 0; }
+		if (!path_format(path, sizeof(path), "%s/cache_info", spr_cache_name)) { found = 0; }
 		if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
 		{
-			sprintf(spr_cache_name, "%s/%s_cache", cache_dir, cache_parent_name);
-			sprintf(path, "%s/cache_info", spr_cache_name);
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", cache_dir, cache_parent_name)) { found = 0; }
+			if (!path_format(path, sizeof(path), "%s/cache_info", spr_cache_name)) { found = 0; }
 			if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
 			{
 				found = 0;

@@ -437,6 +437,7 @@ int state_save(int slot)
 
 		case MACHINE_pang3:
 			state_save_eeprom();
+			/* fall through */
 
 		default:
 			state_save_ym2151();
@@ -624,6 +625,7 @@ int state_load(int slot)
 
 		case MACHINE_pang3:
 			state_load_eeprom();
+			/* fall through */
 
 		default:
 			state_load_ym2151();

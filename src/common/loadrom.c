@@ -13,6 +13,7 @@
 #include "common/input_driver.h"
 #include "common/loadrom.h"
 #include "common/runtime_paths.h"
+#include "common/path_utils.h"
 #include "common/ui_text_driver.h"
 #include "common/ui.h"
 #include <stdio.h>
@@ -124,9 +125,9 @@ rom_file_open_result_t file_open(const char *fname1, const char *fname2, const u
 	{
 		switch (i)
 		{
-		case 0: sprintf(path, "%s/%s.zip", game_dir, fname1); break;
-		case 1: sprintf(path, "%s/%s.zip", game_dir, fname2); break;
-		case 2: sprintf(path, "%sroms/%s.zip", launchDir, fname2); break;
+		case 0: if (!path_format(path, sizeof(path), "%s/%s.zip", game_dir, fname1)) continue; break;
+		case 1: if (!path_format(path, sizeof(path), "%s/%s.zip", game_dir, fname2)) continue; break;
+		case 2: if (!path_format(path, sizeof(path), "%sroms/%s.zip", launchDir, fname2)) continue; break;
 		}
 
 		if (zip_archive_open(&rom_archive, path))
