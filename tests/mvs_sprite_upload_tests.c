@@ -134,11 +134,12 @@ int main(void)
     /* Invalidating the tile cache reuses slot zero, which must be uploaded. */
     blit_set_spr_clear_flag();
     start_frame();
-    before = uploads[0];
+    unsigned invalidated_layer = (2048 / SPR_TEXTURE_LAYER_SIZE) % SPR_TEXTURE_LAYERS;
+    before = uploads[invalidated_layer];
     source_tiles[2048 * 128] = 0x76;
     sprite(2048);
     blit_finish_spr();
-    assert(uploads[0] == before + 1);
+    assert(uploads[invalidated_layer] == before + 1);
     /* Full batches reject new tiles without causing a C-ROM read. */
     start_frame();
     for (unsigned i = 0; i < SPR_MAX_SPRITES; i++) sprite(2048);
