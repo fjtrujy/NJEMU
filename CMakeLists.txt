@@ -215,6 +215,7 @@ if (PLATFORM STREQUAL "PSP")
     list(APPEND COMMON_FLAGS
         -march=allegrex
         -mtune=allegrex
+        -mno-check-zero-division
     )
 endif()
 
