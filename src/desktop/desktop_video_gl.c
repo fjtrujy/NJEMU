@@ -239,6 +239,9 @@ typedef struct desktop_gl_video {
 
 	hw_recorder_t rec;
 	bool pending_flip;
+	uint32_t draw_fill;
+	uint32_t screen_fill;
+	bool screen_fill_valid;
 
 	/* 1x offscreen target for NJEMU_DUMP_FRAMES */
 	GLuint dump_fbo;
@@ -680,6 +683,7 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 		goto fail;
 
 	g->ui_clip = (RECT){ 0, 0, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT };
+	g->draw_fill = 0xff000000u;
 	g->ui_tex = gld_create_texture(1, 1, false);
 	gl.GenTextures(1, &g->ui_fill_tex);
 	gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
@@ -830,7 +834,8 @@ static void desktop_gl_flipScreen(void *data, bool vsync)
 
 static void desktop_gl_beginFrame(void *data)
 {
-	(void)data;
+	desktop_gl_video_t *g = data;
+	g->ui_clip = (RECT){ 0, 0, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT };
 }
 
 static void desktop_gl_endFrame(void *data)
@@ -880,12 +885,14 @@ static void desktop_gl_clearFrame(void *data, int index)
 {
 	desktop_gl_video_t *g = data;
 
-	/*
-	 * As on PSP, DRAW_FRAME_BUFFER is the presentation back buffer, which
-	 * every present clears anyway; SCREEN_BITMAP is the work frame.
-	 */
+	/* SCREEN_BITMAP is the recorded emulator work frame. DRAW/SHOW are the
+	 * display surface used by the common GUI. */
 	if (index == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
 		hw_rec_fill(&g->rec, &g->rec.work, 0, HW_DEPTH_OFF);
+	else {
+		desktop_gl_clearDisplay(0);
+		g->draw_fill = 0xff000000u;
+	}
 }
 
 static void desktop_gl_fillFrame(void *data, int frameIndex, uint32_t color)
@@ -894,33 +901,60 @@ static void desktop_gl_fillFrame(void *data, int frameIndex, uint32_t color)
 
 	if (frameIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
 		hw_rec_fill(&g->rec, &g->rec.work, hw_rgba_to_555(color), HW_DEPTH_OFF);
-	else
+	else {
 		desktop_gl_clearDisplay(color);
+		g->draw_fill = color | 0xff000000u;
+	}
 }
 
 static void desktop_gl_startWorkFrame(void *data, uint32_t color)
 {
 	desktop_gl_video_t *g = data;
 	g->pending_flip = false;
+	g->screen_fill_valid = false;
 	hw_rec_begin_work(&g->rec, hw_rgba_to_555(color));
 }
 
+static void gld_ui_fill(desktop_gl_video_t *g, int x, int y, int w, int h,
+	uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3);
+
 static void desktop_gl_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
-	gld_present(data, src_rect, dst_rect, HW_ORIENT_NORMAL);
+	desktop_gl_video_t *g = data;
+
+	/* The common GUI caches a solid background in SCREEN_BITMAP. Keep that
+	 * cache independent of the per-frame emulator recorder so it survives
+	 * flipScreen(). */
+	if (g->screen_fill_valid) {
+		gld_ui_fill(g, dst_rect->left, dst_rect->top,
+			dst_rect->right - dst_rect->left, dst_rect->bottom - dst_rect->top,
+			g->screen_fill, g->screen_fill, g->screen_fill, g->screen_fill);
+		return;
+	}
+	gld_present(g, src_rect, dst_rect, HW_ORIENT_NORMAL);
 }
 
 static void desktop_gl_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 								RECT *dst_rect)
 {
-	/*
-	 * DRAW_FRAME_BUFFER -> SCREEN_BITMAP only appears in the CPS rotate+flip
-	 * sequence, whose flip is folded into the final rotated present.
-	 */
-	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
-		dstIndex != COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
-		gld_present(data, src_rect, dst_rect, HW_ORIENT_NORMAL);
+	desktop_gl_video_t *g = data;
+	const bool dst_display = dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER ||
+		dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER;
+
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
+		if (dst_display)
+			desktop_gl_transferWorkFrame(g, src_rect, dst_rect);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
+			dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
+		/* GUI background caching. Without UI_DRAW_CAP_CACHE_CHROME the cached
+		 * content is exactly the solid fill selected by load_background(). */
+		if (!g->pending_flip) {
+			g->screen_fill = g->draw_fill;
+			g->screen_fill_valid = true;
+		}
+	}
 }
+
 
 static void desktop_gl_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 									RECT *dst_rect)
@@ -1169,10 +1203,10 @@ static void desktop_gl_drawUILine(void *data, int x1, int y1, int x2, int y2, ui
 	desktop_gl_video_t *g = data;
 	if (y1 == y2) {
 		if (x2 < x1) { int t = x1; x1 = x2; x2 = t; }
-		gld_ui_fill(g, x1, y1, x2 - x1 + 1, 1, color, color, color, color);
+		gld_ui_fill(g, x1, y1, x2 - x1, 1, color, color, color, color);
 	} else if (x1 == x2) {
 		if (y2 < y1) { int t = y1; y1 = y2; y2 = t; }
-		gld_ui_fill(g, x1, y1, 1, y2 - y1 + 1, color, color, color, color);
+		gld_ui_fill(g, x1, y1, 1, y2 - y1, color, color, color, color);
 	} else {
 		/* Basic GUI-off paths do not require diagonal lines; keep them visible. */
 		hw_vertex_t v[2] = { { .u=0.5f,.v=0.5f,.x=x1,.y=y1 }, { .u=0.5f,.v=0.5f,.x=x2,.y=y2 } };
@@ -1189,10 +1223,10 @@ static void desktop_gl_drawUILineGradient(void *data, int x1, int y1, int x2, in
 	/* Axis-aligned gradients cover all current chrome/progress uses. */
 	if (y1 == y2) {
 		if (x2 < x1) { int t=x1; x1=x2; x2=t; uint32_t c=color1; color1=color2; color2=c; }
-		gld_ui_fill(data, x1, y1, x2 - x1 + 1, 1, color1, color2, color1, color2);
+		gld_ui_fill(data, x1, y1, x2 - x1, 1, color1, color2, color1, color2);
 	} else if (x1 == x2) {
 		if (y2 < y1) { int t=y1; y1=y2; y2=t; uint32_t c=color1; color1=color2; color2=c; }
-		gld_ui_fill(data, x1, y1, 1, y2 - y1 + 1, color1, color1, color2, color2);
+		gld_ui_fill(data, x1, y1, 1, y2 - y1, color1, color1, color2, color2);
 	} else {
 		desktop_gl_drawUILine(data, x1, y1, x2, y2, color1);
 	}

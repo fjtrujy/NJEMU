@@ -547,6 +547,9 @@ if (PLATFORM STREQUAL "PSVITA")
         common/hw_recorder.c
     )
 elseif (PLATFORM STREQUAL "DESKTOP")
+    # Desktop backends share the platform-neutral linear UI texture store.
+    # Rendering those texels belongs to the selected video backend.
+    list(REMOVE_ITEM OS_SRC desktop/desktop_ui_draw.c)
     # Desktop keeps SDL as the baseline backend. OpenGL is compiled alongside
     # it when requested so backend selection can become runtime policy.
     if (USE_DESKTOP_GL)

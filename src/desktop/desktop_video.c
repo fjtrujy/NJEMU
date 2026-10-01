@@ -8,6 +8,7 @@
 
 #include "emucfg.h"
 #include "common/video_driver.h"
+#include "common/ui_draw_driver.h"
 #include "common/video_geometry.h"
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,8 @@ typedef struct desktop_video {
 	uint8_t *scrbitmap;
 	uint16_t *ui_scratch;
 	SDL_Texture *sdl_texture_ui_scratch;
+	SDL_Texture *sdl_texture_ui_stream;
+	uint32_t *ui_stream_pixels;
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint32_t presented_frames;	/* NJEMU_DUMP_FRAMES numbering */
@@ -43,16 +46,12 @@ typedef struct desktop_video {
 
 #define OUTPUT_WIDTH 640
 #define OUTPUT_HEIGHT 480
+#define DESKTOP_UI_STREAM_WIDTH BUF_WIDTH
+#define DESKTOP_UI_STREAM_HEIGHT 64
 
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
-
-void *desktop_video_get_renderer(void *video_data)
-{
-	desktop_video_t *desktop = (desktop_video_t *)video_data;
-	return desktop ? desktop->renderer : NULL;
-}
 
 static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
 {
@@ -133,6 +132,23 @@ static void *desktop_init(layer_texture_info_t *layer_textures, uint8_t layer_te
 		free(desktop);
 		return NULL;
 	}
+	desktop->ui_stream_pixels = (uint32_t *)malloc((size_t)DESKTOP_UI_STREAM_WIDTH *
+		DESKTOP_UI_STREAM_HEIGHT * sizeof(uint32_t));
+	desktop->sdl_texture_ui_stream = SDL_CreateTexture(desktop->renderer,
+		SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+		DESKTOP_UI_STREAM_WIDTH, DESKTOP_UI_STREAM_HEIGHT);
+	if (!desktop->ui_stream_pixels || !desktop->sdl_texture_ui_stream) {
+		printf("Could not allocate UI stream texture: %s\n", SDL_GetError());
+		free(desktop->ui_stream_pixels);
+		if (desktop->sdl_texture_ui_stream) SDL_DestroyTexture(desktop->sdl_texture_ui_stream);
+		SDL_DestroyTexture(desktop->sdl_texture_ui_scratch);
+		free(desktop->ui_scratch);
+		free(desktop->scrbitmap);
+		SDL_DestroyRenderer(desktop->renderer);
+		SDL_DestroyWindow(desktop->window);
+		free(desktop);
+		return NULL;
+	}
 
 	size_t totalTextureSize = 0;
 	for (int i = 0; i < layer_textures_count; i++) {
@@ -201,6 +217,12 @@ static void desktop_exit(desktop_video_t *desktop) {
 	}
 	free(desktop->ui_scratch);
 	desktop->ui_scratch = NULL;
+	if (desktop->sdl_texture_ui_stream) {
+		SDL_DestroyTexture(desktop->sdl_texture_ui_stream);
+		desktop->sdl_texture_ui_stream = NULL;
+	}
+	free(desktop->ui_stream_pixels);
+	desktop->ui_stream_pixels = NULL;
 	if (desktop->scrbitmap) {
 		free(desktop->scrbitmap);
 		desktop->scrbitmap = NULL;
@@ -752,37 +774,66 @@ static void desktop_clearColorBuffer(void *data) {
 	2D UI Drawing Primitives
 --------------------------------------------------------*/
 
+static uint32_t desktop_ui_texel_to_argb(uint16_t c, int format)
+{
+	if (format == UI_PIXFMT_4444) {
+		uint8_t r = (uint8_t)((c & 0x000f) * 17);
+		uint8_t g = (uint8_t)(((c >> 4) & 0x000f) * 17);
+		uint8_t b = (uint8_t)(((c >> 8) & 0x000f) * 17);
+		uint8_t a = (uint8_t)(((c >> 12) & 0x000f) * 17);
+		return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+	}
+	{
+		uint8_t r = (uint8_t)((c & 0x001f) * 255 / 31);
+		uint8_t g = (uint8_t)(((c >> 5) & 0x001f) * 255 / 31);
+		uint8_t b = (uint8_t)(((c >> 10) & 0x001f) * 255 / 31);
+		uint8_t a = (c & 0x8000) ? 255 : 0;
+		return ((uint32_t)a << 24) | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+	}
+}
+
 static void desktop_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
 	int tex_width, int tex_height, int tex_stride,
 	int su, int sv, int sw, int sh,
 	int dx, int dy, int dw, int dh, int blend)
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
-	SDL_Texture *texture = (SDL_Texture *)tex;
-	SDL_Rect src_rect = {su, sv, sw, sh};
+	const uint16_t *pixels = (const uint16_t *)tex;
+	SDL_Rect upload = {0, 0, sw, sh};
+	SDL_Rect src_rect = {0, 0, sw, sh};
 	SDL_Rect dst_rect = {dx, dy, dw, dh};
-
-	(void)tex_format;
 	(void)tex_swizzled;
 	(void)tex_width;
-	(void)tex_height;
-	(void)tex_stride;
-	if (!desktop || !desktop->renderer || !texture)
+
+	if (!desktop || !desktop->renderer || !desktop->sdl_texture_ui_stream || !pixels ||
+		sw <= 0 || sh <= 0 || sw > DESKTOP_UI_STREAM_WIDTH || sh > DESKTOP_UI_STREAM_HEIGHT ||
+		su < 0 || sv < 0 || su + sw > tex_stride || sv + sh > tex_height)
 		return;
 
-	SDL_SetTextureBlendMode(texture, blend ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
-	SDL_SetTextureColorMod(texture, 255, 255, 255);
-	SDL_SetTextureAlphaMod(texture, 255);
-	SDL_RenderCopy(desktop->renderer, texture, &src_rect, &dst_rect);
+	for (int y = 0; y < sh; y++) {
+		const uint16_t *src = pixels + (size_t)(sv + y) * tex_stride + su;
+		uint32_t *dst = desktop->ui_stream_pixels + (size_t)y * sw;
+		for (int x = 0; x < sw; x++)
+			dst[x] = desktop_ui_texel_to_argb(src[x], tex_format);
+	}
+
+	if (SDL_UpdateTexture(desktop->sdl_texture_ui_stream, &upload,
+		desktop->ui_stream_pixels, sw * (int)sizeof(uint32_t)) != 0)
+		return;
+	SDL_SetTextureBlendMode(desktop->sdl_texture_ui_stream,
+		blend ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
+	SDL_SetTextureColorMod(desktop->sdl_texture_ui_stream, 255, 255, 255);
+	SDL_SetTextureAlphaMod(desktop->sdl_texture_ui_stream, 255);
+	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_ui_stream, &src_rect, &dst_rect);
 }
 
 static void desktop_drawUILine(void *data,
 	int x1, int y1, int x2, int y2, uint32_t color)
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
-	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t r = color & 0xFF;
 	uint8_t g = (color >> 8) & 0xFF;
-	uint8_t b = color & 0xFF;
+	uint8_t b = (color >> 16) & 0xFF;
 	uint8_t a = (color >> 24) & 0xFF;
 
 	if (!desktop || !desktop->renderer)
@@ -800,13 +851,13 @@ static void desktop_drawUILineGradient(void *data,
 	int abs_dx = dx > 0 ? dx : -dx;
 	int abs_dy = dy > 0 ? dy : -dy;
 	int steps = abs_dx > abs_dy ? abs_dx : abs_dy;
-	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t r1 = color1 & 0xFF;
 	uint8_t g1 = (color1 >> 8) & 0xFF;
-	uint8_t b1 = color1 & 0xFF;
+	uint8_t b1 = (color1 >> 16) & 0xFF;
 	uint8_t a1 = (color1 >> 24) & 0xFF;
-	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t r2 = color2 & 0xFF;
 	uint8_t g2 = (color2 >> 8) & 0xFF;
-	uint8_t b2 = color2 & 0xFF;
+	uint8_t b2 = (color2 >> 16) & 0xFF;
 	uint8_t a2 = (color2 >> 24) & 0xFF;
 	int i;
 
@@ -832,9 +883,9 @@ static void desktop_drawUIRect(void *data,
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
 	SDL_Rect rect = {x, y, w, h};
-	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t r = color & 0xFF;
 	uint8_t g = (color >> 8) & 0xFF;
-	uint8_t b = color & 0xFF;
+	uint8_t b = (color >> 16) & 0xFF;
 	uint8_t a = (color >> 24) & 0xFF;
 
 	if (!desktop || !desktop->renderer)
@@ -848,9 +899,9 @@ static void desktop_fillUIRect(void *data,
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
 	SDL_Rect rect = {x, y, w, h};
-	uint8_t r = (color >> 16) & 0xFF;
+	uint8_t r = color & 0xFF;
 	uint8_t g = (color >> 8) & 0xFF;
-	uint8_t b = color & 0xFF;
+	uint8_t b = (color >> 16) & 0xFF;
 	uint8_t a = (color >> 24) & 0xFF;
 
 	if (!desktop || !desktop->renderer)
@@ -864,13 +915,13 @@ static void desktop_fillUIRectGradient(void *data,
 	int x, int y, int w, int h, uint32_t color1, uint32_t color2, int direction)
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
-	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t r1 = color1 & 0xFF;
 	uint8_t g1 = (color1 >> 8) & 0xFF;
-	uint8_t b1 = color1 & 0xFF;
+	uint8_t b1 = (color1 >> 16) & 0xFF;
 	uint8_t a1 = (color1 >> 24) & 0xFF;
-	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t r2 = color2 & 0xFF;
 	uint8_t g2 = (color2 >> 8) & 0xFF;
-	uint8_t b2 = color2 & 0xFF;
+	uint8_t b2 = (color2 >> 16) & 0xFF;
 	uint8_t a2 = (color2 >> 24) & 0xFF;
 	int lines = direction == 0 ? w : h;
 	int i;
