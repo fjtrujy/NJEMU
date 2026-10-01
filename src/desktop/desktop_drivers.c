@@ -19,7 +19,7 @@ extern video_driver_t video_desktop_sdl;
 #ifdef HAVE_VIDEO_BACKEND_OPENGL
 extern video_driver_t video_desktop_gl;
 #endif
-extern const ui_draw_driver_t desktop_ui_draw_driver;
+extern const ui_draw_driver_t linear_ui_draw_driver;
 extern const ui_draw_driver_t null_ui_draw_driver;
 
 audio_driver_t *const audio_driver = &audio_desktop;
@@ -80,4 +80,4 @@ void video_backend_select(int backend)
 }
 
 
-const ui_draw_driver_t *const ui_draw_driver = &desktop_ui_draw_driver;
+const ui_draw_driver_t *const ui_draw_driver = &linear_ui_draw_driver;

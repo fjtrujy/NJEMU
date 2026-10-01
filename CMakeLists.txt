@@ -555,7 +555,10 @@ elseif (PLATFORM STREQUAL "DESKTOP")
             common/hw_recorder.c
         )
     endif()
-    list(APPEND OS_SRC desktop/desktop_frame_dump.c)
+    list(APPEND OS_SRC
+        desktop/desktop_frame_dump.c
+        common/linear_ui_draw.c
+    )
 endif()
 
 if(ADHOC)
