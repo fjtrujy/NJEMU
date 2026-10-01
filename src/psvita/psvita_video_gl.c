@@ -145,6 +145,8 @@ typedef struct psvita_gl_video {
 	gl_program_t progs[HW_PROG_COUNT];
 	bool pending_flip;
 	uint32_t presented;			/* for PSVITA_DUMP_LIST */
+	hw_xform_t last_present_xform;
+	bool last_present_valid;
 
 	/*
 	 * The display scene: cleared to black by the first draw of a frame, and
@@ -634,6 +636,8 @@ static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
 	if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH,
 			PSVITA_DISPLAY_HEIGHT, &d, &m))
 		return;
+	gl->last_present_xform = m;
+	gl->last_present_valid = true;
 	hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
 
 	/*
@@ -982,6 +986,48 @@ static void gl_ui_fill(psvita_gl_video_t *gl, int x, int y, int w, int h, uint32
 static void gl_draw_scratch(psvita_gl_video_t *gl, const RECT *src, const RECT *dst);
 static void gl_draw_front(psvita_gl_video_t *gl);
 
+static bool gl_capture_front_to_scratch(psvita_gl_video_t *gl, const RECT *src,
+	const RECT *dst, bool rotate)
+{
+	const uint32_t *fb;
+	int stride;
+	const int sw = src->right - src->left;
+	const int sh = src->bottom - src->top;
+	const int dw = dst->right - dst->left;
+	const int dh = dst->bottom - dst->top;
+
+	if (gl->scratch == NULL || !gl->last_present_valid || sw <= 0 || sh <= 0 ||
+		dw <= 0 || dh <= 0 || dst->left < 0 || dst->top < 0 ||
+		dst->right > GL_SCRATCH_WIDTH || dst->bottom > GL_SCRATCH_HEIGHT ||
+		(fb = gl_front_buffer(&stride)) == NULL)
+		return false;
+
+	glFinish();
+	for (int y = 0; y < dh; y++) {
+		uint16_t *out = gl->scratch + (size_t)(dst->top + y) * GL_SCRATCH_WIDTH + dst->left;
+		for (int x = 0; x < dw; x++) {
+			float sx, sy, px, py;
+			if (rotate) {
+				/* Inverse of HW_ORIENT_ROTATE: dest TL <- src BL. */
+				sx = src->left + ((y + 0.5f) * sw / dh);
+				sy = src->bottom - ((x + 0.5f) * sh / dw);
+			} else {
+				sx = src->left + ((x + 0.5f) * sw / dw);
+				sy = src->top + ((y + 0.5f) * sh / dh);
+			}
+			hw_map_point(&gl->last_present_xform, sx, sy, &px, &py);
+			int ix = (int)px;
+			int iy = (int)py;
+			if (ix < 0) ix = 0;
+			if (iy < 0) iy = 0;
+			if (ix >= PSVITA_DISPLAY_WIDTH) ix = PSVITA_DISPLAY_WIDTH - 1;
+			if (iy >= PSVITA_DISPLAY_HEIGHT) iy = PSVITA_DISPLAY_HEIGHT - 1;
+			out[x] = hw_rgba_to_555(fb[(size_t)iy * stride + ix]);
+		}
+	}
+	return true;
+}
+
 static void psvita_gl_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
 	psvita_gl_video_t *gl = data;
@@ -1004,9 +1050,10 @@ static void psvita_gl_copyRect(void *data, int srcIndex, int dstIndex,
 		|| dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER;
 
 	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
-		if (dst_display)
+		if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+			gl_capture_front_to_scratch(gl, src_rect, dst_rect, false);
+		else if (dst_display)
 			gl_present(gl, src_rect, dst_rect, HW_ORIENT_NORMAL);
-		/* SCREEN_BITMAP -> INITIAL (save state thumbnails) is not supported. */
 	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER
 			   && dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
 		/*
@@ -1058,6 +1105,10 @@ static void psvita_gl_copyRectRotate(void *data, int srcIndex, int dstIndex,
 
 	if (srcIndex != COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
 		return;
+	if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		gl_capture_front_to_scratch(gl, src_rect, dst_rect, true);
+		return;
+	}
 
 	gl_present(gl, src_rect, dst_rect,
 		gl->pending_flip ? HW_ORIENT_ROTATE_FLIP : HW_ORIENT_ROTATE);
