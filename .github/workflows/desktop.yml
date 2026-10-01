@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} DESKTOP_GL=${{ matrix.desktop_gl || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -67,6 +67,15 @@ jobs:
             adhoc: OFF
             save_state: ON
             gui: ON
+          # Focused capability build: keep the SDL-only Desktop binary healthy
+          # while the default Desktop build compiles SDL + OpenGL together.
+          - os: ubuntu-latest
+            target: MVS
+            desktop_gl: OFF
+            command_list: OFF
+            adhoc: OFF
+            save_state: ON
+            gui: ON
       fail-fast: false
 
     steps:
@@ -101,6 +110,14 @@ jobs:
           echo "NJEMU_CACHE_ARG=" >> "$GITHUB_ENV"
         fi
 
+    - name: Resolve Desktop OpenGL capability override
+      run: |
+        if [ -n "${{ matrix.desktop_gl }}" ]; then
+          echo "NJEMU_DESKTOP_GL_ARG=-DUSE_DESKTOP_GL=${{ matrix.desktop_gl }}" >> "$GITHUB_ENV"
+        else
+          echo "NJEMU_DESKTOP_GL_ARG=" >> "$GITHUB_ENV"
+        fi
+
     - name: Compile project
       run: |
         set -o pipefail
@@ -109,6 +126,7 @@ jobs:
         cmake -DPLATFORM="DESKTOP" \
           -DTARGET="${{ matrix.target }}" \
           $NJEMU_CACHE_ARG \
+          $NJEMU_DESKTOP_GL_ARG \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
@@ -132,5 +150,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.os }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.os }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-desktop_gl_${{ matrix.desktop_gl || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/
