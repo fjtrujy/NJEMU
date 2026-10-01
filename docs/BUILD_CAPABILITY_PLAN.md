@@ -26,6 +26,7 @@ The reactive-memory refactor currently leaves MVS and CPS2 dependent on cache sy
 - [x] Keep `Cache read size` configuration/UI strictly behind `USE_CACHE`.
 - [x] Keep CPS1 and NCDZ invalid with `USE_CACHE=ON`.
 - [x] Validate Desktop MVS/CPS2 with cache both ON and OFF; hardware runtime validation remains pending.
+- [x] Separate MVS offline-processed assets from the runtime streaming-cache capability: converted C/S/V-ROM data now lives under `processed/` for both resident and streaming modes. `USE_CACHE=OFF` neither creates nor reads `cache/`; `USE_CACHE=ON` may still read the legacy `cache/` layout as a compatibility fallback.
 
 ## Milestone C2 — Cache defaults and platform matrix
 

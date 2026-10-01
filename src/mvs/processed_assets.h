@@ -13,6 +13,7 @@ enum
     MVS_PROCESSED_VROM
 };
 
+const char *mvs_processed_asset_root(void);
 int mvs_processed_asset_open(int type);
 size_t mvs_processed_asset_zip_read(int type, const char *name, void *buf, size_t size);
 bool mvs_processed_info_read(char version[8], uint8_t *usage, size_t usage_size);

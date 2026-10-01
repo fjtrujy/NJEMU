@@ -74,6 +74,7 @@ char game_dir[PATH_MAX];
  * declaration in cps2/memintrf.c. Unused on CPS1/NCDZ where USE_CACHE=0
  * (small bytes-of-bss cost). */
 char cache_dir[PATH_MAX];
+char processed_dir[PATH_MAX];
 char cache_parent_name[16];
 
 int option_showfps;

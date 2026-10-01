@@ -1,6 +1,6 @@
 # ROMCNV - Neo-Geo MVS ROM Converter
 
-A tool to convert Neo-Geo MVS arcade ROMs into an optimized cache format for use with NJEMU emulators on memory-constrained platforms.
+A tool to convert Neo-Geo MVS arcade ROMs into processed assets for use with NJEMU. These assets are shared by full-resident and streaming-cache runtime modes.
 
 ## Why Convert ROMs?
 
@@ -8,17 +8,17 @@ Neo-Geo MVS ROMs often contain graphics data larger than the available RAM on:
 - **PSP**: ~24-64MB available RAM
 - **PS2**: ~32MB available RAM
 
-This converter processes the ROM files and creates optimized cache files that can be loaded in smaller chunks during emulation, enabling playback of games that would otherwise not fit in memory.
+This converter decrypts/decodes the ROM data that must be prepared offline and writes reusable processed assets. Streaming-cache builds can read those assets in smaller chunks, while full-resident builds can load the same processed data directly.
 
 ## Supported Platforms
 
-| Platform | Executable | Cache Location |
+| Platform | Executable | Processed Asset Location |
 |----------|------------|----------------|
-| Windows | `romcnv_mvs.exe` | `./cache/` |
-| Linux/macOS | `romcnv_mvs` | `./cache/` |
+| Windows | `romcnv_mvs.exe` | `./processed/` |
+| Linux/macOS | `romcnv_mvs` | `./processed/` |
 | Web | [Online Converter](https://fjtrujy.github.io/NJEMU/) | Download as ZIP |
-| PSP | N/A (use desktop tool) | `/PSP/GAME/MVSPSP/cache/` |
-| PS2 | N/A (use desktop tool) | `mass:/MVSPSP/cache/` |
+| PSP | N/A (use desktop tool) | `/PSP/GAME/MVSPSP/processed/` |
+| PS2 | N/A (use desktop tool) | `mass:/MVSPSP/processed/` |
 
 ## Usage
 
@@ -34,9 +34,9 @@ romcnv_mvs /path/to/game.zip
 | Option | Description |
 |--------|-------------|
 | `-all` | Convert all ROMs in the specified directory |
-| `-zip` | Create a ZIP compressed cache file instead of a folder |
+| `-zip` | Create a ZIP-compressed processed asset instead of a folder |
 | `-batch` | Batch mode - don't pause between conversions |
-| `-slim` | PSP Slim mode - skip PCM cache for unencrypted games (reduces cache size) |
+| `-slim` | PSP Slim mode - skip processed PCM data for unencrypted games (reduces asset size) |
 
 ### Examples
 
@@ -62,7 +62,7 @@ romcnv_mvs "D:\roms" -all
 romcnv_mvs "D:\roms\kof99.zip" -zip
 ```
 
-**Convert for PSP Slim (reduced cache size):**
+**Convert for PSP Slim (reduced processed asset size):**
 ```bash
 romcnv_mvs "D:\roms\kof99.zip" -slim
 ```
@@ -88,9 +88,9 @@ romcnv_mvs "D:\roms\kof99.zip" -slim
 
 ## Output
 
-The converter creates a `cache` directory containing one of:
+The converter creates a `processed` directory containing one of:
 - `gamename_cache/` — Folder with individual block files (default)
-- `gamename_cache.zip` — ZIP compressed cache file (with `-zip`)
+- `gamename_cache.zip` — ZIP-compressed processed asset (with `-zip`)
 
 Both formats are supported by the emulator on all platforms.
 
@@ -101,7 +101,7 @@ Both formats are supported by the emulator on all platforms.
 /PSP/GAME/MVSPSP/
 ├── roms/
 │   └── game.zip
-└── cache/
+└── processed/
     └── game_cache/
 ```
 
@@ -110,7 +110,7 @@ Both formats are supported by the emulator on all platforms.
 /PSP/GAME/MVSPSP/
 ├── roms/
 │   └── game.zip
-└── cache/
+└── processed/
     └── game_cache.zip
 ```
 
@@ -119,7 +119,7 @@ Both formats are supported by the emulator on all platforms.
 mass:/MVSPSP/
 ├── roms/
 │   └── game.zip
-└── cache/
+└── processed/
     └── game_cache/
 ```
 
@@ -128,13 +128,13 @@ mass:/MVSPSP/
 mass:/MVSPSP/
 ├── roms/
 │   └── game.zip
-└── cache/
+└── processed/
     └── game_cache.zip
 ```
 
-## Cache Format Comparison
+## Processed Asset Format Comparison
 
-The emulator supports reading caches in **folder** and **zip** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
+The emulator supports reading processed MVS assets in **folder** and **zip** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
 
 ### Memory
 
@@ -199,7 +199,8 @@ emmake make
 
 - Parent ROM sets must be in the same directory as the game ROM
 - The converter requires `rominfo.mvs` file to be present in the same directory as the executable
-- Cache files are version-specific - regenerate if you update the emulator
+- Processed assets are version-specific - regenerate if you update the emulator
+- Cache-enabled MVS builds can still read the legacy `cache/` layout for migration; `USE_CACHE=OFF` intentionally reads only `processed/`.
 
 ## Troubleshooting
 
@@ -207,6 +208,6 @@ emmake make
 - Ensure the ROM filename matches entries in `rominfo.mvs`
 - Check that parent ROMs are available for clone sets
 
-**Large cache sizes:**
+**Large processed asset sizes:**
 - Use `-slim` option for PSP Slim/PS Vita
-- Some games (especially later titles) require more cache space
+- Some games (especially later titles) require more processed asset space

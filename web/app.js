@@ -509,10 +509,13 @@ class RomConverter {
         this.downloadPanel.hidden = true;
         this.progressPanel.hidden = false;
 
-        // Create directories if they don't exist
+        // Create only the output root used by the selected converter. MVS
+        // processed assets are independent of the runtime streaming-cache policy.
         const FS = this.FS;
+        const system = this.getSelectedSystem();
+        const outputRoot = system === 'mvs' ? '/processed' : '/cache';
         try { FS.mkdir('/roms'); } catch (e) { /* ignore if exists */ }
-        try { FS.mkdir('/cache'); } catch (e) { /* ignore if exists */ }
+        try { FS.mkdir(outputRoot); } catch (e) { /* ignore if exists */ }
 
         const totalFiles = this.selectedFiles.length;
         let successCount = 0;
@@ -538,16 +541,15 @@ class RomConverter {
                 // Get the game name from the ROM filename
                 const gameName = fileName.replace('.zip', '').toLowerCase();
 
-                // Clean up any stale cache files from previous conversions
-                const staleDir = `/cache/${gameName}_cache`;
-                const staleZip = `/cache/${gameName}_cache.zip`;
-                const staleRaw = `/cache/${gameName}.cache`;
+                // Clean up stale output from previous conversions.
+                const staleDir = `${outputRoot}/${gameName}_cache`;
+                const staleZip = `${outputRoot}/${gameName}_cache.zip`;
+                const staleRaw = `${outputRoot}/${gameName}.cache`;
                 this.removePath(FS, staleDir);
                 try { FS.unlink(staleZip); } catch (e) { /* ignore */ }
                 try { FS.unlink(staleRaw); } catch (e) { /* ignore */ }
 
                 // Get options
-                const system = this.getSelectedSystem();
                 const slim = this.isSlimMode();
                 const format = this.getSelectedFormat();
                 this.log(`Options: ${slim ? 'Slim mode' : 'Standard mode'}, Format: ${format}`);
@@ -562,19 +564,19 @@ class RomConverter {
                 // Call main() with command-line arguments
                 const result = this.Module.callMain(args);
 
-                // Determine expected cache path based on selected format
+                // Determine expected output path based on selected format.
                 let cacheType = null;
                 let cachePath = null;
 
                 if (system === 'cps2' && format === 'raw') {
-                    cachePath = `/cache/${gameName}.cache`;
+                    cachePath = `${outputRoot}/${gameName}.cache`;
                     cacheType = 'raw';
                 } else if (format === 'zip') {
-                    cachePath = `/cache/${gameName}_cache.zip`;
+                    cachePath = `${outputRoot}/${gameName}_cache.zip`;
                     cacheType = 'zip';
                 } else {
                     // folder format (MVS default, or CPS2 -folder)
-                    cachePath = `/cache/${gameName}_cache`;
+                    cachePath = `${outputRoot}/${gameName}_cache`;
                     cacheType = 'dir';
                 }
 
@@ -586,7 +588,7 @@ class RomConverter {
                     this.cacheResults.set(fileName, { gameName, type: cacheType, path: cachePath });
                     successCount++;
                 } else {
-                    this.log(`✗ ${fileName} - No cache created (may not need conversion)`, 'error');
+                    this.log(`✗ ${fileName} - No converted output created (may not need conversion)`, 'error');
                     this.setFileStatus(fileName, 'error');
                 }
 
@@ -630,7 +632,7 @@ class RomConverter {
             }
 
             if (cacheEntries.length === 0) {
-                this.log('No cache files found to download', 'error');
+                this.log('No converted files found to download', 'error');
                 return;
             }
 
@@ -684,7 +686,7 @@ class RomConverter {
             // Generate and download the zip
             this.log('Generating zip file...');
             const content = await zip.generateAsync({ type: 'blob' });
-            const zipName = `romcnv_cache_${cacheEntries.length}_games.zip`;
+            const zipName = `romcnv_output_${cacheEntries.length}_games.zip`;
             this.log(`Downloading ${zipName} (${(content.size / 1024 / 1024).toFixed(2)} MB)`);
             this.downloadBlob(content, zipName);
 

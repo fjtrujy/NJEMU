@@ -24,9 +24,9 @@
             <section class="info-panel">
                 <h2>Why Convert ROMs?</h2>
                 <p>
-                    Many arcade ROMs have graphics data larger than the available RAM on PSP (~24-64MB) 
-                    and PS2 (~32MB). This tool processes ROMs to create optimized cache files that can 
-                    be loaded in chunks.
+                    Many arcade ROMs have graphics data larger than the available RAM on PSP (~24-64MB)
+                    and PS2 (~32MB). This tool creates processed assets that can be loaded fully resident
+                    or streamed in chunks when memory is constrained.
                 </p>
             </section>
 
@@ -56,7 +56,7 @@
                 <div class="converter-content" id="converter-content" hidden>
                     <div class="options-panel">
                         <div class="format-selector" id="format-selector">
-                            <label class="options-label">Cache Format:</label>
+                            <label class="options-label">Output Format:</label>
                             <div class="format-group" id="format-group">
                                 <!-- Options populated by JS based on selected system -->
                             </div>
@@ -69,7 +69,7 @@
                             <input type="checkbox" id="slim-mode">
                             <span class="checkmark"></span>
                             <span>PSP Slim Mode</span>
-                            <span class="hint">(Skip PCM cache for unencrypted games)</span>
+                            <span class="hint">(Skip processed PCM for unencrypted games)</span>
                         </label>
                     </div>
 
@@ -117,10 +117,10 @@
 
             <section class="download-panel" id="download-panel" hidden>
                 <h3>✅ Conversion Complete!</h3>
-                <p>Your cache files are ready for download.</p>
+                <p>Your converted files are ready for download.</p>
                 <button class="download-btn" id="download-btn">
                     <span class="btn-icon">💾</span>
-                    <span>Download Cache Files</span>
+                    <span>Download Converted Files</span>
                 </button>
             </section>
         </main>

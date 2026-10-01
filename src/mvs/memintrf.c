@@ -781,7 +781,7 @@ static int load_rom_gfx2(void)
 			if (mvs_processed_asset_zip_read(MVS_PROCESSED_SROM, "srom",
 				memory_region_gfx2, memory_length_gfx2) != memory_length_gfx2)
 			{
-				error_file("cache/srom");
+				error_file("processed/srom");
 				return 0;
 			}
 			msg_printf(TEXT(LOADING_DECRYPTED_GFX2_ROM));
@@ -844,7 +844,7 @@ static int load_processed_gfx3(void)
 	msg_printf(TEXT(LOADING_CACHE_INFORMATION_DATA));
 	if (!mvs_processed_info_read(version, gfx_pen_usage[2], usage_size))
 	{
-		error_file("cache/cache_info");
+		error_file("processed/cache_info");
 		return 0;
 	}
 	if (strcmp(version, "MVS_" CACHE_VERSION) != 0)
@@ -857,7 +857,7 @@ static int load_processed_gfx3(void)
 
 	if (!mvs_processed_crom_read(memory_region_gfx3, memory_length_gfx3))
 	{
-		error_file("cache/crom");
+		error_file("processed/crom");
 		return 0;
 	}
 	return 1;
@@ -923,8 +923,6 @@ static int load_rom_gfx3(void)
 
 				neogeo_decode_spr(memory_region_gfx3, memory_length_gfx3, gfx_pen_usage[2]);
 			}
-			msg_printf(TEXT(CACHE_USAGE_CROM),
-				memory_length_gfx3 / 1024, memory_length_gfx3 / 1024);
 			return 1;
 		}
 
@@ -1072,7 +1070,7 @@ static int load_rom_sound1(void)
 			if (mvs_processed_asset_zip_read(MVS_PROCESSED_VROM, "vrom",
 				memory_region_sound1, memory_length_sound1) != memory_length_sound1)
 			{
-				error_file("cache/vrom");
+				error_file("processed/vrom");
 				return 0;
 			}
 			msg_printf(TEXT(LOADING_DECRYPTED_SOUND1_ROM));

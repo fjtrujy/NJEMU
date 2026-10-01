@@ -1068,11 +1068,11 @@ static int create_raw_cache(char *game_name)
 
 	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	change_directory("cache");
+	change_directory("processed");
 #ifdef CHINESE
 	printf("正在创建缓存文件...\n");
 #else
-	printf("Create cache file...\n");
+	printf("Create processed asset...\n");
 #endif
 	sprintf(fname, "%s_cache", game_name);
 	if (chdir(fname) != 0)
@@ -1161,33 +1161,33 @@ static int create_zip_cache(char *game_name)
 
 	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
-	change_directory("cache");
+	change_directory("processed");
 
-	sprintf(zipname, "%s%ccache%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
+	sprintf(zipname, "%s%cprocessed%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
 	remove(zipname);
 
 #ifdef CHINESE
-	printf("缓存名: cache%c%s_cache.zip\n", delimiter, game_name);
+	printf("缓存名: processed%c%s_cache.zip\n", delimiter, game_name);
 	printf("正在创建缓存文件...\n");
 #else
-	printf("cache name: cache%c%s_cache.zip\n", delimiter, game_name);
-	printf("Create cache file...\n");
+	printf("processed asset: processed%c%s_cache.zip\n", delimiter, game_name);
+	printf("Create processed asset...\n");
 #endif
 
 	if (!zip_writer_open(&writer, zipname))
 	{
 #ifdef CHINESE
-		printf("错误: 无法创建zip文件 \"cache%c%s_cache.zip\".\n", delimiter, game_name);
+		printf("错误: 无法创建zip文件 \"processed%c%s_cache.zip\".\n", delimiter, game_name);
 #else
-		printf("ERROR: Could not create zip file \"cache%c%s_cache.zip\".\n", delimiter, game_name);
+		printf("ERROR: Could not create zip file \"processed%c%s_cache.zip\".\n", delimiter, game_name);
 #endif
 		goto error;
 	}
 
 #ifdef CHINESE
-	printf("压缩为zip文件... \"cache%c%s_cache.zip\"\n", delimiter, game_name);
+	printf("压缩为zip文件... \"processed%c%s_cache.zip\"\n", delimiter, game_name);
 #else
-	printf("Compress to zip file... \"cache%c%s_cache.zip\"\n", delimiter, game_name);
+	printf("Compress to zip file... \"processed%c%s_cache.zip\"\n", delimiter, game_name);
 #endif
 
 	/* Write crom blocks */
@@ -1309,14 +1309,14 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	if (chdir("cache") != 0)
+	if (chdir("processed") != 0)
 	{
-		if (mkdir("cache", 0777) != 0)
+		if (mkdir("processed", 0777) != 0)
 		{
 #ifdef CHINESE
 			printf("错误: 无法创建\"cache\"目录.\n");
 #else
-			printf("ERROR: Could not create directory \"cache\".\n");
+			printf("ERROR: Could not create directory \"processed\".\n");
 #endif
 			goto error;
 		}
@@ -1378,10 +1378,10 @@ int main(int argc, char *argv[])
 		}
 #ifdef CHINESE
 		printf("完成.\n");
-		printf("请将cache内的文件复制到\"/PSP/GAMES/mvspsp/cache\".\n");
+		printf("请将cache内的文件复制到\"/PSP/GAMES/mvspsp/processed\".\n");
 #else
 		printf("complete.\n");
-		printf("Please copy these files to directory \"/PSP/GAMES/mvspsp/cache\".\n");
+		printf("Please copy these files to directory \"/PSP/GAMES/mvspsp/processed\".\n");
 #endif
 	}
 	else
@@ -1424,9 +1424,9 @@ int main(int argc, char *argv[])
 		}
 		*p = '\0';
 #ifdef CHINESE
-		printf("缓存文件夹名: cache%c%s_cache\n", delimiter, game_name);
+		printf("缓存文件夹名: processed%c%s_cache\n", delimiter, game_name);
 #else
-		printf("cache folder name: cache%c%s_cache\n", delimiter, game_name);
+		printf("processed folder name: processed%c%s_cache\n", delimiter, game_name);
 #endif
 
 		change_directory(launchDir);
@@ -1451,15 +1451,15 @@ int main(int argc, char *argv[])
 #ifdef CHINESE
 				printf("完成.\n");
 				if (zip)
-					printf("请将\"cache%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+					printf("请将\"processed%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
 				else
-					printf("请将\"cache%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+					printf("请将\"processed%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
 #else
 				printf("complete.\n");
 				if (zip)
-					printf("Please copy \"cache%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+					printf("Please copy \"processed%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
 				else
-					printf("Please copy \"cache%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/cache\".\n", delimiter, game_name);
+					printf("Please copy \"processed%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
 #endif
 			}
 		}

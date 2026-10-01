@@ -24,6 +24,43 @@ static int processed_asset_uses_parent(int type)
     }
 }
 
+
+static bool processed_root_has_assets(const char *root)
+{
+    char path[PATH_MAX];
+    const char *names[2] = { game_name, parent_name };
+
+    if (root == NULL || root[0] == '\0')
+        return false;
+
+    for (size_t i = 0; i < 2; i++)
+    {
+        const char *name = names[i];
+        if (name[0] == '\0')
+            continue;
+        if (path_format(path, sizeof(path), "%s/%s_cache/cache_info", root, name) &&
+            access(path, R_OK) == 0)
+            return true;
+        if (path_format(path, sizeof(path), "%s/%s_cache.zip", root, name) &&
+            access(path, R_OK) == 0)
+            return true;
+    }
+    return false;
+}
+
+const char *mvs_processed_asset_root(void)
+{
+    if (processed_root_has_assets(processed_dir))
+        return processed_dir;
+#if USE_CACHE
+    /* Compatibility for pre-migration installs. Full-resident/no-cache builds
+     * intentionally never consult the legacy cache/ root. */
+    if (processed_root_has_assets(cache_dir))
+        return cache_dir;
+#endif
+    return processed_dir;
+}
+
 static const char *processed_asset_name(int type)
 {
     switch (type)
@@ -39,6 +76,7 @@ static const char *processed_asset_name(int type)
 int mvs_processed_asset_open(int type)
 {
     const char *name = processed_asset_name(type);
+    const char *root = mvs_processed_asset_root();
     char path[PATH_MAX];
     int fd = -1;
 
@@ -46,10 +84,10 @@ int mvs_processed_asset_open(int type)
         return -1;
     if (processed_asset_uses_parent(type) && parent_name[0])
     {
-        if (path_format(path, sizeof(path), "%s/%s_cache/%s", cache_dir, parent_name, name))
+        if (path_format(path, sizeof(path), "%s/%s_cache/%s", root, parent_name, name))
             fd = open(path, O_RDONLY, 0777);
     }
-    if (fd < 0 && path_format(path, sizeof(path), "%s/%s_cache/%s", cache_dir, game_name, name))
+    if (fd < 0 && path_format(path, sizeof(path), "%s/%s_cache/%s", root, game_name, name))
         fd = open(path, O_RDONLY, 0777);
     return fd;
 }
@@ -58,11 +96,12 @@ size_t mvs_processed_asset_zip_read(int type, const char *name, void *buf, size_
 {
     zip_archive_t archive = {0};
     zip_entry_t entry = {0};
+    const char *root = mvs_processed_asset_root();
     char path[PATH_MAX];
     size_t bytes = 0;
 
     if (processed_asset_uses_parent(type) && parent_name[0] &&
-        path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, parent_name) &&
+        path_format(path, sizeof(path), "%s/%s_cache.zip", root, parent_name) &&
         zip_archive_open(&archive, path))
     {
         if (zip_entry_open(&archive, name, &entry))
@@ -75,7 +114,7 @@ size_t mvs_processed_asset_zip_read(int type, const char *name, void *buf, size_
         zip_archive_close(&archive);
     }
 
-    if (!path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, game_name) ||
+    if (!path_format(path, sizeof(path), "%s/%s_cache.zip", root, game_name) ||
         !zip_archive_open(&archive, path))
         return 0;
     if (zip_entry_open(&archive, name, &entry))
@@ -105,14 +144,15 @@ static bool processed_asset_read_exact_fd(int fd, void *dst, size_t size)
 
 static bool processed_asset_open_zip(int type, zip_archive_t *archive)
 {
+    const char *root = mvs_processed_asset_root();
     char path[PATH_MAX];
 
     if (processed_asset_uses_parent(type) && parent_name[0] &&
-        path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, parent_name) &&
+        path_format(path, sizeof(path), "%s/%s_cache.zip", root, parent_name) &&
         zip_archive_open(archive, path))
         return true;
 
-    return path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, game_name) &&
+    return path_format(path, sizeof(path), "%s/%s_cache.zip", root, game_name) &&
         zip_archive_open(archive, path);
 }
 

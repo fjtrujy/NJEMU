@@ -15,5 +15,6 @@ extern char game_dir[PATH_MAX];
 
 extern char cache_parent_name[16];
 extern char cache_dir[PATH_MAX];
+extern char processed_dir[PATH_MAX];
 
 #endif /* COMMON_RUNTIME_PATHS_H */

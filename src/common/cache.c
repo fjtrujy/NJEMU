@@ -15,6 +15,13 @@
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
 #include "common/runtime_paths.h"
+
+#if (EMU_SYSTEM == MVS)
+#include "mvs/processed_assets.h"
+#define CACHE_ASSET_ROOT mvs_processed_asset_root()
+#else
+#define CACHE_ASSET_ROOT cache_dir
+#endif
 #include "common/path_utils.h"
 #include "common/ticker_driver.h"
 #include "common/ui_text_driver.h"
@@ -184,12 +191,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_INFO:
 		if (use_parent_crom && use_parent_srom && use_parent_vrom)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", cache_dir, parent_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", CACHE_ASSET_ROOT, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		else
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", cache_dir, game_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/cache_info", CACHE_ASSET_ROOT, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -197,12 +204,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_CROM:
 		if (use_parent_crom)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", cache_dir, parent_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", CACHE_ASSET_ROOT, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", cache_dir, game_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/crom", CACHE_ASSET_ROOT, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -210,12 +217,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_SROM:
 		if (use_parent_srom)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", cache_dir, parent_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", CACHE_ASSET_ROOT, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", cache_dir, game_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/srom", CACHE_ASSET_ROOT, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -223,12 +230,12 @@ static int cachefile_open_resolved(int type, char *resolved_path, size_t resolve
 	case CACHE_VROM:
 		if (use_parent_vrom)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", cache_dir, parent_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", CACHE_ASSET_ROOT, parent_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		if (fd < 0)
 		{
-			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", cache_dir, game_name)) break;
+			if (!path_format(path, sizeof(path), "%s/%s_cache/vrom", CACHE_ASSET_ROOT, game_name)) break;
 			fd = open(path, O_RDONLY, 0777);
 		}
 		break;
@@ -295,7 +302,7 @@ size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
 
 	if (use_parent && parent_name[0])
 	{
-		if (!path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, parent_name)) return 0;
+		if (!path_format(path, sizeof(path), "%s/%s_cache.zip", CACHE_ASSET_ROOT, parent_name)) return 0;
 		if (zip_archive_open(&archive, path))
 		{
 			if (zip_entry_open(&archive, name, &entry))
@@ -310,7 +317,7 @@ size_t cachefile_zip_read(int type, const char *name, void *buf, size_t size)
 		}
 	}
 
-	if (!path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, game_name)) return 0;
+	if (!path_format(path, sizeof(path), "%s/%s_cache.zip", CACHE_ASSET_ROOT, game_name)) return 0;
 	if (!zip_archive_open(&archive, path))
 		return 0;
 
@@ -1402,14 +1409,14 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 
 		if (use_parent_crom && parent_name[0])
 		{
-			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, parent_name)) return 0;
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", CACHE_ASSET_ROOT, parent_name)) return 0;
 			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
 		}
 
 		if (!found)
 		{
-			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, game_name)) { found = 0; }
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", CACHE_ASSET_ROOT, game_name)) { found = 0; }
 			if (zip_archive_open(&cache_zip_archive, spr_cache_name))
 				found = 1;
 		}
@@ -1495,10 +1502,10 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	cache_type = CACHE_RAWFILE;
 
 	/* Try raw file format: {game}.cache */
-	if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", cache_dir, game_name)) { found = 0; }
+	if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", CACHE_ASSET_ROOT, game_name)) { found = 0; }
 	if ((cache_fd = open(spr_cache_name, O_RDONLY, 0777)) < 0)
 	{
-		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", cache_dir, cache_parent_name)) { found = 0; }
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s.cache", CACHE_ASSET_ROOT, cache_parent_name)) { found = 0; }
 		if ((cache_fd = open(spr_cache_name, O_RDONLY, 0777)) < 0)
 		{
 			found = 0;
@@ -1511,10 +1518,10 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		found = 1;
 		cache_type = CACHE_ZIPFILE;
 
-		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, game_name)) found = 0;
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", CACHE_ASSET_ROOT, game_name)) found = 0;
 		if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 		{
-			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", cache_dir, cache_parent_name)) { found = 0; }
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache.zip", CACHE_ASSET_ROOT, cache_parent_name)) { found = 0; }
 			if (!zip_archive_open(&cache_zip_archive, spr_cache_name))
 			{
 				found = 0;
@@ -1530,11 +1537,11 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 		found = 1;
 		cache_type = CACHE_FOLDER;
 
-		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", cache_dir, game_name)) { found = 0; }
+		if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", CACHE_ASSET_ROOT, game_name)) { found = 0; }
 		if (!path_format(path, sizeof(path), "%s/cache_info", spr_cache_name)) { found = 0; }
 		if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
 		{
-			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", cache_dir, cache_parent_name)) { found = 0; }
+			if (!path_format(spr_cache_name, sizeof(spr_cache_name), "%s/%s_cache", CACHE_ASSET_ROOT, cache_parent_name)) { found = 0; }
 			if (!path_format(path, sizeof(path), "%s/cache_info", spr_cache_name)) { found = 0; }
 			if ((cache_fd = open(path, O_RDONLY, 0777)) < 0)
 			{
