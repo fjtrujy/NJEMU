@@ -81,9 +81,9 @@ int ui_show_popup(int draw) {
 void file_browser(void) {
 	Loop = LOOP_EXEC;
 	strcpy(game_dir, "roms");
-#if USE_CACHE
-	sprintf(cache_dir, "cache");
-#endif
+	/* Processed MVS assets are independent of the streaming cache capability.
+	 * Keep their root available in no-GUI builds even when USE_CACHE=OFF. */
+	strcpy(cache_dir, "cache");
 	// Get the game name from a file called game_name.ini
 	{
 		int fd = open("game_name.ini", O_RDONLY);
