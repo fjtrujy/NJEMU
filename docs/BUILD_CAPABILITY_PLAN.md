@@ -97,7 +97,7 @@ Desktop now compiles SDL and OpenGL 3.3 together by default and selects the acti
 - [x] Make backend changes restart the emulator/video subsystem at a safe boundary; do not switch live while backend-owned GPU resources exist unless lifecycle correctness is demonstrated.
 - [x] Extend Desktop CI to build/test the dual-backend binary and retain a focused SDL-only Desktop build to catch accidental coupling.
 - [ ] Add runtime smoke/regression coverage for SDL and OpenGL on representative CPS1/CPS2/MVS/NCDZ content, including GUI navigation and save-state thumbnail paths.
-  - MVS/`mslug3` OpenGL validation now covers GUI splash/browser, gameplay, main menu, save-state menu, save-state creation/thumbnail reload, and the `GUI=OFF` frame path. The no-GUI frame-120 regression remains pixel-identical (0/68,096 differing pixels) after the GUI work. CPS1/CPS2/NCDZ runtime coverage is still pending.
+  - MVS/`mslug3` OpenGL validation now covers GUI splash/browser, gameplay, main menu, save-state menu, save-state creation/thumbnail reload, and the `GUI=OFF` frame path. The no-GUI frame-120 regression remains pixel-identical (0/68,096 differing pixels) after the GUI work. Desktop OpenGL UI uploads now reuse a fixed atlas region and submit each sprite rectangle with one pitched transfer instead of one GL upload per source row. CPS1/CPS2/NCDZ runtime coverage is still pending.
 - [x] Document which renderer is active in diagnostics so performance/correctness comparisons are unambiguous.
 
 ## Milestone C5 — Preprocessor audit

@@ -37,6 +37,7 @@
 #define GLD_WORK_WIDTH		SCR_WIDTH
 #define GLD_WORK_HEIGHT		SCR_HEIGHT
 #define GLD_UI_SCRATCH_HEIGHT	160
+#define GLD_UI_UPLOAD_HEIGHT	64
 
 #define GLD_MAX_TEXTURE_DIM	4096
 #define GLD_MAX_PAGES		4
@@ -702,7 +703,7 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 
 	g->ui_clip = (RECT){ 0, 0, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT };
 	g->draw_fill = 0xff000000u;
-	g->ui_tex = gld_create_texture(1, 1, false);
+	g->ui_tex = gld_create_texture(BUF_WIDTH, GLD_UI_UPLOAD_HEIGHT, false);
 	gl.GenTextures(1, &g->ui_fill_tex);
 	gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
 	gld_texture_params();
@@ -1298,32 +1299,30 @@ static void desktop_gl_drawUISprite(void *data, void *tex, int tex_format, int t
 	desktop_gl_video_t *g = data;
 	hw_vertex_t q[4];
 	GLenum type;
-	GLenum internal;
+	const uint16_t *src;
 	(void)tex_swizzled;
 	(void)tex_width;
 
 	if (tex == NULL || sw <= 0 || sh <= 0 || su < 0 || sv < 0 ||
 		su + sw > tex_stride || sv + sh > tex_height ||
+		sw > BUF_WIDTH || sh > GLD_UI_UPLOAD_HEIGHT ||
 		!gld_ui_quad(&g->ui_clip, q, dx, dy, dx + dw, dy + dh, 0, 0, sw, sh))
 		return;
 
-	/* The common linear UI storage uses the PSP 16-bit layouts. */
-	if (tex_format == UI_PIXFMT_4444) {
-		internal = GL_RGBA4;
-		type = GL_UNSIGNED_SHORT_4_4_4_4_REV;
-	} else {
-		internal = GL_RGB5_A1;
-		type = GL_UNSIGNED_SHORT_1_5_5_5_REV;
-	}
+	/* The common linear UI storage uses the PSP 16-bit layouts. Upload the
+	 * requested rectangle into a reusable atlas region in one GL transfer.
+	 * GL_UNPACK_ROW_LENGTH preserves the source pitch without per-row uploads. */
+	type = tex_format == UI_PIXFMT_4444
+		? GL_UNSIGNED_SHORT_4_4_4_4_REV
+		: GL_UNSIGNED_SHORT_1_5_5_5_REV;
+	src = (const uint16_t *)tex + (size_t)sv * tex_stride + su;
 	gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	gl.PixelStorei(GL_UNPACK_ROW_LENGTH, tex_stride);
 	gl.ActiveTexture(GL_TEXTURE0);
 	gl.BindTexture(GL_TEXTURE_2D, g->ui_tex);
-	gld_texture_params();
-	gl.TexImage2D(GL_TEXTURE_2D, 0, internal, sw, sh, 0, GL_RGBA, type, NULL);
-	for (int row = 0; row < sh; row++)
-		gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, row, sw, 1, GL_RGBA, type,
-			(const uint16_t *)tex + (size_t)(sv + row) * tex_stride + su);
-	gld_ui_setup(g, g->ui_tex, sw, sh, q, 4, GL_TRIANGLE_FAN, blend);
+	gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, sw, sh, GL_RGBA, type, src);
+	gl.PixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	gld_ui_setup(g, g->ui_tex, BUF_WIDTH, GLD_UI_UPLOAD_HEIGHT, q, 4, GL_TRIANGLE_FAN, blend);
 }
 
 static void gld_ui_fill(desktop_gl_video_t *g, int x, int y, int w, int h,
