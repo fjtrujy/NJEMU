@@ -31,11 +31,21 @@ The reactive-memory refactor currently leaves MVS and CPS2 dependent on cache sy
 
 After C1 is functional, define defaults deliberately rather than deriving capability in C headers.
 
-- [ ] Audit actual RAM/runtime requirements for PSP, PS2, PS Vita, and Desktop.
+- [x] Audit platform memory policy for cache defaults: PSP/PS2 retain streaming-cache capability by default because constrained runs require fallback; Vita/Desktop default full-resident, with cache still available as an explicit fallback-capability build. Runtime hardware validation remains a separate completion gate below.
 - [x] Select platform defaults without removing the supported override: PSP/PS2 cached, Vita/Desktop full-resident.
 - [x] Keep Vita/Desktop full-resident by default while retaining optional MVS/CPS2 cache fallback builds.
 - [x] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit. Local PSP/PS2 cache ON/OFF builds pass and CI run for `f6f65d4` passed Desktop, PSP, PS2, and all 16 Vita jobs, including the opposite cache overrides.
 - [x] Keep demand-read-size `Auto` policy independent from whether cache support is compiled.
+
+## Runtime validation gate
+
+Build capability cleanup is compile-time complete only when runtime policy is also exercised on representative content. This gate is intentionally separate from CMake capability correctness.
+
+- [ ] PSP: validate representative MVS (`mslug3`) and CPS2 games with the default cached build on real hardware.
+- [ ] PS2: validate representative MVS (`mslug3`) and CPS2 games with the default cached build on real hardware.
+- [ ] Vita: validate representative MVS/CPS2 games with the default full-resident build on hardware or a trusted runtime environment.
+- [ ] Desktop: validate representative MVS/CPS2 games with the default full-resident build.
+- [ ] Confirm `USE_CACHE=OFF` fails cleanly with an out-of-memory message when a full-resident allocation cannot be satisfied; it must never silently enter streaming paths.
 
 ## Milestone C3 — Cache-related capability cleanup
 
