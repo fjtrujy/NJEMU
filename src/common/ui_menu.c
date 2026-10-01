@@ -481,6 +481,60 @@ static int menu_gamecfg(void)
 	return 0;
 }
 
+static int menu_video_backend_settings(void)
+{
+	int update = 1;
+	int original_backend = option_video_backend;
+	int count = video_backend_choice_count();
+	int selected = 0;
+
+	for (int i = 0; i < count; i++)
+		if (video_backend_choice_at(i).id == option_video_backend)
+			selected = i;
+	/* A stale/unavailable persisted ID resolves to the platform default. */
+	option_video_backend = video_backend_choice_at(selected).id;
+	pad_wait_clear();
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+	do
+	{
+		if (update)
+		{
+			video_backend_choice_t choice = video_backend_choice_at(selected);
+			int width = uifont_get_string_width(choice.name);
+			int editable = count > 1;
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(MENU_VIDEO_BACKEND_SETTINGS));
+			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(VIDEO_BACKEND));
+			if (editable && selected > 0)
+				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
+			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), choice.name);
+			if (editable && selected + 1 < count)
+				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		}
+		else
+			video_driver->waitVsync(video_data);
+		pad_update();
+		update = 0;
+		if (count > 1 && pad_pressed(PLATFORM_PAD_LEFT) && selected > 0) {
+			selected--; option_video_backend = video_backend_choice_at(selected).id; update = 1;
+		} else if (count > 1 && pad_pressed(PLATFORM_PAD_RIGHT) && selected + 1 < count) {
+			selected++; option_video_backend = video_backend_choice_at(selected).id; update = 1;
+		}
+	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
+
+	if (option_video_backend != original_backend) {
+		save_settings();
+		menu_restart();
+		return 1;
+	}
+	return 0;
+}
+
 #ifdef PS2
 static int menu_system_video_settings(void)
 {
@@ -2707,6 +2761,7 @@ typedef struct
 static menu2_t mainmenu2[] =
 {
 	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
+	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_SYSTEM, MENUHELP_VIDEO_BACKEND_SETTINGS },
 #ifdef PS2
 	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
 #endif

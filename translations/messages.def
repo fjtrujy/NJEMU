@@ -393,3 +393,7 @@ UI_TEXT_ID(CACHE_READ_SIZE,                                              388)
 UI_TEXT_ID(MENU_SYSTEM_PERFORMANCE_SETTINGS,                             389)
 UI_TEXT_ID(MENUHELP_SYSTEM_PERFORMANCE_SETTINGS,                         390)
 UI_TEXT_ID(CACHE_READ_SIZE_AUTO_LABEL,                                   391)
+
+UI_TEXT_ID(VIDEO_BACKEND,                                                  392)
+UI_TEXT_ID(MENU_VIDEO_BACKEND_SETTINGS,                                    393)
+UI_TEXT_ID(MENUHELP_VIDEO_BACKEND_SETTINGS,                                394)

@@ -395,3 +395,6 @@ CACHE_READ_SIZE=Cache read size
 MENU_SYSTEM_PERFORMANCE_SETTINGS=Performance settings
 MENUHELP_SYSTEM_PERFORMANCE_SETTINGS=Change global cache performance settings.
 CACHE_READ_SIZE_AUTO_LABEL=Auto (%u KiB)
+VIDEO_BACKEND=Video backend
+MENU_VIDEO_BACKEND_SETTINGS=Video backend
+MENUHELP_VIDEO_BACKEND_SETTINGS=Select the global video backend.
