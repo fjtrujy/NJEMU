@@ -2283,7 +2283,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 	*ch->pan += ch->adpcma_out;
 }
 
-#if (EMU_SYSTEM == MVS) && USE_CACHE
+#if MVS_PCM_CACHE
 static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 {
 	(void)c;
@@ -3049,7 +3049,7 @@ void YM2610Reset(void)
 		YM2610.adpcma[i].adpcma_acc  = 0;
 		YM2610.adpcma[i].adpcma_step = 0;
 		YM2610.adpcma[i].adpcma_out  = 0;
-#if (EMU_SYSTEM == MVS) && USE_CACHE
+#if MVS_PCM_CACHE
 		if (pcm_cache_enable)
 		{
 			YM2610.adpcma[i].buf   = NULL;
