@@ -299,14 +299,18 @@ static void neogeo_run(void)
 		{
 			if (Sleep)
 			{
+#if USE_CACHE
 				cache_sleep(1);
+#endif
 
 				do
 				{
 					usleep(5000000);
 				} while (Sleep);
 
+#if USE_CACHE
 				cache_sleep(0);
+#endif
 				autoframeskip_reset();
 			}
 

@@ -32,6 +32,7 @@
 #include "cps2/vidhrdw.h"
 #elif (EMU_SYSTEM == MVS)
 #include "mvs/memintrf.h"
+#include "mvs/processed_assets.h"
 #include "mvs/vidhrdw.h"
 #endif
 
@@ -1377,7 +1378,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	found = 0;
 
 	/* Try folder format first: {game}_cache/cache_info */
-	if ((fd = cachefile_open(CACHE_INFO)) >= 0)
+	if ((fd = mvs_processed_asset_open(MVS_PROCESSED_INFO)) >= 0)
 	{
 		cache_type = CACHE_RAWFILE;
 		cache_read_legacy(fd, version_str, 8);
@@ -1464,7 +1465,7 @@ int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallo
 	{
 		if (option_sound_enable && disable_sound && requested_pcm_blocks > 0)
 		{
-			pcm_fd = cachefile_open_resolved(CACHE_VROM, pcm_path, sizeof(pcm_path));
+			pcm_fd = mvs_processed_asset_open(MVS_PROCESSED_VROM);
 			if (pcm_fd >= 0)
 			{
 				pcm_file_pos = 0;

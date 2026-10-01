@@ -2283,7 +2283,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 	*ch->pan += ch->adpcma_out;
 }
 
-#if (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS) && USE_CACHE
 static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 {
 	(void)c;
@@ -2382,7 +2382,11 @@ static void OPNB_ADPCMA_write(int r, int v)
 #if (EMU_SYSTEM == MVS)
 					adpcma[c].block       = 0xffff;
 
+#if USE_CACHE
 					if ((!pcm_cache_enable && pcmbufA == NULL) || adpcma[c].start >= pcmsizeA)
+#else
+					if (pcmbufA == NULL || adpcma[c].start >= pcmsizeA)
+#endif
 						adpcma[c].flag = 0;
 #else
 					if (pcmbufA == NULL || adpcma[c].start >= pcmsizeA)
@@ -2597,6 +2601,7 @@ static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
 }
 
 
+#if USE_CACHE
 static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 {
 	uint32_t step;
@@ -2690,6 +2695,8 @@ static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 
 
 /* DELTA-T-ADPCM write register */
+#endif
+
 static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 {
 //	if (r >= 0x20) return;
@@ -2720,7 +2727,11 @@ static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 
 		/* if yes, then let's check if ADPCM memory is mapped and big enough.
 		 * pcm_cache_enable=0 reduces this to the old !pcmbufB check. */
+#if USE_CACHE
 		if (!pcm_cache_enable && !pcmbufB)
+#else
+		if (!pcmbufB)
+#endif
 		{
 			adpcmb->portstate = 0x00;
 			adpcmb->PCM_BSY = 0;
@@ -2942,6 +2953,8 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 	/* SSG */
 //	SSG.step = ((float)SSG_STEP * YM2610.OPN.ST.rate * 8) / clock;
 #if (EMU_SYSTEM == MVS)
+#if USE_CACHE
+#if USE_CACHE
 	if (pcm_cache_enable)
 	{
 		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_dynamic;
@@ -2954,6 +2967,7 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 		pcmbufB  = NULL;
 		pcmsizeB = pcmsizeb;
 	}
+#endif
 	else
 	{
 		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_static;
@@ -2966,6 +2980,14 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 		pcmbufB = (uint8_t *)pcmromb;
 		pcmsizeB = pcmsizeb;
 	}
+#else
+	OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_static;
+	OPNB_ADPCMB_calc = OPNB_ADPCMB_calc_static;
+	pcmbufA = (uint8_t *)pcmroma;
+	pcmsizeA = pcmsizea;
+	pcmbufB = (uint8_t *)pcmromb;
+	pcmsizeB = pcmsizeb;
+#endif
 	YM2610.adpcmb.status_change_EOS_bit = 0x80;	/* status flag: set bit7 on End Of Sample */
 #else
 	/* ADPCM-A */
@@ -3027,7 +3049,7 @@ void YM2610Reset(void)
 		YM2610.adpcma[i].adpcma_acc  = 0;
 		YM2610.adpcma[i].adpcma_step = 0;
 		YM2610.adpcma[i].adpcma_out  = 0;
-#if (EMU_SYSTEM == MVS)
+#if (EMU_SYSTEM == MVS) && USE_CACHE
 		if (pcm_cache_enable)
 		{
 			YM2610.adpcma[i].buf   = NULL;
@@ -3057,11 +3079,13 @@ void YM2610Reset(void)
 	YM2610.adpcmb.adpcmd       = 127;
 	YM2610.adpcmb.adpcml       = 0;
 	YM2610.adpcmb.portstate    = 0x20;
+#if USE_CACHE
 	if (pcm_cache_enable)
 	{
 		YM2610.adpcmb.buf   = NULL;
 		YM2610.adpcmb.block = 0xffff;
 	}
+#endif
 
 	/* The flag mask register disables the BRDY after the reset, however
     ** as soon as the mask is enabled the flag needs to be set. */
@@ -3421,8 +3445,10 @@ STATE_LOAD( ym2610 )
 	{
 		YM2610.adpcma[ch].buf = NULL;
 		YM2610.adpcma[ch].block = 0xffff;
+#if USE_CACHE
 		if (pcm_cache_enable)
 			YM2610.adpcma[ch].now_data = 0;
+#endif
 	}
 
 		/* When pcm_cache_enable=0 (preload mode) the ADPCMB block field is
@@ -3432,9 +3458,11 @@ STATE_LOAD( ym2610 )
 	{
 		YM2610.adpcmb.buf = NULL;
 		YM2610.adpcmb.block = 0xffff;
+#if USE_CACHE
 		if (pcm_cache_enable)
 			YM2610.adpcmb.now_data = 0;
 		else
+#endif
 			YM2610.adpcmb.now_data = *(pcmbufB + (YM2610.adpcmb.now_addr >> 1));
 	}
 #endif

@@ -19,6 +19,7 @@
 #include "common/adhoc.h"
 #endif
 #include "common/cache.h"
+#include "mvs/processed_assets.h"
 #ifdef COMMAND_LIST
 #include "common/cmdlist.h"
 #endif
@@ -767,7 +768,7 @@ static int load_rom_gfx2(void)
 
 	if (encrypt_gfx2)
 	{
-		int32_t fd = cachefile_open(CACHE_SROM);
+		int32_t fd = mvs_processed_asset_open(MVS_PROCESSED_SROM);
 
 		if (fd >= 0)
 		{
@@ -777,7 +778,7 @@ static int load_rom_gfx2(void)
 		}
 		else
 		{
-			if (cachefile_zip_read(CACHE_SROM, "srom",
+			if (mvs_processed_asset_zip_read(MVS_PROCESSED_SROM, "srom",
 				memory_region_gfx2, memory_length_gfx2) != memory_length_gfx2)
 			{
 				error_file("cache/srom");
@@ -837,7 +838,11 @@ static int load_rom_gfx2(void)
 
 static int load_rom_gfx3(void)
 {
+#if USE_CACHE
 	int use_streaming = encrypt_gfx3 || (option_sound_enable && disable_sound);
+#else
+	int use_streaming = 0;
+#endif
 
 	if (!use_streaming && mvs_memory_plan_valid &&
 		mvs_memory_plan.gfx_fully_resident &&
@@ -886,6 +891,7 @@ static int load_rom_gfx3(void)
 		msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
 	}
 
+#if USE_CACHE
 	memory_allocation_shape_release_reserve(&mvs_memory_shape);
 	if (!mvs_memory_plan_valid)
 	{
@@ -910,6 +916,12 @@ static int load_rom_gfx3(void)
 	}
 
 	return 1;
+#else
+	memory_allocation_shape_release(&mvs_memory_shape);
+	msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+	Loop = LOOP_BROWSER;
+	return 0;
+#endif
 }
 
 /*--------------------------------------------------------
@@ -960,7 +972,11 @@ static int load_rom_sound1(void)
 		return 1;
 	}
 
+#if USE_CACHE
 	cache_candidate = disable_sound;
+#else
+	cache_candidate = 0;
+#endif
 	if (cache_candidate && (!mvs_memory_plan_valid ||
 		!mvs_memory_plan.pcm_fully_resident ||
 		mvs_memory_plan.pcm_cache_bytes < memory_length_sound1 ||
@@ -1002,7 +1018,7 @@ static int load_rom_sound1(void)
 
 	if (encrypt_snd1)
 	{
-		int32_t fd = cachefile_open(CACHE_VROM);
+		int32_t fd = mvs_processed_asset_open(MVS_PROCESSED_VROM);
 
 		if (fd >= 0)
 		{
@@ -1012,7 +1028,7 @@ static int load_rom_sound1(void)
 		}
 		else
 		{
-			if (cachefile_zip_read(CACHE_VROM, "vrom",
+			if (mvs_processed_asset_zip_read(MVS_PROCESSED_VROM, "vrom",
 				memory_region_sound1, memory_length_sound1) != memory_length_sound1)
 			{
 				error_file("cache/vrom");
@@ -1655,7 +1671,9 @@ int memory_init(void)
 	}
 #endif
 
+#if USE_CACHE
 	cache_init();
+#endif
 	pad_wait_clear();
 	video_driver->clearScreen(video_data);
 	msg_screen_init(WP_LOGO, ICON_SYSTEM, TEXT(LOAD_ROM));
@@ -2069,7 +2087,9 @@ void memory_shutdown(void)
 {
 	int i;
 
+#if USE_CACHE
 	cache_shutdown();
+#endif
 	memory_allocation_shape_release(&mvs_memory_shape);
 
 	for (i = 0; i < 3; i++)

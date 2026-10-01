@@ -20,12 +20,12 @@ This cleanup must preserve real core-specific behavior. `EMU_SYSTEM`, platform m
 
 The reactive-memory refactor currently leaves MVS and CPS2 dependent on cache symbols even when `USE_CACHE=OFF`. Restore the historical contract that cache support is optional.
 
-- [ ] Make MVS compile and operate full-resident with `USE_CACHE=OFF`.
+- [x] Make MVS compile and operate full-resident with `USE_CACHE=OFF` (build/test path restored; runtime game validation remains part of the matrix).
 - [x] Make CPS2 compile and operate full-resident with `USE_CACHE=OFF` (build/test path restored; runtime game validation remains part of the matrix).
-- [ ] Keep the runtime memory planner/full-resident path when `USE_CACHE=ON`; compiling the fallback does not mean every game must use it.
-- [ ] Keep `Cache read size` configuration/UI strictly behind `USE_CACHE`.
-- [ ] Keep CPS1 and NCDZ invalid with `USE_CACHE=ON`.
-- [ ] Validate MVS/CPS2 with cache both ON and OFF.
+- [x] Keep the runtime memory planner/full-resident path when `USE_CACHE=ON`; compiling the fallback does not mean every game must use it.
+- [x] Keep `Cache read size` configuration/UI strictly behind `USE_CACHE`.
+- [x] Keep CPS1 and NCDZ invalid with `USE_CACHE=ON`.
+- [x] Validate Desktop MVS/CPS2 with cache both ON and OFF; hardware runtime validation remains pending.
 
 ## Milestone C2 — Cache defaults and platform matrix
 

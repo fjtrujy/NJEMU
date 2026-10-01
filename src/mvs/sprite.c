@@ -79,7 +79,11 @@ static void mvs_decode_fix_tile(uint8_t pixels[8 * 8], uint32_t code,
 static void mvs_decode_sprite_tile(uint8_t pixels[16 * 16], uint32_t code,
 	uint16_t attr)
 {
+#if USE_CACHE
 	uint32_t gfx3_offset = read_cache ? read_cache(code << 7) : code << 7;
+#else
+	uint32_t gfx3_offset = code << 7;
+#endif
 	const uint8_t *src = &memory_region_gfx3[gfx3_offset];
 	uint32_t palette = sprite_color_table[(attr >> 8) & 0x0f];
 	int line;

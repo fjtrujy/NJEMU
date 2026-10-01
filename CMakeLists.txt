@@ -99,11 +99,6 @@ option(USE_CACHE "Enable streaming cache support (MVS/CPS2 only)" ${USE_CACHE_DE
 if(USE_CACHE AND NOT ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2"))
     message(FATAL_ERROR "USE_CACHE is only supported for TARGET=MVS or TARGET=CPS2")
 endif()
-# MVS no-cache support is restored in the next C1 slice. Keep rejecting it
-# until that path is build- and runtime-complete rather than accepting a broken build.
-if("${TARGET}" STREQUAL "MVS" AND NOT USE_CACHE)
-    message(FATAL_ERROR "TARGET=MVS temporarily requires USE_CACHE=ON while C1 restores the full-resident path")
-endif()
 if(USE_CACHE)
     add_definitions(-DUSE_CACHE=1)
 else()
@@ -530,6 +525,8 @@ if (${TARGET} STREQUAL "MVS")
         mvs/driver.c
         mvs/memintrf.h
         mvs/memintrf.c
+        mvs/processed_assets.h
+        mvs/processed_assets.c
         mvs/inptport.h
         mvs/inptport.c
         mvs/dipsw.h
@@ -1119,6 +1116,9 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
                 src/mvs/sprite_common.c)
             target_include_directories(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
                 ${CMAKE_CURRENT_SOURCE_DIR}/src)
+            # This test exercises the streaming-cache sprite path regardless of
+            # the main binary's USE_CACHE setting.
+            target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE USE_CACHE=1)
             if(UPLOAD_MODE STREQUAL "dirty")
                 target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
                     MVS_DIRTY_SPRITE_UPLOADS=1)
