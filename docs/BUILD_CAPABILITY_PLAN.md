@@ -67,15 +67,15 @@ For each option:
 - [x] Define valid platforms/cores for the audited boolean capabilities.
 - [x] Define dependencies/conflicts for the audited boolean capabilities.
 - [x] Reject unsupported explicit requests rather than silently ignoring them.
-- [ ] Remove redundant platform/core preprocessor checks from consumers only after the CMake invariant exists.
+- [x] Remove redundant platform/core preprocessor checks from audited consumers after establishing CMake invariants.
 
 ## Milestone C5 — Preprocessor audit
 
 Search compound conditions such as `FEATURE && PLATFORM`, `FEATURE && EMU_SYSTEM`, and `FEATURE && BUILD_*`.
 
-- [ ] Remove conditions that only repeat a CMake invariant.
-- [ ] Preserve conditions that select genuinely different core/platform behavior.
-- [ ] Prefer positive capability names over indirect platform inference where a reusable capability exists.
+- [x] Remove audited conditions that only repeat a CMake invariant.
+- [x] Preserve conditions that select genuinely different core/platform behavior.
+- [x] Prefer positive capability names over indirect platform inference where a reusable capability exists.
 - [ ] Run strict builds/tests after each focused cleanup rather than performing a repository-wide mechanical rewrite.
 
 ## Completion criteria
