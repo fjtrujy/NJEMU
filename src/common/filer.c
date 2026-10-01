@@ -663,7 +663,9 @@ static void checkStartupDir(void)
 {
 	DIR *dp;
 
-#if USE_CACHE
+#if USE_CACHE || (EMU_SYSTEM == MVS)
+	/* MVS processed assets (crom/srom/vrom/cache_info) are also consumed by
+	 * the full-resident USE_CACHE=OFF path. */
 	checkDir("cache");
 #endif
 	checkDir("roms");
@@ -1115,7 +1117,7 @@ void file_browser(void)
 
 #if (EMU_SYSTEM != NCDZ)
 			strcpy(game_dir, curr_dir);
-#if USE_CACHE
+#if USE_CACHE || (EMU_SYSTEM == MVS)
 			if (!path_format(cache_dir, sizeof(cache_dir), "%scache", launchDir)) { run_emulation = 0; continue; }
 #endif
 			strcpy(game_name, files[sel]->name);
