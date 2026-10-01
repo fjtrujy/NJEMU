@@ -34,7 +34,7 @@ After C1 is functional, define defaults deliberately rather than deriving capabi
 - [ ] Audit actual RAM/runtime requirements for PSP, PS2, PS Vita, and Desktop.
 - [x] Select platform defaults without removing the supported override: PSP/PS2 cached, Vita/Desktop full-resident.
 - [x] Keep Vita/Desktop full-resident by default while retaining optional MVS/CPS2 cache fallback builds.
-- [ ] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit. Local PSP/PS2 MVS+CPS2 cache ON/OFF builds pass; CI now covers platform defaults plus opposite cache overrides and is the Vita/full matrix gate.
+- [x] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit. Local PSP/PS2 cache ON/OFF builds pass and CI run for `f6f65d4` passed Desktop, PSP, PS2, and all 16 Vita jobs, including the opposite cache overrides.
 - [x] Keep demand-read-size `Auto` policy independent from whether cache support is compiled.
 
 ## Milestone C3 — Cache-related capability cleanup
@@ -61,6 +61,8 @@ Initial candidates:
 - `PS2_VIDEO_MODE`
 - `PS2_CACHE_RESERVE_KB`
 - sanitizer/profiling options where platform support differs
+
+The PS2 string options now reject non-default requests outside PS2, and ASan/UBSan/gprof are explicitly desktop-only diagnostics.
 
 For each option:
 
