@@ -180,7 +180,12 @@ if(PLATFORM STREQUAL "PS2")
 endif()
 option(USE_VITAGL "PS Vita: render through vitaGL instead of GXM/vita2d" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
-option(USE_DESKTOP_GL "Desktop: compile the OpenGL 3.3 video backend alongside SDL" ON)
+if(PLATFORM STREQUAL "DESKTOP")
+    set(USE_DESKTOP_GL_DEFAULT ON)
+else()
+    set(USE_DESKTOP_GL_DEFAULT OFF)
+endif()
+option(USE_DESKTOP_GL "Desktop: compile the OpenGL 3.3 video backend alongside SDL" ${USE_DESKTOP_GL_DEFAULT})
 
 # Add options to compiler definitions
 if (GUI)

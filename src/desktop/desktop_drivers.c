@@ -16,7 +16,9 @@ extern platform_driver_t platform_desktop;
 extern thread_driver_t thread_desktop;
 extern ticker_driver_t ticker_desktop;
 extern video_driver_t video_desktop_sdl;
+#ifdef HAVE_VIDEO_BACKEND_OPENGL
 extern video_driver_t video_desktop_gl;
+#endif
 extern const ui_draw_driver_t desktop_ui_draw_driver;
 extern const ui_draw_driver_t null_ui_draw_driver;
 
