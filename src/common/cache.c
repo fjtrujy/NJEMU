@@ -93,13 +93,9 @@ static uint8_t gfx_valid_parts[MAX_CACHE_BLOCKS];
 
 static size_t cache_default_read_size(void)
 {
-#if defined(PS2) && (EMU_SYSTEM == MVS)
-	/* Measured on real PS2/MX4SIO: 16 KiB materially reduces demand-read wait. */
-	return 16u * 1024u;
-#else
-	/* Preserve established behavior until each platform/core is measured. */
-	return CACHE_BLOCK_SIZE;
-#endif
+	/* CMake owns the platform/core policy. The cache consumer only sees the
+	 * resolved default capability value. */
+	return (size_t)CACHE_DEFAULT_READ_SIZE_KB * 1024u;
 }
 
 size_t cache_resolved_read_size(void)

@@ -105,6 +105,11 @@ if(USE_CACHE)
 else()
     add_definitions(-DUSE_CACHE=0)
 endif()
+if(USE_CACHE AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
+    add_definitions(-DCACHE_DEFAULT_READ_SIZE_KB=16)
+else()
+    add_definitions(-DCACHE_DEFAULT_READ_SIZE_KB=64)
+endif()
 
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
@@ -533,7 +538,7 @@ elseif (PLATFORM STREQUAL "DESKTOP")
     list(APPEND OS_SRC desktop/desktop_frame_dump.c)
 endif()
 
-if (ADHOC AND PLATFORM STREQUAL "PSP")
+if(ADHOC)
     set(OS_SRC ${OS_SRC}
         psp/adhoc.c
     )
