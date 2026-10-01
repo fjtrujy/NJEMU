@@ -703,7 +703,16 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 
 	g->ui_clip = (RECT){ 0, 0, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT };
 	g->draw_fill = 0xff000000u;
-	g->ui_tex = gld_create_texture(BUF_WIDTH, GLD_UI_UPLOAD_HEIGHT, false);
+
+	/* UI_TEXTURE_FONT mixes RGBA4444 glyphs/shadows with RGB5551 assets.
+	 * Keep the reusable upload target at RGBA8 so 4-bit alpha is preserved;
+	 * allocating it as RGB5_A1 would quantize every 4444 alpha value to a
+	 * single bit and make antialiased glyphs/glows visibly too bright. */
+	gl.GenTextures(1, &g->ui_tex);
+	gl.BindTexture(GL_TEXTURE_2D, g->ui_tex);
+	gld_texture_params();
+	gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, BUF_WIDTH, GLD_UI_UPLOAD_HEIGHT,
+		0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	gl.GenTextures(1, &g->ui_fill_tex);
 	gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
 	gld_texture_params();
