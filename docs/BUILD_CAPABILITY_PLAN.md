@@ -81,6 +81,21 @@ For each option:
 - [x] Reject unsupported explicit requests rather than silently ignoring them.
 - [x] Remove redundant platform/core preprocessor checks from audited consumers after establishing CMake invariants.
 
+## Milestone C4b — Desktop runtime video backend selection
+
+Desktop currently treats `USE_DESKTOP_GL` as a mutually exclusive build-time source selection: the normal SDL renderer and the OpenGL 3.3 renderer are not present in the same binary. Convert this into a compiled-capability plus runtime-policy model, consistent with the rest of this plan.
+
+- [ ] Refactor the Desktop video backends behind a common interface so SDL and OpenGL can coexist in one binary without duplicate public symbols or global ownership.
+- [ ] Compile both Desktop backends by default when their dependencies are available; retain a CMake capability switch only where it is useful for dependency/minimal-build validation, not as the user's renderer preference.
+- [ ] Remove the current `USE_DESKTOP_GL`/`GUI` mutual exclusion by making GUI presentation work with either selected backend, without silently falling back to SDL.
+- [ ] Add a global Desktop `Video backend` setting with `Auto`, `SDL`, and `OpenGL` choices. Keep this emulator-wide rather than per-game.
+- [ ] Define deterministic `Auto` policy and startup fallback/error semantics. An explicitly requested unavailable backend must be reported rather than silently changing the user's choice.
+- [ ] Persist the backend setting in the global configuration and expose it only on Desktop; keep translations/UI IDs deterministic across other platforms.
+- [ ] Make backend changes restart the emulator/video subsystem at a safe boundary; do not switch live while backend-owned GPU resources exist unless lifecycle correctness is demonstrated.
+- [ ] Extend Desktop CI to build/test the dual-backend binary and, where practical, retain focused single-capability builds to catch accidental coupling.
+- [ ] Add runtime smoke/regression coverage for SDL and OpenGL on representative CPS1/CPS2/MVS/NCDZ content, including GUI navigation and save-state thumbnail paths.
+- [ ] Document which renderer is active in diagnostics so performance/correctness comparisons are unambiguous.
+
 ## Milestone C5 — Preprocessor audit
 
 Search compound conditions such as `FEATURE && PLATFORM`, `FEATURE && EMU_SYSTEM`, and `FEATURE && BUILD_*`.
@@ -97,4 +112,5 @@ Search compound conditions such as `FEATURE && PLATFORM`, `FEATURE && EMU_SYSTEM
 - MVS/CPS2 can be built with or without streaming cache support.
 - Feature macros describe compiled capabilities rather than platform identity.
 - Runtime policy remains responsible for choosing full-resident versus fallback behavior when both are compiled.
+- Desktop can compile SDL and OpenGL together and select the video backend at runtime through a persisted global setting.
 - C/C++ consumers do not redundantly re-check platform/core constraints already guaranteed by CMake.
