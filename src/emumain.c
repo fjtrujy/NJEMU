@@ -233,7 +233,7 @@ static void show_battery_warning(void)
 
 void emu_main(void)
 {
-#if defined(ADHOC) && (EMU_SYSTEM == MVS)
+#ifdef ADHOC
 	int save_neogeo_bios = neogeo_bios;
 #endif
 
@@ -243,7 +243,7 @@ void emu_main(void)
 	machine_main();
 	sound_thread_exit();
 
-#if defined(ADHOC) && (EMU_SYSTEM == MVS)
+#ifdef ADHOC
 	if (adhoc_enable)
 		neogeo_bios = save_neogeo_bios;
 #endif

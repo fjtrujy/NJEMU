@@ -64,9 +64,9 @@ Initial candidates:
 
 For each option:
 
-- [ ] Define valid platforms/cores.
-- [ ] Define dependencies/conflicts.
-- [ ] Reject unsupported explicit requests rather than silently ignoring them.
+- [x] Define valid platforms/cores for the audited boolean capabilities.
+- [x] Define dependencies/conflicts for the audited boolean capabilities.
+- [x] Reject unsupported explicit requests rather than silently ignoring them.
 - [ ] Remove redundant platform/core preprocessor checks from consumers only after the CMake invariant exists.
 
 ## Milestone C5 — Preprocessor audit
