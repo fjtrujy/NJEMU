@@ -124,6 +124,8 @@ typedef struct psvita_video {
 
     hw_recorder_t rec;
     bool pending_flip;
+    hw_xform_t last_present_xform;
+    bool last_present_valid;
 
     /*
      * The display scene: opened by the first draw of a frame (present, fill,
@@ -549,6 +551,8 @@ static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst
 
     if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, &d, &m))
         return;
+    v->last_present_xform = m;
+    v->last_present_valid = true;
     hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
 
     /*
@@ -881,6 +885,51 @@ static void v2d_ui_texture(psvita_video_t *v, const void *pixels, SceGxmTextureF
                            int bpp, int tex_stride, int su, int sv, int sw, int sh,
                            int dx, int dy, int dw, int dh, bool copy, bool clip);
 
+static bool v2d_capture_front_to_scratch(psvita_video_t *v, const RECT *src,
+                                        const RECT *dst, bool rotate)
+{
+    const int sw = src->right - src->left;
+    const int sh = src->bottom - src->top;
+    const int dw = dst->right - dst->left;
+    const int dh = dst->bottom - dst->top;
+    const uint32_t *fb;
+    uint16_t *scratch;
+
+    if (v->scratch == NULL || !v->last_present_valid || sw <= 0 || sh <= 0 ||
+        dw <= 0 || dh <= 0 || dst->left < 0 || dst->top < 0 ||
+        dst->right > V2D_SCRATCH_WIDTH || dst->bottom > V2D_SCRATCH_HEIGHT)
+        return false;
+
+    vita2d_wait_rendering_done();
+    fb = vita2d_get_current_fb();
+    scratch = (uint16_t *)vita2d_texture_get_datap(v->scratch);
+    if (fb == NULL || scratch == NULL)
+        return false;
+
+    for (int y = 0; y < dh; y++) {
+        uint16_t *out = scratch + (size_t)(dst->top + y) * V2D_SCRATCH_WIDTH + dst->left;
+        for (int x = 0; x < dw; x++) {
+            float sx, sy, px, py;
+            if (rotate) {
+                sx = src->left + ((y + 0.5f) * sw / dh);
+                sy = src->bottom - ((x + 0.5f) * sh / dw);
+            } else {
+                sx = src->left + ((x + 0.5f) * sw / dw);
+                sy = src->top + ((y + 0.5f) * sh / dh);
+            }
+            hw_map_point(&v->last_present_xform, sx, sy, &px, &py);
+            int ix = (int)px;
+            int iy = (int)py;
+            if (ix < 0) ix = 0;
+            if (iy < 0) iy = 0;
+            if (ix >= PSVITA_DISPLAY_WIDTH) ix = PSVITA_DISPLAY_WIDTH - 1;
+            if (iy >= PSVITA_DISPLAY_HEIGHT) iy = PSVITA_DISPLAY_HEIGHT - 1;
+            out[x] = hw_rgba_to_555(fb[(size_t)iy * PSVITA_DISPLAY_WIDTH + ix]);
+        }
+    }
+    return true;
+}
+
 static void psvita_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 {
     psvita_video_t *v = data;
@@ -915,9 +964,10 @@ static void psvita_copyRect(void *data, int srcIndex, int dstIndex,
         || dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER;
 
     if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
-        if (dst_display)
+        if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+            v2d_capture_front_to_scratch(v, src_rect, dst_rect, false);
+        else if (dst_display)
             v2d_present(v, src_rect, dst_rect, HW_ORIENT_NORMAL);
-        /* SCREEN_BITMAP -> INITIAL (save state thumbnails) is not supported. */
     } else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER
                && dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
         /*
@@ -967,6 +1017,10 @@ static void psvita_copyRectRotate(void *data, int srcIndex, int dstIndex,
 
     if (srcIndex != COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
         return;
+    if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+        v2d_capture_front_to_scratch(v, src_rect, dst_rect, true);
+        return;
+    }
 
     v2d_present(v, src_rect, dst_rect,
         v->pending_flip ? HW_ORIENT_ROTATE_FLIP : HW_ORIENT_ROTATE);
