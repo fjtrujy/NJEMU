@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -23,6 +23,18 @@ jobs:
         save_state: [OFF]
         gui: [OFF, ON]
         include:
+          - target: MVS
+            use_cache: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            use_cache: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
           - target: CPS1
             command_list: ON
             adhoc: OFF
@@ -73,6 +85,14 @@ jobs:
         apk add build-base git bash python3
     
 
+    - name: Resolve cache override
+      run: |
+        if [ -n "${{ matrix.use_cache }}" ]; then
+          echo "NJEMU_CACHE_ARG=-DUSE_CACHE=${{ matrix.use_cache }}" >> "$GITHUB_ENV"
+        else
+          echo "NJEMU_CACHE_ARG=" >> "$GITHUB_ENV"
+        fi
+
     - name: Compile project
       run: |
         mkdir build
@@ -80,6 +100,7 @@ jobs:
         cmake -DPLATFORM="PSP" \
           -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
           -DTARGET="${{ matrix.target }}" \
+          $NJEMU_CACHE_ARG \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
@@ -118,5 +139,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/

@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }} IRXIMG=${{ matrix.external_irx }} FAST_CACHE=${{ matrix.fast_cache }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }} IRXIMG=${{ matrix.external_irx }} FAST_CACHE=${{ matrix.fast_cache }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,6 +30,22 @@ jobs:
           - adhoc: ON
             save_state: FALSE
         include:
+          - target: MVS
+            use_cache: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            external_irx: OFF
+            fast_cache: OFF
+          - target: CPS2
+            use_cache: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            external_irx: OFF
+            fast_cache: OFF
           - target: CPS1
             command_list: ON
             adhoc: OFF
@@ -137,6 +153,14 @@ jobs:
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_bootstrap.elf"
 
+    - name: Resolve cache override
+      run: |
+        if [ -n "${{ matrix.use_cache }}" ]; then
+          echo "NJEMU_CACHE_ARG=-DUSE_CACHE=${{ matrix.use_cache }}" >> "$GITHUB_ENV"
+        else
+          echo "NJEMU_CACHE_ARG=" >> "$GITHUB_ENV"
+        fi
+
     - name: Compile project
       run: |
         mkdir build
@@ -144,6 +168,7 @@ jobs:
         cmake -DPLATFORM="PS2" \
           -DCMAKE_TOOLCHAIN_FILE=$PS2DEV/share/ps2dev.cmake \
           -DTARGET="${{ matrix.target }}" \
+          $NJEMU_CACHE_ARG \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
@@ -162,5 +187,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}-irximg_${{ matrix.external_irx }}-fast_cache_${{ matrix.fast_cache }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}-irximg_${{ matrix.external_irx }}-fast_cache_${{ matrix.fast_cache }}
         path: build/install/

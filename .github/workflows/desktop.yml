@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -29,6 +29,20 @@ jobs:
           - adhoc: ON
             save_state: FALSE
         include:
+          - target: MVS
+            use_cache: ON
+            os: ubuntu-latest
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+          - target: CPS2
+            use_cache: ON
+            os: ubuntu-latest
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
           - os: ubuntu-latest
             target: CPS1
             command_list: ON
@@ -79,6 +93,14 @@ jobs:
         brew update
         brew install cmake sdl2 mad
 
+    - name: Resolve cache override
+      run: |
+        if [ -n "${{ matrix.use_cache }}" ]; then
+          echo "NJEMU_CACHE_ARG=-DUSE_CACHE=${{ matrix.use_cache }}" >> "$GITHUB_ENV"
+        else
+          echo "NJEMU_CACHE_ARG=" >> "$GITHUB_ENV"
+        fi
+
     - name: Compile project
       run: |
         set -o pipefail
@@ -86,6 +108,7 @@ jobs:
         cd build
         cmake -DPLATFORM="DESKTOP" \
           -DTARGET="${{ matrix.target }}" \
+          $NJEMU_CACHE_ARG \
           -DCOMMAND_LIST=${{ matrix.command_list }} \
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
@@ -109,5 +132,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.os }}-${{ matrix.target }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.os }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state${{ matrix.save_state }}-gui_${{ matrix.gui }}
         path: build/install/
