@@ -12,5 +12,7 @@
 /* UI texture management needs the SDL renderer owned by the video backend, but
  * must not depend on the backend's private state layout. */
 void *desktop_video_get_renderer(void *video_data);
+void desktop_video_select_backend(int backend);
+int desktop_video_backend_count(void);
 
 #endif /* DESKTOP_VIDEO_H */

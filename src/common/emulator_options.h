@@ -8,7 +8,16 @@ extern int option_speedlimit;
 extern int option_vsync;
 extern int option_display_mode;
 extern int option_video_output_mode;
+extern int option_video_backend;
 extern int option_cache_read_size;
+
+enum
+{
+	VIDEO_BACKEND_AUTO = 0,
+	VIDEO_BACKEND_NATIVE,
+	VIDEO_BACKEND_OPENGL,
+	VIDEO_BACKEND_COUNT
+};
 
 enum
 {

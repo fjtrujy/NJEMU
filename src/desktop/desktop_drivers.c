@@ -7,6 +7,8 @@
 #include "common/ticker_driver.h"
 #include "common/ui_draw_driver.h"
 #include "common/video_driver.h"
+#include "common/emulator_options.h"
+#include "desktop/desktop_video.h"
 
 extern audio_driver_t audio_desktop;
 extern input_driver_t input_desktop;
@@ -26,5 +28,27 @@ const power_driver_t *const power_driver = &power_unsupported;
 thread_driver_t *const thread_driver = &thread_desktop;
 ticker_driver_t *const ticker_driver = &ticker_desktop;
 video_driver_t *video_driver = &video_desktop_sdl;
+
+void desktop_video_select_backend(int backend)
+{
+#ifdef HAVE_VIDEO_BACKEND_OPENGL
+    if (backend == VIDEO_BACKEND_OPENGL) {
+        video_driver = &video_desktop_gl;
+        return;
+    }
+#else
+    (void)backend;
+#endif
+    video_driver = &video_desktop_sdl;
+}
+
+int desktop_video_backend_count(void)
+{
+#ifdef HAVE_VIDEO_BACKEND_OPENGL
+    return 2;
+#else
+    return 1;
+#endif
+}
 
 const ui_draw_driver_t *const ui_draw_driver = &desktop_ui_draw_driver;

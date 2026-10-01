@@ -144,6 +144,8 @@ static cfg_type default_options[] =
 {
 	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   , 0},
+	{ CFG_NONE,	"[Video Backend]", 0, 0, 0, 0},
+	{ CFG_INT,	"VideoBackend",	&option_video_backend,	VIDEO_BACKEND_AUTO,	VIDEO_BACKEND_COUNT - 1, 0},
 #if USE_CACHE
 	{ CFG_NONE,	"[Performance Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"CacheReadSize",	&option_cache_read_size,	CACHE_READ_SIZE_AUTO,	CACHE_READ_SIZE_COUNT - 1, 0},
