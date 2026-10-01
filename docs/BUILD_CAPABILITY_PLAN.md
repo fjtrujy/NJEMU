@@ -39,12 +39,12 @@ After C1 is functional, define defaults deliberately rather than deriving capabi
 
 ## Milestone C3 — Cache-related capability cleanup
 
-- [ ] `PS2_FAST_CACHE`: require PS2 and `USE_CACHE`; C consumers should not repeat core checks.
-- [ ] `PS2_DIRTY_SPRITE_UPLOADS`: encode its PS2/MVS contract in CMake instead of silently ignoring invalid requests.
-- [ ] `CACHE_IO_PROFILE`: document and validate its exact dependencies.
-- [ ] `CACHE_IO_FORCE_SEEK`: document and validate its exact dependencies.
-- [ ] `CACHE_IO_VALIDATE_ACCELERATED`: require the accelerated backend it validates.
-- [ ] Add configure-time negative tests for invalid combinations where practical.
+- [x] `PS2_FAST_CACHE`: require PS2 and `USE_CACHE`; C consumers should not repeat core checks.
+- [x] `PS2_DIRTY_SPRITE_UPLOADS`: encode its PS2/MVS contract in CMake instead of silently ignoring invalid requests.
+- [x] `CACHE_IO_PROFILE`: require compiled cache support.
+- [x] `CACHE_IO_FORCE_SEEK`: require MVS streaming cache support.
+- [x] `CACHE_IO_VALIDATE_ACCELERATED`: require PS2/MVS streaming cache and the accelerated backend.
+- [x] Exercise configure-time rejection for representative invalid cache-feature combinations during this audit.
 
 ## Milestone C4 — General feature/capability audit
 
