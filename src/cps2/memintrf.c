@@ -255,7 +255,9 @@ static int load_rom_gfx1_full_resident(void)
 static int load_rom_gfx1(void)
 {
 	uint32_t planned_gfx_length = memory_length_gfx1;
+#if USE_CACHE
 	memory_plan_t streaming_plan;
+#endif
 	memory_probe_constraints_t constraints;
 	game_memory_requirements_t requirements;
 
@@ -292,6 +294,7 @@ static int load_rom_gfx1(void)
 	cps2_memory_plan_valid = memory_plan_allocate_shape(&requirements, &constraints,
 		&cps2_memory_shape);
 
+#if USE_CACHE
 	/* A partial CPS2 allocation backs the compact streaming cache, not the full
 	 * decoded GFX image. Re-probe against that real payload ceiling if necessary. */
 	if (cps2_memory_plan_valid && !cps2_memory_shape.plan.gfx_fully_resident &&
@@ -302,6 +305,7 @@ static int load_rom_gfx1(void)
 		cps2_memory_plan_valid = memory_plan_allocate_shape(&requirements, &constraints,
 			&cps2_memory_shape);
 	}
+#endif
 
 	if (cps2_memory_plan_valid)
 	{
@@ -337,6 +341,7 @@ static int load_rom_gfx1(void)
 		msg_printf(TEXT(TRY_TO_USE_SPRITE_CACHE));
 	}
 
+#if USE_CACHE
 	/* Streaming fallback. If a full-resident allocation failed, clamp the
 	 * request to the compact cache-file payload; cache_start() may still retry
 	 * down in 64 KiB blocks if fragmentation prevents that target. */
@@ -358,6 +363,14 @@ static int load_rom_gfx1(void)
 	}
 
 	return 1;
+#else
+	/* A no-cache build has no streaming fallback. The complete decoded GFX
+	 * region must fit in the allocation selected above. */
+	memory_allocation_shape_release(&cps2_memory_shape);
+	msg_printf(TEXT(MEMORY_NOT_ENOUGH));
+	Loop = LOOP_BROWSER;
+	return 0;
+#endif
 }
 
 
@@ -727,7 +740,9 @@ int memory_init(void)
 	cps2_memory_plan_valid = 0;
 	memset(&cps2_memory_shape, 0, sizeof(cps2_memory_shape));
 
+#if USE_CACHE
 	cache_init();
+#endif
 	pad_wait_clear();
 	video_driver->clearScreen(video_data);
 	msg_screen_init(WP_LOGO, ICON_SYSTEM, TEXT(LOAD_ROM));
@@ -905,7 +920,9 @@ int memory_init(void)
 
 void memory_shutdown(void)
 {
+#if USE_CACHE
 	cache_shutdown();
+#endif
 	memory_allocation_shape_release(&cps2_memory_shape);
 
 	if (gfx_pen_usage[TILE08]) free(gfx_pen_usage[TILE08]);

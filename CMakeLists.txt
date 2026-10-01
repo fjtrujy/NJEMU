@@ -99,8 +99,10 @@ option(USE_CACHE "Enable streaming cache support (MVS/CPS2 only)" ${USE_CACHE_DE
 if(USE_CACHE AND NOT ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2"))
     message(FATAL_ERROR "USE_CACHE is only supported for TARGET=MVS or TARGET=CPS2")
 endif()
-if(("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2") AND NOT USE_CACHE)
-    message(FATAL_ERROR "TARGET=${TARGET} requires USE_CACHE=ON")
+# MVS no-cache support is restored in the next C1 slice. Keep rejecting it
+# until that path is build- and runtime-complete rather than accepting a broken build.
+if("${TARGET}" STREQUAL "MVS" AND NOT USE_CACHE)
+    message(FATAL_ERROR "TARGET=MVS temporarily requires USE_CACHE=ON while C1 restores the full-resident path")
 endif()
 if(USE_CACHE)
     add_definitions(-DUSE_CACHE=1)
