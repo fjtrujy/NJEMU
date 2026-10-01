@@ -34,7 +34,7 @@ After C1 is functional, define defaults deliberately rather than deriving capabi
 - [ ] Audit actual RAM/runtime requirements for PSP, PS2, PS Vita, and Desktop.
 - [x] Select platform defaults without removing the supported override: PSP/PS2 cached, Vita/Desktop full-resident.
 - [x] Keep Vita/Desktop full-resident by default while retaining optional MVS/CPS2 cache fallback builds.
-- [ ] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit.
+- [ ] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit. Local PSP/PS2 MVS+CPS2 cache ON/OFF builds pass; CI now covers platform defaults plus opposite cache overrides and is the Vita/full matrix gate.
 - [x] Keep demand-read-size `Auto` policy independent from whether cache support is compiled.
 
 ## Milestone C3 — Cache-related capability cleanup
@@ -76,7 +76,7 @@ Search compound conditions such as `FEATURE && PLATFORM`, `FEATURE && EMU_SYSTEM
 - [x] Remove audited conditions that only repeat a CMake invariant.
 - [x] Preserve conditions that select genuinely different core/platform behavior.
 - [x] Prefer positive capability names over indirect platform inference where a reusable capability exists.
-- [ ] Run strict builds/tests after each focused cleanup rather than performing a repository-wide mechanical rewrite.
+- [x] Run strict builds/tests after each focused cleanup rather than performing a repository-wide mechanical rewrite.
 
 ## Completion criteria
 
