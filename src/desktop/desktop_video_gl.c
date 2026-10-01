@@ -36,6 +36,7 @@
 #define GLD_CANVAS_HEIGHT	544
 #define GLD_WORK_WIDTH		SCR_WIDTH
 #define GLD_WORK_HEIGHT		SCR_HEIGHT
+#define GLD_UI_SCRATCH_HEIGHT	160
 
 #define GLD_MAX_TEXTURE_DIM	4096
 #define GLD_MAX_PAGES		4
@@ -261,6 +262,8 @@ typedef struct desktop_gl_video {
 	GLuint ui_fill_tex;
 	GLuint ui_vbo;
 	RECT ui_clip;
+	uint16_t *ui_scratch;
+	GLuint ui_scratch_tex;
 } desktop_gl_video_t;
 
 
@@ -498,6 +501,21 @@ static void gld_upload(desktop_gl_video_t *g)
 		g->vertices, GL_STREAM_DRAW);
 }
 
+static void gld_bind_vertex_buffer(desktop_gl_video_t *g, GLuint buffer)
+{
+	gl.BindVertexArray(g->vao);
+	gl.BindBuffer(GL_ARRAY_BUFFER, buffer);
+	gl.EnableVertexAttribArray(0);
+	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(hw_vertex_t),
+		(const void *)offsetof(hw_vertex_t, u));
+	gl.EnableVertexAttribArray(1);
+	gl.VertexAttribPointer(1, 2, GL_SHORT, GL_FALSE, sizeof(hw_vertex_t),
+		(const void *)offsetof(hw_vertex_t, x));
+	gl.EnableVertexAttribArray(2);
+	gl.VertexAttribPointer(2, 2, GL_UNSIGNED_SHORT, GL_FALSE, sizeof(hw_vertex_t),
+		(const void *)offsetof(hw_vertex_t, z));
+}
+
 static void gld_set_depth(uint8_t mode)
 {
 	if (mode == HW_DEPTH_OFF) {
@@ -511,7 +529,7 @@ static void gld_set_depth(uint8_t mode)
 
 static void gld_replay(desktop_gl_video_t *g, const float row_x[3], const float row_y[3])
 {
-	gl.BindVertexArray(g->vao);
+	gld_bind_vertex_buffer(g, g->vbo);
 	gl.Enable(GL_BLEND);
 	gl.BlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA);
 
@@ -690,6 +708,9 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 	gld_texture_params();
 	gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	gl.GenBuffers(1, &g->ui_vbo);
+	g->ui_scratch = calloc((size_t)BUF_WIDTH * GLD_UI_SCRATCH_HEIGHT, sizeof(uint16_t));
+	if (g->ui_scratch != NULL)
+		g->ui_scratch_tex = gld_create_texture(BUF_WIDTH, GLD_UI_SCRATCH_HEIGHT, false);
 
 	/* Recorder memory: vertex chunks and CLUT chunks, uploaded per present. */
 	g->vertices = malloc((size_t)GLD_MAX_CHUNKS * HW_CHUNK_QUADS * 4 * sizeof(hw_vertex_t));
@@ -703,16 +724,7 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 	gl.GenVertexArrays(1, &g->vao);
 	gl.BindVertexArray(g->vao);
 	gl.GenBuffers(1, &g->vbo);
-	gl.BindBuffer(GL_ARRAY_BUFFER, g->vbo);
-	gl.EnableVertexAttribArray(0);
-	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(hw_vertex_t),
-		(const void *)offsetof(hw_vertex_t, u));
-	gl.EnableVertexAttribArray(1);
-	gl.VertexAttribPointer(1, 2, GL_SHORT, GL_FALSE, sizeof(hw_vertex_t),
-		(const void *)offsetof(hw_vertex_t, x));
-	gl.EnableVertexAttribArray(2);
-	gl.VertexAttribPointer(2, 2, GL_UNSIGNED_SHORT, GL_FALSE, sizeof(hw_vertex_t),
-		(const void *)offsetof(hw_vertex_t, z));
+	gld_bind_vertex_buffer(g, g->vbo);
 
 	uint16_t *indices = malloc(GLD_DRAW_MAX_QUADS * 6 * sizeof(uint16_t));
 	if (indices == NULL)
@@ -783,6 +795,7 @@ static void desktop_gl_free(void *data)
 		if (g->ui_tex) gl.DeleteTextures(1, &g->ui_tex);
 		if (g->ui_fill_tex) gl.DeleteTextures(1, &g->ui_fill_tex);
 		if (g->ui_vbo) gl.DeleteBuffers(1, &g->ui_vbo);
+		if (g->ui_scratch_tex) gl.DeleteTextures(1, &g->ui_scratch_tex);
 		gl.DeleteTextures(1, &g->dump_color);
 		gl.DeleteRenderbuffers(1, &g->dump_depth);
 		gl.DeleteFramebuffers(1, &g->dump_fbo);
@@ -802,6 +815,7 @@ static void desktop_gl_free(void *data)
 	free(g->vertices);
 	free(g->cluts);
 	free(g->layers);
+	free(g->ui_scratch);
 	free(g);
 }
 
@@ -821,7 +835,6 @@ static void desktop_gl_flipScreen(void *data, bool vsync)
 
 	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
 	SDL_GL_SwapWindow(g->window);
-	gld_reset_frame(g);
 
 	if (g->stats && ++g->stat_frames == 300) {
 		const float n = (float)g->stat_frames;
@@ -845,11 +858,74 @@ static void desktop_gl_endFrame(void *data)
 
 static void *desktop_gl_frameAddr(void *data, int frameIndex, int x, int y)
 {
-	(void)data;
-	(void)frameIndex;
-	(void)x;
-	(void)y;
-	return NULL;
+	desktop_gl_video_t *g = data;
+
+	if (frameIndex != COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER || g->ui_scratch == NULL ||
+		x < 0 || y < 0 || x >= BUF_WIDTH || y >= GLD_UI_SCRATCH_HEIGHT)
+		return NULL;
+	return g->ui_scratch + (size_t)y * BUF_WIDTH + x;
+}
+
+static int gld_read_work_rgba(desktop_gl_video_t *g, int x, int y, int width, int height,
+	uint8_t *pixels)
+{
+	const float row_x[3] = { 2.0f / GLD_WORK_WIDTH, 0.0f, -1.0f };
+	const float row_y[3] = { 0.0f, -2.0f / GLD_WORK_HEIGHT, 1.0f };
+
+	if (pixels == NULL || x < 0 || y < 0 || width <= 0 || height <= 0 ||
+		x + width > GLD_WORK_WIDTH || y + height > GLD_WORK_HEIGHT)
+		return 0;
+	hw_rec_flush(&g->rec);
+	gld_upload(g);
+	gl.BindFramebuffer(GL_FRAMEBUFFER, g->dump_fbo);
+	gl.Viewport(0, 0, GLD_WORK_WIDTH, GLD_WORK_HEIGHT);
+	gl.Disable(GL_SCISSOR_TEST);
+	gl.ClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	gl.ClearDepth(1.0);
+	gl.DepthMask(GL_TRUE);
+	gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	gld_replay(g, row_x, row_y);
+	gl.PixelStorei(GL_PACK_ALIGNMENT, 1);
+	gl.ReadPixels(x, GLD_WORK_HEIGHT - (y + height), width, height, GL_RGBA,
+		GL_UNSIGNED_BYTE, pixels);
+	gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+	return 1;
+}
+
+static int desktop_gl_readFrame(void *data, int frameIndex, int x, int y, int width, int height,
+	uint16_t *dst, int dstPitch)
+{
+	desktop_gl_video_t *g = data;
+
+	if (dst == NULL || dstPitch < width || width <= 0 || height <= 0 || x < 0 || y < 0)
+		return 0;
+	if (frameIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		if (g->ui_scratch == NULL || x + width > BUF_WIDTH ||
+			y + height > GLD_UI_SCRATCH_HEIGHT)
+			return 0;
+		for (int row = 0; row < height; row++)
+			memcpy(dst + (size_t)row * dstPitch,
+				g->ui_scratch + (size_t)(y + row) * BUF_WIDTH + x,
+				(size_t)width * sizeof(uint16_t));
+		return 1;
+	}
+	if (frameIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER) {
+		uint8_t *rgba = malloc((size_t)width * height * 4);
+		if (rgba == NULL || !gld_read_work_rgba(g, x, y, width, height, rgba)) {
+			free(rgba);
+			return 0;
+		}
+		for (int row = 0; row < height; row++) {
+			/* glReadPixels is bottom-up. */
+			const uint8_t *src = rgba + (size_t)(height - 1 - row) * width * 4;
+			for (int col = 0; col < width; col++)
+				dst[(size_t)row * dstPitch + col] =
+					(uint16_t)(0x8000 | MAKECOL15(src[col * 4], src[col * 4 + 1], src[col * 4 + 2]));
+		}
+		free(rgba);
+		return 1;
+	}
+	return 0;
 }
 
 /* The canvas plays the Vita display: the frame is laid out on 960x544. */
@@ -889,7 +965,10 @@ static void desktop_gl_clearFrame(void *data, int index)
 	 * display surface used by the common GUI. */
 	if (index == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
 		hw_rec_fill(&g->rec, &g->rec.work, 0, HW_DEPTH_OFF);
-	else {
+	else if (index == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		if (g->ui_scratch != NULL)
+			memset(g->ui_scratch, 0, (size_t)BUF_WIDTH * GLD_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
+	} else {
 		desktop_gl_clearDisplay(0);
 		g->draw_fill = 0xff000000u;
 	}
@@ -910,6 +989,7 @@ static void desktop_gl_fillFrame(void *data, int frameIndex, uint32_t color)
 static void desktop_gl_startWorkFrame(void *data, uint32_t color)
 {
 	desktop_gl_video_t *g = data;
+	gld_reset_frame(g);
 	g->pending_flip = false;
 	g->screen_fill_valid = false;
 	hw_rec_begin_work(&g->rec, hw_rgba_to_555(color));
@@ -934,6 +1014,49 @@ static void desktop_gl_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_r
 	gld_present(g, src_rect, dst_rect, HW_ORIENT_NORMAL);
 }
 
+static int gld_capture_to_scratch(desktop_gl_video_t *g, const RECT *src_rect,
+	const RECT *dst_rect, bool rotate)
+{
+	const int sw = src_rect->right - src_rect->left;
+	const int sh = src_rect->bottom - src_rect->top;
+	const int dw = dst_rect->right - dst_rect->left;
+	const int dh = dst_rect->bottom - dst_rect->top;
+	uint8_t *rgba;
+
+	if (g->ui_scratch == NULL || sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 ||
+		dst_rect->left < 0 || dst_rect->top < 0 || dst_rect->right > BUF_WIDTH ||
+		dst_rect->bottom > GLD_UI_SCRATCH_HEIGHT)
+		return 0;
+	rgba = malloc((size_t)sw * sh * 4);
+	if (rgba == NULL)
+		return 0;
+	if (!gld_read_work_rgba(g, src_rect->left, src_rect->top, sw, sh, rgba)) {
+		free(rgba);
+		return 0;
+	}
+
+	for (int y = 0; y < dh; y++) {
+		uint16_t *dst = g->ui_scratch +
+			(size_t)(dst_rect->top + y) * BUF_WIDTH + dst_rect->left;
+		for (int x = 0; x < dw; x++) {
+			int sx, sy;
+			if (rotate) {
+				sx = (y * sw) / dh;
+				sy = sh - 1 - (x * sh) / dw;
+			} else {
+				sx = (x * sw) / dw;
+				sy = (y * sh) / dh;
+			}
+			const uint8_t *c = rgba + ((size_t)(sh - 1 - sy) * sw + sx) * 4;
+			dst[x] = (uint16_t)(0x8000 | MAKECOL15(c[0], c[1], c[2]));
+		}
+	}
+	free(rgba);
+	return 1;
+}
+
+static void gld_draw_scratch(desktop_gl_video_t *g, const RECT *src_rect, const RECT *dst_rect);
+
 static void desktop_gl_copyRect(void *data, int srcIndex, int dstIndex, RECT *src_rect,
 								RECT *dst_rect)
 {
@@ -942,8 +1065,12 @@ static void desktop_gl_copyRect(void *data, int srcIndex, int dstIndex, RECT *sr
 		dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER;
 
 	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
-		if (dst_display)
+		if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+			gld_capture_to_scratch(g, src_rect, dst_rect, false);
+		else if (dst_display)
 			desktop_gl_transferWorkFrame(g, src_rect, dst_rect);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER && dst_display) {
+		gld_draw_scratch(g, src_rect, dst_rect);
 	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER &&
 			dstIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP) {
 		/* GUI background caching. Without UI_DRAW_CAP_CACHE_CHROME the cached
@@ -982,6 +1109,10 @@ static void desktop_gl_copyRectRotate(void *data, int srcIndex, int dstIndex, RE
 
 	if (srcIndex != COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
 		return;
+	if (dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
+		gld_capture_to_scratch(g, src_rect, dst_rect, true);
+		return;
+	}
 	gld_present(g, src_rect, dst_rect,
 		g->pending_flip ? HW_ORIENT_ROTATE_FLIP : HW_ORIENT_ROTATE);
 	g->pending_flip = false;
@@ -990,11 +1121,10 @@ static void desktop_gl_copyRectRotate(void *data, int srcIndex, int dstIndex, RE
 static void desktop_gl_drawTexture(void *data, int srcIndex, int dstIndex,
 								   RECT *src_rect, RECT *dst_rect)
 {
-	(void)data;
-	(void)srcIndex;
-	(void)dstIndex;
-	(void)src_rect;
-	(void)dst_rect;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER &&
+		(dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER ||
+		 dstIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER))
+		gld_draw_scratch(data, src_rect, dst_rect);
 }
 
 
@@ -1127,12 +1257,8 @@ static void gld_ui_setup(desktop_gl_video_t *g, GLuint texture, int tex_w, int t
 	gl.Uniform4f(p->u_tex_scale, 1.0f / tex_w, 1.0f / tex_h, 0.0f, 0.0f);
 	gl.ActiveTexture(GL_TEXTURE0);
 	gl.BindTexture(GL_TEXTURE_2D, texture);
-	gl.BindVertexArray(g->vao);
-	gl.BindBuffer(GL_ARRAY_BUFFER, g->ui_vbo);
+	gld_bind_vertex_buffer(g, g->ui_vbo);
 	gl.BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)count * sizeof(*vertices), vertices, GL_STREAM_DRAW);
-	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, u));
-	gl.VertexAttribPointer(1, 2, GL_SHORT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, x));
-	gl.VertexAttribPointer(2, 2, GL_UNSIGNED_SHORT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, z));
 	gl.DrawArrays(mode, 0, count);
 }
 
@@ -1144,6 +1270,24 @@ static bool gld_ui_quad(const RECT *clip, hw_vertex_t q[4], int x0, int y0, int 
 	hw_write_quad(q, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
 		u0, v0, u1, v1, 0, 0);
 	return true;
+}
+
+static void gld_draw_scratch(desktop_gl_video_t *g, const RECT *src_rect, const RECT *dst_rect)
+{
+	hw_vertex_t q[4];
+
+	if (g->ui_scratch == NULL || g->ui_scratch_tex == 0 ||
+		!gld_ui_quad(&g->ui_clip, q, dst_rect->left, dst_rect->top,
+			dst_rect->right, dst_rect->bottom, src_rect->left, src_rect->top,
+			src_rect->right, src_rect->bottom))
+		return;
+	gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	gl.ActiveTexture(GL_TEXTURE0);
+	gl.BindTexture(GL_TEXTURE_2D, g->ui_scratch_tex);
+	gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, BUF_WIDTH, GLD_UI_SCRATCH_HEIGHT,
+		GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, g->ui_scratch);
+	gld_ui_setup(g, g->ui_scratch_tex, BUF_WIDTH, GLD_UI_SCRATCH_HEIGHT, q, 4,
+		GL_TRIANGLE_FAN, 0);
 }
 
 static void desktop_gl_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
@@ -1208,7 +1352,7 @@ static void desktop_gl_drawUILine(void *data, int x1, int y1, int x2, int y2, ui
 		if (y2 < y1) { int t = y1; y1 = y2; y2 = t; }
 		gld_ui_fill(g, x1, y1, 1, y2 - y1, color, color, color, color);
 	} else {
-		/* Basic GUI-off paths do not require diagonal lines; keep them visible. */
+		/* Preserve diagonal UI separators with the same immediate path. */
 		hw_vertex_t v[2] = { { .u=0.5f,.v=0.5f,.x=x1,.y=y1 }, { .u=0.5f,.v=0.5f,.x=x2,.y=y2 } };
 		uint32_t pixels[4] = { color, color, color, color };
 		gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
@@ -1274,7 +1418,7 @@ video_driver_t video_desktop_gl = {
 	.beginFrame = desktop_gl_beginFrame,
 	.endFrame = desktop_gl_endFrame,
 	.frameAddr = desktop_gl_frameAddr,
-	.readFrame = NULL,
+	.readFrame = desktop_gl_readFrame,
 	.getOutputSize = desktop_gl_getOutputSize,
 	.scissor = desktop_gl_scissor,
 	.clearScreen = desktop_gl_clearScreen,
