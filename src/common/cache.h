@@ -59,6 +59,13 @@ void cache_shutdown(void);
 void cache_sleep(int flag);
 
 #if (EMU_SYSTEM == MVS)
+/* PCM decoder addresses nibbles; cache keys address byte-sized parts. */
+#ifdef MVS_PCM_PARTIAL_READS
+#define PCM_CACHE_SHIFT 14
+#else
+#define PCM_CACHE_SHIFT 16
+#endif
+#define PCM_CACHE_MASK ((1u << PCM_CACHE_SHIFT) - 1)
 uint8_t *pcm_cache_read(uint16_t new_block);
 void pcm_cache_update(uint16_t block);
 #endif

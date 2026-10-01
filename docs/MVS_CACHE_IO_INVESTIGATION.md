@@ -2155,3 +2155,323 @@ plan/reserva e informacion de memoria de plataforma. El ELF generado es
 reserva de 1024 KiB e IRX embebidos. La prueba anterior en PCSX2 solo llego al
 splash mediante `host:`; no confirma arranque de MSLUG3, gameplay ni rendimiento
 de USB/MX4SIO. Queda pendiente esa validacion de runtime.
+
+
+## 35. Metricas para la prueba real con ps2link
+
+Build dedicada: `build_ps2_mvs_external_metrics`, con `CACHE_IO_PROFILE=ON`,
+`CACHE_IO_VALIDATE_ACCELERATED=OFF`, fast cache, dirty uploads y reserva de
+1024 KiB. Empaquetado externo: `BOOT.ELF`, `MVS`, `elf_path.ini` y
+`ps2_drivers.irximg`. No se han cambiado inicializacion ni transporte ps2link;
+es necesario adaptar el lanzamiento a sus restricciones antes de ejecutarlo.
+
+Los contadores se acumulan en memoria y se imprimen despues de una lectura de
+runtime, como maximo una vez cada cinco segundos, y al cerrar el cache. Ya no
+se imprime cada 16 misses. Si no hay misses, no hay snapshots periodicos.
+Cada snapshot indica tiempo monotono en microsegundos y contiene C-ROM y PCM.
+Los valores son acumulados desde cache_init; restar snapshots para comparar
+intervalos. El tiempo entre snapshots incluye menus, pausas y el propio logging.
+
+- `accelerated_reads` y `posix_reads`: lecturas de runtime por cada camino;
+  `accelerated_fallbacks` cuenta fallos del acelerador, tambien durante preload.
+  El open informa si se activo extent reader o si se usa POSIX.
+- `wait_us`, `avg_miss_us`, `max_miss_us`, `timed_reads`: tiempo EE dentro de
+  la operacion de lectura, incluido seek y fallback cuando corresponda. No
+  incluye decode, dibujo ni printf; no es tiempo interno del dispositivo.
+- `latency_lt1_4_16_64_ge64_ms`: cinco intervalos disjuntos: [0,1), [1,4),
+  [4,16), [16,64), [64,infinito) ms, solo lecturas runtime cronometradas.
+- `reloads`: misses sobre bloques que ya se intentaron cargar, incluido preload.
+  Sirve para detectar relecturas; con errores puede incluir reintentos, y no
+  identifica por si solo la causa de eviction. Usa 256 bytes por tipo de cache.
+- `errors`: seeks fallidos o lecturas POSIX incompletas/fallidas en runtime.
+  Un fallo acelerado recuperado por POSIX aparece en fallbacks, no errors.
+- Hits, misses, misses consecutivos, bytes y metricas preload se conservan.
+
+El profiler cubre el cache MVS raw de C-ROM y PCM; no mide cache comprimido ZIP.
+No agrega lecturas de validacion, prefetch ni cambios en la politica de cache.
+El logging aun puede perturbar gameplay, aunque queda fuera del tiempo medido;
+comparar despues con una build sin profiling. Se verificaron con reloj simulado
+los limites de buckets, relecturas, reset y throttle usando el codigo real del
+profiler; la validacion de transporte/logs en PS2 sigue pendiente.
+
+
+## 36. Primera captura real por ps2link (2026-09-30)
+
+Build NO_GUI con IRX embebidos, profiling, reserva 1024 KiB y dirty uploads.
+El usuario preparo `mass:/NJEMU/MVS_cache/game_name.ini` con `mslug3`; su ajuste
+local cambia cwd a ese directorio y evita SifIopReset para mantener ps2link.
+El log detecta MX4SIO sdc1 y arranca MSLUG3. No hubo inspeccion visual remota.
+
+Se encontro un fallo de integracion: las rutas relativas `cache/.../crom` y
+`vrom` iban literalmente al RPC, sin la resolucion de cwd que hace libc open.
+Resultado: `Unknown device`, extent open -19 y fallback POSIX. Se corrigio
+`ps2_cache_storage_open` usando `__path_absolute` de PS2SDK antes de cacheioOpen.
+Esto iguala la normalizacion del backend POSIX, tambien para rutas ya absolutas.
+La siguiente ejecucion confirma extent reader enabled para PCM y C-ROM, los
+203 reads de preload acelerados y cero lecturas POSIX/fallbacks en los snapshots.
+No se puede concluir que todas las builds anteriores sufrieran este fallo:
+depende de si llegaban rutas relativas o absolutas al adaptador.
+
+Muestras de arranque (no benchmark pareado ni comparacion de FPS):
+
+| Camino | Misses C-ROM | Media / max C-ROM | Misses PCM | Media / max PCM |
+|---|---:|---:|---:|---:|
+| POSIX, snapshot 33.32 s | 33 | 50.17 / 99.04 ms | 8 | 97.09 / 211.57 ms |
+| cacheio, snapshot 32.13 s | 34 | 43.28 / 80.27 ms | 8 | 71.00 / 147.92 ms |
+| cacheio, snapshot 43.06 s | 51 | 44.17 / 82.87 ms | 14 | 68.32 / 147.92 ms |
+
+En la ultima muestra cacheio se acumulan 2.253 s de espera C-ROM y 0.957 s
+PCM, sin errores ni reloads de runtime. Esto apunta inicialmente a misses de
+bloques nuevos, no a thrashing demostrado. Un hit rate C-ROM de 99.65% no
+impide parones: cada miss cuesta decenas de milisegundos. El siguiente trabajo
+requiere atender tanto PCM como sprites y distinguir tiempo de dispositivo,
+fragmentacion y RPC/DMA antes de atribuir toda la latencia al medio.
+
+Logs locales de esta sesion: `/tmp/njemu-mslug3-ps2link-metrics.log` (POSIX) y
+`/tmp/njemu-mslug3-cacheio-metrics.log` (corregido). El segundo cliente se deja
+escuchando para poder recoger mas gameplay; no se ha automatizado input.
+
+
+La captura continuo hasta snapshot_us=134991321 antes de un apagado accidental
+reportado por el usuario. Ultimos acumulados de runtime:
+
+- C-ROM: 192 misses, 198684 hits, 42.797 ms media, 82.868 ms maximo,
+  8.217080 s de espera; 8 reloads, 39 misses secuenciales.
+- PCM: 24 misses, 514 hits, 59.810 ms media, 147.915 ms maximo,
+  1.435451 s de espera; cero reloads.
+- Los 216 reads runtime fueron acelerados, sin POSIX, fallbacks ni errores.
+
+Se conservaron los logs pese al apagado y se cerro el cliente anterior. Esta
+muestra es suficiente para priorizar la investigacion de latencia por miss;
+no acredita gameplay visual ni representa un benchmark controlado. Solo 8 de
+192 misses C-ROM son relecturas de bloques previamente solicitados: ampliar
+cache no puede eliminar la mayoria de misses nuevos observados en este tramo.
+
+
+## 37. Desglose IOP medido en hardware (2026-09-30)
+
+Se anadio a ps2_drivers `cacheioGetStats`: consulta/activa contadores por handle,
+reiniciados al abrir y sin printf en el IOP. Clientes normales no activan los
+relojes. Un proxy BDM local cuenta llamadas y tiempos, reenviando al callback
+con el puntero original del dispositivo; no modifica dispositivos registrados.
+NJEMU consulta los contadores fuera del timer de lectura, en sus snapshots.
+La cabecera nueva `cacheio-profile.h` evita colision con cabeceras cacheio del
+antiguo prototipo instalado en PS2SDK. El protocolo previo no cambia; un servidor
+anterior responde -EINVAL a la nueva consulta.
+
+`device_us` mide la duracion del callback de dispositivo, incluyendo locks,
+esperas, transformaciones y posibles retries internos; no mide solo el bus.
+`defrag_us` INCLUYE device_us. `total_us` incluye busqueda BDM, defrag y envio
+SIF, pero no la espera previa del cliente EE ni la devolucion RPC.
+`dma_us` cubre preparacion, encolado y espera SIF. Los acumulados IOP incluyen
+preload; comparar deltas para runtime. Las consultas C-ROM/PCM no son una foto
+atomica entre threads. Contadores de tiempo/reads completados excluyen requests
+fallidos, mientras que device_calls puede incluirlos; se expone errors.
+
+Captura `/tmp/njemu-mslug3-iop-breakdown.log`, snapshot 49.38 s:
+
+| Handle | Reads | Device calls | Sectores/call min-max | Fragments | Device us | Defrag us | DMA us | Total us |
+|---|---:|---:|---|---:|---:|---:|---:|---:|
+| C-ROM | 212 | 212 | 128-128 | 1 | 8415862 | 8432792 | 177609 | 8631655 |
+| PCM | 63 | 63 | 128-128 | 1 | 2498260 | 2502962 | 55783 | 2565037 |
+
+Todas las lecturas son 64 KiB, sin errores. Media C-ROM: dispositivo 39.697 ms,
+SIF 0.838 ms, total IOP 40.715 ms. PCM: 39.655, 0.885 y 40.715 ms.
+El dispositivo ocupa aproximadamente 97.5% del tiempo IOP de estas muestras.
+Eliminar totalmente la fase SIF ahorraria menos de 1 ms por bloque en promedio;
+no explica ni resolveria los aproximadamente 40 ms del callback MX4SIO.
+
+Hallazgos del codigo:
+
+- cacheio lee al buffer IOP y hace SIF DMA directamente al slot final EE:
+  no hay memcpy intermedio en EE ni copia completa dentro de cacheio.
+- bd_defrag_read solo divide por extents y avanza el puntero del buffer;
+  en esta muestra no divide las peticiones.
+- MX4SIO recibe por DMA SIO2 en ese buffer, por sectores; procesa eventos y
+  revierte los bits de cada byte in-place con reverse_buffer. Puede esperar
+  locks compartidos de SIO2 y ejecutar retries. Todavia no se ha separado el
+  tiempo de cada una de esas fases.
+- USB tiene otro recorrido y puede dividir por scsi->max_sectors; estos datos
+  NO permiten extrapolar los resultados MX4SIO a USB.
+- EE PCM media runtime 72.930 ms (15 misses) frente a unos 40.7 ms IOP/read;
+  cliente RPC compartido y WaitSema son candidatos a explicar parte del exceso.
+  Aun no se ha medido la espera EE por separado: no atribuirlo como causa probada.
+
+Siguiente paso: instrumentar lock SIO2, CMD18/token/eventos, reverse_buffer y
+retries dentro de MX4SIO, y espera del semaforo/RPC del cliente EE. No se ha
+introducido doble buffer ni cambiado el reloj SIO2, CRC o algoritmo de lectura.
+La build se valido cargandola por ps2link y leyendo estos contadores en MSLUG3.
+
+
+## 38. Experimentos MX4SIO y lecturas parciales (2026-09-30)
+
+La opcion de build SDK `MX4SIO_READ_PROFILE=1` separa lock SIO2, CMD18/token,
+transferencia/eventos, reverse_buffer y CMD12. Imprime una muestra cada 64
+lecturas; por defecto esta desactivada. El tiempo reverse se solapa con DMA y
+puede incluir interrupciones: NO sumarlo al tiempo data. Muestras de 128
+sectores: lock 54-253 us, begin 374-399 us, data 38.5 ms, reverse 13.1-13.3 ms,
+end unos 48 us, un intento, ningun sector pendiente. No hay evidencia en esta
+muestra de que un lock SIO2 largo o retries expliquen los 40 ms.
+
+Se probo despertar el hilo de reversal cada ocho sectores. Redujo los wakes
+por lectura de unos 122-127 a 16, pero data siguio alrededor de 38.2-38.9 ms.
+Las lecturas de ocho sectores empeoraron de unos 2.6 a 3.4 ms. El cambio se
+retiro; se conserva la politica original. Logs: `/tmp/njemu-mx-batch1.log` y
+`/tmp/njemu-mx-batch8.log`.
+
+Se extendio cacheioGetStats con tiempos EE separados: semaforo, writeback de
+cache y RPC, activados solo en profiling. En snapshot 32.60 s, PCM tiene 56
+reads (48 preload + 8 runtime), lock_us=213222, flush_us=745, rpc_us=2344085;
+la espera del semaforo al final de preload era 180 us. La serializacion del
+cliente contribuye materialmente a la espera PCM. Se inicializa completamente
+la estructura ee_sema_t para no pasar atributos indeterminados al kernel.
+
+### Prototipo PS2_CROM_PARTIAL_READS
+
+Opcion NJEMU OFF por defecto. En MVS raw, cada slot sigue ocupando 64 KiB, pero
+cuatro bits de validez indican cuales de sus cuartos de 16 KiB estan cargados.
+Un miss demanda solo el cuarto que contiene el tile de 128 bytes solicitado.
+Los hits y el LRU conservan el mapping de slots; al reutilizar un slot se
+invalidan sus cuatro partes. El preload sigue leyendo 64 KiB y marca todos los
+cuartos validos. PCM y formatos comprimidos no cambian. No se regeneran caches.
+No se afirma un aumento de capacidad util: el slot sigue reservado completo.
+
+Los contadores misses/reloads/sequential_misses C-ROM de esta variante cuentan
+partes de 16 KiB; los de PCM conservan bloques de 64 KiB. Comparar bytes y
+espera total, no interpretar una diferencia en numero de misses como regresion
+por si sola. La linea inicial identifica demanda 16384 y slot 65536.
+
+Test `tests/mvs_partial_cache_tests.py`: compila la funcion real del lector con
+storage simulado y dos slots; cubre hits, carga de otra parte, eviction,
+fallo/reintento y 10000 tiles pseudoaleatorios. Pasan siete tests seleccionados
+de renderer y memoria en desktop. Compilan las builds PS2 de referencia y
+experimental con IRX embebidos.
+
+Validacion hardware con CACHE_IO_VALIDATE_ACCELERATED=ON: se encontraron
+mismatches PCM causados por el buffer de comparacion compartido con C-ROM.
+Se separaron ambos buffers por stream y se repitio: snapshot 142.54 s registra
+612 comparaciones C-ROM y 71 PCM, todas sin diferencias. Incluye 459 lecturas
+parciales C-ROM de runtime. Este modo compara cada lectura acelerada con POSIX,
+y sus tiempos NO son validos para rendimiento. Logs anteriores al arreglo:
+`/tmp/njemu-partial16-validate.log`; posteriores:
+`/tmp/njemu-partial16-validate-separate.log`.
+
+Se hizo rebase de memoryImprovements sobre polish (96b8379), conservando las
+correcciones de compilacion de polish y los cambios locales. Las comparaciones
+de rendimiento posteriores se deben hacer sobre esa misma base y con la
+validacion byte a byte desactivada. Las muestras de validacion citadas son
+anteriores al rebase; los cambios de cache se conservaron.
+
+
+### Comparacion sin validacion sobre polish
+
+Ambas builds sobre 96b8379, NO_GUI, IRX embebidos, profiling, PCM 3072 KiB,
+C-ROM 9472 KiB (148 slots) y mismo arranque de MSLUG3 sin input automatizado.
+Se conserva la politica original de avisos MX4SIO. El modo de 16 KiB queda
+OFF por defecto; activado en `build_ps2_mvs_partial16_metrics/MVS.ELF`.
+
+Snapshots con exactamente 14611 accesos al cache grafico:
+
+| Variante | Misses runtime | Bytes runtime | Espera runtime | Media/miss | Maximo/miss |
+|---|---:|---:|---:|---:|---:|
+| 64 KiB | 51 | 3342336 | 2281520 us | 44735 us | 78703 us |
+| 16 KiB | 104 | 1703936 | 1607413 us | 15455 us | 55003 us |
+
+En este punto se lee 49.0% menos y la espera grafica acumulada baja 29.5%.
+Las dos ejecuciones tienen cero fallbacks/errores. No interpretar esto como
+29.5% mas FPS ni extrapolar a otras escenas: solo se compararon estos tramos
+con igual numero de accesos, no un replay determinista con frame pacing medido.
+La media cae mucho mas que el acumulado porque aumenta el numero de misses.
+En un tramo posterior cercano a 167000 accesos, el ahorro acumulado es menor
+(aprox. 4.66 frente a 4.00 s; conteos de acceso no exactamente iguales).
+
+PCM no se ha dividido en partes; sus consumidores necesitan una revision de
+limites distinta. Puede seguir causando esperas de unos 40 ms y bloquear una
+lectura grafica. No se ha cambiado su orden/prioridad ni anadido I/O asincrono.
+
+La prueba de sprite uploads se adapto a polish: tras invalidar, comprueba que
+se sube el atlas realmente elegido, sin asumir slot/capa cero (polish agrupa
+tiles relacionados). Pasan de nuevo los siete tests seleccionados despues del
+rebase. Se compilo tambien MX4SIO con profiling desactivado, sin instalar esa
+variante sobre los drivers de diagnostico usados en esta comparacion.
+
+Logs copiados a `build_ps2_mvs_partial16_metrics/measurements/` para conservar
+las capturas fuera de /tmp. La captura de la variante parcial sin validacion esta en
+`/tmp/njemu-polish-partial16.log`.
+
+La captura extendida llega a snapshot_us=174620760: 219057 accesos graficos,
+575 misses C-ROM y 25 PCM de runtime, todos acelerados, sin errores ni
+fallbacks. C-ROM registra 14.150 ms de media y 55.003 ms de maximo; 545 de
+sus 575 lecturas quedan por debajo de 16 ms. PCM sigue en 45.132 ms de
+media. Esta captura mide rendimiento, no comparacion byte a byte; la
+validacion de contenido es la ejecucion separada citada arriba. No hay
+una referencia de 64 KiB con exactamente estos mismos accesos para calcular
+un ahorro comparable en este ultimo punto.
+
+### Experimento PCM parcial (2026-10-01)
+
+`PS2_PCM_PARTIAL_READS` (OFF por defecto) extiende las lecturas bajo demanda de
+16 KiB al PCM. Los slots, el presupuesto de RAM y el preload siguen siendo de
+64 KiB. Cada slot mantiene cuatro bits de validez. ADPCM-A y ADPCM-B usan
+`PCM_CACHE_SHIFT` para renovar el puntero al cruzar cada parte de 16 KiB y
+limitan el offset con `PCM_CACHE_MASK`; cambiar solo el lector seria incorrecto
+porque los decodificadores conservarian el puntero durante 64 KiB.
+
+Un fallo deja la parte invalida y rellena esa parte con ceros; una nueva llamada
+al lector puede reintentar. No se promete reintento por cada byte: el consumidor
+conserva su puntero hasta cambiar de parte. El modo no cambia la sincronizacion,
+prioridades, formato del archivo ni la politica de asignacion de slots.
+Los contadores PCM de misses/reloads pasan a contar partes, igual que C-ROM.
+
+`mvs_pcm_partial_tests.py` compila la funcion PCM real con almacenamiento
+simulado: hits, distintas partes, eviction, fallo/reintento, 10000 claves
+pseudoaleatorias y recorrido secuencial de bytes por limites de 16 y 64 KiB.
+Pasan los ocho tests seleccionados. Compilan tanto PCM parcial como el modo
+original sin esa opcion. Builds de prueba con NO_GUI e IRX embebidos:
+`build_ps2_mvs_pcm16_metrics/MVS.ELF` y
+`build_ps2_mvs_pcm16_validate/MVS.ELF` (comparacion POSIX, no usar sus tiempos).
+
+Validacion en PS2/MX4SIO: snapshot 90.99 s, 423 comparaciones C-ROM y 79 PCM
+(31 PCM de runtime), cero diferencias, errores o fallbacks. Log:
+`njemu-pcm16-validate.log`. El modo de validacion reserva mas RAM y obtiene
+146 slots graficos; las dos capturas de rendimiento siguientes tienen 148.
+
+Comparacion con C-ROM parcial activado en ambos casos, PCM 3072 KiB, misma
+base polish y validacion OFF. En el punto de 14611 accesos graficos:
+
+| PCM demand | Misses PCM | Bytes PCM | Espera PCM | Media PCM | Maximo PCM | Espera C-ROM |
+|---|---:|---:|---:|---:|---:|---:|
+| 64 KiB | 14 | 917504 | 649670 us | 46405 us | 54764 us | 1607413 us |
+| 16 KiB | 22 | 360448 | 328257 us | 14920 us | 21614 us | 1478277 us |
+
+La espera PCM cae 49.5% y los bytes 60.7% en este punto. A 102927 accesos
+graficos, PCM pasa de 824603 a 460660 us de espera (44.1% menos), con 18 frente
+a 31 misses. C-ROM tiene 266 misses y 4358144 bytes en ambas capturas en ese
+punto. No son replays deterministas ni prueban mejora de FPS, calidad subjetiva
+del audio o rendimiento USB. Los tiempos de C-ROM y PCM pueden solaparse entre
+hilos: no sumar sus esperas como si fueran tiempo de frame.
+
+Captura anterior: `njemu-polish-partial16.log`; nueva:
+`njemu-pcm16-metrics.log`. Copias conservadas junto a la build nueva en
+`build_ps2_mvs_pcm16_metrics/measurements/`. La mejora queda experimental,
+activada en esa build y OFF por defecto. No implementa prefetch ni asincronia.
+
+Rebase posterior sobre polish 8686b3a: ocho tests seleccionados pasan y la
+build PS2 recompila. Se conserva el test de atlas de polish, que ya incluye
+su correccion. El primer arranque fallo con `bad message count`: los paquetes
+de idioma instalados en mass: preceden los nuevos textos de polish. Se anadio
+`PS2LINK_HOST_TRANSLATIONS` (OFF por defecto), activado solo en esta build,
+para cargar `host:/lang/*.lng` generados junto al ELF. ROM y cache siguen en
+mass:. El segundo arranque supera la inicializacion del texto y llega a
+Checking BIOS. Log: `/tmp/njemu-polish-8686b3a-hostlang.log`.
+
+Diagnostico tras reporte de imagen monocroma/triplicada y retorno al OSD:
+el log hostlang muestra cleanup normal antes de cargar ROMs (cero lecturas
+de cache), sin excepcion registrada. El selector usa circulo para confirmar
+y cruz para cancelar; cancelar con NO_GUI puede terminar la aplicacion.
+Se anadieron trazas del selector y del modo GS, y la opcion diagnostica
+PS2LINK_FORCE_480I (OFF por defecto, ON en esta build). El nuevo arranque
+registra modo configurado=1 (480i), por lo que no confirma la hipotesis de
+un modo 480p guardado. Completa la carga de mslug3, inicializa audio y empieza
+lecturas runtime sin errores. Falta confirmacion visual del usuario; no se
+considera solucionado el sintoma de imagen. Log: /tmp/njemu-polish-480i-diag.log.

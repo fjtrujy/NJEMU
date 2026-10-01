@@ -85,6 +85,12 @@ static cache_t *tail;
 
 static int num_cache;
 static uint16_t ALIGN16_DATA blocks[MAX_CACHE_BLOCKS];
+#ifdef MVS_CROM_PARTIAL_READS
+/* Slots and file format remain 64 KiB. Each bit describes one valid 16 KiB
+ * quarter. A decoded sprite tile is 128-byte aligned and never crosses it. */
+static uint8_t crom_valid_parts[MAX_CACHE_BLOCKS];
+#define CROM_PART_SIZE (CACHE_BLOCK_SIZE / 4)
+#endif
 static int32_t cache_fd;
 static zip_archive_t cache_zip_archive;
 static zip_entry_t cache_zip_entry;
@@ -140,13 +146,16 @@ static cache_t *pcm_tail;
 static int num_pcm_cache;
 
 static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
+#ifdef MVS_PCM_PARTIAL_READS
+static uint8_t pcm_valid_parts[MAX_PCM_BLOCKS];
+#endif
 static int32_t pcm_fd;
 static int64_t cache_file_pos;
 static int64_t pcm_file_pos;
 static int cache_storage_handle = -1;
 static int pcm_storage_handle = -1;
 #ifdef CACHE_IO_VALIDATE_ACCELERATED
-static uint8_t ALIGN16_DATA cache_validation_buffer[CACHE_BLOCK_SIZE];
+static uint8_t ALIGN16_DATA cache_validation_buffers[2][CACHE_BLOCK_SIZE];
 #endif
 
 static int cachefile_open_resolved(int type, char *resolved_path, size_t resolved_size)
@@ -225,12 +234,20 @@ static int cache_storage_open_optional(const char *path, const char *name)
 	int handle;
 
 	if (cache_storage_driver == NULL || cache_storage_driver->open == NULL ||
-		cache_storage_driver->readAt == NULL || cache_storage_driver->close == NULL)
+		cache_storage_driver->readAt == NULL || cache_storage_driver->close == NULL) {
+#ifdef CACHE_IO_PROFILE
+		printf("[cache-io] %s extent reader unavailable; using POSIX\n", name);
+#endif
 		return -1;
+	}
 
 	handle = cache_storage_driver->open(path);
 	if (handle >= 0)
 		printf("[cache-io] %s extent reader enabled\n", name);
+#ifdef CACHE_IO_PROFILE
+	else
+		printf("[cache-io] %s extent open failed (%d); using POSIX\n", name, handle);
+#endif
 	return handle;
 }
 
@@ -310,11 +327,19 @@ typedef struct cache_io_profile_s
 	uint64_t bytes_read;
 	uint64_t miss_time_us;
 	uint64_t max_miss_time_us;
+	uint64_t timed_reads;
+	uint64_t posix_reads;
+	uint64_t errors;
+	uint64_t reloads;
+	uint64_t validation_checks, validation_errors;
+	uint64_t latency[5]; /* <1, <4, <16, <64, >=64 ms */
+	uint8_t seen[MAX_CACHE_BLOCKS * 4 / 8];
 	int32_t last_miss_block;
 } cache_io_profile_t;
 
 static cache_io_profile_t crom_io_profile;
 static cache_io_profile_t pcm_io_profile;
+static uint64_t cache_io_last_report_us;
 
 static uint64_t cache_io_now_us(void)
 {
@@ -327,11 +352,15 @@ static void cache_io_profile_reset(cache_io_profile_t *profile)
 {
 	memset(profile, 0, sizeof(*profile));
 	profile->last_miss_block = -1;
+	cache_io_last_report_us = cache_io_now_us();
 }
 
 static void cache_io_profile_miss(cache_io_profile_t *profile, int block)
 {
 	profile->misses++;
+	if (block >= 0 && block < (int)(sizeof(profile->seen) * 8) &&
+		(profile->seen[block >> 3] & (1u << (block & 7))))
+		profile->reloads++;
 	if (profile->last_miss_block >= 0 && block == profile->last_miss_block + 1)
 		profile->sequential_misses++;
 	profile->last_miss_block = block;
@@ -345,6 +374,9 @@ static void cache_io_profile_time(cache_io_profile_t *profile, uint64_t start)
 		return;
 
 	elapsed = cache_io_now_us() - start;
+	profile->timed_reads++;
+	profile->latency[elapsed < 1000 ? 0 : elapsed < 4000 ? 1 :
+		elapsed < 16000 ? 2 : elapsed < 64000 ? 3 : 4]++;
 	profile->miss_time_us += elapsed;
 	if (elapsed > profile->max_miss_time_us)
 		profile->max_miss_time_us = elapsed;
@@ -353,7 +385,7 @@ static void cache_io_profile_time(cache_io_profile_t *profile, uint64_t start)
 static void cache_io_profile_print(const char *name, const cache_io_profile_t *profile)
 {
 	uint64_t accesses = profile->hits + profile->misses;
-	uint64_t avg_us = profile->misses ? profile->miss_time_us / profile->misses : 0;
+	uint64_t avg_us = profile->timed_reads ? profile->miss_time_us / profile->timed_reads : 0;
 	uint64_t rate_x100 = accesses ? (profile->hits * 10000) / accesses : 0;
 
 	printf("[cache-io] %s preload_reads=%llu preload_seeks=%llu "
@@ -362,7 +394,9 @@ static void cache_io_profile_print(const char *name, const cache_io_profile_t *p
 		"hits=%llu misses=%llu hit_rate=%llu.%02llu%% "
 		"sequential_misses=%llu seeks=%llu seek_skips=%llu "
 		"accelerated_reads=%llu accelerated_fallbacks=%llu bytes=%llu "
-		"avg_miss_us=%llu max_miss_us=%llu\n",
+		"avg_miss_us=%llu max_miss_us=%llu "
+		"wait_us=%llu timed_reads=%llu posix_reads=%llu errors=%llu reloads=%llu "
+		"latency_lt1_4_16_64_ge64_ms=%llu,%llu,%llu,%llu,%llu validation_checks=%llu validation_errors=%llu\n",
 		name,
 		(unsigned long long)profile->preload_reads,
 		(unsigned long long)profile->preload_seeks,
@@ -381,43 +415,96 @@ static void cache_io_profile_print(const char *name, const cache_io_profile_t *p
 		(unsigned long long)profile->accelerated_fallbacks,
 		(unsigned long long)profile->bytes_read,
 		(unsigned long long)avg_us,
-		(unsigned long long)profile->max_miss_time_us);
+		(unsigned long long)profile->max_miss_time_us,
+		(unsigned long long)profile->miss_time_us,
+		(unsigned long long)profile->timed_reads,
+		(unsigned long long)profile->posix_reads,
+		(unsigned long long)profile->errors,
+		(unsigned long long)profile->reloads,
+		(unsigned long long)profile->latency[0],
+		(unsigned long long)profile->latency[1],
+		(unsigned long long)profile->latency[2],
+		(unsigned long long)profile->latency[3],
+		(unsigned long long)profile->latency[4],
+		(unsigned long long)profile->validation_checks,
+		(unsigned long long)profile->validation_errors);
 }
 
-static void cache_io_profile_snapshot(const cache_io_profile_t *profile)
+static void cache_io_profile_snapshot(void)
 {
-	if (profile->misses == 0 || (profile->misses & 15) != 0)
+	uint64_t now = cache_io_now_us();
+	/* Report after a completed read, at most once per five seconds. The read
+	 * timer excludes printf; cumulative counters also print at shutdown. */
+	if (!now || now - cache_io_last_report_us < 5000000ULL)
 		return;
-
-	cache_io_profile_print(profile == &pcm_io_profile ? "pcm" : "crom", profile);
+	/* Reserve this interval before printf/RPC can yield to the PCM thread. */
+	cache_io_last_report_us = now;
+	printf("[cache-io] snapshot_us=%llu block_bytes=%u cumulative=1\n",
+		(unsigned long long)now, (unsigned int)CACHE_BLOCK_SIZE);
+	cache_io_profile_print("crom", &crom_io_profile);
+	cache_io_profile_print("pcm", &pcm_io_profile);
+	if (cache_storage_driver && cache_storage_driver->profile) {
+		cache_storage_driver->profile(cache_storage_handle, "crom");
+		cache_storage_driver->profile(pcm_storage_handle, "pcm");
+	}
+	cache_io_last_report_us = cache_io_now_us();
 }
+
 #endif
 
-static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
-	uint16_t block, uint8_t *dst, const char *name
+static int mvs_cache_read_range(int fd, int *storage_handle, int64_t *known_pos,
+	uint16_t block, uint8_t *dst, const char *name, unsigned int within, unsigned int read_size
 #ifdef CACHE_IO_PROFILE
 	, cache_io_profile_t *profile, int runtime_miss
 #endif
 )
 {
-	const int64_t offset = (int64_t)block << BLOCK_SHIFT;
+	const int64_t offset = ((int64_t)block << BLOCK_SHIFT) + within;
 	ssize_t bytes;
+#ifdef CACHE_IO_VALIDATE_ACCELERATED
+	/* Graphics and PCM can validate concurrently on different EE threads. */
+	uint8_t *cache_validation_buffer = cache_validation_buffers[
+		storage_handle == &pcm_storage_handle ? 1 : 0];
+#endif
 #ifdef CACHE_IO_PROFILE
 	uint64_t start = cache_io_now_us();
+	/* Include preloaded blocks so their first runtime reload is visible. */
+#ifdef MVS_CROM_PARTIAL_READS
+	if (profile == &crom_io_profile) {
+		unsigned int part;
+		for (part = within / CROM_PART_SIZE; part < (within + read_size) / CROM_PART_SIZE; part++) {
+			unsigned int key = block * 4u + part;
+			if (key < sizeof(profile->seen) * 8)
+				profile->seen[key >> 3] |= (uint8_t)(1u << (key & 7));
+		}
+	} else
+#endif
+#ifdef MVS_PCM_PARTIAL_READS
+	if (profile == &pcm_io_profile) {
+		unsigned int part;
+		for (part = within / 16384; part < (within + read_size) / 16384; part++) {
+			unsigned int key = block * 4u + part;
+			if (key < sizeof(profile->seen) * 8)
+				profile->seen[key >> 3] |= (uint8_t)(1u << (key & 7));
+		}
+	} else
+#endif
+	if (block < MAX_CACHE_BLOCKS)
+		profile->seen[block >> 3] |= (uint8_t)(1u << (block & 7));
 #endif
 
 	if (storage_handle != NULL && *storage_handle >= 0 &&
 		cache_storage_driver != NULL && cache_storage_driver->readAt != NULL)
 	{
 		bytes = cache_storage_driver->readAt(*storage_handle, (uint64_t)offset,
-			dst, CACHE_BLOCK_SIZE);
-		if (bytes == CACHE_BLOCK_SIZE)
+			dst, read_size);
+		if (bytes >= 0 && (size_t)bytes == read_size)
 		{
 #ifdef CACHE_IO_VALIDATE_ACCELERATED
 			ssize_t reference_bytes;
 			size_t mismatch;
 
-			memcpy(cache_validation_buffer, dst, CACHE_BLOCK_SIZE);
+			memcpy(cache_validation_buffer, dst, read_size);
 			if (lseek(fd, offset, SEEK_SET) < 0)
 			{
 				printf("[cache-io-validate] %s block=%u offset=%lld reference seek failed\n",
@@ -425,22 +512,26 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 				*known_pos = -1;
 				return 0;
 			}
-			reference_bytes = read(fd, dst, CACHE_BLOCK_SIZE);
-			if (reference_bytes != CACHE_BLOCK_SIZE)
+			reference_bytes = read(fd, dst, read_size);
+			if (reference_bytes < 0 || (size_t)reference_bytes != read_size)
 			{
 				printf("[cache-io-validate] %s block=%u offset=%lld reference read=%d\n",
 					name, (unsigned int)block, (long long)offset, (int)reference_bytes);
 				*known_pos = -1;
 				return 0;
 			}
-			*known_pos = offset + CACHE_BLOCK_SIZE;
+			*known_pos = offset + read_size;
 
-			for (mismatch = 0; mismatch < CACHE_BLOCK_SIZE; ++mismatch)
+			for (mismatch = 0; mismatch < read_size; ++mismatch)
 			{
 				if (cache_validation_buffer[mismatch] != dst[mismatch])
 					break;
 			}
-			if (mismatch != CACHE_BLOCK_SIZE)
+#ifdef CACHE_IO_PROFILE
+			profile->validation_checks++;
+			if (mismatch != read_size) profile->validation_errors++;
+#endif
+			if (mismatch != read_size)
 			{
 				printf("[cache-io-validate] MISMATCH %s block=%u offset=%lld byte=%u accelerated=%02x posix=%02x\n",
 					name, (unsigned int)block, (long long)offset,
@@ -451,16 +542,16 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 			if (runtime_miss)
 			{
 				profile->accelerated_reads++;
-				profile->bytes_read += CACHE_BLOCK_SIZE;
+				profile->bytes_read += read_size;
 				cache_io_profile_time(profile, start);
-				cache_io_profile_snapshot(profile);
+				cache_io_profile_snapshot();
 			}
 			else
 			{
 				uint64_t elapsed = start ? cache_io_now_us() - start : 0;
 				profile->preload_reads++;
 				profile->preload_accelerated_reads++;
-				profile->preload_bytes += CACHE_BLOCK_SIZE;
+				profile->preload_bytes += read_size;
 				profile->preload_time_us += elapsed;
 			}
 #endif
@@ -486,6 +577,13 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 		if (lseek(fd, offset, SEEK_SET) < 0)
 		{
 			*known_pos = -1;
+#ifdef CACHE_IO_PROFILE
+			if (runtime_miss) {
+				profile->errors++;
+				cache_io_profile_time(profile, start);
+				cache_io_profile_snapshot();
+			}
+#endif
 			return 0;
 		}
 #ifdef CACHE_IO_PROFILE
@@ -506,19 +604,21 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 	}
 #endif
 
-	bytes = read(fd, dst, CACHE_BLOCK_SIZE);
-	if (bytes == CACHE_BLOCK_SIZE)
-		*known_pos = offset + CACHE_BLOCK_SIZE;
+	bytes = read(fd, dst, read_size);
+	if (bytes >= 0 && (size_t)bytes == read_size)
+		*known_pos = offset + read_size;
 	else
 		*known_pos = -1;
 
 #ifdef CACHE_IO_PROFILE
 	if (runtime_miss)
 	{
+		profile->posix_reads++;
+		if (bytes < 0 || (size_t)bytes != read_size) profile->errors++;
 		if (bytes > 0)
 			profile->bytes_read += (uint64_t)bytes;
 		cache_io_profile_time(profile, start);
-		cache_io_profile_snapshot(profile);
+		cache_io_profile_snapshot();
 	}
 	else
 	{
@@ -530,8 +630,24 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 	}
 #endif
 
-	return bytes == CACHE_BLOCK_SIZE;
+	return bytes >= 0 && (size_t)bytes == read_size;
 }
+
+static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
+	uint16_t block, uint8_t *dst, const char *name
+#ifdef CACHE_IO_PROFILE
+	, cache_io_profile_t *profile, int runtime_miss
+#endif
+)
+{
+	return mvs_cache_read_range(fd, storage_handle, known_pos, block, dst, name,
+		0, CACHE_BLOCK_SIZE
+#ifdef CACHE_IO_PROFILE
+		, profile, runtime_miss
+#endif
+	);
+}
+
 #endif
 
 
@@ -548,20 +664,53 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 
 uint8_t *pcm_cache_read(uint16_t new_block)
 {
+#ifdef MVS_PCM_PARTIAL_READS
+	const unsigned int part = new_block & 3;
+	const unsigned int within = part << PCM_CACHE_SHIFT;
+#ifdef CACHE_IO_PROFILE
+	const uint16_t key = new_block;
+#endif
+	new_block >>= 2;
+#endif
 	uint32_t idx = pcm_blocks[new_block];
 	cache_t *p;
 
 	if (idx == BLOCK_NOT_CACHED)
 	{
+		p = pcm_head;
+		pcm_blocks[p->block] = BLOCK_NOT_CACHED;
+		p->block = new_block;
+		pcm_blocks[new_block] = p->idx;
+#ifdef MVS_PCM_PARTIAL_READS
+		pcm_valid_parts[p->idx] = 0;
+#endif
+	}
+	else
+		p = &pcm_data[idx];
+
+#ifdef MVS_PCM_PARTIAL_READS
+	if (!(pcm_valid_parts[p->idx] & (1u << part)))
+	{
+#ifdef CACHE_IO_PROFILE
+		cache_io_profile_miss(&pcm_io_profile, key);
+#endif
+		uint8_t *dst = &memory_region_sound1[(p->idx << BLOCK_SHIFT) + within];
+		if (mvs_cache_read_range(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
+			new_block, dst, "pcm", within, 1u << PCM_CACHE_SHIFT
+#ifdef CACHE_IO_PROFILE
+			, &pcm_io_profile, 1
+#endif
+		))
+			pcm_valid_parts[p->idx] |= (uint8_t)(1u << part);
+		else
+			memset(dst, 0, 1u << PCM_CACHE_SHIFT);
+	}
+#else
+	if (idx == BLOCK_NOT_CACHED)
+	{
 #ifdef CACHE_IO_PROFILE
 		cache_io_profile_miss(&pcm_io_profile, new_block);
 #endif
-		p = pcm_head;
-		pcm_blocks[p->block] = BLOCK_NOT_CACHED;
-
-		p->block = new_block;
-		pcm_blocks[new_block] = p->idx;
-
 		mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
 			new_block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
 #ifdef CACHE_IO_PROFILE
@@ -569,13 +718,11 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 #endif
 		);
 	}
-	else
-	{
+#endif
 #ifdef CACHE_IO_PROFILE
+	else
 		pcm_io_profile.hits++;
 #endif
-		p = &pcm_data[idx];
-	}
 
 	if (p->frame != frames_displayed)
 	{
@@ -602,7 +749,11 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 		}
 	}
 
-	return &memory_region_sound1[p->idx << BLOCK_SHIFT];
+	return &memory_region_sound1[(p->idx << BLOCK_SHIFT)
+#ifdef MVS_PCM_PARTIAL_READS
+		+ within
+#endif
+	];
 }
 
 #endif
@@ -710,6 +861,9 @@ static int fill_cache(void)
 
 			p->block = block;
 			blocks[block] = p->idx;
+#ifdef MVS_CROM_PARTIAL_READS
+			crom_valid_parts[p->idx] = 0x0f;
+#endif
 
 				cache_rotate_head_to_tail(&head, &tail);
 			i++;
@@ -771,6 +925,9 @@ static int fill_cache(void)
 
 				p->block = block;
 				pcm_blocks[block] = p->idx;
+#ifdef MVS_PCM_PARTIAL_READS
+				pcm_valid_parts[p->idx] = 0x0f;
+#endif
 
 				cache_rotate_head_to_tail(&pcm_head, &pcm_tail);
 			i++;
@@ -875,6 +1032,42 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 	uint32_t idx = blocks[new_block];
 	cache_t *p;
 
+#ifdef MVS_CROM_PARTIAL_READS
+	unsigned int part = (offset & BLOCK_MASK) / CROM_PART_SIZE;
+	unsigned int within = part * CROM_PART_SIZE;
+	uint8_t bit = (uint8_t)(1u << part);
+	if (idx == BLOCK_NOT_CACHED) {
+		p = head;
+		blocks[p->block] = BLOCK_NOT_CACHED;
+		p->block = new_block;
+		blocks[new_block] = p->idx;
+		crom_valid_parts[p->idx] = 0;
+	} else {
+		p = &cache_data[idx];
+	}
+	if (!(crom_valid_parts[p->idx] & bit)) {
+#ifdef CACHE_IO_PROFILE
+		cache_io_profile_miss(&crom_io_profile, new_block * 4 + part);
+#endif
+		uint8_t *dst = &GFX_MEMORY[(p->idx << BLOCK_SHIFT) + within];
+		if (mvs_cache_read_range(cache_fd, &cache_storage_handle, &cache_file_pos,
+			new_block, dst, "crom", within, CROM_PART_SIZE
+#ifdef CACHE_IO_PROFILE
+			, &crom_io_profile, 1
+#endif
+		)) {
+			crom_valid_parts[p->idx] |= bit;
+		} else {
+			/* Keep invalid so the next access retries; never decode stale data. */
+			memset(dst, 0, CROM_PART_SIZE);
+		}
+	} else {
+#ifdef CACHE_IO_PROFILE
+		crom_io_profile.hits++;
+#endif
+	}
+#else
+
 	if (idx == BLOCK_NOT_CACHED)
 	{
 		p = head;
@@ -905,6 +1098,8 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 	#endif
 		p = &cache_data[idx];
 	}
+
+#endif
 
 	if (p->next)
 	{
@@ -1110,6 +1305,10 @@ void cache_init(void)
 
 	for (i = 0; i < MAX_CACHE_BLOCKS; i++)
 		blocks[i] = BLOCK_NOT_CACHED;
+#ifdef MVS_CROM_PARTIAL_READS
+	memset(crom_valid_parts, 0, sizeof(crom_valid_parts));
+	printf("[cache-io] C-ROM demand reads=16384 slot_bytes=65536\n");
+#endif
 
 #if (EMU_SYSTEM == MVS)
 	if (pcm_data)
@@ -1120,6 +1319,10 @@ void cache_init(void)
 	pcm_head = NULL;
 	pcm_tail = NULL;
 	num_pcm_cache = 0;
+#ifdef MVS_PCM_PARTIAL_READS
+	memset(pcm_valid_parts, 0, sizeof(pcm_valid_parts));
+	printf("[cache-io] PCM demand reads=16384 slot_bytes=65536\n");
+#endif
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
 	cache_file_pos = -1;

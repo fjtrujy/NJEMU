@@ -2317,8 +2317,8 @@ static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 			}
 			else
 			{
-				uint16_t block = ch->now_addr >> 17;
-				uint16_t offset = (ch->now_addr >> 1) & 0xffff;
+				uint16_t block = ch->now_addr >> (PCM_CACHE_SHIFT + 1);
+				uint16_t offset = (ch->now_addr >> 1) & PCM_CACHE_MASK;
 
 				if (ch->block != block)
 				{
@@ -2644,8 +2644,8 @@ static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 			}
 			else
 			{
-				uint16_t block  = adpcmb->now_addr >> 17;
-				uint16_t offset = (adpcmb->now_addr >> 1) & 0xffff;
+				uint16_t block  = adpcmb->now_addr >> (PCM_CACHE_SHIFT + 1);
+				uint16_t offset = (adpcmb->now_addr >> 1) & PCM_CACHE_MASK;
 
 				if (adpcmb->block != block)
 				{

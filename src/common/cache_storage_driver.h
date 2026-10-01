@@ -17,6 +17,7 @@ typedef struct cache_storage_driver
 	int (*open)(const char *path);
 	int (*readAt)(int handle, uint64_t offset, void *buffer, size_t size);
 	void (*close)(int handle);
+	void (*profile)(int handle, const char *name); /* Optional diagnostic snapshot. */
 } cache_storage_driver_t;
 
 extern const cache_storage_driver_t *const cache_storage_driver;
