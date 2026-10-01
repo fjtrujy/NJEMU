@@ -347,8 +347,8 @@ static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_
 	int *logical_width, int *logical_height)
 {
 	(void)data;
-	if (logical_width) *logical_width = output_width;
-	if (logical_height) *logical_height = output_height;
+	ui_layout_compute_responsive_size(output_width, output_height,
+		logical_width, logical_height);
 }
 
 /*------------------------------------------------------

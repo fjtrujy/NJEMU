@@ -73,6 +73,7 @@ static void test_aspect_preserving_viewport(void)
 int main(void)
 {
 	test_responsive_layout(480, 272, 480, 272, 11);
+	test_responsive_layout(640, 224, 778, 272, 11);
 	test_responsive_layout(640, 448, 480, 336, 14);
 	test_responsive_layout(640, 480, 480, 360, 16);
 	test_responsive_layout(720, 480, 480, 320, 14);
