@@ -84,7 +84,7 @@ For each option:
 
 ## Milestone C4b — Runtime video backend selection
 
-Desktop now compiles SDL and OpenGL 3.3 together by default and selects the active renderer at runtime. `USE_DESKTOP_GL` remains only as a focused build-capability switch for dependency/minimal-build validation. The UI/configuration model is platform-independent even when a platform currently has only one backend.
+Desktop compiles SDL and OpenGL 3.3 together by default and selects the active renderer at runtime. PS Vita now follows the same model when `USE_VITAGL=ON`: the native GXM/vita2d backend and vitaGL coexist in one binary and the global setting exposes `Auto`, `GXM`, and `VitaGL`. `USE_DESKTOP_GL` and `USE_VITAGL` remain compiled-capability switches rather than user renderer preferences.
 
 - [x] Refactor the Desktop video backends behind a common interface so SDL and OpenGL can coexist in one binary without duplicate public symbols or global ownership.
 - [x] Compile both Desktop backends by default when their dependencies are available; retain a CMake capability switch only where it is useful for dependency/minimal-build validation, not as the user's renderer preference.
@@ -92,10 +92,10 @@ Desktop now compiles SDL and OpenGL 3.3 together by default and selects the acti
 - [x] Add a global `Video backend` setting to the emulator menu on every platform. Keep this emulator-wide rather than per-game.
 - [x] Populate the setting from the backends compiled for the current platform instead of hardcoding a Desktop-only list. Desktop initially exposes `Auto`, `SDL`, and `OpenGL`; single-backend platforms expose their effective backend.
 - [x] Make the setting editable only when more than one selectable backend is compiled. On single-backend platforms keep the row visible but disabled/read-only so the active backend remains discoverable.
-- [x] Define deterministic `Auto` policy and startup fallback/error semantics. Desktop `Auto` currently resolves to SDL; single-backend platforms resolve to their native backend. An explicitly configured unavailable backend is reported at startup and falls back to `Auto`.
+- [x] Define deterministic `Auto` policy and startup fallback/error semantics. Desktop `Auto` resolves to SDL and Vita `Auto` resolves to native GXM; single-backend builds resolve to their native backend. An explicitly configured unavailable backend is reported at startup and falls back to `Auto`.
 - [x] Persist the backend setting in the global configuration using stable backend IDs. Keep translations/UI IDs deterministic across all platforms and gracefully resolve a configured backend that is unavailable in the current build.
 - [x] Make backend changes restart the emulator/video subsystem at a safe boundary; do not switch live while backend-owned GPU resources exist unless lifecycle correctness is demonstrated.
-- [x] Extend Desktop CI to build/test the dual-backend binary and retain a focused SDL-only Desktop build to catch accidental coupling.
+- [x] Extend Desktop CI to build/test the dual-backend binary and retain a focused SDL-only Desktop build to catch accidental coupling. Vita CI covers both GXM-only and dual GXM+vitaGL builds across all four cores with GUI ON/OFF.
 - [x] Add runtime smoke/regression coverage for SDL and OpenGL on representative CPS1/CPS2/MVS/NCDZ content, including GUI navigation and save-state thumbnail paths.
   - MVS/`mslug3` OpenGL validation covers GUI splash/browser, gameplay, main menu, save-state menu, save-state creation/thumbnail reload, and the `GUI=OFF` frame path. Its no-GUI frame-120 regression remains pixel-identical (0/68,096 differing pixels) after the GUI work. OpenGL UI uploads reuse a fixed RGBA8 atlas region so RGBA4444 glyph/shadow alpha precision is preserved while each sprite rectangle still uses one pitched transfer. CPS1/`ffight` and CPS2/`avsp` boot through the OpenGL no-GUI path, reach frame 120, and match SDL exactly (0/86,016 differing pixels for each); their OpenGL GUI browsers also render successfully. NCDZ/`MetalSlug2` now boots with the supplied CDZ BIOS through both backends and its frame-120 OpenGL/SDL output is also pixel-identical (0/68,096 differing pixels). NCDZ GUI validation additionally reaches gameplay with `aof3`, opens the save-state UI, creates a state, and reloads a non-empty 152x112 thumbnail (16,684/17,024 pixels contain RGB data).
 - [x] Document which renderer is active in diagnostics so performance/correctness comparisons are unambiguous.
@@ -116,5 +116,5 @@ Search compound conditions such as `FEATURE && PLATFORM`, `FEATURE && EMU_SYSTEM
 - MVS/CPS2 can be built with or without streaming cache support.
 - Feature macros describe compiled capabilities rather than platform identity.
 - Runtime policy remains responsible for choosing full-resident versus fallback behavior when both are compiled.
-- Every platform exposes the active video backend through the global emulator menu; builds with multiple backends can select it at runtime through a persisted global setting. Desktop can compile SDL and OpenGL together as the first multi-backend implementation.
+- Every platform exposes the active video backend through the global emulator menu; builds with multiple backends can select it at runtime through a persisted global setting. Desktop supports SDL/OpenGL coexistence and Vita supports native GXM/vitaGL coexistence when the vitaGL capability is compiled.
 - C/C++ consumers do not redundantly re-check platform/core constraints already guaranteed by CMake.
