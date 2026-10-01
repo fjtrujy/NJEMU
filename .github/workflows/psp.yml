@@ -55,18 +55,7 @@ jobs:
             adhoc: OFF
             save_state: ON
             gui: ON
-          # Translation-system fragility check: ADHOC used to participate in
-          # the conditional UI-text ID/table layout. NCDZ does not support it.
-          - target: CPS1
-            command_list: OFF
-            adhoc: ON
-            save_state: ON
-            gui: ON
-          - target: CPS2
-            command_list: OFF
-            adhoc: ON
-            save_state: ON
-            gui: ON
+          # ADHOC is an MVS-only PSP capability.
           - target: MVS
             command_list: OFF
             adhoc: ON

@@ -76,13 +76,13 @@ static RECT cps_presentation_rect(int native_width, int native_height)
 	int width;
 	int height;
 	RECT rect;
-	display_mode_t mode = (display_mode_t)option_display_mode;
+	int mode = option_display_mode;
 
 	if (mode < DISPLAY_MODE_ORIGINAL_SIZE || mode >= DISPLAY_MODE_COUNT)
 		mode = DISPLAY_MODE_ORIGINAL_ASPECT;
 	if (video_driver->getOutputSize)
 		video_driver->getOutputSize(video_data, &output_width, &output_height);
-	display_mode_size(mode, output_width, output_height,
+	display_mode_size((display_mode_t)mode, output_width, output_height,
 		native_width, native_height, &width, &height);
 
 	rect.left = (int16_t)((output_width - width) / 2);
