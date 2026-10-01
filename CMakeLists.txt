@@ -1134,9 +1134,10 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
                 src/mvs/sprite_common.c)
             target_include_directories(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
                 ${CMAKE_CURRENT_SOURCE_DIR}/src)
-            # This test exercises the streaming-cache sprite path regardless of
-            # the main binary's USE_CACHE setting.
-            target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE USE_CACHE=1)
+            # The test follows the selected build capability. In no-cache builds it
+            # verifies the direct full-resident sprite path instead.
+            target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
+                USE_CACHE=$<BOOL:${USE_CACHE}>)
             if(UPLOAD_MODE STREQUAL "dirty")
                 target_compile_definitions(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
                     MVS_DIRTY_SPRITE_UPLOADS=1)

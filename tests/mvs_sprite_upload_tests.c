@@ -87,7 +87,12 @@ int main(void)
     start_frame();
     sprite(0);
     blit_finish_spr();
-    assert(reads == 1 && uploads[0] == 1 && vertices_drawn == 2);
+#if USE_CACHE
+    assert(reads == 1);
+#else
+    assert(reads == 0);
+#endif
+    assert(uploads[0] == 1 && vertices_drawn == 2);
     /* Same tile next frame: draw it again but no texture upload or ROM read. */
     start_frame();
     sprite(0);
@@ -97,13 +102,23 @@ int main(void)
 #else
     assert(uploads[0] == 2);
 #endif
-    assert(reads == 1 && vertices_drawn == 4);
+#if USE_CACHE
+    assert(reads == 1);
+#else
+    assert(reads == 0);
+#endif
+    assert(vertices_drawn == 4);
     unsigned before = uploads[0];
     /* A later raster batch writes a new tile in the same atlas. */
     blit_start(FIRST_VISIBLE_LINE + 1, LAST_VISIBLE_LINE);
     sprite(1);
     blit_finish_spr();
-    assert(uploads[0] == before + 1 && reads == 2);
+    assert(uploads[0] == before + 1);
+#if USE_CACHE
+    assert(reads == 2);
+#else
+    assert(reads == 0);
+#endif
     /* Palette bank changes do not change indexed pixel data. */
     before = uploads[0];
     palette_bank = 1;
