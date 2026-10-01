@@ -833,6 +833,37 @@ static int load_rom_gfx2(void)
 }
 
 /*--------------------------------------------------------
+	GFX3 processed C-ROM loader
+--------------------------------------------------------*/
+
+static int load_processed_gfx3(void)
+{
+	char version[8] = {0};
+	size_t usage_size = memory_length_gfx3 / 128;
+
+	msg_printf(TEXT(LOADING_CACHE_INFORMATION_DATA));
+	if (!mvs_processed_info_read(version, gfx_pen_usage[2], usage_size))
+	{
+		error_file("cache/cache_info");
+		return 0;
+	}
+	if (strcmp(version, "MVS_" CACHE_VERSION) != 0)
+	{
+		msg_printf(TEXT(UNSUPPORTED_VERSION_OF_CACHE_FILE), version[5], version[6]);
+		msg_printf(TEXT(CURRENT_REQUIRED_VERSION_IS_x));
+		msg_printf(TEXT(PLEASE_REBUILD_CACHE_FILE));
+		return 0;
+	}
+
+	if (!mvs_processed_crom_read(memory_region_gfx3, memory_length_gfx3))
+	{
+		error_file("cache/crom");
+		return 0;
+	}
+	return 1;
+}
+
+/*--------------------------------------------------------
 	GFX3 (OBJ sprite ROM)
 --------------------------------------------------------*/
 
@@ -860,28 +891,38 @@ static int load_rom_gfx3(void)
 
 			memset(memory_region_gfx3, 0, memory_length_gfx3);
 
-			parent = strlen(parent_name) ? parent_name : NULL;
-
-			for (i = 0; i < num_gfx3rom; )
+			if (encrypt_gfx3)
 			{
-				strcpy(fname, gfx3rom[i].name);
-				if ((res = file_open(game_name, parent, gfx3rom[i].crc, fname)) < 0)
+				/* Encrypted C-ROM sets are converted offline. The processed crom is
+				 * already decrypted and decoded, so full-resident mode must consume
+				 * that asset just like the streaming cache path does. */
+				if (!load_processed_gfx3()) return 0;
+			}
+			else
+			{
+				parent = strlen(parent_name) ? parent_name : NULL;
+
+				for (i = 0; i < num_gfx3rom; )
 				{
-					if (res == ROM_FILE_OPEN_NOT_FOUND)
-						error_file(fname);
-					else
-						error_crc(fname);
-					return 0;
+					strcpy(fname, gfx3rom[i].name);
+					if ((res = file_open(game_name, parent, gfx3rom[i].crc, fname)) < 0)
+					{
+						if (res == ROM_FILE_OPEN_NOT_FOUND)
+							error_file(fname);
+						else
+							error_crc(fname);
+						return 0;
+					}
+
+					msg_printf(TEXT(LOADING), fname);
+
+					i = rom_load(gfx3rom, memory_region_gfx3, i, num_gfx3rom);
+
+					file_close();
 				}
 
-				msg_printf(TEXT(LOADING), fname);
-
-				i = rom_load(gfx3rom, memory_region_gfx3, i, num_gfx3rom);
-
-				file_close();
+				neogeo_decode_spr(memory_region_gfx3, memory_length_gfx3, gfx_pen_usage[2]);
 			}
-
-			neogeo_decode_spr(memory_region_gfx3, memory_length_gfx3, gfx_pen_usage[2]);
 			msg_printf(TEXT(CACHE_USAGE_CROM),
 				memory_length_gfx3 / 1024, memory_length_gfx3 / 1024);
 			return 1;

@@ -1,4 +1,7 @@
 #include <fcntl.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -82,4 +85,116 @@ size_t mvs_processed_asset_zip_read(int type, const char *name, void *buf, size_
     }
     zip_archive_close(&archive);
     return bytes;
+}
+
+
+static bool processed_asset_read_exact_fd(int fd, void *dst, size_t size)
+{
+    uint8_t *out = dst;
+    size_t done = 0;
+
+    while (done < size)
+    {
+        ssize_t got = read(fd, out + done, size - done);
+        if (got <= 0)
+            return false;
+        done += (size_t)got;
+    }
+    return true;
+}
+
+static bool processed_asset_open_zip(int type, zip_archive_t *archive)
+{
+    char path[PATH_MAX];
+
+    if (processed_asset_uses_parent(type) && parent_name[0] &&
+        path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, parent_name) &&
+        zip_archive_open(archive, path))
+        return true;
+
+    return path_format(path, sizeof(path), "%s/%s_cache.zip", cache_dir, game_name) &&
+        zip_archive_open(archive, path);
+}
+
+bool mvs_processed_info_read(char version[8], uint8_t *usage, size_t usage_size)
+{
+    int fd = mvs_processed_asset_open(MVS_PROCESSED_INFO);
+
+    if (fd >= 0)
+    {
+        bool ok = processed_asset_read_exact_fd(fd, version, 8) &&
+            processed_asset_read_exact_fd(fd, usage, usage_size);
+        close(fd);
+        return ok;
+    }
+
+    zip_archive_t archive = {0};
+    zip_entry_t entry = {0};
+    bool ok = false;
+
+    if (!processed_asset_open_zip(MVS_PROCESSED_INFO, &archive))
+        return false;
+    if (zip_entry_open(&archive, "cache_info", &entry))
+    {
+        ok = zip_entry_read(&entry, version, 8) == 8 &&
+            zip_entry_read(&entry, usage, usage_size) == usage_size &&
+            zip_entry_close(&entry);
+    }
+    zip_archive_close(&archive);
+    return ok;
+}
+
+bool mvs_processed_crom_read(uint8_t *dst, size_t size)
+{
+    int fd = mvs_processed_asset_open(MVS_PROCESSED_CROM);
+
+    if (fd >= 0)
+    {
+        bool ok = processed_asset_read_exact_fd(fd, dst, size);
+        close(fd);
+        return ok;
+    }
+
+    zip_archive_t archive = {0};
+    bool ok = false;
+    size_t offset = 0;
+    unsigned block = 0;
+
+    if (!processed_asset_open_zip(MVS_PROCESSED_CROM, &archive))
+        return false;
+
+    ok = true;
+    while (offset < size)
+    {
+        static const char hex[] = "0123456789abcdef";
+        char name[4];
+        zip_entry_t entry = {0};
+        size_t bytes = size - offset;
+
+        if (bytes > 0x10000)
+            bytes = 0x10000;
+        if (block > 0xfff)
+        {
+            ok = false;
+            break;
+        }
+        name[0] = hex[(block >> 8) & 0xf];
+        name[1] = hex[(block >> 4) & 0xf];
+        name[2] = hex[block & 0xf];
+        name[3] = '\0';
+
+        if (!zip_entry_open(&archive, name, &entry) ||
+            zip_entry_read(&entry, dst + offset, bytes) != bytes ||
+            !zip_entry_close(&entry))
+        {
+            if (zip_entry_is_open(&entry))
+                zip_entry_close(&entry);
+            ok = false;
+            break;
+        }
+        offset += bytes;
+        block++;
+    }
+    zip_archive_close(&archive);
+    return ok;
 }
