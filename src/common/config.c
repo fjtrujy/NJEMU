@@ -144,6 +144,10 @@ static cfg_type default_options[] =
 {
 	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   , 0},
+#ifdef PS2
+	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"VideoOutputMode",	&option_video_output_mode,	DEFAULT_VIDEO_OUTPUT_MODE,	VIDEO_OUTPUT_MODE_COUNT - 1, 0},
+#endif
 #if (EMU_SYSTEM == MVS)
 	{ CFG_NONE,	"[Emulation Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"NeogeoBIOS",		&neogeo_bios,	-1,	BIOS_MAX-1 , 0},

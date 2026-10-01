@@ -481,6 +481,76 @@ static int menu_gamecfg(void)
 	return 0;
 }
 
+#ifdef PS2
+static int menu_system_video_settings(void)
+{
+	static const int value_labels[] = {
+		VIDEO_OUTPUT_240P_LABEL,
+		VIDEO_OUTPUT_480I_LABEL,
+		VIDEO_OUTPUT_480P_LABEL
+	};
+	int update = 1;
+	int original_mode = option_video_output_mode;
+
+	pad_wait_clear();
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+
+	do
+	{
+		if (update)
+		{
+			int arrowl = option_video_output_mode > VIDEO_OUTPUT_240P;
+			int arrowr = option_video_output_mode < VIDEO_OUTPUT_480P;
+			const char *value = TEXT(value_labels[option_video_output_mode]);
+			int width = uifont_get_string_width(value);
+
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
+				TEXT(SYSTEM_VIDEO_SETTINGS_MENU));
+			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT),
+				TEXT(VIDEO_OUTPUT_MODE));
+			if (arrowl)
+				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
+			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
+			if (arrowr)
+				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT),
+					FONT_RIGHTTRIANGLE);
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		}
+		else
+		{
+			video_driver->waitVsync(video_data);
+		}
+
+		pad_update();
+		update = 0;
+		if (pad_pressed(PLATFORM_PAD_LEFT) &&
+			option_video_output_mode > VIDEO_OUTPUT_240P)
+		{
+			option_video_output_mode--;
+			update = 1;
+		}
+		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
+			option_video_output_mode < VIDEO_OUTPUT_480P)
+		{
+			option_video_output_mode++;
+			update = 1;
+		}
+
+		if (Loop == LOOP_EXIT)
+			break;
+	} while (!pad_pressed(PLATFORM_PAD_B2));
+
+	if (option_video_output_mode != original_mode)
+		save_settings();
+	return 0;
+}
+#endif
+
 /*------------------------------------------------------
 	CHEAT OPTIONS DAVEX
 ------------------------------------------------------*/
@@ -2570,6 +2640,9 @@ typedef struct
 static menu2_t mainmenu2[] =
 {
 	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
+#ifdef PS2
+	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
+#endif
 	{ MENU_KEY_CONFIGURATION,   menu_keycfg,    ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION   },
 #ifdef COMMAND_LIST
 	{ MENU_COMMAND_LIST,        menu_cmdlist,   ICON_CMDLIST,   MENUHELP_COMMAND_LIST        },

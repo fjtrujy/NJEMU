@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "emucfg.h"
+#include "common/emulator_options.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
 #include <string.h>
@@ -601,22 +602,27 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	 * consoles. Keep the render width at gsKit's historical 640 pixels;
 	 * 240p halves only the vertical framebuffer while 480p changes the
 	 * scan timing without increasing NJEMU's framebuffer allocation. */
-#if defined(PS2_VIDEO_MODE_240P)
-	gsGlobal->Mode = GS_MODE_NTSC;
-	gsGlobal->Interlace = GS_NONINTERLACED;
-	gsGlobal->Field = GS_FRAME;
-	gsGlobal->Height = 224;
-#elif defined(PS2_VIDEO_MODE_480P)
-	gsGlobal->Mode = GS_MODE_DTV_480P;
-	gsGlobal->Interlace = GS_NONINTERLACED;
-	gsGlobal->Field = GS_FRAME;
-	gsGlobal->Height = 448;
-#else
-	gsGlobal->Mode = GS_MODE_NTSC;
-	gsGlobal->Interlace = GS_INTERLACED;
-	gsGlobal->Field = GS_FIELD;
-	gsGlobal->Height = 448;
-#endif
+	switch (option_video_output_mode) {
+	case VIDEO_OUTPUT_240P:
+		gsGlobal->Mode = GS_MODE_NTSC;
+		gsGlobal->Interlace = GS_NONINTERLACED;
+		gsGlobal->Field = GS_FRAME;
+		gsGlobal->Height = 224;
+		break;
+	case VIDEO_OUTPUT_480P:
+		gsGlobal->Mode = GS_MODE_DTV_480P;
+		gsGlobal->Interlace = GS_NONINTERLACED;
+		gsGlobal->Field = GS_FRAME;
+		gsGlobal->Height = 448;
+		break;
+	case VIDEO_OUTPUT_480I:
+	default:
+		gsGlobal->Mode = GS_MODE_NTSC;
+		gsGlobal->Interlace = GS_INTERLACED;
+		gsGlobal->Field = GS_FIELD;
+		gsGlobal->Height = 448;
+		break;
+	}
 
 	gsGlobal->PSM  = GS_PSM_CT16;
 	gsGlobal->PSMZ = GS_PSMZ_16S;

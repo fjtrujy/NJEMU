@@ -7,6 +7,15 @@ extern int option_frameskip;
 extern int option_speedlimit;
 extern int option_vsync;
 extern int option_display_mode;
+extern int option_video_output_mode;
+
+enum
+{
+	VIDEO_OUTPUT_240P = 0,
+	VIDEO_OUTPUT_480I,
+	VIDEO_OUTPUT_480P,
+	VIDEO_OUTPUT_MODE_COUNT
+};
 
 extern int option_sound_enable;
 extern int option_samplerate;

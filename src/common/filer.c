@@ -1016,7 +1016,6 @@ void file_browser(void)
 	strcpy(curr_dir, launchDir);
 	strcat(curr_dir, "roms");
 	strcpy(startupDir, curr_dir);
-	load_settings();
 	video_driver->beginFrame(video_data);
 	ui_fill_frame(UI_PAL_BG2);
 	video_driver->endFrame(video_data);

@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "emucfg.h"
+#include "common/config.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
 #include "common/ui.h"
@@ -81,6 +82,10 @@ int option_autoframeskip;
 int option_frameskip;
 int option_vsync;
 int option_display_mode;
+#ifndef DEFAULT_VIDEO_OUTPUT_MODE
+#define DEFAULT_VIDEO_OUTPUT_MODE VIDEO_OUTPUT_480I
+#endif
+int option_video_output_mode = DEFAULT_VIDEO_OUTPUT_MODE;
 
 int option_sound_enable;
 int option_samplerate;
@@ -627,12 +632,15 @@ int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		power_set_lowest_performance_level();
 		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
-		ui_text_data = ui_text_driver->init();
+			ui_text_data = ui_text_driver->init();
 		if (ui_text_data == NULL) {
 			printf("Failed to initialize UI text driver\n");
-			goto cleanup_ticker;
-		}
-		printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+				goto cleanup_ticker;
+			}
+			/* Global settings must be available before video creation. In particular,
+			 * PS2 selects its physical GS timing from njemu.ini at startup. */
+			load_settings();
+			printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		if (!pad_init()) {
 			printf("Failed to initialize input driver\n");
 			goto cleanup_ui_text;
