@@ -25,6 +25,6 @@ platform_driver_t *const platform_driver = &platform_psp;
 const power_driver_t *const power_driver = &power_psp;
 thread_driver_t *const thread_driver = &thread_psp;
 ticker_driver_t *const ticker_driver = &ticker_psp;
-video_driver_t *const video_driver = &video_psp;
+video_driver_t *video_driver = &video_psp;
 
 const ui_draw_driver_t *const ui_draw_driver = &psp_ui_draw_driver;

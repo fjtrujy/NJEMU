@@ -194,7 +194,7 @@ typedef struct video_driver
 
 } video_driver_t;
 
-extern video_driver_t *const video_driver;
+extern video_driver_t *video_driver;
 
 extern RECT full_rect;
 

@@ -72,7 +72,7 @@ static video_driver_t mock = {
     .uploadClut = upload_clut, .writeIndexedTextureRect = write_pixels,
     .uploadMem = upload, .blitSpriteVertices = draw,
 };
-video_driver_t *const video_driver = &mock;
+video_driver_t *video_driver = &mock;
 
 static void sprite(unsigned code) { blit_draw_spr(24, 16, 16, 16, code, 0); }
 static void start_frame(void)

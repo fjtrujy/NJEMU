@@ -908,7 +908,7 @@ static void desktop_setUIScissor(void *data, int x, int y, int w, int h)
 	SDL_RenderSetClipRect(desktop->renderer, &scissor);
 }
 
-video_driver_t video_desktop = {
+video_driver_t video_desktop_sdl = {
 	"desktop",
 	desktop_init,
 	desktop_free,

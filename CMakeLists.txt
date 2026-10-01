@@ -539,11 +539,9 @@ if (PLATFORM STREQUAL "PSVITA")
         common/hw_recorder.c
     )
 elseif (PLATFORM STREQUAL "DESKTOP")
+    # Desktop keeps SDL as the baseline backend. OpenGL is compiled alongside
+    # it when requested so backend selection can become runtime policy.
     if (USE_DESKTOP_GL)
-        if (GUI)
-            message(FATAL_ERROR "USE_DESKTOP_GL requires GUI=OFF (the desktop GUI draws through SDL_Renderer)")
-        endif()
-        list(REMOVE_ITEM OS_SRC desktop/desktop_video.c)
         list(APPEND OS_SRC
             desktop/desktop_video_gl.c
             common/hw_recorder.c

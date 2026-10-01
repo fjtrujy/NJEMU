@@ -25,6 +25,6 @@ platform_driver_t *const platform_driver = &platform_psvita;
 const power_driver_t *const power_driver = &power_psvita;
 thread_driver_t *const thread_driver = &thread_psvita;
 ticker_driver_t *const ticker_driver = &ticker_psvita;
-video_driver_t *const video_driver = &video_psvita;
+video_driver_t *video_driver = &video_psvita;
 
 const ui_draw_driver_t *const ui_draw_driver = &psvita_ui_draw_driver;

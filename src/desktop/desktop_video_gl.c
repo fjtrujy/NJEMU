@@ -1045,7 +1045,7 @@ static void desktop_gl_clearColorBuffer(void *data)
 	hw_rec_fill(&g->rec, &g->rec.clip, 0, HW_DEPTH_OFF);
 }
 
-video_driver_t video_desktop = {
+video_driver_t video_desktop_gl = {
 	.ident = "desktop_gl",
 	.init = desktop_gl_init,
 	.free = desktop_gl_free,
