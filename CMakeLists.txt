@@ -90,14 +90,6 @@ option(USE_PG "Use Performance Graph" OFF)
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
 option(CACHE_IO_VALIDATE_ACCELERATED "Validate accelerated MVS cache reads against POSIX" OFF)
-option(PS2_CROM_PARTIAL_READS "PS2 MVS: experimental 16 KiB C-ROM demand reads" OFF)
-if(PS2_CROM_PARTIAL_READS AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
-    add_definitions(-DMVS_CROM_PARTIAL_READS=1)
-endif()
-option(PS2_PCM_PARTIAL_READS "PS2 MVS: experimental 16 KiB PCM demand reads" OFF)
-if(PS2_PCM_PARTIAL_READS AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
-    add_definitions(-DMVS_PCM_PARTIAL_READS=1)
-endif()
 option(PS2_FAST_CACHE "PS2: enable accelerated cache I/O for MVS/CPS2" ON)
 option(PS2_DIRTY_SPRITE_UPLOADS "PS2 MVS: upload sprite atlases only when their pixels change" ON)
 if(PS2_DIRTY_SPRITE_UPLOADS AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
@@ -1076,6 +1068,11 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    if("${TARGET}" STREQUAL "CPS2")
+        add_test(NAME cps2_partial_cache_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/cps2_partial_cache_tests.py
+                ${CMAKE_C_COMPILER})
+    endif()
     if("${TARGET}" STREQUAL "MVS")
         add_test(NAME mvs_partial_cache_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/mvs_partial_cache_tests.py

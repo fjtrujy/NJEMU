@@ -8,6 +8,16 @@ extern int option_speedlimit;
 extern int option_vsync;
 extern int option_display_mode;
 extern int option_video_output_mode;
+extern int option_cache_read_size;
+
+enum
+{
+	CACHE_READ_SIZE_AUTO = 0,
+	CACHE_READ_SIZE_16K,
+	CACHE_READ_SIZE_32K,
+	CACHE_READ_SIZE_64K,
+	CACHE_READ_SIZE_COUNT
+};
 
 enum
 {

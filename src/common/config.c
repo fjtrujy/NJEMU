@@ -144,6 +144,10 @@ static cfg_type default_options[] =
 {
 	{ CFG_NONE,	"[System Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   , 0},
+#if USE_CACHE && (defined(PSP) || defined(PS2)) && (EMU_SYSTEM == MVS || EMU_SYSTEM == CPS2)
+	{ CFG_NONE,	"[Performance Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"CacheReadSize",	&option_cache_read_size,	CACHE_READ_SIZE_AUTO,	CACHE_READ_SIZE_COUNT - 1, 0},
+#endif
 #ifdef PS2
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"VideoOutputMode",	&option_video_output_mode,	DEFAULT_VIDEO_OUTPUT_MODE,	VIDEO_OUTPUT_MODE_COUNT - 1, 0},

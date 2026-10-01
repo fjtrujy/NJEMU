@@ -2475,3 +2475,31 @@ registra modo configurado=1 (480i), por lo que no confirma la hipotesis de
 un modo 480p guardado. Completa la carga de mslug3, inicializa audio y empieza
 lecturas runtime sin errores. Falta confirmacion visual del usuario; no se
 considera solucionado el sintoma de imagen. Log: /tmp/njemu-polish-480i-diag.log.
+
+## 39. Runtime cache demand-read size (2026-10-01)
+
+The experimental PS2/MVS compile-time C-ROM/PCM 16 KiB switches were replaced
+by the global `CacheReadSize` setting in `njemu.ini`. It is exposed for MVS and
+CPS2 on PSP/PS2 as `Auto`, `16 KiB`, `32 KiB`, or `64 KiB`. Cache slots, memory
+budgets, LRU ownership and on-disk cache formats remain 64 KiB; the setting only
+controls how much of a missing raw-cache slot is fetched on demand.
+
+`Auto` is stored as its own value rather than the resolved byte count. The UI
+shows the resolution, e.g. `Auto (16 KiB)`, so future defaults can improve
+without rewriting user settings. PS2/MVS currently resolves to 16 KiB because
+the real-hardware MX4SIO measurements above demonstrated lower C-ROM and PCM
+wait. PSP/MVS and PSP/PS2+CPS2 conservatively resolve to the established 64 KiB
+behavior until equivalent hardware measurements exist. Manual 16/32/64 KiB
+selection is available on all four platform/core combinations.
+
+MVS applies the setting to both C-ROM and PCM demand I/O. The YM2610 decoder now
+refreshes its PCM pointer at 16 KiB boundaries while the cache reader coalesces
+quarters according to the selected 16/32/64 KiB size, preserving 64 KiB slots
+and preload behavior. CPS2 raw GFX cache uses the same quarter-validity model;
+its 64/128/512-byte graphics elements cannot cross a 16 KiB boundary when
+properly aligned. ZIP/folder preload/cache formats are unchanged.
+
+Focused extracted-reader tests cover 16/32/64 KiB C-ROM/GFX reads, validity,
+hits and eviction for MVS/CPS2, plus MVS PCM boundary/failure behavior. Release
+GUI builds compile for MVS and CPS2 on both PS2 and PSP. Performance defaults
+for PSP and CPS2 remain intentionally unclaimed pending hardware benchmarks.

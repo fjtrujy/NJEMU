@@ -551,6 +551,73 @@ static int menu_system_video_settings(void)
 }
 #endif
 
+#if USE_CACHE && (defined(PSP) || defined(PS2)) && (EMU_SYSTEM == MVS || EMU_SYSTEM == CPS2)
+static int menu_system_performance_settings(void)
+{
+	int update = 1;
+	int original_size = option_cache_read_size;
+
+	pad_wait_clear();
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+	do
+	{
+		if (update)
+		{
+			char value[32];
+			int width;
+			int arrowl = option_cache_read_size > CACHE_READ_SIZE_AUTO;
+			int arrowr = option_cache_read_size < CACHE_READ_SIZE_64K;
+
+			if (option_cache_read_size == CACHE_READ_SIZE_AUTO)
+				snprintf(value, sizeof(value), TEXT(CACHE_READ_SIZE_AUTO_LABEL),
+					(unsigned int)(cache_resolved_read_size() / 1024));
+			else
+				snprintf(value, sizeof(value), "%u KiB",
+					16u << (option_cache_read_size - CACHE_READ_SIZE_16K));
+			width = uifont_get_string_width(value);
+
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
+				TEXT(SYSTEM_PERFORMANCE_SETTINGS_MENU));
+			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(CACHE_READ_SIZE));
+			if (arrowl)
+				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
+			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
+			if (arrowr)
+				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		}
+		else
+			video_driver->waitVsync(video_data);
+
+		pad_update();
+		update = 0;
+		if (pad_pressed(PLATFORM_PAD_LEFT) && option_cache_read_size > CACHE_READ_SIZE_AUTO)
+		{
+			option_cache_read_size--;
+			update = 1;
+		}
+		else if (pad_pressed(PLATFORM_PAD_RIGHT) && option_cache_read_size < CACHE_READ_SIZE_64K)
+		{
+			option_cache_read_size++;
+			update = 1;
+		}
+	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
+
+	if (option_cache_read_size != original_size)
+	{
+		save_settings();
+		menu_restart();
+		return 1;
+	}
+	return 0;
+}
+#endif
+
 /*------------------------------------------------------
 	CHEAT OPTIONS DAVEX
 ------------------------------------------------------*/
@@ -2642,6 +2709,9 @@ static menu2_t mainmenu2[] =
 	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
 #ifdef PS2
 	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
+#endif
+#if USE_CACHE && (defined(PSP) || defined(PS2)) && (EMU_SYSTEM == MVS || EMU_SYSTEM == CPS2)
+	{ MENU_SYSTEM_PERFORMANCE_SETTINGS, menu_system_performance_settings, ICON_SYSTEM, MENUHELP_SYSTEM_PERFORMANCE_SETTINGS },
 #endif
 	{ MENU_KEY_CONFIGURATION,   menu_keycfg,    ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION   },
 #ifdef COMMAND_LIST

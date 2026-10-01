@@ -8,13 +8,17 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 source = (root / 'src/common/cache.c').read_text()
 start = source.index('uint8_t *pcm_cache_read(')
-reader = source[start:source.index('\n#endif', source.index('\n\t];', start))]
+reader = source[start:source.index('\n\n#endif', start)]
 preamble = r'''
 #include <stdint.h>
+#include <stddef.h>
 #include <string.h>
 #include <assert.h>
-#define MVS_PCM_PARTIAL_READS 1
 #define PCM_CACHE_SHIFT 14
+#define CACHE_BLOCK_SIZE 65536
+#define CACHE_READ_QUARTER_SIZE 16384
+static size_t demand_size=16384;
+static size_t cache_resolved_read_size(void) { return demand_size; }
 #define BLOCK_SHIFT 16
 #define BLOCK_NOT_CACHED 65535
 static uint8_t memory_region_sound1[2*65536], pcm_valid_parts[2];
@@ -25,7 +29,7 @@ static int pcm_fd,pcm_storage_handle,frames_displayed=1,reads,fail;
 static int64_t pcm_file_pos;
 static int mvs_cache_read_range(int fd,int *h,int64_t *p,uint16_t block,uint8_t *dst,const char *name,unsigned within,unsigned size) {
  (void)fd;(void)h;(void)p;(void)name;
- assert(size==16384 && within%16384==0); reads++;
+ assert(size==demand_size && within%demand_size==0); reads++;
  if(fail) return 0;
  for(unsigned i=0;i<size;i++) dst[i]=(uint8_t)(block*4+within/16384+i);
  return 1;
@@ -39,8 +43,10 @@ int main(void) {
  pcm_blocks[0]=0;pcm_blocks[1]=1;pcm_head=&pcm_data[0];pcm_tail=&pcm_data[1];
  uint8_t *p=pcm_cache_read(9);assert(reads==1 && p[0]==9 && p[16383]==8);
  assert(pcm_cache_read(9)==p && reads==1);
+ demand_size=32768; p=pcm_cache_read(10);assert(reads==2 && p[0]==10);assert(pcm_cache_read(11)==p+16384 && reads==2);
+ demand_size=16384;
  p=pcm_cache_read(10);assert(reads==2 && p[0]==10);
- fail=1;p=pcm_cache_read(11);assert(p[0]==0 && p[16383]==0);
+ pcm_valid_parts[pcm_blocks[2]] &= (uint8_t)~8u;fail=1;p=pcm_cache_read(11);assert(p[0]==0 && p[16383]==0);
  fail=0;p=pcm_cache_read(11);assert(reads==4 && p[0]==11);
  uint32_t rng=123;
  for(int i=0;i<10000;i++) {

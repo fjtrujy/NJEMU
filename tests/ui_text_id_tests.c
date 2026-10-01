@@ -23,7 +23,9 @@ int main(void)
 	assert(END_OF_TEXT == 379);
 	assert(SYSTEM_VIDEO_SETTINGS_MENU == 380);
 	assert(VIDEO_OUTPUT_480P_LABEL == 386);
-	assert(UI_TEXT_MAX == 387);
+	assert(SYSTEM_PERFORMANCE_SETTINGS_MENU == 387);
+	assert(CACHE_READ_SIZE_AUTO_LABEL == 391);
+	assert(UI_TEXT_MAX == 392);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

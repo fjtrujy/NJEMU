@@ -85,12 +85,33 @@ static cache_t *tail;
 
 static int num_cache;
 static uint16_t ALIGN16_DATA blocks[MAX_CACHE_BLOCKS];
-#ifdef MVS_CROM_PARTIAL_READS
-/* Slots and file format remain 64 KiB. Each bit describes one valid 16 KiB
- * quarter. A decoded sprite tile is 128-byte aligned and never crosses it. */
-static uint8_t crom_valid_parts[MAX_CACHE_BLOCKS];
-#define CROM_PART_SIZE (CACHE_BLOCK_SIZE / 4)
+/* Cache slots and on-disk blocks remain 64 KiB. Runtime demand reads may fill
+ * them in 16/32 KiB parts; one bit tracks each 16 KiB quarter. */
+static uint8_t gfx_valid_parts[MAX_CACHE_BLOCKS];
+#define CACHE_READ_QUARTER_SIZE (CACHE_BLOCK_SIZE / 4)
+
+static size_t cache_default_read_size(void)
+{
+#if defined(PS2) && (EMU_SYSTEM == MVS)
+	/* Measured on real PS2/MX4SIO: 16 KiB materially reduces demand-read wait. */
+	return 16u * 1024u;
+#else
+	/* Preserve established behavior until each platform/core is measured. */
+	return CACHE_BLOCK_SIZE;
 #endif
+}
+
+size_t cache_resolved_read_size(void)
+{
+	switch (option_cache_read_size)
+	{
+	case CACHE_READ_SIZE_16K: return 16u * 1024u;
+	case CACHE_READ_SIZE_32K: return 32u * 1024u;
+	case CACHE_READ_SIZE_64K: return CACHE_BLOCK_SIZE;
+	case CACHE_READ_SIZE_AUTO:
+	default: return cache_default_read_size();
+	}
+}
 static int32_t cache_fd;
 static zip_archive_t cache_zip_archive;
 static zip_entry_t cache_zip_entry;
@@ -146,9 +167,7 @@ static cache_t *pcm_tail;
 static int num_pcm_cache;
 
 static uint16_t ALIGN16_DATA pcm_blocks[MAX_PCM_BLOCKS];
-#ifdef MVS_PCM_PARTIAL_READS
 static uint8_t pcm_valid_parts[MAX_PCM_BLOCKS];
-#endif
 static int32_t pcm_fd;
 static int64_t cache_file_pos;
 static int64_t pcm_file_pos;
@@ -469,26 +488,24 @@ static int mvs_cache_read_range(int fd, int *storage_handle, int64_t *known_pos,
 #ifdef CACHE_IO_PROFILE
 	uint64_t start = cache_io_now_us();
 	/* Include preloaded blocks so their first runtime reload is visible. */
-#ifdef MVS_CROM_PARTIAL_READS
 	if (profile == &crom_io_profile) {
 		unsigned int part;
-		for (part = within / CROM_PART_SIZE; part < (within + read_size) / CROM_PART_SIZE; part++) {
+		for (part = within / CACHE_READ_QUARTER_SIZE;
+			part < (within + read_size) / CACHE_READ_QUARTER_SIZE; part++) {
 			unsigned int key = block * 4u + part;
 			if (key < sizeof(profile->seen) * 8)
 				profile->seen[key >> 3] |= (uint8_t)(1u << (key & 7));
 		}
 	} else
-#endif
-#ifdef MVS_PCM_PARTIAL_READS
 	if (profile == &pcm_io_profile) {
 		unsigned int part;
-		for (part = within / 16384; part < (within + read_size) / 16384; part++) {
+		for (part = within / CACHE_READ_QUARTER_SIZE;
+			part < (within + read_size) / CACHE_READ_QUARTER_SIZE; part++) {
 			unsigned int key = block * 4u + part;
 			if (key < sizeof(profile->seen) * 8)
 				profile->seen[key >> 3] |= (uint8_t)(1u << (key & 7));
 		}
 	} else
-#endif
 	if (block < MAX_CACHE_BLOCKS)
 		profile->seen[block >> 3] |= (uint8_t)(1u << (block & 7));
 #endif
@@ -662,63 +679,48 @@ static int mvs_cache_read_block(int fd, int *storage_handle, int64_t *known_pos,
 	Read PCM Cache
 ------------------------------------------------------*/
 
-uint8_t *pcm_cache_read(uint16_t new_block)
+uint8_t *pcm_cache_read(uint16_t new_part)
 {
-#ifdef MVS_PCM_PARTIAL_READS
-	const unsigned int part = new_block & 3;
-	const unsigned int within = part << PCM_CACHE_SHIFT;
-#ifdef CACHE_IO_PROFILE
-	const uint16_t key = new_block;
-#endif
-	new_block >>= 2;
-#endif
+	const unsigned int requested_quarter = new_part & 3u;
+	const uint16_t new_block = new_part >> 2;
+	const size_t read_size = cache_resolved_read_size();
+	const unsigned int quarters_per_read = (unsigned int)read_size / CACHE_READ_QUARTER_SIZE;
+	const unsigned int first_quarter = (requested_quarter / quarters_per_read) * quarters_per_read;
+	const unsigned int within = first_quarter * CACHE_READ_QUARTER_SIZE;
+	const uint8_t valid_mask = (uint8_t)(((1u << quarters_per_read) - 1u) << first_quarter);
 	uint32_t idx = pcm_blocks[new_block];
 	cache_t *p;
 
 	if (idx == BLOCK_NOT_CACHED)
 	{
 		p = pcm_head;
-		pcm_blocks[p->block] = BLOCK_NOT_CACHED;
+		if (p->block >= 0)
+			pcm_blocks[p->block] = BLOCK_NOT_CACHED;
 		p->block = new_block;
 		pcm_blocks[new_block] = p->idx;
-#ifdef MVS_PCM_PARTIAL_READS
 		pcm_valid_parts[p->idx] = 0;
-#endif
 	}
 	else
 		p = &pcm_data[idx];
 
-#ifdef MVS_PCM_PARTIAL_READS
-	if (!(pcm_valid_parts[p->idx] & (1u << part)))
+	if ((pcm_valid_parts[p->idx] & valid_mask) != valid_mask)
 	{
 #ifdef CACHE_IO_PROFILE
-		cache_io_profile_miss(&pcm_io_profile, key);
+		cache_io_profile_miss(&pcm_io_profile,
+			new_block * (CACHE_BLOCK_SIZE / (unsigned int)read_size) +
+			first_quarter / quarters_per_read);
 #endif
 		uint8_t *dst = &memory_region_sound1[(p->idx << BLOCK_SHIFT) + within];
 		if (mvs_cache_read_range(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
-			new_block, dst, "pcm", within, 1u << PCM_CACHE_SHIFT
+			new_block, dst, "pcm", within, read_size
 #ifdef CACHE_IO_PROFILE
 			, &pcm_io_profile, 1
 #endif
 		))
-			pcm_valid_parts[p->idx] |= (uint8_t)(1u << part);
+			pcm_valid_parts[p->idx] |= valid_mask;
 		else
-			memset(dst, 0, 1u << PCM_CACHE_SHIFT);
+			memset(dst, 0, read_size);
 	}
-#else
-	if (idx == BLOCK_NOT_CACHED)
-	{
-#ifdef CACHE_IO_PROFILE
-		cache_io_profile_miss(&pcm_io_profile, new_block);
-#endif
-		mvs_cache_read_block(pcm_fd, &pcm_storage_handle, &pcm_file_pos,
-			new_block, &memory_region_sound1[p->idx << BLOCK_SHIFT], "pcm"
-#ifdef CACHE_IO_PROFILE
-			, &pcm_io_profile, 1
-#endif
-		);
-	}
-#endif
 #ifdef CACHE_IO_PROFILE
 	else
 		pcm_io_profile.hits++;
@@ -727,7 +729,6 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 	if (p->frame != frames_displayed)
 	{
 		p->frame = frames_displayed;
-
 		if (p->next)
 		{
 			if (p->prev)
@@ -740,20 +741,15 @@ uint8_t *pcm_cache_read(uint16_t new_block)
 				pcm_head = p->next;
 				pcm_head->prev = NULL;
 			}
-
 			p->prev = pcm_tail;
 			p->next = NULL;
-
 			pcm_tail->next = p;
 			pcm_tail = p;
 		}
 	}
 
-	return &memory_region_sound1[(p->idx << BLOCK_SHIFT)
-#ifdef MVS_PCM_PARTIAL_READS
-		+ within
-#endif
-	];
+	return &memory_region_sound1[(p->idx << BLOCK_SHIFT) +
+		requested_quarter * CACHE_READ_QUARTER_SIZE];
 }
 
 #endif
@@ -861,9 +857,7 @@ static int fill_cache(void)
 
 			p->block = block;
 			blocks[block] = p->idx;
-#ifdef MVS_CROM_PARTIAL_READS
-			crom_valid_parts[p->idx] = 0x0f;
-#endif
+				gfx_valid_parts[p->idx] = 0x0f;
 
 				cache_rotate_head_to_tail(&head, &tail);
 			i++;
@@ -925,9 +919,7 @@ static int fill_cache(void)
 
 				p->block = block;
 				pcm_blocks[block] = p->idx;
-#ifdef MVS_PCM_PARTIAL_READS
 				pcm_valid_parts[p->idx] = 0x0f;
-#endif
 
 				cache_rotate_head_to_tail(&pcm_head, &pcm_tail);
 			i++;
@@ -944,6 +936,7 @@ static int fill_cache(void)
 				p = head;
 				p->block = block;
 				blocks[block] = p->idx;
+				gfx_valid_parts[p->idx] = 0x0f;
 
 				lseek(cache_fd, block_offset[block], SEEK_SET);
 				cache_read_legacy(cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
@@ -1031,74 +1024,58 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 	int16_t new_block = offset >> BLOCK_SHIFT;
 	uint32_t idx = blocks[new_block];
 	cache_t *p;
-
-#ifdef MVS_CROM_PARTIAL_READS
-	unsigned int part = (offset & BLOCK_MASK) / CROM_PART_SIZE;
-	unsigned int within = part * CROM_PART_SIZE;
-	uint8_t bit = (uint8_t)(1u << part);
-	if (idx == BLOCK_NOT_CACHED) {
-		p = head;
-		blocks[p->block] = BLOCK_NOT_CACHED;
-		p->block = new_block;
-		blocks[new_block] = p->idx;
-		crom_valid_parts[p->idx] = 0;
-	} else {
-		p = &cache_data[idx];
-	}
-	if (!(crom_valid_parts[p->idx] & bit)) {
-#ifdef CACHE_IO_PROFILE
-		cache_io_profile_miss(&crom_io_profile, new_block * 4 + part);
-#endif
-		uint8_t *dst = &GFX_MEMORY[(p->idx << BLOCK_SHIFT) + within];
-		if (mvs_cache_read_range(cache_fd, &cache_storage_handle, &cache_file_pos,
-			new_block, dst, "crom", within, CROM_PART_SIZE
-#ifdef CACHE_IO_PROFILE
-			, &crom_io_profile, 1
-#endif
-		)) {
-			crom_valid_parts[p->idx] |= bit;
-		} else {
-			/* Keep invalid so the next access retries; never decode stale data. */
-			memset(dst, 0, CROM_PART_SIZE);
-		}
-	} else {
-#ifdef CACHE_IO_PROFILE
-		crom_io_profile.hits++;
-#endif
-	}
-#else
+	size_t read_size = cache_resolved_read_size();
+	unsigned int part = (offset & BLOCK_MASK) / (unsigned int)read_size;
+	unsigned int within = part * (unsigned int)read_size;
+	unsigned int first_quarter = within / CACHE_READ_QUARTER_SIZE;
+	unsigned int quarter_count = (unsigned int)read_size / CACHE_READ_QUARTER_SIZE;
+	uint8_t valid_mask = (uint8_t)(((1u << quarter_count) - 1u) << first_quarter);
 
 	if (idx == BLOCK_NOT_CACHED)
 	{
 		p = head;
-		blocks[p->block] = BLOCK_NOT_CACHED;
-
+		if (p->block >= 0)
+			blocks[p->block] = BLOCK_NOT_CACHED;
 		p->block = new_block;
 		blocks[new_block] = p->idx;
-
-#if (EMU_SYSTEM == MVS)
-	#ifdef CACHE_IO_PROFILE
-		cache_io_profile_miss(&crom_io_profile, new_block);
-	#endif
-		mvs_cache_read_block((int32_t)cache_fd, &cache_storage_handle,
-			&cache_file_pos, new_block, &GFX_MEMORY[p->idx << BLOCK_SHIFT], "crom"
-	#ifdef CACHE_IO_PROFILE
-			, &crom_io_profile, 1
-	#endif
-		);
-#else
-		lseek((int32_t)cache_fd, block_offset[new_block], SEEK_SET);
-		cache_read_legacy((int32_t)cache_fd, &GFX_MEMORY[p->idx << BLOCK_SHIFT], CACHE_BLOCK_SIZE);
-	#endif
+		gfx_valid_parts[p->idx] = 0;
 	}
 	else
-	{
-	#if (EMU_SYSTEM == MVS) && defined(CACHE_IO_PROFILE)
-		crom_io_profile.hits++;
-	#endif
 		p = &cache_data[idx];
-	}
 
+	if ((gfx_valid_parts[p->idx] & valid_mask) != valid_mask)
+	{
+		uint8_t *dst = &GFX_MEMORY[(p->idx << BLOCK_SHIFT) + within];
+#if (EMU_SYSTEM == MVS)
+#ifdef CACHE_IO_PROFILE
+		cache_io_profile_miss(&crom_io_profile,
+			new_block * (CACHE_BLOCK_SIZE / (unsigned int)read_size) + part);
+#endif
+		if (mvs_cache_read_range(cache_fd, &cache_storage_handle, &cache_file_pos,
+			new_block, dst, "crom", within, read_size
+#ifdef CACHE_IO_PROFILE
+			, &crom_io_profile, 1
+#endif
+		))
+			gfx_valid_parts[p->idx] |= valid_mask;
+		else
+			memset(dst, 0, read_size);
+#else
+		if (lseek((int32_t)cache_fd, (off_t)block_offset[new_block] + within, SEEK_SET) >= 0)
+		{
+			ssize_t bytes = read((int32_t)cache_fd, dst, read_size);
+			if (bytes == (ssize_t)read_size)
+				gfx_valid_parts[p->idx] |= valid_mask;
+			else
+				memset(dst, 0, read_size);
+		}
+		else
+			memset(dst, 0, read_size);
+#endif
+	}
+#if (EMU_SYSTEM == MVS) && defined(CACHE_IO_PROFILE)
+	else
+		crom_io_profile.hits++;
 #endif
 
 	if (p->next)
@@ -1113,17 +1090,14 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 			head = p->next;
 			head->prev = NULL;
 		}
-
 		p->prev = tail;
 		p->next = NULL;
-
 		tail->next = p;
 		tail = p;
 	}
 
-	return ((tail->idx << BLOCK_SHIFT) | (offset & BLOCK_MASK));
+	return ((uint32_t)p->idx << BLOCK_SHIFT) | (offset & BLOCK_MASK);
 }
-
 
 /*------------------------------------------------------
 	Use ZIP Compressed Cache
@@ -1305,10 +1279,9 @@ void cache_init(void)
 
 	for (i = 0; i < MAX_CACHE_BLOCKS; i++)
 		blocks[i] = BLOCK_NOT_CACHED;
-#ifdef MVS_CROM_PARTIAL_READS
-	memset(crom_valid_parts, 0, sizeof(crom_valid_parts));
-	printf("[cache-io] C-ROM demand reads=16384 slot_bytes=65536\n");
-#endif
+	memset(gfx_valid_parts, 0, sizeof(gfx_valid_parts));
+	printf("[cache] demand_read_bytes=%u slot_bytes=%u\n",
+		(unsigned int)cache_resolved_read_size(), (unsigned int)CACHE_BLOCK_SIZE);
 
 #if (EMU_SYSTEM == MVS)
 	if (pcm_data)
@@ -1319,10 +1292,7 @@ void cache_init(void)
 	pcm_head = NULL;
 	pcm_tail = NULL;
 	num_pcm_cache = 0;
-#ifdef MVS_PCM_PARTIAL_READS
 	memset(pcm_valid_parts, 0, sizeof(pcm_valid_parts));
-	printf("[cache-io] PCM demand reads=16384 slot_bytes=65536\n");
-#endif
 	pcm_cache_enable = 0;
 	pcm_fd = -1;
 	cache_file_pos = -1;

@@ -53,18 +53,16 @@ extern uint8_t *block_empty;
 extern uint32_t block_offset[MAX_CACHE_BLOCKS];
 #endif
 
+size_t cache_resolved_read_size(void);
 void cache_init(void);
 int cache_start(const memory_plan_t *plan, void *preallocated_gfx, void *preallocated_pcm);
 void cache_shutdown(void);
 void cache_sleep(int flag);
 
 #if (EMU_SYSTEM == MVS)
-/* PCM decoder addresses nibbles; cache keys address byte-sized parts. */
-#ifdef MVS_PCM_PARTIAL_READS
+/* Refresh decoder pointers at the smallest selectable demand-read boundary.
+ * The cache reader may coalesce adjacent quarters into 32/64 KiB I/O. */
 #define PCM_CACHE_SHIFT 14
-#else
-#define PCM_CACHE_SHIFT 16
-#endif
 #define PCM_CACHE_MASK ((1u << PCM_CACHE_SHIFT) - 1)
 uint8_t *pcm_cache_read(uint16_t new_block);
 void pcm_cache_update(uint16_t block);

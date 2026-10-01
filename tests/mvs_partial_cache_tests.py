@@ -17,16 +17,21 @@ end = source.index("\n\n/*---", start)
 reader = source[start:end]
 PREAMBLE = r"""
 #include <stdint.h>
+#include <stddef.h>
+#include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#define MVS_CROM_PARTIAL_READS 1
 #define BLOCK_SHIFT 16
 #define BLOCK_MASK 65535
 #define CACHE_BLOCK_SIZE 65536
-#define CROM_PART_SIZE 16384
+#define CACHE_READ_QUARTER_SIZE 16384
+#define MVS 1
+#define EMU_SYSTEM MVS
 #define BLOCK_NOT_CACHED 65535
 #define GFX_MEMORY mem
-static uint8_t mem[2*65536], crom_valid_parts[2];
+static uint8_t mem[2*65536], gfx_valid_parts[2];
+static size_t demand_size=16384;
+static size_t cache_resolved_read_size(void) { return demand_size; }
 static uint16_t blocks[8];
 typedef struct cache { int idx, block; struct cache *prev, *next; } cache_t;
 static cache_t cache_data[2], *head, *tail;
@@ -34,7 +39,7 @@ static int cache_fd, cache_storage_handle, reads, fail;
 static int64_t cache_file_pos;
 static int mvs_cache_read_range(int fd, int *h, int64_t *p, uint16_t block, uint8_t *dst, const char *name, unsigned within, unsigned size) {
  (void)fd;(void)h;(void)p;(void)name;
- assert(size==16384 && within%16384==0);
+ assert(size==demand_size && within%demand_size==0);
  reads++; if(fail) return 0;
  memset(dst, block*4+within/16384, size); return 1;
 }
@@ -46,16 +51,24 @@ int main(void) {
  cache_data[0]=(cache_t){0,0,0,&cache_data[1]};
  cache_data[1]=(cache_t){1,1,&cache_data[0],0};
  blocks[0]=0;blocks[1]=1;head=&cache_data[0];tail=&cache_data[1];
- crom_valid_parts[0]=crom_valid_parts[1]=15;
+ gfx_valid_parts[0]=gfx_valid_parts[1]=15;
  unsigned pos=read_cache_rawfile(2*65536+16384+128);
- assert(reads==1 && mem[pos]==9 && crom_valid_parts[0]==2);
+ assert(reads==1 && mem[pos]==9 && gfx_valid_parts[0]==2);
  assert(mem[0]==0xa5 && mem[32768]==0xa5);
  assert(read_cache_rawfile(2*65536+16384+256)==pos+128 && reads==1);
- pos=read_cache_rawfile(2*65536+49152);assert(reads==2 && mem[pos]==11 && crom_valid_parts[0]==10);
+ pos=read_cache_rawfile(2*65536+49152);assert(reads==2 && mem[pos]==11 && gfx_valid_parts[0]==10);
  read_cache_rawfile(3*65536);assert(reads==3);
- fail=1;pos=read_cache_rawfile(4*65536);assert(reads==4 && mem[pos]==0 && crom_valid_parts[0]==0);
- fail=0;pos=read_cache_rawfile(4*65536);assert(reads==5 && mem[pos]==16 && crom_valid_parts[0]==1);
+ fail=1;pos=read_cache_rawfile(4*65536);assert(reads==4 && mem[pos]==0 && gfx_valid_parts[0]==0);
+ fail=0;pos=read_cache_rawfile(4*65536);assert(reads==5 && mem[pos]==16 && gfx_valid_parts[0]==1);
  assert(blocks[2]==BLOCK_NOT_CACHED);
+ /* 32/64 KiB selections coalesce validity quarters without changing slots. */
+ demand_size=32768; memset(blocks,255,sizeof(blocks)); memset(gfx_valid_parts,0,sizeof(gfx_valid_parts));
+ cache_data[0]=(cache_t){0,-1,0,&cache_data[1]};cache_data[1]=(cache_t){1,-1,&cache_data[0],0};head=&cache_data[0];tail=&cache_data[1];reads=0;
+ pos=read_cache_rawfile(32768+128);assert(reads==1 && gfx_valid_parts[0]==12);read_cache_rawfile(49152);assert(reads==1);
+ demand_size=65536; memset(blocks,255,sizeof(blocks)); memset(gfx_valid_parts,0,sizeof(gfx_valid_parts));
+ cache_data[0]=(cache_t){0,-1,0,&cache_data[1]};cache_data[1]=(cache_t){1,-1,&cache_data[0],0};head=&cache_data[0];tail=&cache_data[1];reads=0;
+ pos=read_cache_rawfile(128);assert(reads==1 && gfx_valid_parts[0]==15);read_cache_rawfile(49152);assert(reads==1);
+ demand_size=16384;
  /* Random aligned sprite tiles, including every quarter and repeated evictions. */
  uint32_t rng=12345;
  for(unsigned i=0;i<10000;i++) {
