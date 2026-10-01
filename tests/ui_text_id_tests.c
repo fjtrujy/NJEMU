@@ -25,7 +25,10 @@ int main(void)
 	assert(VIDEO_OUTPUT_480P_LABEL == 386);
 	assert(SYSTEM_PERFORMANCE_SETTINGS_MENU == 387);
 	assert(CACHE_READ_SIZE_AUTO_LABEL == 391);
-	assert(UI_TEXT_MAX == 392);
+	assert(VIDEO_BACKEND == 392);
+	assert(MENU_VIDEO_BACKEND_SETTINGS == 393);
+	assert(MENUHELP_VIDEO_BACKEND_SETTINGS == 394);
+	assert(UI_TEXT_MAX == 395);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);
