@@ -90,7 +90,8 @@ option(USE_PG "Use Performance Graph" OFF)
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
 # C sources only need to ask whether this build has cache support.
-if("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2")
+if((PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PS2") AND
+   ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2"))
     set(USE_CACHE_DEFAULT ON)
 else()
     set(USE_CACHE_DEFAULT OFF)

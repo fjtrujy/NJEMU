@@ -32,10 +32,10 @@ The reactive-memory refactor currently leaves MVS and CPS2 dependent on cache sy
 After C1 is functional, define defaults deliberately rather than deriving capability in C headers.
 
 - [ ] Audit actual RAM/runtime requirements for PSP, PS2, PS Vita, and Desktop.
-- [ ] Select platform defaults without removing the supported override.
-- [ ] Verify whether Vita/Desktop should default to full-resident while retaining optional cache fallback builds.
+- [x] Select platform defaults without removing the supported override: PSP/PS2 cached, Vita/Desktop full-resident.
+- [x] Keep Vita/Desktop full-resident by default while retaining optional MVS/CPS2 cache fallback builds.
 - [ ] Validate PSP/PS2/Vita/Desktop × MVS/CPS2 configurations that toolchains permit.
-- [ ] Keep demand-read-size `Auto` policy independent from whether cache support is compiled.
+- [x] Keep demand-read-size `Auto` policy independent from whether cache support is compiled.
 
 ## Milestone C3 — Cache-related capability cleanup
 
