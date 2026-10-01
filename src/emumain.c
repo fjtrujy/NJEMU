@@ -642,6 +642,12 @@ int main(int argc, char *argv[]) {
 			/* Global settings must be available before video creation. In particular,
 			 * PS2 selects its physical GS timing from njemu.ini at startup. */
 			load_settings();
+			if (!video_backend_option_available(option_video_backend))
+			{
+				printf("Requested video backend %d is unavailable; falling back to Auto.\n",
+					option_video_backend);
+				option_video_backend = VIDEO_BACKEND_AUTO;
+			}
 			video_backend_select(option_video_backend);
 			printf("Video backend: %s\n", video_driver->ident);
 			printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);

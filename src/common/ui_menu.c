@@ -491,8 +491,8 @@ static int menu_video_backend_settings(void)
 	for (int i = 0; i < count; i++)
 		if (video_backend_choice_at(i).id == option_video_backend)
 			selected = i;
-	/* A stale/unavailable persisted ID resolves to the platform default. */
-	option_video_backend = video_backend_choice_at(selected).id;
+	/* Auto may intentionally be hidden on single-backend platforms. Keep the
+	 * persisted policy unchanged while displaying the effective native backend. */
 	pad_wait_clear();
 	load_background(WP_GAMECFG);
 	ui_popup_reset();

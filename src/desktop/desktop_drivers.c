@@ -59,6 +59,8 @@ video_backend_choice_t video_backend_choice_at(int index)
 
 int video_backend_option_available(int id)
 {
+    if (id == VIDEO_BACKEND_AUTO)
+        return 1;
     for (int i = 0; i < video_backend_choice_count(); i++)
         if (video_backend_choice_at(i).id == id)
             return 1;
