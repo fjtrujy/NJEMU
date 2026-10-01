@@ -85,18 +85,18 @@ For each option:
 
 Desktop currently treats `USE_DESKTOP_GL` as a mutually exclusive build-time source selection: the normal SDL renderer and the OpenGL 3.3 renderer are not present in the same binary. Convert video backend selection into a common compiled-capability plus runtime-policy model, consistent with the rest of this plan. The UI/configuration model is platform-independent even when a platform currently has only one backend.
 
-- [ ] Refactor the Desktop video backends behind a common interface so SDL and OpenGL can coexist in one binary without duplicate public symbols or global ownership.
-- [ ] Compile both Desktop backends by default when their dependencies are available; retain a CMake capability switch only where it is useful for dependency/minimal-build validation, not as the user's renderer preference.
+- [x] Refactor the Desktop video backends behind a common interface so SDL and OpenGL can coexist in one binary without duplicate public symbols or global ownership.
+- [x] Compile both Desktop backends by default when their dependencies are available; retain a CMake capability switch only where it is useful for dependency/minimal-build validation, not as the user's renderer preference.
 - [ ] Remove the current `USE_DESKTOP_GL`/`GUI` mutual exclusion by making GUI presentation work with either selected backend, without silently falling back to SDL.
-- [ ] Add a global `Video backend` setting to the emulator menu on every platform. Keep this emulator-wide rather than per-game.
-- [ ] Populate the setting from the backends compiled for the current platform instead of hardcoding a Desktop-only list. Desktop initially exposes `Auto`, `SDL`, and `OpenGL`; single-backend platforms expose their effective backend.
-- [ ] Make the setting editable only when more than one selectable backend is compiled. On single-backend platforms keep the row visible but disabled/read-only so the active backend remains discoverable.
+- [x] Add a global `Video backend` setting to the emulator menu on every platform. Keep this emulator-wide rather than per-game.
+- [x] Populate the setting from the backends compiled for the current platform instead of hardcoding a Desktop-only list. Desktop initially exposes `Auto`, `SDL`, and `OpenGL`; single-backend platforms expose their effective backend.
+- [x] Make the setting editable only when more than one selectable backend is compiled. On single-backend platforms keep the row visible but disabled/read-only so the active backend remains discoverable.
 - [ ] Define deterministic `Auto` policy and startup fallback/error semantics. An explicitly requested unavailable backend must be reported rather than silently changing the user's choice.
-- [ ] Persist the backend setting in the global configuration using stable backend IDs. Keep translations/UI IDs deterministic across all platforms and gracefully resolve a configured backend that is unavailable in the current build.
-- [ ] Make backend changes restart the emulator/video subsystem at a safe boundary; do not switch live while backend-owned GPU resources exist unless lifecycle correctness is demonstrated.
+- [x] Persist the backend setting in the global configuration using stable backend IDs. Keep translations/UI IDs deterministic across all platforms and gracefully resolve a configured backend that is unavailable in the current build.
+- [x] Make backend changes restart the emulator/video subsystem at a safe boundary; do not switch live while backend-owned GPU resources exist unless lifecycle correctness is demonstrated.
 - [ ] Extend Desktop CI to build/test the dual-backend binary and, where practical, retain focused single-capability builds to catch accidental coupling.
 - [ ] Add runtime smoke/regression coverage for SDL and OpenGL on representative CPS1/CPS2/MVS/NCDZ content, including GUI navigation and save-state thumbnail paths.
-- [ ] Document which renderer is active in diagnostics so performance/correctness comparisons are unambiguous.
+- [x] Document which renderer is active in diagnostics so performance/correctness comparisons are unambiguous.
 
 ## Milestone C5 — Preprocessor audit
 
