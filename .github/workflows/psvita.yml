@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         target: [MVS, NCDZ, CPS1, CPS2]
-        use_vitagl: [OFF, ON] # GXM/vita2d and vitaGL backends
+        use_vitagl: [OFF, ON] # GXM-only and dual GXM+vitaGL builds
         gui: [OFF, ON]
         include:
           - target: MVS

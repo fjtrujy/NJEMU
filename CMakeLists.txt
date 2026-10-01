@@ -539,7 +539,7 @@ endif()
 # GPU backends replaying a recorded work frame (see common/hw_recorder.h)
 if (PLATFORM STREQUAL "PSVITA")
     if (USE_VITAGL)
-        list(REMOVE_ITEM OS_SRC psvita/psvita_video.c)
+        add_definitions(-DHAVE_VIDEO_BACKEND_VITAGL=1)
         list(APPEND OS_SRC psvita/psvita_video_gl.c)
     endif()
     list(APPEND OS_SRC
@@ -1011,6 +1011,7 @@ elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
     # defines PATH_MAX as 4096: provide the same value to the whole build.
     target_compile_definitions(${TARGET} PRIVATE PATH_MAX=4096)
+    target_link_libraries(${TARGET} PUBLIC vita2d)
     if (USE_VITAGL)
         target_link_libraries(${TARGET} PUBLIC
             vitaGL
@@ -1022,8 +1023,6 @@ elseif(PLATFORM STREQUAL "PSVITA")
             mathneon
             stdc++
         )
-    else()
-        target_link_libraries(${TARGET} PUBLIC vita2d)
     endif()
     target_link_libraries(${TARGET} PUBLIC
         SceDisplay_stub

@@ -1316,7 +1316,7 @@ static void psvita_setUIScissor(void *data, int x, int y, int w, int h)
     v->ui_clip = (RECT){ x, y, x1, y1 };
 }
 
-video_driver_t video_psvita = {
+video_driver_t video_psvita_gxm = {
     .ident = "psvita",
     .init = psvita_init,
     .free = psvita_free,
