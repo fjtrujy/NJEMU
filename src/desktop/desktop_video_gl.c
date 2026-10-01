@@ -28,6 +28,7 @@
 #include "emucfg.h"
 #include "common/hw_recorder.h"
 #include "common/video_driver.h"
+#include "common/ui_draw_driver.h"
 #include "common/video_geometry.h"
 #include "desktop/desktop_frame_dump.h"
 
@@ -96,6 +97,7 @@
 	X(Uniform1i) \
 	X(Uniform4f) \
 	X(DrawElementsBaseVertex) \
+	X(DrawArrays) \
 	X(GenFramebuffers) \
 	X(DeleteFramebuffers) \
 	X(BindFramebuffer) \
@@ -249,6 +251,13 @@ typedef struct desktop_gl_video {
 	uint32_t stat_frames;
 	uint32_t stat_draws;
 	uint32_t stat_quads;
+
+	/* Immediate UI path. UI texture storage is CPU-owned by linear_ui_draw.c;
+	 * OpenGL uploads each submitted region before drawing it. */
+	GLuint ui_tex;
+	GLuint ui_fill_tex;
+	GLuint ui_vbo;
+	RECT ui_clip;
 } desktop_gl_video_t;
 
 
@@ -670,6 +679,14 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 	if (!gld_create_programs(g) || !gld_create_layers(g, layer_textures, layer_textures_count))
 		goto fail;
 
+	g->ui_clip = (RECT){ 0, 0, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT };
+	g->ui_tex = gld_create_texture(1, 1, false);
+	gl.GenTextures(1, &g->ui_fill_tex);
+	gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
+	gld_texture_params();
+	gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	gl.GenBuffers(1, &g->ui_vbo);
+
 	/* Recorder memory: vertex chunks and CLUT chunks, uploaded per present. */
 	g->vertices = malloc((size_t)GLD_MAX_CHUNKS * HW_CHUNK_QUADS * 4 * sizeof(hw_vertex_t));
 	g->cluts = malloc((size_t)GLD_MAX_CLUTS * HW_CLUT_CHUNK_BYTES);
@@ -759,6 +776,9 @@ static void desktop_gl_free(void *data)
 			free(g->pages[p].data);
 		}
 		gl.DeleteTextures(GLD_MAX_CLUTS, g->clut_tex);
+		if (g->ui_tex) gl.DeleteTextures(1, &g->ui_tex);
+		if (g->ui_fill_tex) gl.DeleteTextures(1, &g->ui_fill_tex);
+		if (g->ui_vbo) gl.DeleteBuffers(1, &g->ui_vbo);
 		gl.DeleteTextures(1, &g->dump_color);
 		gl.DeleteRenderbuffers(1, &g->dump_depth);
 		gl.DeleteFramebuffers(1, &g->dump_fbo);
@@ -1045,6 +1065,172 @@ static void desktop_gl_clearColorBuffer(void *data)
 	hw_rec_fill(&g->rec, &g->rec.clip, 0, HW_DEPTH_OFF);
 }
 
+static void gld_ui_setup(desktop_gl_video_t *g, GLuint texture, int tex_w, int tex_h,
+                         const hw_vertex_t *vertices, int count, GLenum mode, int blend)
+{
+	const gld_program_t *p = &g->progs[HW_PROG_DIRECT];
+
+	gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+	{
+		int win_w, win_h;
+		SDL_GL_GetDrawableSize(g->window, &win_w, &win_h);
+		float scale = (float)win_w / GLD_CANVAS_WIDTH;
+		if ((float)win_h / GLD_CANVAS_HEIGHT < scale) scale = (float)win_h / GLD_CANVAS_HEIGHT;
+		int vp_w = (int)(GLD_CANVAS_WIDTH * scale), vp_h = (int)(GLD_CANVAS_HEIGHT * scale);
+		gl.Viewport((win_w - vp_w) / 2, (win_h - vp_h) / 2, vp_w, vp_h);
+	}
+	gl.Disable(GL_DEPTH_TEST);
+	gl.Disable(GL_SCISSOR_TEST);
+	if (blend) {
+		gl.Enable(GL_BLEND);
+		gl.BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	} else {
+		gl.Disable(GL_BLEND);
+	}
+	gl.UseProgram(p->id);
+	gl.Uniform4f(p->u_row_x, 2.0f / GLD_CANVAS_WIDTH, 0.0f, -1.0f, 0.0f);
+	gl.Uniform4f(p->u_row_y, 0.0f, -2.0f / GLD_CANVAS_HEIGHT, 1.0f, 0.0f);
+	gl.Uniform4f(p->u_tex_scale, 1.0f / tex_w, 1.0f / tex_h, 0.0f, 0.0f);
+	gl.ActiveTexture(GL_TEXTURE0);
+	gl.BindTexture(GL_TEXTURE_2D, texture);
+	gl.BindVertexArray(g->vao);
+	gl.BindBuffer(GL_ARRAY_BUFFER, g->ui_vbo);
+	gl.BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)count * sizeof(*vertices), vertices, GL_STREAM_DRAW);
+	gl.VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, u));
+	gl.VertexAttribPointer(1, 2, GL_SHORT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, x));
+	gl.VertexAttribPointer(2, 2, GL_UNSIGNED_SHORT, GL_FALSE, sizeof(hw_vertex_t), (const void *)offsetof(hw_vertex_t, z));
+	gl.DrawArrays(mode, 0, count);
+}
+
+static bool gld_ui_quad(const RECT *clip, hw_vertex_t q[4], int x0, int y0, int x1, int y1,
+                        float u0, float v0, float u1, float v1)
+{
+	if (!hw_clip_quad(clip, &x0, &y0, &x1, &y1, &u0, &v0, &u1, &v1))
+		return false;
+	hw_write_quad(q, (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1,
+		u0, v0, u1, v1, 0, 0);
+	return true;
+}
+
+static void desktop_gl_drawUISprite(void *data, void *tex, int tex_format, int tex_swizzled,
+                                    int tex_width, int tex_height, int tex_stride,
+                                    int su, int sv, int sw, int sh,
+                                    int dx, int dy, int dw, int dh, int blend)
+{
+	desktop_gl_video_t *g = data;
+	hw_vertex_t q[4];
+	GLenum type;
+	GLenum internal;
+	(void)tex_swizzled;
+	(void)tex_width;
+
+	if (tex == NULL || sw <= 0 || sh <= 0 || su < 0 || sv < 0 ||
+		su + sw > tex_stride || sv + sh > tex_height ||
+		!gld_ui_quad(&g->ui_clip, q, dx, dy, dx + dw, dy + dh, 0, 0, sw, sh))
+		return;
+
+	/* The common linear UI storage uses the PSP 16-bit layouts. */
+	if (tex_format == UI_PIXFMT_4444) {
+		internal = GL_RGBA4;
+		type = GL_UNSIGNED_SHORT_4_4_4_4_REV;
+	} else {
+		internal = GL_RGB5_A1;
+		type = GL_UNSIGNED_SHORT_1_5_5_5_REV;
+	}
+	gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	gl.ActiveTexture(GL_TEXTURE0);
+	gl.BindTexture(GL_TEXTURE_2D, g->ui_tex);
+	gld_texture_params();
+	gl.TexImage2D(GL_TEXTURE_2D, 0, internal, sw, sh, 0, GL_RGBA, type, NULL);
+	for (int row = 0; row < sh; row++)
+		gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, row, sw, 1, GL_RGBA, type,
+			(const uint16_t *)tex + (size_t)(sv + row) * tex_stride + su);
+	gld_ui_setup(g, g->ui_tex, sw, sh, q, 4, GL_TRIANGLE_FAN, blend);
+}
+
+static void gld_ui_fill(desktop_gl_video_t *g, int x, int y, int w, int h,
+                        uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3)
+{
+	hw_vertex_t q[4];
+	uint32_t pixels[4] = { c0, c1, c2, c3 };
+	if (w <= 0 || h <= 0 ||
+		!gld_ui_quad(&g->ui_clip, q, x, y, x + w, y + h, 0.5f, 0.5f, 1.5f, 1.5f))
+		return;
+	gl.ActiveTexture(GL_TEXTURE0);
+	gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
+	gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 2, 2, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	gld_ui_setup(g, g->ui_fill_tex, 2, 2, q, 4, GL_TRIANGLE_FAN, 1);
+}
+
+static void desktop_gl_drawUILine(void *data, int x1, int y1, int x2, int y2, uint32_t color)
+{
+	desktop_gl_video_t *g = data;
+	if (y1 == y2) {
+		if (x2 < x1) { int t = x1; x1 = x2; x2 = t; }
+		gld_ui_fill(g, x1, y1, x2 - x1 + 1, 1, color, color, color, color);
+	} else if (x1 == x2) {
+		if (y2 < y1) { int t = y1; y1 = y2; y2 = t; }
+		gld_ui_fill(g, x1, y1, 1, y2 - y1 + 1, color, color, color, color);
+	} else {
+		/* Basic GUI-off paths do not require diagonal lines; keep them visible. */
+		hw_vertex_t v[2] = { { .u=0.5f,.v=0.5f,.x=x1,.y=y1 }, { .u=0.5f,.v=0.5f,.x=x2,.y=y2 } };
+		uint32_t pixels[4] = { color, color, color, color };
+		gl.BindTexture(GL_TEXTURE_2D, g->ui_fill_tex);
+		gl.TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 2, 2, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+		gld_ui_setup(g, g->ui_fill_tex, 2, 2, v, 2, GL_LINES, 1);
+	}
+}
+
+static void desktop_gl_drawUILineGradient(void *data, int x1, int y1, int x2, int y2,
+                                          uint32_t color1, uint32_t color2)
+{
+	/* Axis-aligned gradients cover all current chrome/progress uses. */
+	if (y1 == y2) {
+		if (x2 < x1) { int t=x1; x1=x2; x2=t; uint32_t c=color1; color1=color2; color2=c; }
+		gld_ui_fill(data, x1, y1, x2 - x1 + 1, 1, color1, color2, color1, color2);
+	} else if (x1 == x2) {
+		if (y2 < y1) { int t=y1; y1=y2; y2=t; uint32_t c=color1; color1=color2; color2=c; }
+		gld_ui_fill(data, x1, y1, 1, y2 - y1 + 1, color1, color1, color2, color2);
+	} else {
+		desktop_gl_drawUILine(data, x1, y1, x2, y2, color1);
+	}
+}
+
+static void desktop_gl_drawUIRect(void *data, int x, int y, int w, int h, uint32_t color)
+{
+	gld_ui_fill(data, x, y, w, 1, color, color, color, color);
+	gld_ui_fill(data, x, y + h - 1, w, 1, color, color, color, color);
+	gld_ui_fill(data, x, y, 1, h, color, color, color, color);
+	gld_ui_fill(data, x + w - 1, y, 1, h, color, color, color, color);
+}
+
+static void desktop_gl_fillUIRect(void *data, int x, int y, int w, int h, uint32_t color)
+{
+	gld_ui_fill(data, x, y, w, h, color, color, color, color);
+}
+
+static void desktop_gl_fillUIRectGradient(void *data, int x, int y, int w, int h,
+                                          uint32_t color1, uint32_t color2, int direction)
+{
+	if (direction == UI_GRADIENT_HORIZONTAL)
+		gld_ui_fill(data, x, y, w, h, color1, color2, color1, color2);
+	else
+		gld_ui_fill(data, x, y, w, h, color1, color1, color2, color2);
+}
+
+static void desktop_gl_setUIScissor(void *data, int x, int y, int w, int h)
+{
+	desktop_gl_video_t *g = data;
+	int x1 = x + w, y1 = y + h;
+	if (x < 0) x = 0;
+	if (y < 0) y = 0;
+	if (x1 > GLD_CANVAS_WIDTH) x1 = GLD_CANVAS_WIDTH;
+	if (y1 > GLD_CANVAS_HEIGHT) y1 = GLD_CANVAS_HEIGHT;
+	g->ui_clip = (RECT){ x, y, x1, y1 };
+}
+
 video_driver_t video_desktop_gl = {
 	.ident = "desktop_gl",
 	.init = desktop_gl_init,
@@ -1076,12 +1262,11 @@ video_driver_t video_desktop_gl = {
 	.disableDepthTest = desktop_gl_disableDepthTest,
 	.clearDepthBuffer = desktop_gl_clearDepthBuffer,
 	.clearColorBuffer = desktop_gl_clearColorBuffer,
-	/* The desktop GUI draws through SDL_Renderer: GL builds are GUI=OFF only. */
-	.drawUISprite = NULL,
-	.drawUILine = NULL,
-	.drawUILineGradient = NULL,
-	.drawUIRect = NULL,
-	.fillUIRect = NULL,
-	.fillUIRectGradient = NULL,
-	.setUIScissor = NULL,
+	.drawUISprite = desktop_gl_drawUISprite,
+	.drawUILine = desktop_gl_drawUILine,
+	.drawUILineGradient = desktop_gl_drawUILineGradient,
+	.drawUIRect = desktop_gl_drawUIRect,
+	.fillUIRect = desktop_gl_fillUIRect,
+	.fillUIRectGradient = desktop_gl_fillUIRectGradient,
+	.setUIScissor = desktop_gl_setUIScissor,
 };
