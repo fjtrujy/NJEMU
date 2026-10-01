@@ -31,9 +31,44 @@ thread_driver_t *const thread_driver = &thread_desktop;
 ticker_driver_t *const ticker_driver = &ticker_desktop;
 video_driver_t *video_driver = &video_desktop_sdl;
 
-void desktop_video_select_backend(int backend)
+int video_backend_choice_count(void)
 {
 #ifdef HAVE_VIDEO_BACKEND_OPENGL
+    return 3; /* Auto, SDL, OpenGL */
+#else
+    return 1;
+#endif
+}
+
+video_backend_choice_t video_backend_choice_at(int index)
+{
+#ifdef HAVE_VIDEO_BACKEND_OPENGL
+    static const video_backend_choice_t choices[] = {
+        { VIDEO_BACKEND_AUTO, "Auto" },
+        { VIDEO_BACKEND_NATIVE, "SDL" },
+        { VIDEO_BACKEND_OPENGL, "OpenGL" },
+    };
+    if (index >= 0 && index < 3)
+        return choices[index];
+#else
+    if (index == 0)
+        return (video_backend_choice_t){ VIDEO_BACKEND_NATIVE, "SDL" };
+#endif
+    return (video_backend_choice_t){ -1, "" };
+}
+
+int video_backend_option_available(int id)
+{
+    for (int i = 0; i < video_backend_choice_count(); i++)
+        if (video_backend_choice_at(i).id == id)
+            return 1;
+    return 0;
+}
+
+void video_backend_select(int backend)
+{
+#ifdef HAVE_VIDEO_BACKEND_OPENGL
+    /* Auto deliberately keeps SDL as the conservative compatibility backend. */
     if (backend == VIDEO_BACKEND_OPENGL) {
         video_driver = &video_desktop_gl;
         return;
@@ -44,13 +79,5 @@ void desktop_video_select_backend(int backend)
     video_driver = &video_desktop_sdl;
 }
 
-int desktop_video_backend_count(void)
-{
-#ifdef HAVE_VIDEO_BACKEND_OPENGL
-    return 2;
-#else
-    return 1;
-#endif
-}
 
 const ui_draw_driver_t *const ui_draw_driver = &desktop_ui_draw_driver;

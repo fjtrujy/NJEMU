@@ -194,6 +194,20 @@ typedef struct video_driver
 
 } video_driver_t;
 
+typedef struct video_backend_choice
+{
+	int id;
+	const char *name;
+} video_backend_choice_t;
+
+/* Platform registry used by the global backend setting. A single-backend
+ * platform returns one read-only choice; multi-backend builds return all
+ * compiled choices plus any policy choice such as Auto. */
+int video_backend_choice_count(void);
+video_backend_choice_t video_backend_choice_at(int index);
+int video_backend_option_available(int id);
+void video_backend_select(int id);
+
 extern video_driver_t *video_driver;
 
 extern RECT full_rect;

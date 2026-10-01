@@ -38,9 +38,6 @@
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
-#ifdef DESKTOP
-#include "desktop/desktop_video.h"
-#endif
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -645,10 +642,8 @@ int main(int argc, char *argv[]) {
 			/* Global settings must be available before video creation. In particular,
 			 * PS2 selects its physical GS timing from njemu.ini at startup. */
 			load_settings();
-#ifdef DESKTOP
-			desktop_video_select_backend(option_video_backend);
+			video_backend_select(option_video_backend);
 			printf("Video backend: %s\n", video_driver->ident);
-#endif
 			printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		if (!pad_init()) {
 			printf("Failed to initialize input driver\n");
