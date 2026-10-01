@@ -1074,7 +1074,7 @@ static uint32_t read_cache_rawfile(uint32_t offset)
 			memset(dst, 0, read_size);
 #endif
 	}
-#if (EMU_SYSTEM == MVS) && defined(CACHE_IO_PROFILE)
+#ifdef CACHE_IO_PROFILE
 	else
 		crom_io_profile.hits++;
 #endif

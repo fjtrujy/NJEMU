@@ -74,7 +74,7 @@ static void ps2_cache_storage_close(int handle)
 
 static void ps2_cache_storage_profile(int handle, const char *name)
 {
-#if defined(PS2_FAST_CACHE) && defined(CACHE_IO_PROFILE)
+#ifdef CACHE_IO_PROFILE
 	cacheio_stats_t s;
 	if (handle < 0 || cacheioGetStats(handle, &s) < 0) return;
 	printf("[cache-iop] %s reads=%llu bytes=%llu fragments=%u device_calls=%llu "
