@@ -551,7 +551,7 @@ static int menu_system_video_settings(void)
 }
 #endif
 
-#if USE_CACHE && (EMU_SYSTEM == MVS || EMU_SYSTEM == CPS2)
+#if USE_CACHE
 static int menu_system_performance_settings(void)
 {
 	int update = 1;
@@ -2710,7 +2710,7 @@ static menu2_t mainmenu2[] =
 #ifdef PS2
 	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
 #endif
-#if USE_CACHE && (EMU_SYSTEM == MVS || EMU_SYSTEM == CPS2)
+#if USE_CACHE
 	{ MENU_SYSTEM_PERFORMANCE_SETTINGS, menu_system_performance_settings, ICON_SYSTEM, MENUHELP_SYSTEM_PERFORMANCE_SETTINGS },
 #endif
 	{ MENU_KEY_CONFIGURATION,   menu_keycfg,    ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION   },

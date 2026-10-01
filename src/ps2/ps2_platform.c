@@ -51,7 +51,7 @@ static bool stage_drivers_before_iop_reset(void)
 		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
 	int result;
 
-#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
+#if defined(PS2_FAST_CACHE)
 	{
 		uint32_t boot_requirements = 0u;
 
@@ -74,7 +74,7 @@ static bool stage_drivers_before_iop_reset(void)
 
 	return true;
 #else
-#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
+#if defined(PS2_FAST_CACHE)
 	char cwd[FILENAME_MAX];
 	enum BootDeviceIDs boot_device = BOOT_DEVICE_UNKNOWN;
 
@@ -108,7 +108,7 @@ static bool prepare_IOP()
 static bool init_drivers()
 {
 	init_only_boot_ps2_filesystem_driver();
-#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
+#if defined(PS2_FAST_CACHE)
 	if (cacheio_driver_requested) {
 		enum CACHEIO_INIT_STATUS cacheio_status = init_cacheio_driver(false);
 		if (cacheio_status == CACHEIO_INIT_STATUS_OK) {
@@ -124,7 +124,7 @@ static bool init_drivers()
 	}
 #endif
 	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
-#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
+#if defined(PS2_FAST_CACHE)
 		if (cacheio_driver_initialized) {
 			ps2_cache_storage_set_available(false);
 			deinit_cacheio_driver(false);
@@ -144,7 +144,7 @@ static bool init_drivers()
 static void deinit_drivers()
 {
 	deinit_audio_driver();
-#if defined(PS2_FAST_CACHE) && ((EMU_SYSTEM == MVS) || (EMU_SYSTEM == CPS2))
+#if defined(PS2_FAST_CACHE)
 	if (cacheio_driver_initialized) {
 		ps2_cache_storage_set_available(false);
 		deinit_cacheio_driver(false);

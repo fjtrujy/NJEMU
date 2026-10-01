@@ -49,7 +49,6 @@
 #define SYSTEM_NAME				"CPS1"
 #define FPS						60.0
 #define TICKS_PER_FRAME			16666.666666
-#define USE_CACHE				0
 #define EEPROM_SIZE				128
 #define GULIST_SIZE				300*1024	// 300KB
 #define ENABLE_RASTER_OPTION	1			// on
@@ -70,7 +69,6 @@
 #define TICKS_PER_FRAME			16769.144773
 	/* Keep streaming cache support compiled in unconditionally. Runtime memory
 	 * planning decides whether CPS2 uses it or loads the complete GFX region. */
-	#define USE_CACHE				1
 #define CACHE_VERSION			"V24"
 #define EEPROM_SIZE				128
 #define GULIST_SIZE				300*1024	// 300KB
@@ -90,7 +88,6 @@
 #define SYSTEM_NAME				"NEO·GEO"
 #define FPS						59.185606
 #define TICKS_PER_FRAME			16896.0
-#define USE_CACHE				1
 #define CACHE_VERSION			"V24"
 #define GULIST_SIZE				300*1024	// 300KB
 
@@ -108,7 +105,6 @@
 #define SYSTEM_NAME				"NEO·GEO CDZ"
 #define FPS						59.185606
 #define TICKS_PER_FRAME			16896.0
-#define USE_CACHE				0
 #define GULIST_SIZE				300*1024	// 300KB
 
 #endif
