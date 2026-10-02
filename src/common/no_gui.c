@@ -96,7 +96,12 @@ void file_browser(void) {
 #endif
 	// Get the game name from a file called game_name.ini
 	{
-		int fd = open("game_name.ini", O_RDONLY);
+		char path[PATH_MAX];
+		int fd;
+
+		if (!path_format(path, sizeof(path), "%sgame_name.ini", launchDir))
+			return;
+		fd = open(path, O_RDONLY);
 		if (fd >= 0) {
 			ssize_t n = read(fd, game_name, sizeof(game_name) - 1);
 			if (n > 0) {
