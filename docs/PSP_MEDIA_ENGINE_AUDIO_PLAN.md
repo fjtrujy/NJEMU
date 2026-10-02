@@ -136,6 +136,20 @@ before migrating sound emulation.  During the current bootstrap work
 `usbhostfs_pc` was running but `pspsh` did not establish a session, so no new
 hardware measurement is claimed here.
 
+`PSP_AUDIO_PROFILE=ON` now provides a focused replacement for the old temporary
+instrumentation.  It is OFF by default and records 300-buffer windows to
+`psp_audio_profile.log`, separating:
+
+- total producer time (`producer`);
+- sound-chip callback/synthesis (`callback`);
+- clipping/resampling/PCM conversion (`post`);
+- blocking native output (`output_block`);
+- actual sound-thread loop period (`loop_period`).
+
+The log also records the configured sample count/rate/channels and expected
+buffer period.  File output occurs only once per 300 buffers so diagnostic I/O
+does not contaminate every measured callback.
+
 ## Milestones and status
 
 ### M1 - CPU reference seam [complete]

@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "common/emulator_options.h"
+#include "common/audio_profile.h"
 #include "common/sound.h"
 #include <string.h>
 #include "sound/sndintrf.h"
@@ -144,8 +145,11 @@ static void sound_update_stereo(int16_t *buffer)
 	uint32_t samples = sound->samples;
 	int32_t *srcL, *srcR, sample;
 	int16_t *dst = buffer;
+	uint64_t start = audio_profile_now_us();
 
 	(*sound->callback)(stream_buffer, samples);
+	audio_profile_add(AUDIO_PROFILE_CALLBACK, audio_profile_now_us() - start);
+	start = audio_profile_now_us();
 
 	srcL = stream_buffer[0];
 	srcR = stream_buffer[1];
@@ -163,13 +167,18 @@ static void sound_update_stereo(int16_t *buffer)
 
 	memset(stream_buffer[0], 0, sound->samples * sizeof(int32_t));
 	memset(stream_buffer[1], 0, sound->samples * sizeof(int32_t));
+	audio_profile_add(AUDIO_PROFILE_POST_PROCESS, audio_profile_now_us() - start);
 }
 
 #else
 
 static void sound_update_stereo(int16_t *buffer)
 {
+	uint64_t start = audio_profile_now_us();
+
 	(*sound->callback)(stream_buffer, samples_this_update);
+	audio_profile_add(AUDIO_PROFILE_CALLBACK, audio_profile_now_us() - start);
+	start = audio_profile_now_us();
 
 	clip_stream(stream_buffer[0]);
 	clip_stream(stream_buffer[1]);
@@ -180,6 +189,7 @@ static void sound_update_stereo(int16_t *buffer)
 	samples_left_over  += samples_per_update;
 	samples_this_update = (uint32_t)samples_left_over;
 	samples_left_over  -= samples_this_update;
+	audio_profile_add(AUDIO_PROFILE_POST_PROCESS, audio_profile_now_us() - start);
 }
 
 #endif
@@ -193,7 +203,11 @@ static void sound_update_stereo(int16_t *buffer)
 
 static void sound_update_mono(int16_t *buffer)
 {
+	uint64_t start = audio_profile_now_us();
+
 	(*sound->callback)(stream_buffer, samples_this_update);
+	audio_profile_add(AUDIO_PROFILE_CALLBACK, audio_profile_now_us() - start);
+	start = audio_profile_now_us();
 
 	clip_stream(stream_buffer[0]);
 
@@ -202,6 +216,7 @@ static void sound_update_mono(int16_t *buffer)
 	samples_left_over  += samples_per_update;
 	samples_this_update = (uint32_t)samples_left_over;
 	samples_left_over  -= samples_this_update;
+	audio_profile_add(AUDIO_PROFILE_POST_PROCESS, audio_profile_now_us() - start);
 }
 
 #endif

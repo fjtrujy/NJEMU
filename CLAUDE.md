@@ -42,6 +42,7 @@ Useful options include:
 - `COMMAND_LIST=ON/OFF`;
 - `ADHOC=ON/OFF` (PSP where supported);
 - `PSP_ME_AUDIO=ON/OFF` (experimental PSP-only Media Engine producer; default OFF);
+- `PSP_AUDIO_PROFILE=ON/OFF` (PSP-only audio timing log; default OFF);
 - `USE_ASAN=ON` (Desktop development).
 
 PSP packages request the large user-memory partition (`MEMSIZE=1`). Platform

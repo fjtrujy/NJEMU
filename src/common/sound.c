@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "thread_driver.h"
 #include "audio_driver.h"
+#include "audio_profile.h"
 #include "audio_producer_driver.h"
 
 
@@ -50,11 +51,19 @@ struct sound_t *sound = &sound_info;
 static int32_t sound_update_thread(uint32_t args, void *argp)
 {
 	int flip = 0;
+	uint64_t last_loop_start = 0;
 	(void)args;
 	(void)argp;
 
 	while (sound_active)
 	{
+		uint64_t loop_start = audio_profile_now_us();
+		uint64_t start;
+
+		if (last_loop_start != 0)
+			audio_profile_add(AUDIO_PROFILE_LOOP_PERIOD, loop_start - last_loop_start);
+		last_loop_start = loop_start;
+
 		if (Sleep)
 		{
 			do
@@ -64,11 +73,18 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 		}
 
 		if (sound_enable)
+		{
+			start = audio_profile_now_us();
 			audio_producer_driver->render(sound->update, sound_buffer[flip]);
+			audio_profile_add(AUDIO_PROFILE_PRODUCER, audio_profile_now_us() - start);
+		}
 		else
 			memset(sound_buffer[flip], 0, sound->samples * sound->channels * sizeof(int16_t));
 
+		start = audio_profile_now_us();
 		audio_driver->srcOutputBlocking(game_audio, sound_volume, sound_buffer[flip], sound->samples * sound->channels * sizeof(int16_t));
+		audio_profile_add(AUDIO_PROFILE_OUTPUT_BLOCK, audio_profile_now_us() - start);
+		audio_profile_buffer_completed();
 		flip ^= 1;
 	}
 
@@ -172,6 +188,8 @@ int sound_thread_start(void)
 
 	memset(sound_buffer[0], 0, sizeof(sound_buffer[0]));
 	memset(sound_buffer[1], 0, sizeof(sound_buffer[1]));
+	audio_profile_configure((uint32_t)sound->samples, (uint32_t)sound->frequency,
+		(uint32_t)sound->channels);
 
 	if (!audio_producer_driver->init())
 		return 0;
