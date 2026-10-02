@@ -56,14 +56,11 @@ jobs:
         git clone --depth 1 https://github.com/Rinnegatamante/vitashark
         make -C vitashark -j $(getconf _NPROCESSORS_ONLN) install
         git clone --depth 1 https://github.com/Rinnegatamante/vitaGL
-        # Current vitaGL master has an incomplete helper rename: the helper is
-        # defined as update_scissor_test_uniforms(), while vgl.c/gxm.c still
-        # call update_scissor_clear_precomputed_uniforms(). Patch the current
-        # checkout in place instead of pinning NJEMU to an older vitaGL.
-        grep -q 'void update_scissor_test_uniforms(void)' vitaGL/source/vgl.c
-        grep -q 'update_scissor_clear_precomputed_uniforms();' vitaGL/source/vgl.c
-        grep -q 'update_scissor_clear_precomputed_uniforms();' vitaGL/source/gxm.c
-        sed -i 's/update_scissor_clear_precomputed_uniforms()/update_scissor_test_uniforms()/g' vitaGL/source/vgl.c vitaGL/source/gxm.c
+        # Keep compatibility with the short-lived upstream helper rename
+        # regression without requiring that broken revision to be present.
+        if grep -R -q 'update_scissor_clear_precomputed_uniforms' vitaGL/source; then
+          sed -i 's/update_scissor_clear_precomputed_uniforms/update_scissor_test_uniforms/g' vitaGL/source/*.c vitaGL/source/*.h
+        fi
         make -C vitaGL -j $(getconf _NPROCESSORS_ONLN) USE_SCRATCH_MEMORY=1 install
 
     - name: Resolve cache override
