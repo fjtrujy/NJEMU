@@ -19,6 +19,7 @@
   - [PSP (PlayStation Portable)](#psp-playstation-portable)
   - [PS2 (PlayStation 2)](#ps2-playstation-2)
   - [Desktop (PC/SDL2)](#desktop-pcsdl2)
+  - [PS Vita](#ps-vita)
 - [ROM Compatibility](#rom-compatibility)
   - [MVS-Specific ROM Notes](#mvs-specific-rom-notes)
   - [CPS2-Specific Cache Notes](#cps2-specific-cache-notes)
@@ -48,18 +49,19 @@
 
 ## Overview
 
-**NJEMU** is an open-source arcade emulator for classic Capcom and SNK hardware. It originated as a **PSP (PlayStation Portable)** project and now supports PSP, **PlayStation 2**, and **Desktop/SDL2** from the same C codebase.
+**NJEMU** is an open-source arcade emulator for classic Capcom and SNK hardware. It originated as a **PSP (PlayStation Portable)** project and now supports PSP, **PlayStation 2**, **PS Vita**, and **Desktop/SDL2** from the same C codebase.
 
 **Current Version:** 2.4.0  
 **Based on:** NJEmu 2.3.5
 
 ### Multi-Platform Status
 
-The PSP-first codebase has completed its platform-driver refactor. All four emulator cores and the shared GUI/menu frontend now run through common contracts on all three supported hosts:
+The PSP-first codebase has completed its platform-driver refactor. All four emulator cores and the shared GUI/menu frontend now run through common contracts on all four supported hosts:
 
 - **PSP** - Original platform with native GU/audio/input backends
 - **PS2** - Native gsKit/PS2SDK backend for all four cores and the common GUI
 - **DESKTOP** - SDL2 backend for all four cores and the common GUI, also used for tests and debugging
+- **PS VITA** - Native Vita backend with both GXM/vita2d and vitaGL available in every build
 
 MVS, CPS1, CPS2, and NCDZ each have a single platform-neutral `sprite.c`. Target code owns emulation and rendering semantics; the selected host backend owns native texture layout, GPU submission, audio, physical input, threading, timing, lifecycle, and optional power capabilities.
 
@@ -78,12 +80,12 @@ The current architecture follows these rules:
 
 ### Current Porting Status
 
-| Emulator | PSP | PS2 | PC |
-|----------|-----|-----|-----|
-| **MVS** | ✅ Full | ✅ Full | ✅ Full |
-| **CPS1** | ✅ Full | ✅ Full | ✅ Full |
-| **CPS2** | ✅ Full | ✅ Full | ✅ Full |
-| **NCDZ** | ✅ Full | ✅ Full | ✅ Full |
+| Emulator | PSP | PS2 | PC | PS Vita |
+|----------|-----|-----|-----|---------|
+| **MVS** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **CPS1** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **CPS2** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| **NCDZ** | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
 
 > **Note:** "Full" here means the emulator core and common GUI/menu frontend are available on the platform. Platform-specific features such as PSP Ad Hoc remain capability-dependent.
 
@@ -100,10 +102,10 @@ The current architecture follows these rules:
 | **MVS** | MVSPSP | Neo-Geo MVS/AES Emulator | [README](resources/mvs/README.md) |
 | **NCDZ** | NCDZPSP | Neo-Geo CD Emulator | [README](resources/ncdz/README.md) |
 
-Each target has specific setup requirements. See the linked README files for:
-- Required files (ROMs, BIOS)
-- Directory structure
-- Troubleshooting tips
+The authoritative external-file contract is
+[docs/RUNTIME_FILES_AUDIT.md](docs/RUNTIME_FILES_AUDIT.md). The per-target
+resource READMEs remain useful background material, but runtime requirements
+and canonical lookup paths should be checked against that audit.
 
 ## Supported Platforms
 
@@ -112,6 +114,7 @@ Each target has specific setup requirements. See the linked README files for:
 | **PSP** | Sony PlayStation Portable | ✅ Original platform |
 | **PS2** | Sony PlayStation 2 | ✅ Full |
 | **DESKTOP** | PC/Desktop (SDL2) | ✅ Full |
+| **PS VITA** | Sony PlayStation Vita | ✅ Full |
 
 ### PSP Runtime and Packaging
 
@@ -254,31 +257,44 @@ Button layouts automatically flip/rotate when:
 
 ### Directory Structure
 
-All folders are automatically created on first launch.
+The examples below show the runtime layout. Generated translation packs and the
+external GBK font are installed by CMake. ROMs, BIOS files, converter output,
+configuration, saves, and NVRAM are user/runtime data and are never part of the
+NJEMU release manifest.
+
+For the complete per-core/per-platform classification and lookup order, see
+[docs/RUNTIME_FILES_AUDIT.md](docs/RUNTIME_FILES_AUDIT.md).
 
 #### CPS1PSP / CPS2PSP
 
 ```
 /PSP/GAME/CPS1PSP/              (or CPS2PSP/)
 ├── EBOOT.PBP                   # Main executable
+├── lang/                       # Generated UI translation packs
+├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
 ├── zipname.cps1                # English game names (REQUIRED)
 ├── zipnamej.cps1               # Japanese game names (optional)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
-├── cache/                      # Cache files (CPS2 only, REQUIRED)
+├── cache/                      # CPS2 streaming cache, only when needed
 ├── config/                     # Per-game settings
 ├── nvram/                      # EEPROM saves
-├── snap/                       # Screenshots
 └── state/                      # Save states
 ```
+
+CPS1 does not use `cache/`. CPS2 first tries to keep decoded graphics fully
+resident; cache files are only required when a cache-enabled build falls back
+to streaming.
 
 #### MVSPSP
 
 ```
 /PSP/GAME/MVSPSP/
 ├── EBOOT.PBP                   # Main executable
+├── lang/                       # Generated UI translation packs
+├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
 ├── zipname.mvs                 # English game names (REQUIRED)
@@ -286,29 +302,41 @@ All folders are automatically created on first launch.
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 │   └── neogeo.zip              # BIOS file (REQUIRED)
-├── cache/                      # Cache files (created by romcnv)
+├── processed/                  # Canonical romcnv_mvs processed assets
 ├── config/                     # Per-game settings
 ├── memcard/                    # Memory card saves
 ├── nvram/                      # SRAM saves
-├── snap/                       # Screenshots
 └── state/                      # Save states
 ```
+
+Cache-enabled builds can still read historical MVS processed assets from
+`cache/` as a migration fallback, but new converter output belongs under
+`processed/`.
 
 #### NCDZPSP
 
 ```
 /PSP/GAME/NCDZPSP/
 ├── EBOOT.PBP                   # Main executable
+├── lang/                       # Generated UI translation packs
+├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
+├── neocd.bin                   # Neo Geo CD BIOS (user supplied, REQUIRED)
+├── 000-lo.lo                   # Neo Geo low ROM (user supplied, REQUIRED)
 ├── command.dat                 # MAME Plus! command list (optional)
-├── roms/                       # CD-ROM images
-│   └── [Game Name]/            # Game folder
-│       ├── *.PRG, *.SPR, etc.  # CD-ROM files (or single .zip)
+├── roms/                       # Extracted game folders or ZIP archives
+│   └── [Game Name]/            # Must contain IPL.TXT
+│       ├── *.PRG, *.SPR, etc.  # Neo Geo CD game files
 │       └── mp3/                # MP3 audio tracks
+├── data/loading.png            # Optional loading image
 ├── config/                     # Per-game settings
-├── snap/                       # Screenshots
+├── backup.bin                  # Backup RAM (auto-created)
 └── state/                      # Save states
 ```
+
+NJEMU currently opens NCDZ games as extracted directories or ZIP archives; it
+does not mount ISO/BIN/CUE disc images directly. PSP screenshots are written to
+`ms0:/PICTURE/<CORE>/`, outside the application directory.
 
 ---
 
@@ -329,6 +357,11 @@ All folders are automatically created on first launch.
 The UI language is selected through the platform driver. PSP and PS2 map their system language to Japanese, Spanish, Simplified Chinese, Traditional Chinese, or English; Desktop currently uses English. If a requested catalog is unavailable, NJEMU falls back to English.
 
 The `zipnamej.*` files (Japanese game name lists) are optional and can be deleted if not needed.
+
+The build generates `lang/*.lng` and `font/gbk_s14.bin` from the tracked
+translation/font sources. Both GUI and no-GUI binaries initialize the common UI
+text/draw services, so the English catalog and GBK font are runtime assets in
+both configurations.
 
 ---
 
@@ -396,7 +429,15 @@ Each target has a corresponding resource folder under `resources/` containing fi
 | MVS | `resources/mvs/` | [README](resources/mvs/README.md) |
 | NCDZ | `resources/ncdz/` | [README](resources/ncdz/README.md) |
 
-These resource files are automatically copied to the build directory and included in release artifacts when running CMake.
+For local development, CMake stages the target resource tree into the build
+root, normally using symlinks for read-only entries and private copies for
+mutable entries. This deliberately allows local ROM/BIOS/cache data under
+`resources/<target>/` to be used for validation.
+
+Release/install output is different: `cmake --install` and Vita VPK packaging
+use an explicit distribution manifest, so local ROMs, BIOS files, converter
+output, caches, saves, NVRAM, and configuration are not copied into release
+artifacts merely because they exist under `resources/`.
 
 ---
 
@@ -468,7 +509,11 @@ After a successful build, you'll find the following files in the build directory
 - `EBOOT.PBP` - The main executable for PSP
   - The PBP embeds the target-specific XMB icon from `data/{target}.png`.
   - Its XMB title includes the target and NJEMU version (for example, `MVS 2.4 for PSP`).
-- Resource entries are staged directly in the build root. Large/read-only assets are **linked** back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Set `-DCOPY_RESOURCES=ON` to force a full copy.
+- The build root stages an explicit per-target runtime set. Known read-only
+  entries are **linked** back to `resources/{target}/` by default, while
+  writable entries such as `config/`, `nvram/`, `memcard/`, `state/`,
+  and `game_name.ini` are private build copies. `-DCOPY_RESOURCES=ON` copies
+  that same explicit set instead of linking it.
 
 #### Configuring the Game (without GUI)
 
@@ -574,7 +619,23 @@ cmake --build . --parallel
 
 After a successful build, you'll find the following in the build directory:
 - `{TARGET}` - The main executable for PS2
-- Resource entries are staged directly in the build root. Large/read-only assets such as `roms/`, `data/`, `cache/`, `rominfo.*`, and `zipname.*` are **linked** from `resources/{target}/`; writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. This matches the runtime `launchDir` layout and PCSX2's `host:` root without letting runtime writes modify `resources/`. Use `-DCOPY_RESOURCES=ON` to force a full copy.
+- Resource entries are staged directly in the build root from an explicit
+  per-target set. Read-only entries such as applicable `roms/`, `data/`,
+  `cache/`, `processed/`, `rominfo.*`, and `zipname.*` are **linked**
+  from `resources/{target}/`; writable entries such as `config/`, `nvram/`,
+  `memcard/`, `state/`, and `game_name.ini` are private build copies. This
+  matches the runtime `launchDir` layout and PCSX2's `host:` root without
+  letting runtime writes modify `resources/`. `-DCOPY_RESOURCES=ON` copies
+  that same explicit set instead of linking it.
+
+Use `cmake --install .` for a distributable tree. The install step uses the
+explicit runtime manifest and intentionally excludes local ROMs, BIOS files,
+processed assets, caches, saves, NVRAM, and configuration.
+
+With `-DPS2_EXTERNAL_IRX_IMAGE=ON`, the install tree instead contains
+`BOOT.ELF`, the real `{TARGET}` engine executable, `elf_path.ini`, and
+`ps2_drivers.irximg`. The default embedded-driver build does not require those
+external support files.
 
 #### Configuring the Game (without GUI)
 
@@ -676,7 +737,14 @@ cmake --build . --parallel
 
 After a successful build, you'll find the following files in the build directory:
 - `{TARGET}` - The main executable
-- Resource entries are staged directly in the build root. Large/read-only assets are linked back to `resources/{target}/`, while writable data such as `config/`, `nvram/`, `memcard/`, `state/`, screenshots, and `game_name.ini` are private build copies. Use `-DCOPY_RESOURCES=ON` to force a full copy.
+- The build root stages an explicit per-target runtime set. Known read-only
+  entries are linked back to `resources/{target}/`; writable entries such as
+  `config/`, `nvram/`, `memcard/`, `state/`, and `game_name.ini` are
+  private build copies. `-DCOPY_RESOURCES=ON` copies that same explicit set
+  instead of linking it.
+
+Use `cmake --install .` when you want a distributable tree without local
+ROM/BIOS/cache/save data from the development resource directory.
 
 #### Configuring the Game (without GUI)
 
@@ -714,6 +782,35 @@ lldb ./{TARGET}
 
 ---
 
+### PS Vita
+
+#### Prerequisites
+
+- [VitaSDK](https://vitasdk.org/) with `VITASDK` configured
+- vita2d
+- vitaGL and vitashark
+- miniz built for Vita
+
+#### Building
+
+    mkdir build_vita_{target}
+    cd build_vita_{target}
+    cmake -DPLATFORM="PSVITA" -DCMAKE_TOOLCHAIN_FILE=${VITASDK}/share/vita.toolchain.cmake -DTARGET={TARGET} ..
+    cmake --build . --parallel
+    cmake --install .
+
+Every Vita build contains both graphics backends. Runtime selection is
+`Auto / GXM / VitaGL`; there is no `USE_VITAGL` build option.
+
+The generated `{TARGET}.vpk` contains only NJEMU-distributed metadata,
+generated translations/font data, and the empty runtime layout. On first use,
+packaged files are copied from `app0:` to the writable runtime root
+`ux0:data/<target>/`. User ROMs, BIOS files, processed assets, caches, saves,
+and configuration belong in that writable data tree and are never packaged
+from local `resources/` contents.
+
+---
+
 ## ROM Compatibility
 
 - ROMs must be in **MAME 0.152** compatible format
@@ -740,7 +837,11 @@ ROM file names inside the ZIP can be anything, but **CRC values must match** MAM
 | **MVS** | 267+ games | Including bootlegs and homebrew |
 | **NCDZ** | All official releases | All officially released Neo-Geo CD games |
 
-See `docs/gamelist_*.txt` for complete game lists.
+Tracked supported-game lists are kept with each target's distributed metadata:
+
+- `resources/cps1/gamelist_cps1.txt`
+- `resources/cps2/gamelist_cps2.txt`
+- `resources/mvs/gamelist_mvs.txt`
 
 ### MVS-Specific ROM Notes
 
@@ -787,7 +888,21 @@ These ROM sets have different parent/clone relationships than MAME (bootleg-only
 
 ### CPS2-Specific Cache Notes
 
-**All CPS2 games require cache files** - create them with `romcnv_cps2`.
+CPS2 cache files are a **conditional streaming fallback**, not an unconditional
+requirement. The runtime first probes whether the decoded GFX region can stay
+fully resident. If it fits, the original ROM ZIPs are loaded and decoded
+directly.
+
+`USE_CACHE` defaults to ON for CPS2 on PSP and PS2, where a game that does not
+fit fully in RAM can fall back to converter output from `romcnv_cps2`. Desktop
+and PS Vita default to `USE_CACHE=OFF` and therefore require a successful
+full-resident allocation.
+
+Supported cache representations are:
+
+- `cache/<game>.cache`
+- `cache/<game>_cache.zip`
+- `cache/<game>_cache/` with `cache_info` and block files
 
 #### Special Cases
 
@@ -798,16 +913,29 @@ These ROM sets have different parent/clone relationships than MAME (bootleg-only
 
 ### NCDZ-Specific Setup
 
+#### BIOS
+
+Two user-supplied top-level files are required:
+
+- `neocd.bin`
+- `000-lo.lo`
+
+They are validated by size/CRC by the core and are not distributed with NJEMU.
+
 #### Game Files
 
 Neo-Geo CD games can be stored in two ways:
 
-1. **Uncompressed folder:** Create a folder with all CD-ROM files
-2. **ZIP archive:** Compress all files into a single ZIP
+1. **Extracted folder:** Create a folder containing `IPL.TXT` and the game files
+2. **ZIP archive:** Put `IPL.TXT` and the game files into a single ZIP
+
+The current runtime does not mount ISO/BIN/CUE disc images directly.
 
 #### MP3 Audio Setup
 
-CDDA audio must be converted to MP3 format. Place MP3 files in an `mp3/` subfolder within each game folder.
+CDDA audio must be converted to MP3 format. For a directory-backed game, place
+MP3 files in its `mp3/` subfolder. For a ZIP-backed game, the runtime uses an
+`mp3/` directory beside the ZIP.
 
 **File Naming Rules:**
 
@@ -826,25 +954,27 @@ MP3 files must end with the track number: `xx.mp3` (where xx = 02-99)
 ```
 roms/
 ├── Metal Slug/
-│   ├── ABS.TXT
+│   ├── IPL.TXT
 │   ├── *.PRG
 │   ├── *.SPR
 │   └── mp3/
 │       ├── track02.mp3
 │       ├── track03.mp3
 │       └── ...
-└── Samurai Spirits RPG/
-    ├── game.zip          # All CD files in one ZIP
-    └── mp3/
-        ├── ssrpg_track02.mp3
-        └── ...
+├── samsho.zip            # ZIP contains IPL.TXT + game files
+└── mp3/                  # Audio directory used by ZIP-backed games
+    ├── track02.mp3
+    └── ...
 ```
 
 ---
 
 ## ROM Conversion Tool (romcnv)
 
-The `romcnv` tool is a separate utility that converts and splits ROM files into smaller cache files. This is essential for platforms with limited RAM (PSP, PS2) where the full ROM cannot be loaded into memory at once.
+The `romcnv` tools create derived assets for the runtime paths that need them.
+`romcnv_cps2` can generate streaming cache data when decoded CPS2 graphics do
+not fit fully in RAM. `romcnv_mvs` generates canonical `processed/` assets for
+sets that require offline C/S/V-ROM processing and for MVS streaming paths.
 
 ### Web Interface (Experimental)
 

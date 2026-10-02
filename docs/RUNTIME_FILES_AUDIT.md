@@ -63,10 +63,11 @@ Most runtime paths are relative to `launchDir`.
 | PS2 | Process current working directory, normally the ELF directory exposed as the loader/PCSX2 root. | `src/emumain.c`, `src/ps2/ps2_platform.c` |
 | PS Vita | `ux0:data/<target>/`; packaged app resources are copied from `app0:` on first/missing-file use. | `src/psvita/psvita_platform.c` |
 
-The build tree mirrors the same layout. With `COPY_RESOURCES=OFF`, CMake
-currently symlinks read-only entries from `resources/<core>/` into the build
-root and makes private copies of entries considered mutable. With
-`COPY_RESOURCES=ON`, it copies the complete resource tree.
+The build tree mirrors the same layout from an explicit per-core staging set.
+With `COPY_RESOURCES=OFF`, CMake symlinks known read-only entries from
+`resources/<core>/` into the build root and makes private copies of known
+mutable entries. With `COPY_RESOURCES=ON`, it copies that same explicit set
+instead of broadening staging to the complete validation tree.
 
 ### Mutable build-tree entries
 
@@ -76,7 +77,6 @@ The current CMake staging code treats these names as mutable:
 - `memcard/`
 - `nvram/`
 - `state/`
-- `picture/`
 - `game_name.ini`
 - `njemu.ini`
 - `command.dat`
@@ -148,9 +148,8 @@ Runtime owner:
 
 The font is currently required by the regular UI renderer, including no-GUI
 builds because `ui_draw.c` remains a runtime service for overlays and loading
-UI. It is installed/packaged only under the current `GUI` CMake condition,
-which must be audited before changing packaging: source inclusion and runtime
-initialization are not themselves conditional on `GUI`.
+UI. Packaging now installs/includes it unconditionally for the same reason;
+source inclusion and runtime initialization are not conditional on `GUI`.
 
 Other small/ASCII/Latin fonts in `src/common/font/*.c` are compiled into the
 executable and are not external runtime files.
@@ -207,6 +206,11 @@ Runtime owner:
 
 This is required to choose a game in the current no-GUI workflow. It is not a
 ROM database and is safe to edit per build/runtime installation.
+
+Release/install packaging generates a fresh empty selector in the build runtime
+layout instead of copying `resources/<core>/game_name.ini`. Local development
+build staging can still copy the resource-tree file so developers may keep a
+private selection for runtime testing without affecting packaged output.
 
 ### Command list
 
@@ -692,10 +696,14 @@ shader-regeneration workflow, not a normal runtime requirement.
 The VPK packages:
 
 - translation packs;
-- top-level target resource files;
-- nested `_placeholder` files only, deliberately excluding local ROM/cache/
-  save contents;
-- `font/gbk_s14.bin` under the current `GUI` packaging condition.
+- the same explicit target distribution manifest used by `cmake --install`;
+- generated `_placeholder` files for the runtime directories relevant to the
+  selected target/options;
+- `font/gbk_s14.bin` for both GUI and no-GUI builds.
+
+The VPK manifest does not glob `resources/<target>/`, so local ROMs, BIOS
+files, processed assets, caches, saves, NVRAM, and configuration cannot be
+included merely because they exist in the local validation tree.
 
 At runtime, `src/psvita/psvita_platform.c` copies missing packaged resources
 from `app0:` to `ux0:data/<target>/` and then uses that writable directory
@@ -844,37 +852,37 @@ Translation packs and the GBK font are generated in the build tree, then
 packaged/installed. Those copies are expected deployment artifacts rather than
 source duplication.
 
-### 6. Generic CMake install copies the entire resource tree
+### 6. Release/install manifest
 
-Current install logic runs:
+Before this audit, generic `cmake --install` copied the complete
+`resources/<core>/` tree. Because that same tree is intentionally used for
+local validation, an install could accidentally contain untracked ROMs, BIOS
+files, caches, processed assets, saves, configuration, or NVRAM.
 
-~~~cmake
-install(DIRECTORY \${RESOURCE_DIR} DESTINATION .)
-~~~
+Status: **fixed**.
 
-This can copy local untracked ROMs, BIOS files, caches, saves, configuration,
-or NVRAM from `resources/<core>/` into the install output. It is inconsistent
-with the safer Vita VPK rule, which only packages top-level files and nested
-placeholders.
+CMake now owns an explicit `NJEMU_DISTRIBUTED_RESOURCE_FILES` manifest and
+generates private empty runtime-directory placeholders in the build tree.
+`cmake --install` and Vita VPK packaging consume the same manifest. In
+particular:
 
-Status: **confirmed cleanup target**.
-
-The install rule should be replaced by an explicit distribution manifest or
-equivalent filtering that:
-
-- includes runtime metadata shipped by NJEMU;
-- includes directory placeholders where useful;
-- excludes user ROM/BIOS/processed/cache/save/config data;
-- does not accidentally include a local top-level NCDZ BIOS;
-- remains identical across Desktop, PSP, PS2, and the non-VPK install tree for
-  Vita.
+- only NJEMU-distributed metadata/documentation is sourced from
+  `resources/<core>/`;
+- runtime directories are represented by generated placeholders rather than
+  copied from the validation tree;
+- the packaged `game_name.ini` is generated empty in the build runtime layout
+  rather than copied from mutable resource-tree configuration;
+- user ROM/BIOS/processed/cache/save/config data is excluded;
+- a local top-level NCDZ `neocd.bin` is not installable/packageable by
+  discovery;
+- `font/gbk_s14.bin` is included in both GUI and no-GUI deployment output.
 
 ### 7. Root README supported-game path
 
 The README points to `docs/gamelist_*.txt`, while the tracked lists are under
 `resources/<core>/gamelist_<core>.txt`.
 
-Status: **confirmed documentation cleanup target**.
+Status: **fixed in the root README**.
 
 ## Packaging/install ownership
 
@@ -933,26 +941,26 @@ The desired long-term separation is:
 
 ### Phase B - packaging safety
 
-- [ ] Replace the generic whole-`resources/` install copy with an explicit
+- [x] Replace the generic whole-`resources/` install copy with an explicit
   distribution-safe resource manifest/filter.
-- [ ] Reuse the same manifest for Vita VPK resource selection where practical
+- [x] Reuse the same manifest for Vita VPK resource selection where practical
   so install/package behavior cannot drift.
-- [ ] Verify no local ROM, BIOS, cache, processed asset, save, NVRAM, or config
+- [x] Verify no local ROM, BIOS, cache, processed asset, save, NVRAM, or config
   can enter an install/package merely because it exists under `resources/`.
-- [ ] Reconcile `font/gbk_s14.bin` packaging with the fact that the common UI
+- [x] Reconcile `font/gbk_s14.bin` packaging with the fact that the common UI
   renderer initializes it in no-GUI builds too.
 
 ### Phase C - documentation
 
-- [ ] Replace the historical README directory examples with the authoritative
+- [x] Replace the historical README directory examples with the authoritative
   file classes and conditional requirements above.
-- [ ] Correct the supported-game-list paths.
-- [ ] Correct CPS2 wording that describes caches as always mandatory.
-- [ ] Document `processed/` as the MVS canonical converter output.
-- [ ] Correct NCDZ documentation that implies direct ISO/BIN/CUE mounting.
-- [ ] Document NCDZ BIOS requirements explicitly, including `000-lo.lo`.
-- [ ] Document PS2 embedded versus external IRX-image deployments.
-- [ ] Document Vita's writable `ux0:data/<target>/` resource root.
+- [x] Correct the supported-game-list paths.
+- [x] Correct CPS2 wording that describes caches as always mandatory.
+- [x] Document `processed/` as the MVS canonical converter output.
+- [x] Correct NCDZ documentation that implies direct ISO/BIN/CUE mounting.
+- [x] Document NCDZ BIOS requirements explicitly, including `000-lo.lo`.
+- [x] Document PS2 embedded versus external IRX-image deployments.
+- [x] Document Vita's writable `ux0:data/<target>/` resource root.
 
 ### Phase D - compatibility cleanup
 
