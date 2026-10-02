@@ -136,12 +136,7 @@ stashes that separated:
 - video/presentation and pacing.
 
 That distinction is important: time blocked in `sceAudioSRCOutputBlocking()` is
-not work that should be moved to ME.  No retained log provides a sufficiently
-current per-audio-stage baseline for the present branch, so the first workload
-has **not** been selected yet.  A fresh real-PSP `MVS/mslug3` run is required
-before migrating sound emulation.  During the current bootstrap work
-`usbhostfs_pc` was running but `pspsh` did not establish a session, so no new
-hardware measurement is claimed here.
+not work that should be moved to ME.
 
 `PSP_AUDIO_PROFILE=ON` now provides a focused replacement for the old temporary
 instrumentation.  It is OFF by default and records 300-buffer windows to
@@ -157,6 +152,65 @@ The log also records the configured sample count/rate/channels and expected
 buffer period.  File output occurs only once per 300 buffers so diagnostic I/O
 does not contaminate every measured callback.
 
+### Real-PSP MVS/mslug3 baseline
+
+The current branch was profiled on a real PSP through psplinkusb using MVS,
+`mslug3`, Release, no GUI, `PSP_ME_AUDIO=OFF`, and `PSP_AUDIO_PROFILE=ON`.
+The host-backed no-GUI harness first exposed a path bug: relative paths such as
+`roms/neogeo.zip` do not resolve through libc/miniz when a PRX is started from
+`host0:` even though the psplink current directory is correct.  The no-GUI path
+now derives ROM/cache/processed roots from `launchDir`, matching the normal GUI
+path.  A standalone PSP probe verified that the same `neogeo.zip` opens through
+an absolute `host0:` path and contains the expected Europe MVS v2 CRC.
+
+Attract/demo mode is **not** a representative audio baseline for `mslug3`.
+During demo play the music workload is absent and the game mainly emits sound
+effects.  Those windows are retained only as a low-audio-load reference; they
+showed roughly 3.0-4.1 ms of producer time per 33.378 ms output period.
+
+For the representative run, a temporary, non-committed input script inserted a
+credit, started player 1, and generated movement/fire/jump input.  A psplink
+screenshot confirmed active gameplay.  The representative 300-buffer window
+was:
+
+| metric | average | maximum |
+| --- | ---: | ---: |
+| producer | 6.617 ms | 16.210 ms |
+| YM2610 callback | 6.463 ms | 16.061 ms |
+| clip/resample/post | 0.148 ms | 0.229 ms |
+| `sceAudioSRCOutputBlocking` | 26.743 ms | 28.184 ms |
+| sound-thread loop period | 33.378 ms | 36.745 ms |
+
+The output format was 1472 stereo samples at 44.1 kHz, so the expected output
+period is 33.378 ms.  The callback is therefore the meaningful Allegrex audio
+compute target; post-processing is only about 0.15 ms and is too small to
+justify an ME dispatch/copy/synchronization boundary.  The ~26.7 ms output wait
+is blocking time, not computation.
+
+### YM2610 hotspot breakdown
+
+A second hardware run used PSPSDK `-pg`/`psp-gprof` for two gameplay windows.
+The profiler overhead raises absolute callback timings, so the gprof run is used
+for attribution rather than wall-clock comparison.  Across 20.01 s of sampled
+CPU time:
+
+- `OPNB_ADPCMA_calc_chan_dynamic`: 5.28 s / 26.37% of total sampled CPU time,
+  2,421,797 calls;
+- `OPNB_ADPCMB_calc_dynamic`: 0.48 s / 2.38%, 390,153 calls;
+- `YM2610Update` as a whole accounted for about 5.82 s / 29% including children;
+- the remaining YM2610/FM/SSG/mix self time was very small relative to ADPCM-A;
+- `pcm_cache_read` was called only 572 times during the sample and was not itself
+  the hot path, so the dominant cost is ADPCM-A decode/update work rather than
+  storage I/O.
+
+This selects **MVS YM2610 ADPCM-A decode** as the first workload worth studying
+for ME migration.  It does *not* yet make the current per-sample dynamic helper
+safe to dispatch directly: millions of tiny ME RPCs would be worse, and the
+helper can touch PCM-cache state plus YM2610 state concurrently modified by Z80
+register writes.  M4 therefore requires one bounded job per useful chunk/buffer
+with explicit state/input/output ownership and cache coherency; directly calling
+`OPNB_ADPCMA_calc_chan_dynamic()` on ME is rejected.
+
 ## Milestones and status
 
 ### M1 - CPU reference seam [complete]
@@ -168,17 +222,27 @@ does not contaminate every measured callback.
 - PSP MVS ON/OFF builds and PSP CPS1/CPS2/NCDZ OFF builds passed locally.
 - OFF contains no `meLib`, `meCore`, or `meSafe` symbols.
 
-### M2 - optional ME dependency/bootstrap [implemented; hardware validation pending]
+### M2 - optional ME dependency/bootstrap [hardware validated for startup/clean teardown]
 
 The PSP producer now initializes the safe-task Classic dispatcher and loads the
 upstream AV module only when `PSP_ME_AUDIO=ON`.  Initialization failure logs the
 error and leaves the producer on CPU.  Reset/shutdown wait for outstanding ME
 work before unloading the module.
 
-Build validation is complete locally.  Real-PSP validation is still required
-for dispatcher startup, sleep/wake, repeated game changes and shutdown.
+On real PSP the dispatcher initializes successfully, the upstream AV module is
+loaded, and the ME-enabled MVS build reaches `mslug3` with the normal PSP sound
+thread active.  A hardware-only teardown build exercised the normal
+`neogeo_exit -> sound_exit -> producer shutdown -> memory_shutdown` path twice
+in consecutive launches.  After each run MVS was no longer loaded and the user
+partition returned exactly to the pre-run 57,655,296 free bytes.  This validates
+startup, shutdown, unload, and repeated clean startup without a leak.
 
-### M3 - deterministic shared-memory proof [implemented; hardware validation pending]
+Sleep/wake and an in-process normal-UI ROM switch are still pending.  A synthetic
+double-`emu_main()` no-GUI diagnostic was deliberately discarded as evidence
+because that is not a supported normal application flow and its second video
+initialization did not remain valid.
+
+### M3 - deterministic shared-memory proof [hardware validated]
 
 The ON backend dispatches one small 64-byte-aligned job during producer startup.
 Allegrex writes two input words and writes back/invalidates the cache line; ME
@@ -187,14 +251,27 @@ Allegrex invalidates before verifying both words.  Dispatch error or result
 mismatch unloads the AV module, marks ME unavailable, and leaves all PCM
 production on CPU.  No emulator or sound-chip state is touched by the probe.
 
-The proof is compiled and linked locally but still needs a real-PSP run before
-it can be marked hardware-validated.
+The proof passed on the real PSP.  Inspection through psplink after startup
+showed `me_module_loaded=1` and `me_available=1`.  The shared probe line contained
+the expected values:
 
-### M4 - first real audio workload [blocked on profiling]
+- input A: `0x13579BDF`;
+- input B: `0x2468ACE0`;
+- ME XOR result: `0x373F373F`;
+- ME addition result: `0x37C048BF`.
 
-Re-run the audio baseline on real PSP with `MVS/mslug3`, then choose one workload
-only if its Allegrex compute cost is material and its state can be bounded.  Keep
-the CPU implementation callable as oracle/fallback and compare produced PCM.
+This confirms actual ME execution plus the Allegrex/ME cache-maintenance path;
+it is not PPSSPP-derived validation.
+
+### M4 - first real audio workload [selected; design/prototype pending]
+
+The selected workload is MVS YM2610 ADPCM-A decode in PCM-cache mode.  The first
+prototype must batch enough decode work to amortize ME dispatch, keep CPU cache
+miss/file handling on Allegrex, and exchange only bounded decoder state, source
+bytes/nibbles, and output contributions.  It must not grant ME unrestricted
+access to the global YM2610 or PCM-cache structures.  CPU output remains the
+oracle/fallback and deterministic PCM comparison is required before performance
+claims.
 
 ### M5 - hardware performance decision
 
@@ -212,14 +289,15 @@ experiment.
 ## Remaining risks
 
 - Safe-task/custom-core firmware mapping support is still evolving upstream.
-- Kernel-PRX loading and model-specific ME firmware behavior require real PSP
-  validation; PPSSPP cannot validate them.
-- Repeated dispatcher/module initialization across ROM changes needs hardware
-  testing.
+- Kernel-PRX loading and model-specific ME firmware behavior may still vary on
+  PSP models other than the hardware tested here; PPSSPP cannot validate them.
+- A normal in-process ROM switch still needs hardware validation after an actual
+  ME audio workload exists.
 - Sleep/wake must be tested while no job is in flight and while the audio thread
   is active.
-- Dispatch overhead may exceed the cost of small mixing/conversion jobs; profiling
-  must choose job granularity before offloading real audio work.
+- ADPCM-A is individually hot, but its existing helper is called millions of
+  times; batching and synchronization semantics determine whether the ME path is
+  beneficial.
 
 ## Validation checkpoint - 2026-10-02
 
@@ -238,8 +316,9 @@ CPS2, and in combination with `PSP_ME_AUDIO=ON`.  With profiling disabled, the
 MVS Release `.text`, `.data`, and `.bss` sizes are unchanged from the pre-profiler
 build, confirming that the disabled instrumentation optimizes away.
 
-Real-PSP runtime validation could not run at this checkpoint. `usbhostfs_pc` was
-listening on the host, but `pspsh` timed out waiting for the PSP and macOS did not
-enumerate a PSP USB device.  Therefore M2/M3 remain hardware-validation pending
-and M4 remains blocked.  Do not select or migrate a YM2610/PCM workload until a
-fresh `MVS/mslug3` `PSP_AUDIO_PROFILE=ON` log is captured on real hardware.
+Subsequent real-PSP validation completed the missing runtime work at this
+checkpoint: M2 startup/clean teardown and M3 execution/coherency now pass on
+hardware, and a fresh `MVS/mslug3` gameplay profile selected dynamic YM2610
+ADPCM-A as the only first workload with enough measured cost to justify further
+ME prototyping.  No real audio workload has been migrated yet, so there is still
+no ME-vs-CPU performance claim.
