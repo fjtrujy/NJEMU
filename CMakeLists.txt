@@ -932,7 +932,9 @@ elseif("${TARGET}" STREQUAL "MVS")
     # compatibility fallback for existing USE_CACHE installs.
     list(APPEND NJEMU_RUNTIME_DATA_DIRS processed memcard nvram)
 elseif("${TARGET}" STREQUAL "NCDZ")
-    list(APPEND NJEMU_RUNTIME_DATA_DIRS data)
+    if(GUI)
+        list(APPEND NJEMU_RUNTIME_DATA_DIRS data)
+    endif()
 endif()
 
 set(NJEMU_RUNTIME_LAYOUT_DIR "${CMAKE_BINARY_DIR}/generated/runtime_layout")
@@ -949,43 +951,74 @@ foreach(NJEMU_RUNTIME_DATA_DIR IN LISTS NJEMU_RUNTIME_DATA_DIRS)
     list(APPEND NJEMU_RUNTIME_PLACEHOLDER_FILES "${NJEMU_RUNTIME_PLACEHOLDER}")
 endforeach()
 
-# By default we don't want to duplicate a potentially large resource tree
-# in every build directory. Read-only assets are therefore linked back to the
-# source tree, while files/directories that the emulator writes at runtime are
-# copied once into the build so running a build never modifies resources/.
-# COPY_RESOURCES keeps the fully self-contained/copy-only behaviour available
-# for platforms where symlinks are problematic.
+# Keep development staging explicit for the same reason release packaging is
+# explicit: resources/<target> is a validation tree and may contain unrelated
+# local files. Known read-only inputs are linked by default, while mutable
+# inputs are copied once so running a build never modifies resources/.
+set(NJEMU_BUILD_RESOURCE_ENTRIES
+    ${NJEMU_DISTRIBUTED_RESOURCE_FILES}
+    game_name.ini
+    njemu.ini
+    roms
+    config
+)
+if(GUI)
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES cheats)
+endif()
+if(SAVE_STATE)
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES state)
+endif()
+if(COMMAND_LIST)
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES command.dat)
+endif()
+if("${TARGET}" STREQUAL "CPS1")
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES nvram)
+elseif("${TARGET}" STREQUAL "CPS2")
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES nvram)
+    if(USE_CACHE)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES cache)
+    endif()
+elseif("${TARGET}" STREQUAL "MVS")
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES processed memcard nvram)
+    if(USE_CACHE)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES cache)
+    endif()
+elseif("${TARGET}" STREQUAL "NCDZ")
+    list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES neocd.bin 000-lo.lo backup.bin)
+    if(GUI)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES data)
+    endif()
+endif()
+list(REMOVE_DUPLICATES NJEMU_BUILD_RESOURCE_ENTRIES)
+
+# COPY_RESOURCES makes the explicit development staging set self-contained on
+# platforms where symlinks are problematic; it does not broaden the set.
 option(COPY_RESOURCES "Copy resources into the build directory instead of linking" OFF)
 
-if(COPY_RESOURCES)
-    message(STATUS "Copying resources (COPY_RESOURCES=ON)")
-    file(COPY ${RESOURCE_DIR} DESTINATION ${DESTINATION_DIR})
-    message(STATUS "Resources copied from ${RESOURCE_DIR} to: ${DESTINATION_DIR}")
-else()
-    # The application resolves resources directly below launchDir (for example
-    # launchDir/roms and launchDir/zipname.cps1), so mirror the contents of the
-    # target resource directory into the build root.  Linking the directory as
-    # build/cps1 is not only the wrong runtime layout, it also collides with the
-    # CPS1 executable on case-insensitive filesystems such as default macOS.
-    # These entries may be edited by the user or written by the emulator.
-    # Compare lower-cased names so mutable entries are recognized consistently
-    # on case-sensitive hosts.
-    set(MUTABLE_RESOURCE_ENTRIES
-        "config"
-        "memcard"
-        "nvram"
-        "state"
-        "picture"
-        "game_name.ini"
-        "njemu.ini"
-        "command.dat"
-        "backup.bin"
-    )
+set(MUTABLE_RESOURCE_ENTRIES
+    "config"
+    "memcard"
+    "nvram"
+    "state"
+    "game_name.ini"
+    "njemu.ini"
+    "command.dat"
+    "backup.bin"
+)
 
-    file(GLOB RESOURCE_ENTRIES RELATIVE "${RESOURCE_DIR}" "${RESOURCE_DIR}*")
-    foreach(RESOURCE_ENTRY IN LISTS RESOURCE_ENTRIES)
-        set(RESOURCE_SOURCE "${RESOURCE_DIR}${RESOURCE_ENTRY}")
-        set(RESOURCE_LINK "${DESTINATION_DIR}/${RESOURCE_ENTRY}")
+foreach(RESOURCE_ENTRY IN LISTS NJEMU_BUILD_RESOURCE_ENTRIES)
+    set(RESOURCE_SOURCE "${RESOURCE_DIR}${RESOURCE_ENTRY}")
+    set(RESOURCE_LINK "${DESTINATION_DIR}/${RESOURCE_ENTRY}")
+
+    if(NOT EXISTS "${RESOURCE_SOURCE}" AND NOT IS_SYMLINK "${RESOURCE_SOURCE}")
+        continue()
+    endif()
+
+    if(COPY_RESOURCES)
+        if(NOT EXISTS "${RESOURCE_LINK}" AND NOT IS_SYMLINK "${RESOURCE_LINK}")
+            file(COPY "${RESOURCE_SOURCE}" DESTINATION "${DESTINATION_DIR}")
+        endif()
+    else()
         string(TOLOWER "${RESOURCE_ENTRY}" RESOURCE_ENTRY_LOWER)
         list(FIND MUTABLE_RESOURCE_ENTRIES "${RESOURCE_ENTRY_LOWER}" MUTABLE_RESOURCE_INDEX)
 
@@ -1002,9 +1035,20 @@ else()
         elseif(NOT EXISTS "${RESOURCE_LINK}" AND NOT IS_SYMLINK "${RESOURCE_LINK}")
             file(CREATE_LINK "${RESOURCE_SOURCE}" "${RESOURCE_LINK}" SYMBOLIC)
         endif()
-    endforeach()
-    message(STATUS "Resources staged from ${RESOURCE_DIR} into: ${DESTINATION_DIR}")
-endif()
+    endif()
+endforeach()
+
+# Fresh no-GUI builds do not run the GUI directory bootstrap, so ensure every
+# selected runtime directory exists even when the validation tree has no local
+# data for it (for example a clean MVS checkout has no processed/ directory).
+foreach(NJEMU_RUNTIME_DATA_DIR IN LISTS NJEMU_RUNTIME_DATA_DIRS)
+    set(NJEMU_RUNTIME_DATA_PATH "${DESTINATION_DIR}/${NJEMU_RUNTIME_DATA_DIR}")
+    if(NOT EXISTS "${NJEMU_RUNTIME_DATA_PATH}" AND NOT IS_SYMLINK "${NJEMU_RUNTIME_DATA_PATH}")
+        file(MAKE_DIRECTORY "${NJEMU_RUNTIME_DATA_PATH}")
+    endif()
+endforeach()
+
+message(STATUS "Resources staged from ${RESOURCE_DIR} into: ${DESTINATION_DIR}")
 
 target_compile_options(${TARGET} PUBLIC ${COMMON_FLAGS} ${WARNING_OPTIONS} ${SANITIZER_OPTIONS})
 target_link_options(${TARGET} PUBLIC ${SANITIZER_OPTIONS})
