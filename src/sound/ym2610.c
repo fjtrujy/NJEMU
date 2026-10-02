@@ -110,8 +110,12 @@
 #include "2610intf.h"
 #include "ym2610.h"
 #include "common/cache.h"
+#include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
 #include "common/sound.h"
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#include "common/ym2610_adpcma_job.h"
+#endif
 
 #if (EMU_SYSTEM == MVS)
 #include "mvs/timer.h"
@@ -2185,6 +2189,11 @@ static void (*OPNB_ADPCMB_calc)(ADPCMB *adpcmb);
 static uint8_t *pcmbufA;
 static uint32_t pcmsizeA;
 
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+static ym2610_adpcma_job_t *adpcma_job;
+static volatile uint32_t adpcma_control_generation[YM2610_ADPCMA_JOB_CHANNELS];
+#endif
+
 
 /* Algorithm and tables verified on real YM2610 */
 
@@ -2282,6 +2291,156 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 	/* output for work of output channels (out_adpcma[OPNxxxx]) */
 	*ch->pan += ch->adpcma_out;
 }
+
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+static bool OPNB_ADPCMA_prepare_job_channel(ym2610_adpcma_channel_job_t *dst,
+	ADPCMA *src, int channel, int length)
+{
+	uint64_t total_decodes;
+	uint32_t decode_distance;
+	uint32_t decode_count;
+	uint32_t source_bytes;
+	uint32_t source_base;
+	uint16_t cached_part = 0xffff;
+	uint8_t *cached_data = NULL;
+	uint32_t i;
+
+	dst->flag = src->flag;
+	dst->flag_mask = src->flagMask;
+	dst->now_data = src->now_data;
+	dst->pan = (uint8_t)(src->pan - out_adpcma);
+	dst->now_addr = src->now_addr;
+	dst->now_step = src->now_step;
+	dst->step = src->step;
+	dst->end = src->end;
+	dst->adpcma_acc = src->adpcma_acc;
+	dst->adpcma_step = src->adpcma_step;
+	dst->adpcma_out = src->adpcma_out;
+	dst->vol_mul = src->vol_mul;
+	dst->vol_shift = src->vol_shift;
+	dst->source_size = 0;
+	dst->source_base_byte = src->now_addr >> 1;
+	dst->control_generation = adpcma_control_generation[channel];
+
+	if (!src->flag)
+		return true;
+
+	total_decodes = ((uint64_t)src->now_step +
+		(uint64_t)src->step * (uint32_t)length) >> ADPCM_SHIFT;
+	decode_distance = (((src->end << 1) & ((1u << 21) - 1u)) -
+		(src->now_addr & ((1u << 21) - 1u))) & ((1u << 21) - 1u);
+	decode_count = total_decodes < decode_distance ?
+		(uint32_t)total_decodes : decode_distance;
+	if (decode_count == 0)
+		return true;
+
+	source_bytes = ((src->now_addr & 1u) + decode_count + 1u) >> 1;
+	if (source_bytes > YM2610_ADPCMA_JOB_MAX_SOURCE_BYTES)
+		return false;
+
+	source_base = src->now_addr >> 1;
+	if (source_base >= pcmsizeA || source_bytes > pcmsizeA - source_base)
+		return false;
+
+	dst->source_base_byte = source_base;
+	dst->source_size = (uint16_t)source_bytes;
+	for (i = 0; i < source_bytes; i++)
+	{
+		uint32_t byte_addr = source_base + i;
+		uint16_t part = (uint16_t)(byte_addr >> PCM_CACHE_SHIFT);
+
+		if (part != cached_part)
+		{
+			cached_data = pcm_cache_read(part);
+			if (!cached_data)
+				return false;
+			cached_part = part;
+		}
+		dst->source[i] = cached_data[byte_addr & PCM_CACHE_MASK];
+	}
+
+	return true;
+}
+
+static bool OPNB_ADPCMA_submit_job(int length)
+{
+	int channel;
+
+	if (!pcm_cache_enable || length <= 0 ||
+		length > YM2610_ADPCMA_JOB_MAX_SAMPLES ||
+		!audio_producer_driver->canRunJobs())
+		return false;
+
+	if (!adpcma_job)
+	{
+		adpcma_job = audio_producer_driver->acquireJobBuffer(
+			sizeof(*adpcma_job), 64);
+		if (!adpcma_job)
+			return false;
+	}
+
+	memset(adpcma_job, 0, sizeof(*adpcma_job));
+	adpcma_job->samples = (uint32_t)length;
+	for (channel = 0; channel < 49; channel++)
+		adpcma_job->steps[channel] = (int16_t)steps[channel];
+	for (channel = 0; channel < 8; channel++)
+		adpcma_job->step_inc[channel] = (int16_t)step_inc[channel];
+	for (channel = 0; channel < YM2610_ADPCMA_JOB_CHANNELS; channel++)
+	{
+		if (!OPNB_ADPCMA_prepare_job_channel(&adpcma_job->channel[channel],
+			&YM2610.adpcma[channel], channel, length))
+			return false;
+	}
+
+	return audio_producer_driver->submitJob(ym2610_adpcma_job_run,
+		adpcma_job, sizeof(*adpcma_job));
+}
+
+static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
+{
+	int channel;
+	int sample;
+
+	audio_producer_driver->waitJob();
+	if (adpcma_job->error)
+	{
+		printf("YM2610 ADPCM-A ME job failed source validation\n");
+		return;
+	}
+
+	YM2610.adpcm_arrivedEndAddress |= adpcma_job->ended_mask;
+	for (channel = 0; channel < YM2610_ADPCMA_JOB_CHANNELS; channel++)
+	{
+		ADPCMA *dst = &YM2610.adpcma[channel];
+		const ym2610_adpcma_channel_job_t *src = &adpcma_job->channel[channel];
+
+		/* A key-on/off issued while the ME was running represents state for the
+		 * next audio period. Do not overwrite that newer decoder state. */
+		if (src->control_generation != adpcma_control_generation[channel])
+			continue;
+
+		dst->flag = src->flag;
+		dst->now_data = src->now_data;
+		dst->now_addr = src->now_addr;
+		dst->now_step = src->now_step;
+		dst->adpcma_acc = src->adpcma_acc;
+		dst->adpcma_step = src->adpcma_step;
+		/* Volume/pan writes may occur if waitReady() yields the sound thread
+		 * after the job has already produced this period. Keep those live
+		 * controls for the next period while advancing only decoder state. */
+		dst->adpcma_out =
+			((dst->adpcma_acc * dst->vol_mul) >> dst->vol_shift) & ~3;
+		dst->block = 0xffff;
+		dst->buf = NULL;
+	}
+
+	for (sample = 0; sample < length; sample++)
+	{
+		bufL[sample] += adpcma_job->left[sample];
+		bufR[sample] += adpcma_job->right[sample];
+	}
+}
+#endif
 
 #if MVS_PCM_CACHE
 static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
@@ -2391,7 +2550,10 @@ static void OPNB_ADPCMA_write(int r, int v)
 #else
 					if (pcmbufA == NULL || adpcma[c].start >= pcmsizeA)
 						adpcma[c].flag = 0;
-#endif
+					#endif
+	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+					adpcma_control_generation[c]++;
+	#endif
 				}
 			}
 		}
@@ -2400,7 +2562,12 @@ static void OPNB_ADPCMA_write(int r, int v)
 			/* KEY OFF */
 			for (c = 0; c < 6; c++)
 				if ((v >> c) & 1)
+				{
 					adpcma[c].flag = 0;
+	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+					adpcma_control_generation[c]++;
+	#endif
+				}
 		}
 		break;
 
@@ -2809,6 +2976,9 @@ static void YM2610Update(int32_t **buffer, int length)
 	int32_t *bufL, *bufR;
 	FMSAMPLE_MIX lt, rt;
 	FM_CH *cch[6];
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	bool adpcma_job_submitted = false;
+#endif
 
 	bufL = buffer[0];
 	bufR = buffer[1];
@@ -2839,6 +3009,10 @@ static void YM2610Update(int32_t **buffer, int length)
 
 	/* calc SSG count */
 	outn = SSG_calc_count(length);
+
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	adpcma_job_submitted = OPNB_ADPCMA_submit_job(length);
+#endif
 
 	/* buffering */
 	for (i = 0; i < length; i++)
@@ -2888,16 +3062,31 @@ static void YM2610Update(int32_t **buffer, int length)
 			OPNB_ADPCMB_calc(&YM2610.adpcmb);
 #endif
 
-		for (j = 0; j < 6; j++)
+	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+		if (!adpcma_job_submitted)
+	#endif
 		{
-			/* ADPCM */
-			if (YM2610.adpcma[j].flag)
-				OPNB_ADPCMA_calc_chan(j, &YM2610.adpcma[j]);
+			for (j = 0; j < 6; j++)
+			{
+				/* ADPCM */
+				if (YM2610.adpcma[j].flag)
+					OPNB_ADPCMA_calc_chan(j, &YM2610.adpcma[j]);
+			}
 		}
 
 		/* buffering */
-		lt =  out_adpcma[OUTD_LEFT]  + out_adpcma[OUTD_CENTER];
-		rt =  out_adpcma[OUTD_RIGHT] + out_adpcma[OUTD_CENTER];
+	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+		if (adpcma_job_submitted)
+		{
+			lt = 0;
+			rt = 0;
+		}
+		else
+	#endif
+		{
+			lt = out_adpcma[OUTD_LEFT] + out_adpcma[OUTD_CENTER];
+			rt = out_adpcma[OUTD_RIGHT] + out_adpcma[OUTD_CENTER];
+		}
 
 #if (EMU_SYSTEM == MVS)
 		lt += (out_delta[OUTD_LEFT]  + out_delta[OUTD_CENTER]) >> 9;
@@ -2920,6 +3109,11 @@ static void YM2610Update(int32_t **buffer, int length)
 		*bufL++ = lt;
 		*bufR++ = rt;
 	}
+
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	if (adpcma_job_submitted)
+		OPNB_ADPCMA_finish_job(buffer[0], buffer[1], length);
+#endif
 }
 
 
@@ -2938,6 +3132,10 @@ void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 	/* clear */
 	memset(&YM2610, 0, sizeof(YM2610));
 	memset(&SSG, 0, sizeof(SSG));
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	adpcma_job = NULL;
+	memset((void *)adpcma_control_generation, 0, sizeof(adpcma_control_generation));
+#endif
 
 	OPNInitTable();
 	SSG_init_table();

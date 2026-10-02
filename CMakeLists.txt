@@ -407,9 +407,21 @@ set(COMMON_SRC
 
 if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     list(APPEND COMMON_SRC psp/psp_audio_producer.c)
-    add_definitions(-DPSP_ME_AUDIO=1)
+    add_definitions(-DPSP_ME_AUDIO=1 -DAUDIO_PRODUCER_JOBS=1)
 else()
     list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
+endif()
+
+if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
+    # Functions entered directly by the Media Engine must not rely on the
+    # Allegrex application's small-data/global-pointer convention. Match the
+    # upstream ME samples by compiling the ME boundary and workload with -G0
+    # and non-PIC code.
+    set_source_files_properties(
+        src/psp/psp_audio_producer.c
+        src/common/ym2610_adpcma_job.c
+        PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
+    )
 endif()
 
 if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)
@@ -629,6 +641,13 @@ if (${TARGET} STREQUAL "MVS")
         mvs/biosmenu.h
         mvs/biosmenu.c
     )
+
+    if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
+        list(APPEND TARGET_SRC
+            common/ym2610_adpcma_job.h
+            common/ym2610_adpcma_job.c
+        )
+    endif()
 
     # Set SOUND_2610 flag
     set(SOUND_2610 ON)
@@ -1368,6 +1387,12 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_test(NAME mvs_pcm_partial_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/mvs_pcm_partial_tests.py
                 ${CMAKE_C_COMPILER})
+        add_executable(ym2610_adpcma_job_tests
+            tests/ym2610_adpcma_job_tests.c
+            src/common/ym2610_adpcma_job.c)
+        target_include_directories(ym2610_adpcma_job_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        add_test(NAME ym2610_adpcma_job_tests COMMAND ym2610_adpcma_job_tests)
         foreach(UPLOAD_MODE IN ITEMS dirty legacy)
             add_executable(mvs_sprite_upload_${UPLOAD_MODE}_tests
                 tests/mvs_sprite_upload_tests.c

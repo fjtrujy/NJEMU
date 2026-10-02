@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "common/audio_producer_driver.h"
 
 static bool cpu_init(void)
@@ -23,6 +24,29 @@ static bool cpu_isAvailable(void)
 	return true;
 }
 
+static bool cpu_canRunJobs(void)
+{
+	return false;
+}
+
+static void *cpu_acquireJobBuffer(uint32_t size, uint32_t alignment)
+{
+	(void)size;
+	(void)alignment;
+	return NULL;
+}
+
+static bool cpu_submitJob(audio_producer_job_fn job, void *data, uint32_t size)
+{
+	(void)size;
+	job(data);
+	return true;
+}
+
+static void cpu_waitJob(void)
+{
+}
+
 const audio_producer_driver_t audio_producer_cpu = {
 	"cpu",
 	cpu_init,
@@ -30,4 +54,8 @@ const audio_producer_driver_t audio_producer_cpu = {
 	cpu_reset,
 	cpu_render,
 	cpu_isAvailable,
+	cpu_canRunJobs,
+	cpu_acquireJobBuffer,
+	cpu_submitJob,
+	cpu_waitJob,
 };

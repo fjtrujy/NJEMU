@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 typedef void (*audio_producer_render_fn)(int16_t *buffer);
+typedef void (*audio_producer_job_fn)(void *data);
 
 typedef struct audio_producer_driver
 {
@@ -14,6 +15,10 @@ typedef struct audio_producer_driver
 	void (*reset)(void);
 	void (*render)(audio_producer_render_fn cpu_render, int16_t *buffer);
 	bool (*isAvailable)(void);
+	bool (*canRunJobs)(void);
+	void *(*acquireJobBuffer)(uint32_t size, uint32_t alignment);
+	bool (*submitJob)(audio_producer_job_fn job, void *data, uint32_t size);
+	void (*waitJob)(void);
 } audio_producer_driver_t;
 
 extern const audio_producer_driver_t *const audio_producer_driver;
