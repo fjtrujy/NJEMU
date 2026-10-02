@@ -745,19 +745,41 @@ and should be corrected.
 source/package layouts. They are packaging structure, not runtime data.
 
 Some historical placeholder directories are broader than the current runtime
-needs. They should be removed only after documentation/install manifests no
-longer depend on them; no cleanup should be inferred from their presence alone.
+needs. Release/install packaging no longer consumes any placeholder from
+`resources/`: CMake generates target/option-specific placeholders in the
+build tree instead. Development staging also creates required runtime
+directories when a source directory is absent.
+
+The following tracked source placeholders therefore have no current
+runtime/build/package ownership beyond preserving a convenient visible
+directory in a source checkout:
+
+- CPS1: top-level `_placeholder`, `cache/`, `data/`, and `memcard/`;
+- CPS2: top-level `_placeholder`, `data/`, and `memcard/`;
+- MVS: top-level `_placeholder`;
+- NCDZ: top-level `_placeholder`, `cache/`, `memcard/`, and `nvram/`.
+
+Other placeholder directories correspond to paths that the selected core can
+actually use (for example `roms/`, `config/`, `state/`, CPS2 `cache/`,
+or NCDZ `data/`). They are still not required by the release manifest, but
+remain meaningful as local source-tree layout hints.
+
+No source placeholder is removed by this audit because `resources/` is
+explicitly read-only for this work. If that constraint is relaxed later, the
+unowned list above can be deleted without changing the current CMake runtime
+layout.
 
 ### Legacy SystemButtons file
 
-`data/SystemButtons/SystemButtons.prx` is still tracked according to Git, but
-the current source/CMake search finds no active loader or packaging rule for
-it; the only textual reference found so far is historical README material.
+`data/SystemButtons/SystemButtons.prx` was a historical PSP 2.3.x support
+module. The current source has no loader for it, CMake only consumes
+`data/<core>.png` from the top-level `data/` tree, and no package/install
+rule references the module. Git attributes and sparse-checkout state add no
+special ownership requirement.
 
-Status: **candidate historical build artifact; do not delete yet**.
-
-Before deletion, verify repository attributes/sparse state, old PSP packaging
-requirements, and release compatibility.
+Status: **confirmed obsolete; removed from the current source tree**. The root
+README keeps a clearly historical changelog note so the old 2.3.x behavior is
+still documented without implying a current runtime requirement.
 
 ## Core/platform requirement matrix
 
@@ -964,12 +986,15 @@ The desired long-term separation is:
 
 ### Phase D - compatibility cleanup
 
-- [ ] Audit whether the legacy MVS `cache/` processed-asset fallback can be
-  deprecated and eventually removed.
-- [ ] Verify whether tracked `data/SystemButtons/SystemButtons.prx` has any
-  remaining supported PSP packaging purpose before deleting it.
-- [ ] Review historical empty resource directories per core and remove only
-  those that no build/package/runtime workflow still needs.
+- [x] Audit whether the legacy MVS `cache/` processed-asset fallback can be
+  deprecated and eventually removed. Keep it for now because it is an explicit
+  migration path for existing cache-enabled installs; `processed/` remains
+  the only canonical location.
+- [x] Verify whether tracked `data/SystemButtons/SystemButtons.prx` has any
+  remaining supported PSP packaging purpose and remove the obsolete module.
+- [x] Review historical empty resource directories per core. The unowned
+  placeholders are documented above; leave them untouched because this audit
+  explicitly treats `resources/` as read-only.
 
 ## Validation requirements for changes driven by this audit
 

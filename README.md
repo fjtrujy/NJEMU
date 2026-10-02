@@ -2336,7 +2336,9 @@ The coin counter (`src/common/coin.c`) tracks coin insertions for arcade authent
 **Differences from 2.2.x:**
 
 - **AdHoc Support:** Built-in support for AdHoc multiplayer (except NCDZPSP)
-- **SystemButtons.prx:** Uses extended SystemButtons.prx (based on homehook.prx), even for 1.5 Kernel builds
+- **SystemButtons.prx (historical):** 2.3.x used an extended SystemButtons.prx
+  (based on homehook.prx), even for 1.5 Kernel builds. Current builds no longer
+  ship or load this module.
   - On CFW 3.52+, supports volume display when pressing VOL +/- buttons
 - **Sound Emulation:** Different sound emulation processing
 - **Video Emulation:** Different video emulation processing for MVS and NCDZ
