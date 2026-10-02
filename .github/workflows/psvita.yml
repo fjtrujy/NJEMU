@@ -13,21 +13,18 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} USE_VITAGL=${{ matrix.use_vitagl }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} GUI=${{ matrix.gui }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [MVS, NCDZ, CPS1, CPS2]
-        use_vitagl: [OFF, ON] # GXM-only and dual GXM+vitaGL builds
         gui: [OFF, ON]
         include:
           - target: MVS
             use_cache: ON
-            use_vitagl: OFF
             gui: ON
           - target: CPS2
             use_cache: ON
-            use_vitagl: OFF
             gui: ON
       fail-fast: false
 
@@ -55,7 +52,6 @@ jobs:
     # libvita2d comes with the image (upstream no longer builds with GCC 15).
 
     - name: Install vitaGL
-      if: matrix.use_vitagl == 'ON'
       run: |
         git clone --depth 1 https://github.com/Rinnegatamante/vitashark
         make -C vitashark -j $(getconf _NPROCESSORS_ONLN) install
@@ -78,7 +74,6 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=${VITASDK}/share/vita.toolchain.cmake \
           -DTARGET="${{ matrix.target }}" \
           $NJEMU_CACHE_ARG \
-          -DUSE_VITAGL=${{ matrix.use_vitagl }} \
           -DGUI=${{ matrix.gui }} \
           ..
         make -j $(getconf _NPROCESSORS_ONLN)
@@ -92,5 +87,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-PSVITA-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-vitagl_${{ matrix.use_vitagl }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-PSVITA-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-gui_${{ matrix.gui }}
         path: build/install/
