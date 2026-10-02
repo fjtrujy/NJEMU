@@ -777,6 +777,37 @@ target_include_directories(${TARGET} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
+if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
+    find_path(PSP_ME_CORE_INCLUDE_DIR
+        NAMES me-core-mapper/me-core-mapper.h
+        HINTS "$ENV{PSPDEV}/psp/include"
+    )
+    find_path(PSP_ME_SAFE_TASK_INCLUDE_DIR
+        NAMES me-safe-task/me-stask.h
+        HINTS "$ENV{PSPDEV}/psp/include"
+    )
+    find_library(PSP_ME_CORE_MAPPER_LIBRARY
+        NAMES me-core-mapper
+        HINTS "$ENV{PSPDEV}/psp/lib"
+    )
+    find_library(PSP_ME_SAFE_TASK_LIBRARY
+        NAMES me-stask
+        HINTS "$ENV{PSPDEV}/psp/lib"
+    )
+
+    if(NOT PSP_ME_CORE_INCLUDE_DIR OR NOT PSP_ME_SAFE_TASK_INCLUDE_DIR OR
+       NOT PSP_ME_CORE_MAPPER_LIBRARY OR NOT PSP_ME_SAFE_TASK_LIBRARY)
+        message(FATAL_ERROR
+            "PSP_ME_AUDIO=ON requires psp-media-engine-custom-core and "
+            "psp-media-engine-safe-task installed in PSPDEV")
+    endif()
+
+    target_include_directories(${TARGET} SYSTEM PRIVATE
+        "${PSP_ME_CORE_INCLUDE_DIR}"
+        "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+    )
+endif()
+
 # Keep miniz's usage requirements local to implementation files that consume
 # compression/CRC APIs. Public domain headers deliberately do not expose miniz
 # types.
@@ -1183,6 +1214,13 @@ elseif(PLATFORM STREQUAL "PSP")
         pspwlan
         pspdebug
     )
+    if(PSP_ME_AUDIO)
+        target_link_libraries(${TARGET} PRIVATE
+            "${PSP_ME_SAFE_TASK_LIBRARY}"
+            "${PSP_ME_CORE_MAPPER_LIBRARY}"
+            pspaudiocodec
+        )
+    endif()
     if(ADHOC)
         target_link_libraries(${TARGET} PUBLIC
             pspnet

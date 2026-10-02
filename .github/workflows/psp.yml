@@ -94,6 +94,7 @@ jobs:
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
           -DGUI=${{ matrix.gui }} \
+          -DPSP_ME_AUDIO=OFF \
           ..
         cmake --build . --parallel $(getconf _NPROCESSORS_ONLN)
         cmake --install . --prefix "$PWD/install"
