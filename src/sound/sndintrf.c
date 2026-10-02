@@ -284,6 +284,8 @@ void sound_exit(void)
 
 void sound_reset(void)
 {
+	sound_thread_reset_producer();
+
 #if (EMU_SYSTEM == CPS1)
 	if (machine_sound_type == SOUND_QSOUND)
 		qsound_sh_reset();

@@ -87,8 +87,12 @@ option(RELEASE "Release" OFF)
 option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
+option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
 if((USE_ASAN OR USE_UBSAN OR USE_PG) AND NOT PLATFORM STREQUAL "DESKTOP")
     message(FATAL_ERROR "USE_ASAN, USE_UBSAN, and USE_PG are desktop-only diagnostic capabilities")
+endif()
+if(PSP_ME_AUDIO AND NOT PLATFORM STREQUAL "PSP")
+    message(FATAL_ERROR "PSP_ME_AUDIO requires PLATFORM=PSP")
 endif()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
@@ -390,9 +394,17 @@ set(COMMON_SRC
 	common/platform_memory_info.c
 	common/memory_plan.h
 	common/memory_plan.c
-    common/sound.h
-    common/sound.c
+	    common/sound.h
+	    common/sound.c
+	    common/audio_producer_driver.h
 )
+
+if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
+    list(APPEND COMMON_SRC psp/psp_audio_producer.c)
+    add_definitions(-DPSP_ME_AUDIO=1)
+else()
+    list(APPEND COMMON_SRC common/audio_producer_cpu.c)
+endif()
 
 find_package(miniz 3.1.2 CONFIG QUIET)
 if (TARGET miniz::miniz)

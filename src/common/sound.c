@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "thread_driver.h"
 #include "audio_driver.h"
+#include "audio_producer_driver.h"
 
 
 /******************************************************************************
@@ -63,7 +64,7 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 		}
 
 		if (sound_enable)
-			(*sound->update)(sound_buffer[flip]);
+			audio_producer_driver->render(sound->update, sound_buffer[flip]);
 		else
 			memset(sound_buffer[flip], 0, sound->samples * sound->channels * sizeof(int16_t));
 
@@ -144,6 +145,17 @@ void sound_thread_set_volume(void)
 
 
 /*--------------------------------------------------------
+	Synchronize/reset the producer backend
+--------------------------------------------------------*/
+
+void sound_thread_reset_producer(void)
+{
+	if (sound_thread)
+		audio_producer_driver->reset();
+}
+
+
+/*--------------------------------------------------------
 	Sound Thread Start
 --------------------------------------------------------*/
 
@@ -161,6 +173,9 @@ int sound_thread_start(void)
 	memset(sound_buffer[0], 0, sizeof(sound_buffer[0]));
 	memset(sound_buffer[1], 0, sizeof(sound_buffer[1]));
 
+	if (!audio_producer_driver->init())
+		return 0;
+
 	game_audio = audio_driver->init();
 
 	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency, sound->channels))
@@ -168,6 +183,7 @@ int sound_thread_start(void)
 		fatalerror(TEXT(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND));
 		audio_driver->free(game_audio);
 		game_audio = NULL;
+		audio_producer_driver->shutdown();
 		return 0;
 	}
 
@@ -180,6 +196,7 @@ int sound_thread_start(void)
 		thread_driver->free(sound_thread);
 		sound_thread = NULL;
 		game_audio = NULL;
+		audio_producer_driver->shutdown();
 		return 0;
 	}
 
@@ -208,6 +225,8 @@ void sound_thread_stop(void)
 		thread_driver->deleteThread(sound_thread);
 		thread_driver->free(sound_thread);
 		sound_thread = NULL;
+
+		audio_producer_driver->shutdown();
 
 		audio_driver->release(game_audio);
 		audio_driver->free(game_audio);
