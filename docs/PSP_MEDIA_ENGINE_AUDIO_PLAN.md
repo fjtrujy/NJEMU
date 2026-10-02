@@ -90,12 +90,13 @@ the active PSPDEV toolchain:
 The normal OFF build does not search for or link these libraries.  The regular
 PSP GitHub Actions matrix explicitly configures `PSP_ME_AUDIO=OFF`.
 
-No ME-enabled CI job is added yet.  The upstream builds generate and embed a
-small kernel PRX and currently use host utilities (`xxd`, `sed`) in their build
-pipeline.  The dependency needs a reproducible CI installation step before an
-ON build-only job is appropriate.  In particular, the inspected revisions use
-GNU-style `sed -i`; macOS validation used GNU `sed` without modifying upstream
-source.
+The regular PSP matrix remains OFF-only.  A separate MVS build-only job installs
+the two upstream dependencies from the exact revisions above and compiles
+`PSP_ME_AUDIO=ON`; it does not run PPSSPP or claim ME runtime coverage.  The
+upstream builds generate and embed a small kernel PRX and use host utilities
+such as `xxd` and `sed`, so those tools are installed explicitly in that job.
+The inspected revisions use GNU-style `sed -i`; macOS local validation used GNU
+`sed` without modifying upstream source.
 
 ## Memory and synchronization findings
 
