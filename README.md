@@ -246,14 +246,19 @@ Button layouts automatically flip/rotate when:
 
 | Action | Buttons |
 |--------|---------|
-| Open Menu | HOME |
+| Open Menu | START + SELECT |
+| PSP system exit dialog | HOME |
 | Service Switch | L + R + SELECT |
 | 1P & 2P Start | L + R + START |
+
+NJEMU does not intercept PSP system buttons. HOME is left to the firmware and
+uses the standard PSP exit callback; VOL +/- are likewise left entirely to the
+firmware so the normal system volume behavior/overlay can be used.
 
 #### AdHoc Mode
 
 - Press **Square** in the file browser to start a game in AdHoc mode
-- Press **HOME** during AdHoc play to pause and show disconnect dialog
+- Press **START + SELECT** during AdHoc play to pause and show the disconnect dialog
 
 ### Directory Structure
 

@@ -649,6 +649,11 @@ build-time/package asset and is not opened by NJEMU at runtime.
 PSP system/network modules loaded by the executable are platform facilities,
 not files distributed from this repository.
 
+NJEMU does not ship or load a custom system-button PRX. PSP HOME and VOL +/-
+remain firmware-owned. `src/psp/psp_platform.c` registers the standard PSP exit
+callback so HOME activates the normal firmware exit dialog; the emulator menu
+uses START+SELECT instead.
+
 ### PS2
 
 There are two support-driver packaging modes.

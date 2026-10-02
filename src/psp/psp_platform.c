@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include <pspkernel.h>
+#include <psploadexec.h>
 #include <psppower.h>
 #include <pspsdk.h>
 #include <psputility_sysparam.h>
@@ -35,6 +36,20 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 /******************************************************************************
 	���`�����v��
 ******************************************************************************/
+
+/*--------------------------------------------------------
+	Exit Callback
+--------------------------------------------------------*/
+
+static int ExitCallback(int arg1, int arg2, void *common)
+{
+	(void)arg1;
+	(void)arg2;
+	(void)common;
+
+	sceKernelExitGame();
+	return 0;
+}
 
 /*--------------------------------------------------------
 	Power Callback
@@ -72,8 +87,13 @@ static int CallbackThread(SceSize args, void *argp)
 	(void)args;
 	(void)argp;
 
+	cbid = sceKernelCreateCallback("Exit Callback", ExitCallback, NULL);
+	if (cbid >= 0)
+		sceKernelRegisterExitCallback(cbid);
+
 	cbid = sceKernelCreateCallback("Power Callback", (void *)PowerCallback, NULL);
-	scePowerRegisterCallback(0, cbid);
+	if (cbid >= 0)
+		scePowerRegisterCallback(0, cbid);
 
 	sceKernelSleepThreadCB();
 
