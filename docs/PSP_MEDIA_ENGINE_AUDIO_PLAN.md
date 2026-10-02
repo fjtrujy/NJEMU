@@ -57,50 +57,52 @@ not a second reimplementation of it.
 
 ## Upstream dependencies investigated
 
-The primary library was inspected at:
-
-- `mcidclan/psp-media-engine-custom-core`
-- revision `fe871e12754060f3b42fbca6b251bb8ee3ade453`
-- MIT license
-
-The custom-core library maps native ME firmware entry points according to the
-detected ME image.  Its raw `me-core` mode resets the ME to a custom handler and
-the upstream `audio-shared-buffer` example keeps a long-running ME loop.  That
-example is useful for its 64-byte alignment, uncached/shared-memory and hardware
-mutex patterns, but a permanent loop is not the preferred first NJEMU
-integration because it takes stronger ownership of ME execution and complicates
-sleep/syscall coexistence.
-
-NJEMU therefore uses the related upstream safe-task layer for discrete jobs:
+NJEMU uses the task-oriented library as its public ME integration layer:
 
 - `mcidclan/psp-media-engine-safe-task`
 - revision validated locally: `7d4c41f77b0be8815a720e0c8212ed504c01806d`
 - MIT license
-- PRX-free dispatcher path (`meSafeTaskInitDispatcher`, safe-task built with
-  `PRX_FREE=1` and `pspkubridge`)
+- built with `PRX_FREE=1` and `pspkubridge`.
 
-The safe-task dispatcher preserves System Controller ME syscalls, provides
-explicit dispatch and `waitReady` synchronization, and can load/unload the AV
-module used to exercise the patched EDRAM path.  This is a better match for
-bounded audio jobs and ROM/reset lifetime than replacing the ME with an infinite
-producer loop.
+Safe-task itself uses the lower-level mapper library:
 
-Real-hardware isolation found that safe-task's embedded kernel-PRX mode
-(`PRX_FREE=0`) is not viable on the test PSP: `meSafeTaskInitDispatcher()`
-returns `-4`, corresponding to failure to load its temporary `kcall.prx` into
-the kernel partition.  The same exact upstream revision rebuilt with
-`PRX_FREE=1` succeeds through `kubridge`: dispatcher init returns 0, the AV
-module loads, dispatch returns 0, `waitReady` completes, and the deterministic
-shared-memory result matches.  NJEMU therefore standardizes this experiment on
-the upstream PRX-free safe-task configuration instead of depending on runtime
-kernel-PRX loading.
+- `mcidclan/psp-media-engine-custom-core`
+- revision `fe871e12754060f3b42fbca6b251bb8ee3ade453`
+- MIT license.
+
+Custom-core maps native ME firmware entry points according to the detected ME
+image and supplies the cache/DMACPLUS primitives used by safe-task and by the
+NJEMU worker boundary.  Its raw `me-core` mode can replace the ME execution
+environment with a custom handler; that is useful for experiments but is a
+stronger ownership model than NJEMU needs for one bounded audio job per buffer.
+
+Safe-task provides three discrete-task transports (Classic, Mini and MIST).
+NJEMU initially validated Classic on hardware, then migrated to **MIST**.  MIST
+injects the NJEMU task entry into an ME syscall-table slot through
+DMACPLUS rather than hot-patching the ME core.  The audio producer registers
+syscall index 13 once per producer initialization, triggers it for each job, and
+waits with `meSafeTaskMistWait()`.  The ME thunk always returns through
+`meSafeTaskMistFinish()`.
+
+This removes the Classic path's `PSP_AV_MODULE_AVCODEC` load/unload cycle and the
+`pspaudiocodec` link dependency while retaining System Controller to ME syscall
+coexistence.  The upstream library also documents sleep/awake support for MIST;
+NJEMU still treats a real suspend/resume test with its audio thread active as a
+separate hardware validation item.
+
+Earlier hardware isolation of Classic also established that safe-task's embedded
+kernel-PRX mode (`PRX_FREE=0`) was not viable on the test PSP.  The same upstream
+revision built with `PRX_FREE=1` works through `kubridge`.  MIST keeps that
+PRX-free configuration, so NJEMU never needs to create/load a temporary
+`kcall.prx` at runtime.
 
 ### Build integration
 
 `PSP_ME_AUDIO=ON` currently expects the upstream libraries to be installed in
 the active PSPDEV toolchain:
 
-- headers `me-core-mapper/me-core-mapper.h` and `me-safe-task/me-stask.h`;
+- headers `me-core-mapper/me-core-mapper.h` and
+  `me-safe-task/me-stask-mist.h`;
 - `libme-core-mapper.a`;
 - `libme-stask.a` built with `PRX_FREE=1`;
 - PSP `kubridge` support (`pspkubridge`).
@@ -110,10 +112,10 @@ PSP GitHub Actions matrix explicitly configures `PSP_ME_AUDIO=OFF`.
 
 The regular PSP matrix remains OFF-only.  A separate MVS build-only job installs
 the two upstream dependencies from the exact revisions above, builds safe-task
-with `PRX_FREE=1`, and compiles `PSP_ME_AUDIO=ON`; it does not run PPSSPP or
-claim ME runtime coverage.  The custom-core dependency still uses its own
-upstream kernel bridge build machinery, while NJEMU itself avoids loading a
-temporary safe-task kernel PRX at runtime.
+with `PRX_FREE=1`, and compiles the MIST-backed `PSP_ME_AUDIO=ON` path; it does
+not run PPSSPP or claim ME runtime coverage.  The custom-core dependency still
+uses its own upstream kernel bridge build machinery, while NJEMU itself avoids
+loading a temporary safe-task kernel PRX at runtime.
 
 ## Memory and synchronization findings
 
@@ -127,8 +129,8 @@ boundary explicit:
 - Allegrex must invalidate data written by ME before reading it;
 - ME-side jobs use the mapped ME cache maintenance functions;
 - `volatile` alone is not synchronization;
-- a dispatched job must reach `waitReady` before its buffers or referenced state
-  can be reset/freed;
+- a dispatched job must reach its transport wait completion before its buffers
+  or referenced state can be reset/freed;
 - the first real workload should use bounded input/output buffers rather than
   granting ME unrestricted access to mutable emulator globals.
 
@@ -235,39 +237,41 @@ with explicit state/input/output ownership and cache coherency; directly calling
 - PSP MVS ON/OFF builds and PSP CPS1/CPS2/NCDZ OFF builds passed locally.
 - OFF contains no `meLib`, `meCore`, or `meSafe` symbols.
 
-### M2 - optional ME dependency/bootstrap [hardware validated for startup/clean teardown]
+### M2 - optional ME dependency/bootstrap [hardware validated for MIST startup/producer teardown]
 
-The PSP producer now initializes the safe-task dispatcher and loads the upstream
-AV module only when `PSP_ME_AUDIO=ON`.  The dependency is built PRX-free and the
-NJEMU binary links `pspkubridge`.  Initialization failure logs the error and
-leaves the producer on CPU.  Reset/shutdown wait for outstanding ME work before
-unloading the module.
+The PSP producer now initializes safe-task MIST only when `PSP_ME_AUDIO=ON`.
+The dependency is built PRX-free, NJEMU links `pspkubridge`, and no AVCODEC
+module is loaded.  Initialization failure logs the error and leaves the producer
+on CPU.  Reset/shutdown waits for any outstanding ME work before releasing the
+shared workspace.
 
-On real PSP the dispatcher initializes successfully, the upstream AV module is
-loaded, and the ME-enabled MVS build reaches `mslug3` with the normal PSP sound
-thread active.  A hardware-only teardown build exercised the normal
-`neogeo_exit -> sound_exit -> producer shutdown -> memory_shutdown` path twice
-in consecutive launches.  After each run MVS was no longer loaded and the user
-partition returned exactly to the pre-run 57,655,296 free bytes.  This validates
-startup, shutdown, unload, and repeated clean startup without a leak.
+On real PSP MIST initializes successfully and the ME-enabled MVS build reaches
+`mslug3` with the normal PSP sound thread active.  A 900-frame hardware teardown
+run exited through the normal emulation/sound shutdown path.  After the sound
+thread stopped, direct state inspection showed `me_available=0`,
+`me_job_in_flight=0`, null job/workspace pointers and zero workspace/cache sizes.
+The later platform call to `sceKernelExitGame()` blocks under PSPLINK, so process
+partition memory after that point is not used as producer-lifetime evidence.
 
-Sleep/wake and an in-process normal-UI ROM switch are still pending.  A synthetic
-double-`emu_main()` no-GUI diagnostic was deliberately discarded as evidence
-because that is not a supported normal application flow and its second video
-initialization did not remain valid.
+A separate hardware harness exercised the actual NJEMU producer twice inside one
+process: `init -> MIST job -> wait -> shutdown`, immediately followed by a second
+identical cycle without a reset.  Both cycles produced the expected data.  This
+validates MIST re-initialization and workspace teardown at the boundary needed by
+an in-process ROM change.  Full GUI ROM-selection flow and physical sleep/wake
+remain separate end-to-end validation items.
 
 ### M3 - deterministic shared-memory proof [hardware validated]
 
-The ON backend dispatches one small 64-byte-aligned job during producer startup.
-Allegrex writes two input words and writes back/invalidates the cache line; ME
-invalidates it, computes XOR and addition results, writes the line back, and
-Allegrex invalidates before verifying both words.  Dispatch error or result
-mismatch unloads the AV module, marks ME unavailable, and leaves all PCM
-production on CPU.  No emulator or sound-chip state is touched by the probe.
+The ON backend dispatches one small 64-byte-aligned job through MIST during
+producer startup.  It deliberately uses the same 64-byte job descriptor and ME
+entry thunk as real audio jobs.  Allegrex writes two input words and writes
+back/invalidates the cache line; ME invalidates it, computes XOR and addition
+results, writes the line back, and Allegrex invalidates before verifying both
+words.  Dispatch error or result mismatch marks ME unavailable and leaves all
+PCM production on CPU.  No emulator or sound-chip state is touched by the probe.
 
-The proof passed on the real PSP.  Inspection through psplink after startup
-showed `me_module_loaded=1` and `me_available=1`.  The shared probe line contained
-the expected values:
+The MIST proof passed on the real PSP.  Inspection through psplink after startup
+showed `me_available=1`.  The shared probe line contained the expected values:
 
 - input A: `0x13579BDF`;
 - input B: `0x2468ACE0`;
@@ -294,8 +298,12 @@ maintenance used the logical 15,236-byte job size.  Upstream requires the range
 size itself to be cache-line aligned.  Real PSP comparisons initially produced
 299/300 mismatches; moving the decode tables into shared memory reduced that to
 34/300, and rounding every Allegrex/ME cache-maintenance range to 64 bytes fixed
-the remaining stale first-cache-line reads.  The final hardware oracle completed
-**300/300 jobs with 0 mismatches**.
+the remaining stale first-cache-line reads.  The final Classic hardware oracle
+completed **300/300 jobs with 0 mismatches**.  After migrating the transport to
+MIST, the same exact NJEMU decoder was run again against the independent CPU
+reference on real hardware: **300/300 MIST jobs also completed with 0
+mismatches**.  The logical job size was 15,236 bytes and every shared cache range
+was rounded to 15,296 bytes.
 
 If ME is unavailable, workspace allocation fails, source preparation cannot be
 bounded, or dispatch fails before a job is in flight, that buffer follows the
@@ -331,6 +339,22 @@ benchmark.  No audio-period overruns or runtime instability were observed in the
 profiling logs.  Audible-quality capture was not performed, so subjective glitch
 assessment remains a manual hardware check.
 
+Those whole-emulator figures were captured while the first implementation still
+used safe-task Classic.  To isolate the transport change, a later real-PSP
+microbenchmark ran 2,000 identical shared-memory `dispatch + wait` operations:
+
+| safe-task transport | total | average/job |
+| --- | ---: | ---: |
+| Classic | ~176.0 ms | ~87 us |
+| MIST | ~119.6 ms | ~59 us |
+
+MIST therefore reduced the isolated transport overhead by roughly **32%** while
+also removing the AVCODEC dependency.  The exact ADPCM-A output oracle remained
+bit-identical after the migration.  A new whole-emulator MIST FPS number is not
+claimed because the temporary wall-clock autoplay run did not stay in a valid,
+comparable gameplay state; the transport microbenchmark is the accepted A/B for
+this migration.
+
 ### M6 - expansion and runtime selector
 
 Expand to additional workloads only after M4/M5 demonstrate a real win.  Runtime
@@ -340,10 +364,11 @@ experiment.
 ## Remaining risks
 
 - Safe-task/custom-core firmware mapping support is still evolving upstream.
-- Kernel-PRX loading and model-specific ME firmware behavior may still vary on
-  PSP models other than the hardware tested here; PPSSPP cannot validate them.
-- A normal in-process ROM switch still needs hardware validation after an actual
-  ME audio workload exists.
+- Model-specific ME firmware behavior may still vary on PSP models other than the
+  hardware tested here; PPSSPP cannot validate it.
+- Producer-level in-process re-initialization is hardware validated for two
+  consecutive MIST cycles, but the complete GUI ROM-selection flow has not yet
+  been exercised as an end-to-end hardware test.
 - Sleep/wake must be tested while no job is in flight and while the audio thread
   is active.
 - The first ADPCM-A workload is beneficial but only modestly at whole-system
@@ -353,16 +378,18 @@ experiment.
   that changes control/update timing must preserve the generation/lifecycle
   semantics proven here rather than exposing live YM2610 globals to ME.
 
-## Validation checkpoint - 2026-10-02
+## Validation checkpoint - 2026-10-03
 
 Final local validation after the shared CPU fallback refactor:
 
 - PSP MVS, `PSP_ME_AUDIO=OFF`, `PSP_AUDIO_PROFILE=OFF`: builds and packages;
-- PSP MVS, `PSP_ME_AUDIO=ON`, `PSP_AUDIO_PROFILE=OFF`: builds and packages;
+- PSP MVS, MIST-backed `PSP_ME_AUDIO=ON`, `PSP_AUDIO_PROFILE=OFF`: builds and
+  packages;
 - PSP CPS1/CPS2/NCDZ, `PSP_ME_AUDIO=OFF`: all build and package;
-- Desktop MVS builds and passes 22/22 CTests;
+- Desktop MVS builds and passes 23/23 CTests;
 - the final MVS OFF ELF contains no `meSafe`, `meCore`, or ME-processing symbols;
-- the final MVS ON ELF contains the safe-task dispatcher and NJEMU ME probe;
+- the final MVS ON ELF contains safe-task MIST and the NJEMU ME probe, with no
+  `pspaudiocodec` link dependency;
 - `git diff --check` is clean.
 
 The focused profiler was also compiled successfully for MVS, NCDZ, CPS1 and
@@ -371,8 +398,11 @@ MVS Release `.text`, `.data`, and `.bss` sizes are unchanged from the pre-profil
 build, confirming that the disabled instrumentation optimizes away.
 
 Subsequent real-PSP validation completed M2/M3 and the first M4/M5 workload.
-Dynamic cached YM2610 ADPCM-A is now dispatched as one bounded ME job per output
-buffer, passed a 300-job exact-output hardware oracle, reduced the representative
-YM2610 callback by about 16.7%, and improved the sustained uncapped `mslug3`
-measurement by about 2.8%.  Runtime backend selection and expansion to additional
+Dynamic cached YM2610 ADPCM-A is now dispatched as one bounded MIST job per output
+buffer, passed a 300-job exact-output hardware oracle on both the original
+Classic transport and final MIST transport, and the original ME workload reduced
+the representative YM2610 callback by about 16.7% with an indicative ~2.8%
+whole-emulator gain.  MIST itself measured ~32% lower isolated dispatch/wait
+overhead than Classic and passed two consecutive producer init/job/shutdown
+cycles in one PSP process.  Runtime backend selection and expansion to additional
 workloads remain intentionally deferred.

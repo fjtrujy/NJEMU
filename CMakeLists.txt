@@ -813,7 +813,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         HINTS "$ENV{PSPDEV}/psp/include"
     )
     find_path(PSP_ME_SAFE_TASK_INCLUDE_DIR
-        NAMES me-safe-task/me-stask.h
+        NAMES me-safe-task/me-stask-mist.h
         HINTS "$ENV{PSPDEV}/psp/include"
     )
     find_library(PSP_ME_CORE_MAPPER_LIBRARY
@@ -1248,7 +1248,6 @@ elseif(PLATFORM STREQUAL "PSP")
         target_link_libraries(${TARGET} PRIVATE
             "${PSP_ME_SAFE_TASK_LIBRARY}"
             "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspaudiocodec
             pspkubridge
         )
     endif()

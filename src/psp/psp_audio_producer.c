@@ -2,11 +2,11 @@
 #include <malloc.h>
 #include <string.h>
 #include <pspkernel.h>
-#include <me-safe-task/me-stask.h>
+#include <me-safe-task/me-stask-mist.h>
+#include <me-core-mapper/hw-registers.h>
 #include "common/audio_producer_driver.h"
 
 static bool me_available;
-static bool me_module_loaded;
 static bool me_job_in_flight;
 static uint32_t me_probe_data[16] __attribute__((aligned(64)));
 
@@ -36,35 +36,8 @@ static void psp_me_probe_task(void *param)
 {
 	uint32_t *data = (uint32_t *)param;
 
-	meCoreDcacheInvalidateRange(data, sizeof(me_probe_data));
 	data[2] = data[0] ^ data[1];
 	data[3] = data[0] + data[1];
-	meCoreDcacheWritebackRange(data, sizeof(me_probe_data));
-}
-
-static bool psp_me_probe(void)
-{
-	Task task = {
-		.func = psp_me_probe_task,
-		.param = me_probe_data,
-		.index = 0,
-	};
-	int result;
-
-	memset(me_probe_data, 0, sizeof(me_probe_data));
-	me_probe_data[0] = PSP_ME_PROBE_A;
-	me_probe_data[1] = PSP_ME_PROBE_B;
-	sceKernelDcacheWritebackInvalidateRange(me_probe_data, sizeof(me_probe_data));
-
-	result = meSafeTaskDispatch(&task);
-	if (result < 0)
-		return false;
-
-	meSafeTaskWaitReady();
-	sceKernelDcacheInvalidateRange(me_probe_data, sizeof(me_probe_data));
-
-	return me_probe_data[2] == (PSP_ME_PROBE_A ^ PSP_ME_PROBE_B) &&
-		me_probe_data[3] == (PSP_ME_PROBE_A + PSP_ME_PROBE_B);
 }
 
 static void psp_me_audio_job_entry(void *param)
@@ -77,12 +50,73 @@ static void psp_me_audio_job_entry(void *param)
 	meCoreDcacheWritebackRange(job->data, job->size);
 }
 
+#define PSP_ME_MIST_SYSCALL_INDEX 13
+
+static int psp_me_mist_job_entry(int index, void *param)
+{
+	(void)index;
+	psp_me_audio_job_entry(param);
+	return meSafeTaskMistFinish();
+}
+
+static int psp_me_dispatch_init(void)
+{
+	MistInjector injector;
+	int result = meSafeTaskMistInit();
+
+	if (result < 0)
+		return result;
+
+	injector.index = PSP_ME_MIST_SYSCALL_INDEX;
+	injector.addr = CACHED_KERNEL_MASK | (uint32_t)psp_me_mist_job_entry;
+	meSafeTaskMistInjectSyscall(&injector);
+	return 0;
+}
+
+static int psp_me_dispatch_job(void)
+{
+	MistTrigger trigger = {
+		.index = PSP_ME_MIST_SYSCALL_INDEX,
+		.param = &me_job,
+	};
+
+	return meSafeTaskMistTrigger(&trigger);
+}
+
+static void psp_me_dispatch_wait(void)
+{
+	meSafeTaskMistWait();
+}
+
+static bool psp_me_probe(void)
+{
+	int result;
+
+	memset(me_probe_data, 0, sizeof(me_probe_data));
+	me_probe_data[0] = PSP_ME_PROBE_A;
+	me_probe_data[1] = PSP_ME_PROBE_B;
+	me_job.job = psp_me_probe_task;
+	me_job.data = me_probe_data;
+	me_job.size = sizeof(me_probe_data);
+	sceKernelDcacheWritebackInvalidateRange(&me_job, sizeof(me_job));
+	sceKernelDcacheWritebackInvalidateRange(me_probe_data, sizeof(me_probe_data));
+
+	result = psp_me_dispatch_job();
+	if (result < 0)
+		return false;
+
+	psp_me_dispatch_wait();
+	sceKernelDcacheInvalidateRange(me_probe_data, sizeof(me_probe_data));
+
+	return me_probe_data[2] == (PSP_ME_PROBE_A ^ PSP_ME_PROBE_B) &&
+		me_probe_data[3] == (PSP_ME_PROBE_A + PSP_ME_PROBE_B);
+}
+
 static bool psp_audio_producer_init(void)
 {
 	int result;
 
 	me_available = false;
-	me_module_loaded = false;
 	me_job_in_flight = false;
 	me_job_data = NULL;
 	me_job_cache_size = 0;
@@ -91,29 +125,21 @@ static bool psp_audio_producer_init(void)
 	if (!audio_producer_cpu.init())
 		return false;
 
-	result = meSafeTaskInitDispatcher();
+	result = psp_me_dispatch_init();
 	if (result < 0)
 	{
 		printf("[PSP_ME_AUDIO] ME dispatcher unavailable (%d); using CPU producer\n",
 			result);
 		return true;
 	}
-
-	/* Loading AVCODEC exercises the safe-task patched ME EDRAM path while
-	 * leaving ordinary System Controller ME syscalls available. */
-	meSafeTaskLoadModule();
-	me_module_loaded = true;
-
 	if (!psp_me_probe())
 	{
 		printf("[PSP_ME_AUDIO] ME execution probe failed; using CPU producer\n");
-		meSafeTaskUnloadModule();
-		me_module_loaded = false;
 		return true;
 	}
 
 	me_available = true;
-	printf("[PSP_ME_AUDIO] ME execution probe passed; CPU producer retained as fallback\n");
+	printf("[PSP_ME_AUDIO] ME execution probe passed (MIST); CPU producer retained as fallback\n");
 
 	return true;
 }
@@ -122,16 +148,11 @@ static void psp_audio_producer_shutdown(void)
 {
 	if (me_job_in_flight)
 	{
-		meSafeTaskWaitReady();
+		psp_me_dispatch_wait();
 		if (me_job_data && me_job_cache_size)
 			sceKernelDcacheInvalidateRange(me_job_data, me_job_cache_size);
 		me_job_in_flight = false;
 	}
-
-	if (me_module_loaded)
-		meSafeTaskUnloadModule();
-
-	me_module_loaded = false;
 	me_available = false;
 	me_job_data = NULL;
 	me_job_cache_size = 0;
@@ -190,7 +211,6 @@ static void *psp_audio_producer_acquireJobBuffer(uint32_t size, uint32_t alignme
 static bool psp_audio_producer_submitJob(audio_producer_job_fn job, void *data,
 	uint32_t size)
 {
-	Task task;
 	uint32_t cache_size;
 	int result;
 
@@ -211,10 +231,7 @@ static bool psp_audio_producer_submitJob(audio_producer_job_fn job, void *data,
 	sceKernelDcacheWritebackInvalidateRange(&me_job, sizeof(me_job));
 	sceKernelDcacheWritebackInvalidateRange(data, cache_size);
 
-	task.func = psp_me_audio_job_entry;
-	task.param = &me_job;
-	task.index = 0;
-	result = meSafeTaskDispatch(&task);
+	result = psp_me_dispatch_job();
 	if (result < 0)
 	{
 		me_job_data = NULL;
@@ -230,7 +247,7 @@ static void psp_audio_producer_waitJob(void)
 {
 	if (!me_job_in_flight)
 		return;
-	meSafeTaskWaitReady();
+	psp_me_dispatch_wait();
 	if (me_job_data && me_job_cache_size)
 		sceKernelDcacheInvalidateRange(me_job_data, me_job_cache_size);
 	me_job_in_flight = false;

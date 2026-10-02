@@ -133,7 +133,7 @@ jobs:
         path: build/install/
 
   me-build:
-    name: MVS PSP_ME_AUDIO=ON build-only
+    name: MVS PSP_ME_AUDIO=ON MIST build-only
     runs-on: ubuntu-latest
     container: ghcr.io/pspdev/pspdev:develop
     steps:
