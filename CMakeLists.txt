@@ -1310,7 +1310,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             add_executable(mvs_sprite_upload_${UPLOAD_MODE}_tests
                 tests/mvs_sprite_upload_tests.c
                 src/mvs/sprite.c
-                src/mvs/sprite_common.c)
+                src/mvs/sprite_common.c
+                src/common/video_driver.c)
             target_include_directories(mvs_sprite_upload_${UPLOAD_MODE}_tests PRIVATE
                 ${CMAKE_CURRENT_SOURCE_DIR}/src)
             # The test follows the selected build capability. In no-cache builds it
@@ -1398,6 +1399,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c
         src/common/ui_layout.c
+        src/common/video_driver.c
     )
     target_include_directories(ui_layout_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

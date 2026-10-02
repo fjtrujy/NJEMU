@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "common/ui_layout.h"
+#include "common/video_driver.h"
 
 static ui_layout_metrics_t metrics = {
 	UI_LAYOUT_BASE_WIDTH, UI_LAYOUT_BASE_HEIGHT,
@@ -15,10 +16,15 @@ static ui_layout_metrics_t metrics = {
 	UI_LAYOUT_BASE_WIDTH, UI_LAYOUT_BASE_HEIGHT,
 	1.0f
 };
+static float transform_scale_x = 1.0f;
+static float transform_scale_y = 1.0f;
 
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height)
 {
+	int pixel_aspect_num = 1;
+	int pixel_aspect_den = 1;
+	float physical_output_width;
 	float scale_x;
 	float scale_y;
 
@@ -31,19 +37,26 @@ void ui_layout_init(int logical_width, int logical_height,
 	if (output_height <= 0)
 		output_height = logical_height;
 
+	video_get_pixel_aspect_ratio(&pixel_aspect_num, &pixel_aspect_den);
+	physical_output_width = (float)output_width *
+		(float)pixel_aspect_num / (float)pixel_aspect_den;
+
 	metrics.logical_width = logical_width;
 	metrics.logical_height = logical_height;
 	metrics.output_width = output_width;
 	metrics.output_height = output_height;
 
-	scale_x = (float)output_width / (float)logical_width;
+	scale_x = physical_output_width / (float)logical_width;
 	scale_y = (float)output_height / (float)logical_height;
 	metrics.scale = scale_x < scale_y ? scale_x : scale_y;
+	transform_scale_x = metrics.scale *
+		(float)pixel_aspect_den / (float)pixel_aspect_num;
+	transform_scale_y = metrics.scale;
 
 	metrics.viewport_width =
-		(int)((float)logical_width * metrics.scale + 0.5f);
+		(int)((float)logical_width * transform_scale_x + 0.5f);
 	metrics.viewport_height =
-		(int)((float)logical_height * metrics.scale + 0.5f);
+		(int)((float)logical_height * transform_scale_y + 0.5f);
 	metrics.viewport_x = (output_width - metrics.viewport_width) / 2;
 	metrics.viewport_y = (output_height - metrics.viewport_height) / 2;
 }
@@ -51,6 +64,9 @@ void ui_layout_init(int logical_width, int logical_height,
 void ui_layout_compute_responsive_size(int output_width, int output_height,
 	int *logical_width, int *logical_height)
 {
+	int pixel_aspect_num = 1;
+	int pixel_aspect_den = 1;
+	float physical_output_width;
 	float scale_x;
 	float scale_y;
 	float scale;
@@ -62,18 +78,22 @@ void ui_layout_compute_responsive_size(int output_width, int output_height,
 	if (output_height <= 0)
 		output_height = UI_LAYOUT_BASE_HEIGHT;
 
+	video_get_pixel_aspect_ratio(&pixel_aspect_num, &pixel_aspect_den);
+	physical_output_width = (float)output_width *
+		(float)pixel_aspect_num / (float)pixel_aspect_den;
+
 	/* 480x272 is the minimum design canvas, not a fixed screen size. Scale the
 	 * baseline uniformly until one output axis is filled, then expose any extra
-	 * space on the other axis as additional logical layout room. This keeps the
-	 * PSP layout pixel-identical while making legacy center coordinates scale
-	 * naturally on PS2/Desktop and still lets edge-anchored UI reflow. */
-	scale_x = (float)output_width / (float)UI_LAYOUT_BASE_WIDTH;
+	 * space on the other axis as additional logical layout room. Horizontal
+	 * capacity is measured in physical square-pixel units so non-square output
+	 * pixels (notably PS2 NTSC) preserve the intended UI proportions. */
+	scale_x = physical_output_width / (float)UI_LAYOUT_BASE_WIDTH;
 	scale_y = (float)output_height / (float)UI_LAYOUT_BASE_HEIGHT;
 	scale = scale_x < scale_y ? scale_x : scale_y;
 	if (scale <= 0.0f)
 		scale = 1.0f;
 
-	width = (int)((float)output_width / scale + 0.9999f);
+	width = (int)(physical_output_width / scale + 0.9999f);
 	height = (int)((float)output_height / scale + 0.9999f);
 	if (width < UI_LAYOUT_BASE_WIDTH)
 		width = UI_LAYOUT_BASE_WIDTH;
@@ -91,9 +111,9 @@ const ui_layout_metrics_t *ui_layout_get(void)
 	return &metrics;
 }
 
-static int scaled_coord(int value)
+static int scaled_coord(int value, float scale)
 {
-	float scaled = (float)value * metrics.scale;
+	float scaled = (float)value * scale;
 	return (int)(scaled >= 0.0f ? scaled + 0.5f : scaled - 0.5f);
 }
 
@@ -108,18 +128,18 @@ int ui_layout_uses_output_transform(void)
 void ui_layout_transform_point(int x, int y, int *out_x, int *out_y)
 {
 	if (out_x)
-		*out_x = metrics.viewport_x + scaled_coord(x);
+		*out_x = metrics.viewport_x + scaled_coord(x, transform_scale_x);
 	if (out_y)
-		*out_y = metrics.viewport_y + scaled_coord(y);
+		*out_y = metrics.viewport_y + scaled_coord(y, transform_scale_y);
 }
 
 void ui_layout_transform_rect(int x, int y, int w, int h,
 	int *out_x, int *out_y, int *out_w, int *out_h)
 {
-	int x0 = metrics.viewport_x + scaled_coord(x);
-	int y0 = metrics.viewport_y + scaled_coord(y);
-	int x1 = metrics.viewport_x + scaled_coord(x + w);
-	int y1 = metrics.viewport_y + scaled_coord(y + h);
+	int x0 = metrics.viewport_x + scaled_coord(x, transform_scale_x);
+	int y0 = metrics.viewport_y + scaled_coord(y, transform_scale_y);
+	int x1 = metrics.viewport_x + scaled_coord(x + w, transform_scale_x);
+	int y1 = metrics.viewport_y + scaled_coord(y + h, transform_scale_y);
 
 	if (out_x) *out_x = x0;
 	if (out_y) *out_y = y0;

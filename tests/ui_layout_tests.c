@@ -1,6 +1,8 @@
 #include <assert.h>
 
+#include "common/display_mode.h"
 #include "common/ui_layout.h"
+#include "common/video_driver.h"
 
 static void test_responsive_layout(int width, int height,
 	int expected_logical_width, int expected_logical_height,
@@ -70,8 +72,59 @@ static void test_aspect_preserving_viewport(void)
 	assert(ui_layout_uses_output_transform());
 }
 
+static void test_non_square_pixel_layout(int width, int height,
+	int pixel_aspect_num, int pixel_aspect_den)
+{
+	const ui_layout_metrics_t *layout;
+	int logical_width;
+	int logical_height;
+	int x;
+	int y;
+	int w;
+	int h;
+
+	video_set_pixel_aspect_ratio(pixel_aspect_num, pixel_aspect_den);
+	ui_layout_compute_responsive_size(width, height,
+		&logical_width, &logical_height);
+	assert(logical_width == 480);
+	assert(logical_height == 360);
+
+	ui_layout_init(logical_width, logical_height, width, height);
+	layout = ui_layout_get();
+	assert(layout->viewport_x == 0);
+	assert(layout->viewport_y == 0);
+	assert(layout->viewport_width == width);
+	assert(layout->viewport_height == height);
+
+	ui_layout_transform_rect(0, 0, logical_width, logical_height,
+		&x, &y, &w, &h);
+	assert(x == 0);
+	assert(y == 0);
+	assert(w == width);
+	assert(h == height);
+}
+
+static void test_non_square_pixel_display_mode(void)
+{
+	int width;
+	int height;
+
+	video_set_pixel_aspect_ratio(10, 11);
+	display_mode_size(DISPLAY_MODE_4_3, 704, 480, 304, 224,
+		&width, &height);
+	assert(width == 704);
+	assert(height == 480);
+
+	video_set_pixel_aspect_ratio(10, 22);
+	display_mode_size(DISPLAY_MODE_4_3, 704, 240, 304, 224,
+		&width, &height);
+	assert(width == 704);
+	assert(height == 240);
+}
+
 int main(void)
 {
+	video_set_pixel_aspect_ratio(1, 1);
 	test_responsive_layout(480, 272, 480, 272, 11);
 	test_responsive_layout(640, 224, 778, 272, 11);
 	test_responsive_layout(640, 448, 480, 336, 14);
@@ -88,5 +141,9 @@ int main(void)
 	test_responsive_layout(600, 900, 480, 720, 34);
 	test_responsive_content_scaling();
 	test_aspect_preserving_viewport();
+	test_non_square_pixel_layout(704, 480, 10, 11);
+	test_non_square_pixel_layout(704, 240, 10, 22);
+	test_non_square_pixel_display_mode();
+	video_set_pixel_aspect_ratio(1, 1);
 	return 0;
 }

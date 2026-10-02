@@ -1,6 +1,8 @@
 #ifndef COMMON_DISPLAY_MODE_H
 #define COMMON_DISPLAY_MODE_H
 
+#include "common/video_driver.h"
+
 typedef enum display_mode
 {
 	DISPLAY_MODE_ORIGINAL_SIZE = 0,
@@ -16,6 +18,8 @@ static inline void display_mode_size(display_mode_t mode,
 {
 	int aspect_width = native_width;
 	int aspect_height = native_height;
+	int pixel_aspect_num = 1;
+	int pixel_aspect_den = 1;
 
 	if (mode == DISPLAY_MODE_FULLSCREEN) {
 		*width = output_width;
@@ -31,13 +35,16 @@ static inline void display_mode_size(display_mode_t mode,
 		aspect_width = 4;
 		aspect_height = 3;
 	}
-	if ((long long)output_width * aspect_height <=
-		(long long)output_height * aspect_width) {
+	video_get_pixel_aspect_ratio(&pixel_aspect_num, &pixel_aspect_den);
+	if ((long long)output_width * pixel_aspect_num * aspect_height <=
+		(long long)output_height * pixel_aspect_den * aspect_width) {
 		*width = output_width;
-		*height = (output_width * aspect_height) / aspect_width;
+		*height = (int)(((long long)output_width * pixel_aspect_num *
+			aspect_height) / ((long long)pixel_aspect_den * aspect_width));
 	} else {
 		*height = output_height;
-		*width = (output_height * aspect_width) / aspect_height;
+		*width = (int)(((long long)output_height * pixel_aspect_den *
+			aspect_width) / ((long long)pixel_aspect_num * aspect_height));
 	}
 }
 

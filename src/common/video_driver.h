@@ -214,4 +214,9 @@ extern RECT full_rect;
 
 extern void *video_data;
 
+/* Physical pixel width:height ratio of the active presentation surface.
+ * Square-pixel backends leave this at the default 1:1. */
+void video_set_pixel_aspect_ratio(int numerator, int denominator);
+void video_get_pixel_aspect_ratio(int *numerator, int *denominator);
+
 #endif /* VIDEO_DRIVER_H */

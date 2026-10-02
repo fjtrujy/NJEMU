@@ -106,6 +106,36 @@
 #define RENDER_SCREEN_HEIGHT 264
 #endif
 
+typedef struct ps2_output_mode
+{
+	int mode;
+	int width;
+	int height;
+	int interlace;
+	int field;
+	int pixel_aspect_num;
+	int pixel_aspect_den;
+} ps2_output_mode_t;
+
+/* Match the GS raster geometry used by RetroArch's mature PS2 backend.
+ * 480-line NTSC/DTV uses a 10:11 pixel aspect; 240p doubles the vertical
+ * pixel extent to 10:22. 704 pixels therefore cover the intended 4:3 active
+ * width while remaining 64-pixel aligned for GS FBW. With gsKit's timing
+ * widths this also derives VCK x4 for NTSC/240p and VCK x2 for 480p. */
+static const ps2_output_mode_t ps2_output_modes[VIDEO_OUTPUT_MODE_COUNT] = {
+	{ GS_MODE_NTSC,     704, 240, GS_NONINTERLACED, GS_FRAME, 10, 22 },
+	{ GS_MODE_NTSC,     704, 480, GS_INTERLACED,    GS_FIELD, 10, 11 },
+	{ GS_MODE_DTV_480P, 704, 480, GS_NONINTERLACED, GS_FRAME, 10, 11 },
+};
+
+static const ps2_output_mode_t *ps2_selected_output_mode(void)
+{
+	int index = option_video_output_mode;
+	if (index < 0 || index >= VIDEO_OUTPUT_MODE_COUNT)
+		index = VIDEO_OUTPUT_480I;
+	return &ps2_output_modes[index];
+}
+
 typedef struct texture_layer {
 	GSTEXTURE *texture;
 } texture_layer_t;
@@ -574,11 +604,13 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ee_sema_t sema;
 	ps2_video_t *ps2;
 	GSGLOBAL *gsGlobal;
+	const ps2_output_mode_t *output_mode;
 
 	ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
 	if (!ps2)
 		return NULL;
 	ps2->finish_callback_id = -1;
+	output_mode = ps2_selected_output_mode();
 
 	gsGlobal = gsKit_init_global();
 	if (!gsGlobal) {
@@ -597,32 +629,13 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	}
 
-	/* NJEMU's emulated systems run around 60 Hz, so every selectable PS2
-	 * output mode deliberately uses a 60-Hz NTSC/DTV timing even on PAL
-	 * consoles. Keep the render width at gsKit's historical 640 pixels;
-	 * 240p halves only the vertical framebuffer while 480p changes the
-	 * scan timing without increasing NJEMU's framebuffer allocation. */
-	switch (option_video_output_mode) {
-	case VIDEO_OUTPUT_240P:
-		gsGlobal->Mode = GS_MODE_NTSC;
-		gsGlobal->Interlace = GS_NONINTERLACED;
-		gsGlobal->Field = GS_FRAME;
-		gsGlobal->Height = 224;
-		break;
-	case VIDEO_OUTPUT_480P:
-		gsGlobal->Mode = GS_MODE_DTV_480P;
-		gsGlobal->Interlace = GS_NONINTERLACED;
-		gsGlobal->Field = GS_FRAME;
-		gsGlobal->Height = 448;
-		break;
-	case VIDEO_OUTPUT_480I:
-	default:
-		gsGlobal->Mode = GS_MODE_NTSC;
-		gsGlobal->Interlace = GS_INTERLACED;
-		gsGlobal->Field = GS_FIELD;
-		gsGlobal->Height = 448;
-		break;
-	}
+	/* NJEMU's emulated systems run around 60 Hz, so every selectable mode uses
+	 * a 60-Hz NTSC/DTV timing even on PAL-region consoles. */
+	gsGlobal->Mode = output_mode->mode;
+	gsGlobal->Width = output_mode->width;
+	gsGlobal->Height = output_mode->height;
+	gsGlobal->Interlace = output_mode->interlace;
+	gsGlobal->Field = output_mode->field;
 
 	gsGlobal->PSM  = GS_PSM_CT16;
 	gsGlobal->PSMZ = GS_PSMZ_16S;
@@ -739,6 +752,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
 	ps2_flipScreen(ps2, true);
 
+	video_set_pixel_aspect_ratio(output_mode->pixel_aspect_num,
+		output_mode->pixel_aspect_den);
 	return ps2;
 }
 
@@ -789,6 +804,7 @@ static void ps2_free(void *data)
 	ps2->tex_layers = NULL;
 	// We don't need to free vram, it's done with gsKit_vram_clear
 
+	video_set_pixel_aspect_ratio(1, 1);
 	free(ps2);
 }
 
