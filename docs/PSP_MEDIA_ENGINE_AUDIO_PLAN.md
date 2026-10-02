@@ -147,7 +147,7 @@ hardware measurement is claimed here.
 - PSP MVS ON/OFF builds and PSP CPS1/CPS2/NCDZ OFF builds passed locally.
 - OFF contains no `meLib`, `meCore`, or `meSafe` symbols.
 
-### M2 - optional ME dependency/bootstrap [in progress]
+### M2 - optional ME dependency/bootstrap [implemented; hardware validation pending]
 
 The PSP producer now initializes the safe-task Classic dispatcher and loads the
 upstream AV module only when `PSP_ME_AUDIO=ON`.  Initialization failure logs the
@@ -157,12 +157,17 @@ work before unloading the module.
 Build validation is complete locally.  Real-PSP validation is still required
 for dispatcher startup, sleep/wake, repeated game changes and shutdown.
 
-### M3 - deterministic shared-memory proof [next]
+### M3 - deterministic shared-memory proof [implemented; hardware validation pending]
 
-Dispatch one small aligned job, verify a deterministic result on Allegrex after
-cache invalidation, and disable ME/fall back to CPU if the result is wrong.  This
-must prove dispatch, cache coherency and synchronization before any sound state
-is moved.
+The ON backend dispatches one small 64-byte-aligned job during producer startup.
+Allegrex writes two input words and writes back/invalidates the cache line; ME
+invalidates it, computes XOR and addition results, writes the line back, and
+Allegrex invalidates before verifying both words.  Dispatch error or result
+mismatch unloads the AV module, marks ME unavailable, and leaves all PCM
+production on CPU.  No emulator or sound-chip state is touched by the probe.
+
+The proof is compiled and linked locally but still needs a real-PSP run before
+it can be marked hardware-validated.
 
 ### M4 - first real audio workload [blocked on profiling]
 
