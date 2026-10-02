@@ -121,6 +121,8 @@ The upstream examples and safe-task implementation make the producer/consumer
 boundary explicit:
 
 - shared job/buffer storage must be at least 64-byte aligned;
+- cache-maintenance ranges must also be rounded to 64-byte multiples; using an
+  aligned pointer with a non-aligned byte count produced stale data on real PSP;
 - Allegrex writes must be written back before ME consumes them;
 - Allegrex must invalidate data written by ME before reading it;
 - ME-side jobs use the mapped ME cache maintenance functions;
@@ -275,22 +277,59 @@ the expected values:
 This confirms actual ME execution plus the Allegrex/ME cache-maintenance path;
 it is not PPSSPP-derived validation.
 
-### M4 - first real audio workload [selected; design/prototype pending]
+### M4 - first real audio workload [hardware validated]
 
-The selected workload is MVS YM2610 ADPCM-A decode in PCM-cache mode.  The first
-prototype must batch enough decode work to amortize ME dispatch, keep CPU cache
-miss/file handling on Allegrex, and exchange only bounded decoder state, source
-bytes/nibbles, and output contributions.  It must not grant ME unrestricted
-access to the global YM2610 or PCM-cache structures.  CPU output remains the
-oracle/fallback and deterministic PCM comparison is required before performance
-claims.
+The selected workload is MVS YM2610 ADPCM-A decode in PCM-cache mode.  One job is
+prepared per YM2610 output buffer rather than dispatching the per-sample helper.
+Allegrex resolves any PCM-cache misses and copies only the bounded source bytes
+needed by the six ADPCM-A channels into a 64-byte-aligned shared workspace.  The
+job also contains a snapshot of the decoder state and the small decode tables;
+the ME therefore never dereferences the mutable global YM2610 or PCM-cache
+structures.  While ME decodes/mixes ADPCM-A, Allegrex continues FM, SSG and
+ADPCM-B work, then waits once and merges the ADPCM-A contribution.
 
-### M5 - hardware performance decision
+The first hardware comparison exposed a coherency bug that was useful in
+clarifying the contract.  The shared allocation was aligned, but cache
+maintenance used the logical 15,236-byte job size.  Upstream requires the range
+size itself to be cache-line aligned.  Real PSP comparisons initially produced
+299/300 mismatches; moving the decode tables into shared memory reduced that to
+34/300, and rounding every Allegrex/ME cache-maintenance range to 64 bytes fixed
+the remaining stale first-cache-line reads.  The final hardware oracle completed
+**300/300 jobs with 0 mismatches**.
 
-Compare CPU and ME paths using identical game/configuration.  Evaluate total
-emulation speed, audio glitches/underruns, Allegrex time, dispatch/wait overhead,
-frame pacing and sustained stability.  A lower audio counter without a whole-
-system improvement is not sufficient.
+If ME is unavailable, workspace allocation fails, source preparation cannot be
+bounded, or dispatch fails before a job is in flight, that buffer follows the
+existing CPU ADPCM-A path.  Key-on/key-off generation counters prevent completed
+ME state from overwriting newer control state.  Reset/shutdown waits for any
+in-flight job before shared storage can be released.
+
+### M5 - hardware performance decision [first workload complete]
+
+A real-PSP A/B run used the same MVS `mslug3` no-GUI Release configuration with
+the speed limiter disabled and the focused audio profiler enabled.  In sustained
+gameplay windows the representative averages were:
+
+| metric | CPU path | ME ADPCM-A path | change |
+| --- | ---: | ---: | ---: |
+| YM2610 callback | ~6.29 ms | ~5.24 ms | ~-16.7% |
+| total producer | ~6.44 ms | ~5.37 ms | ~-16.5% |
+| post-process | ~0.14 ms | ~0.13 ms | negligible |
+| blocking PSP output | ~26.93 ms | ~27.98 ms | expected slack transfer |
+
+The sound-thread period remained locked to the 33.378 ms hardware output period,
+so the lower compute time appears as additional time blocked waiting for the next
+audio slot rather than changing audio cadence.
+
+For whole-emulator throughput, the later sustained uncapped portion of the same
+automated gameplay run averaged about **72.4 FPS on CPU vs 74.4 FPS with ME**,
+roughly **+2.8%**.  This is a modest but positive whole-system improvement, not
+just a profiler-counter reduction.  The temporary gameplay script was driven by
+wall-clock time, so after the two builds diverge in speed their exact emulated
+frame/input sequence is not perfectly synchronized; treat the +2.8% figure as an
+indicative hardware measurement rather than a laboratory-grade frame-identical
+benchmark.  No audio-period overruns or runtime instability were observed in the
+profiling logs.  Audible-quality capture was not performed, so subjective glitch
+assessment remains a manual hardware check.
 
 ### M6 - expansion and runtime selector
 
@@ -307,9 +346,12 @@ experiment.
   ME audio workload exists.
 - Sleep/wake must be tested while no job is in flight and while the audio thread
   is active.
-- ADPCM-A is individually hot, but its existing helper is called millions of
-  times; batching and synchronization semantics determine whether the ME path is
-  beneficial.
+- The first ADPCM-A workload is beneficial but only modestly at whole-system
+  level; additional migrations should be attempted only when profiling shows a
+  similarly coarse, state-bounded workload.
+- The current job snapshots ADPCM-A state once per output buffer.  Future work
+  that changes control/update timing must preserve the generation/lifecycle
+  semantics proven here rather than exposing live YM2610 globals to ME.
 
 ## Validation checkpoint - 2026-10-02
 
@@ -328,9 +370,9 @@ CPS2, and in combination with `PSP_ME_AUDIO=ON`.  With profiling disabled, the
 MVS Release `.text`, `.data`, and `.bss` sizes are unchanged from the pre-profiler
 build, confirming that the disabled instrumentation optimizes away.
 
-Subsequent real-PSP validation completed the missing runtime work at this
-checkpoint: M2 startup/clean teardown and M3 execution/coherency now pass on
-hardware, and a fresh `MVS/mslug3` gameplay profile selected dynamic YM2610
-ADPCM-A as the only first workload with enough measured cost to justify further
-ME prototyping.  No real audio workload has been migrated yet, so there is still
-no ME-vs-CPU performance claim.
+Subsequent real-PSP validation completed M2/M3 and the first M4/M5 workload.
+Dynamic cached YM2610 ADPCM-A is now dispatched as one bounded ME job per output
+buffer, passed a 300-job exact-output hardware oracle, reduced the representative
+YM2610 callback by about 16.7%, and improved the sustained uncapped `mslug3`
+measurement by about 2.8%.  Runtime backend selection and expansion to additional
+workloads remain intentionally deferred.
