@@ -81,6 +81,7 @@ const ui_draw_driver_t null_ui_draw_driver = {
 	null_getTextureBasePtr,
 	null_prepareTextureDraw,
 	null_finishTextureDraw,
+	NULL,
 };
 
 void *ui_draw_data = NULL;
@@ -89,13 +90,24 @@ void ui_draw_configure_layout(void)
 {
 	int output_width = 0;
 	int output_height = 0;
+	int viewport_x = 0;
+	int viewport_y = 0;
+	int viewport_width = 0;
+	int viewport_height = 0;
 	int logical_width = 0;
 	int logical_height = 0;
 
 	video_driver->getOutputSize(video_data, &output_width, &output_height);
-	ui_draw_driver->getLogicalSize(ui_draw_data, output_width, output_height,
+	viewport_width = output_width;
+	viewport_height = output_height;
+	if (ui_draw_driver->getOutputViewport)
+		ui_draw_driver->getOutputViewport(ui_draw_data, output_width, output_height,
+			&viewport_x, &viewport_y, &viewport_width, &viewport_height);
+	ui_draw_driver->getLogicalSize(ui_draw_data, viewport_width, viewport_height,
 		&logical_width, &logical_height);
-	ui_layout_init(logical_width, logical_height, output_width, output_height);
+	ui_layout_init_viewport(logical_width, logical_height,
+		output_width, output_height,
+		viewport_x, viewport_y, viewport_width, viewport_height);
 }
 
 int ui_draw_has_capability(uint32_t capability)

@@ -639,7 +639,13 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 
 	gsGlobal->PSM  = GS_PSM_CT16;
 	gsGlobal->PSMZ = GS_PSMZ_16S;
-	gsGlobal->ZBuffering = GS_SETTING_ON;
+	/* gsKit normally sizes the Z buffer to the physical output framebuffer.
+	 * At 704x480 that wastes ~704 KiB on CPS1/MVS/NCDZ, which never use depth,
+	 * and is still oversized for CPS2: CPS2 depth priority is rendered into the
+	 * 512x272 work texture, not directly into the presentation framebuffer.
+	 * Keep gsKit from allocating the output-sized Z buffer; CPS2 gets a compact
+	 * work-target-sized Z buffer immediately after screen initialization. */
+	gsGlobal->ZBuffering = GS_SETTING_OFF;
 	gsGlobal->DoubleBuffering = GS_SETTING_ON;
 	gsGlobal->Dithering = GS_SETTING_OFF;
 	gsGlobal->PrimAlphaEnable = GS_SETTING_ON;
@@ -660,6 +666,26 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	gsKit_vram_clear(gsGlobal);
 
 	gsKit_init_screen(gsGlobal);
+
+	#if (EMU_SYSTEM == CPS2)
+	{
+		/* Match gsKit's CT16-compatible depth format, but allocate only the
+		 * dimensions that CPS2's priority passes actually render against. */
+		u32 z_size;
+		u32 z_buffer;
+
+		gsGlobal->PSMZ = GS_PSMZ_16;
+		z_size = gsKit_texture_size(RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT,
+			gsGlobal->PSMZ);
+		z_buffer = gsKit_vram_alloc(gsGlobal, z_size, GSKIT_ALLOC_SYSBUFFER);
+		if (z_buffer == GSKIT_ALLOC_ERROR) {
+			ps2->gsGlobal = gsGlobal;
+			ps2_cleanup_failed_init(ps2);
+			return NULL;
+		}
+		gsGlobal->ZBuffer = z_buffer;
+	}
+	#endif
 
 	/* Default depth test to "always pass" so Z-buffering doesn't
 	   interfere with targets that don't need it (CPS1, MVS, NCDZ).

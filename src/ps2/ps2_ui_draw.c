@@ -351,6 +351,37 @@ static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_
 		logical_width, logical_height);
 }
 
+static void ps2_ui_draw_getOutputViewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
+	int viewport_width = output_width;
+	int viewport_height = output_height;
+	int viewport_x = 0;
+	int viewport_y = 0;
+
+	/* NTSC's full 704x480/240 raster includes the conventional overscan area.
+	 * Keep gameplay on that full raster, but place menus in the 640x448/224
+	 * center that PCSX2 exposes by default and that analog TVs are expected to
+	 * keep visible. Progressive 480p uses the complete 704x480 raster. */
+	if (d && d->gsGlobal && d->gsGlobal->Mode == GS_MODE_NTSC &&
+		output_width >= 704) {
+		viewport_width = 640;
+		viewport_height =
+			d->gsGlobal->Interlace == GS_NONINTERLACED ? 224 : 448;
+		if (viewport_height > output_height)
+			viewport_height = output_height;
+		viewport_x = (output_width - viewport_width) / 2;
+		viewport_y = (output_height - viewport_height) / 2;
+	}
+
+	if (x) *x = viewport_x;
+	if (y) *y = viewport_y;
+	if (width) *width = viewport_width;
+	if (height) *height = viewport_height;
+}
+
 /*------------------------------------------------------
 	Texture management
 ------------------------------------------------------*/
@@ -563,4 +594,5 @@ const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_getTextureBasePtr,
 	ps2_ui_draw_prepareTextureDraw,
 	ps2_ui_draw_finishTextureDraw,
+	ps2_ui_draw_getOutputViewport,
 };

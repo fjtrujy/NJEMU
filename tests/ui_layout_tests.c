@@ -122,6 +122,41 @@ static void test_non_square_pixel_display_mode(void)
 	assert(height == 240);
 }
 
+static void test_non_square_pixel_safe_viewport(int output_width, int output_height,
+	int safe_x, int safe_y, int safe_width, int safe_height,
+	int pixel_aspect_num, int pixel_aspect_den)
+{
+	const ui_layout_metrics_t *layout;
+	int logical_width;
+	int logical_height;
+	int center_x;
+	int center_y;
+
+	video_set_pixel_aspect_ratio(pixel_aspect_num, pixel_aspect_den);
+	ui_layout_compute_responsive_size(safe_width, safe_height,
+		&logical_width, &logical_height);
+	assert(logical_width == 480);
+	assert(logical_height == 370);
+
+	ui_layout_init_viewport(logical_width, logical_height,
+		output_width, output_height,
+		safe_x, safe_y, safe_width, safe_height);
+	layout = ui_layout_get();
+	assert(layout->output_width == output_width);
+	assert(layout->output_height == output_height);
+	assert(layout->viewport_x >= safe_x);
+	assert(layout->viewport_y >= safe_y);
+	assert(layout->viewport_x + layout->viewport_width <= safe_x + safe_width);
+	assert(layout->viewport_y + layout->viewport_height <= safe_y + safe_height);
+
+	ui_layout_transform_point(ui_layout_center_x(), ui_layout_center_y(),
+		&center_x, &center_y);
+	assert(center_x >= output_width / 2 - 1 &&
+		center_x <= output_width / 2 + 1);
+	assert(center_y >= output_height / 2 - 1 &&
+		center_y <= output_height / 2 + 1);
+}
+
 int main(void)
 {
 	video_set_pixel_aspect_ratio(1, 1);
@@ -144,6 +179,8 @@ int main(void)
 	test_non_square_pixel_layout(704, 480, 10, 11);
 	test_non_square_pixel_layout(704, 240, 10, 22);
 	test_non_square_pixel_display_mode();
+	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
+	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);
 	video_set_pixel_aspect_ratio(1, 1);
 	return 0;
 }

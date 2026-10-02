@@ -22,11 +22,21 @@ static float transform_scale_y = 1.0f;
 void ui_layout_init(int logical_width, int logical_height,
 	int output_width, int output_height)
 {
+	ui_layout_init_viewport(logical_width, logical_height,
+		output_width, output_height, 0, 0, output_width, output_height);
+}
+
+void ui_layout_init_viewport(int logical_width, int logical_height,
+	int output_width, int output_height,
+	int viewport_x, int viewport_y, int viewport_width, int viewport_height)
+{
 	int pixel_aspect_num = 1;
 	int pixel_aspect_den = 1;
-	float physical_output_width;
+	float physical_viewport_width;
 	float scale_x;
 	float scale_y;
+	int transformed_width;
+	int transformed_height;
 
 	if (logical_width <= 0)
 		logical_width = UI_LAYOUT_BASE_WIDTH;
@@ -36,9 +46,18 @@ void ui_layout_init(int logical_width, int logical_height,
 		output_width = logical_width;
 	if (output_height <= 0)
 		output_height = logical_height;
+	if (viewport_width <= 0 || viewport_height <= 0 ||
+		viewport_x < 0 || viewport_y < 0 ||
+		viewport_x + viewport_width > output_width ||
+		viewport_y + viewport_height > output_height) {
+		viewport_x = 0;
+		viewport_y = 0;
+		viewport_width = output_width;
+		viewport_height = output_height;
+	}
 
 	video_get_pixel_aspect_ratio(&pixel_aspect_num, &pixel_aspect_den);
-	physical_output_width = (float)output_width *
+	physical_viewport_width = (float)viewport_width *
 		(float)pixel_aspect_num / (float)pixel_aspect_den;
 
 	metrics.logical_width = logical_width;
@@ -46,19 +65,21 @@ void ui_layout_init(int logical_width, int logical_height,
 	metrics.output_width = output_width;
 	metrics.output_height = output_height;
 
-	scale_x = physical_output_width / (float)logical_width;
-	scale_y = (float)output_height / (float)logical_height;
+	scale_x = physical_viewport_width / (float)logical_width;
+	scale_y = (float)viewport_height / (float)logical_height;
 	metrics.scale = scale_x < scale_y ? scale_x : scale_y;
 	transform_scale_x = metrics.scale *
 		(float)pixel_aspect_den / (float)pixel_aspect_num;
 	transform_scale_y = metrics.scale;
 
-	metrics.viewport_width =
+	transformed_width =
 		(int)((float)logical_width * transform_scale_x + 0.5f);
-	metrics.viewport_height =
+	transformed_height =
 		(int)((float)logical_height * transform_scale_y + 0.5f);
-	metrics.viewport_x = (output_width - metrics.viewport_width) / 2;
-	metrics.viewport_y = (output_height - metrics.viewport_height) / 2;
+	metrics.viewport_width = transformed_width;
+	metrics.viewport_height = transformed_height;
+	metrics.viewport_x = viewport_x + (viewport_width - transformed_width) / 2;
+	metrics.viewport_y = viewport_y + (viewport_height - transformed_height) / 2;
 }
 
 void ui_layout_compute_responsive_size(int output_width, int output_height,

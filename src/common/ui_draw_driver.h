@@ -124,6 +124,13 @@ typedef struct ui_draw_driver
 	 * draw (for example PSP mutable scratch or the PS2 glyph ring). */
 	void (*finishTextureDraw)(void *data, int slot);
 
+	/* Optional physical area in which common UI should be laid out. Backends
+	 * that leave this NULL use the complete video output. This is distinct from
+	 * game presentation: e.g. analog-TV backends can keep chrome inside a safe
+	 * area while gameplay still uses the full raster. */
+	void (*getOutputViewport)(void *data, int output_width, int output_height,
+		int *x, int *y, int *width, int *height);
+
 } ui_draw_driver_t;
 
 

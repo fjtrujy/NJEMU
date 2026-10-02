@@ -237,4 +237,5 @@ const ui_draw_driver_t psp_ui_draw_driver = {
 	psp_ui_draw_getTextureBasePtr,
 	psp_ui_draw_prepareTextureDraw,
 	psp_ui_draw_finishTextureDraw,
+	NULL,
 };

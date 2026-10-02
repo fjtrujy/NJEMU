@@ -305,4 +305,5 @@ const ui_draw_driver_t desktop_ui_draw_driver = {
 	desktop_ui_draw_getTextureBasePtr,
 	desktop_ui_draw_prepareTextureDraw,
 	desktop_ui_draw_finishTextureDraw,
+	NULL,
 };

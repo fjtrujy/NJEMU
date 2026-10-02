@@ -177,4 +177,5 @@ const ui_draw_driver_t linear_ui_draw_driver = {
 	linear_ui_draw_getTextureBasePtr,
 	linear_ui_draw_prepareTextureDraw,
 	linear_ui_draw_finishTextureDraw,
+	NULL,
 };

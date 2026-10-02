@@ -177,4 +177,5 @@ const ui_draw_driver_t psvita_ui_draw_driver = {
 	psvita_ui_draw_getTextureBasePtr,
 	psvita_ui_draw_prepareTextureDraw,
 	psvita_ui_draw_finishTextureDraw,
+	NULL,
 };
