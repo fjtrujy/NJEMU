@@ -220,3 +220,26 @@ experiment.
   is active.
 - Dispatch overhead may exceed the cost of small mixing/conversion jobs; profiling
   must choose job granularity before offloading real audio work.
+
+## Validation checkpoint - 2026-10-02
+
+Final local validation after the shared CPU fallback refactor:
+
+- PSP MVS, `PSP_ME_AUDIO=OFF`, `PSP_AUDIO_PROFILE=OFF`: builds and packages;
+- PSP MVS, `PSP_ME_AUDIO=ON`, `PSP_AUDIO_PROFILE=OFF`: builds and packages;
+- PSP CPS1/CPS2/NCDZ, `PSP_ME_AUDIO=OFF`: all build and package;
+- Desktop MVS builds and passes 22/22 CTests;
+- the final MVS OFF ELF contains no `meSafe`, `meCore`, or ME-processing symbols;
+- the final MVS ON ELF contains the safe-task dispatcher and NJEMU ME probe;
+- `git diff --check` is clean.
+
+The focused profiler was also compiled successfully for MVS, NCDZ, CPS1 and
+CPS2, and in combination with `PSP_ME_AUDIO=ON`.  With profiling disabled, the
+MVS Release `.text`, `.data`, and `.bss` sizes are unchanged from the pre-profiler
+build, confirming that the disabled instrumentation optimizes away.
+
+Real-PSP runtime validation could not run at this checkpoint. `usbhostfs_pc` was
+listening on the host, but `pspsh` timed out waiting for the PSP and macOS did not
+enumerate a PSP USB device.  Therefore M2/M3 remain hardware-validation pending
+and M4 remains blocked.  Do not select or migrate a YM2610/PCM workload until a
+fresh `MVS/mslug3` `PSP_AUDIO_PROFILE=ON` log is captured on real hardware.
