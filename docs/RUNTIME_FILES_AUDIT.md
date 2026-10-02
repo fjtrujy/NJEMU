@@ -1013,3 +1013,29 @@ For every packaging/runtime lookup cleanup:
    validation, without modifying or committing it;
 9. use CI for PSP/PS2/PS Vita toolchain coverage when local cross-platform
    validation is not sufficient.
+
+### Validation snapshot - 2026-10-02
+
+The packaging/staging cleanup in this audit was validated with:
+
+- Desktop CPS1, GUI enabled: build plus 19/19 CTest tests;
+- Desktop CPS2, no GUI and `USE_CACHE=ON`: build plus 19/19 CTest tests,
+  including `cps2_partial_cache_tests`;
+- Desktop MVS, no GUI and `USE_CACHE=ON`: build plus 22/22 CTest tests,
+  including partial graphics/PCM cache coverage;
+- Desktop NCDZ, GUI enabled: build plus 20/20 CTest tests, including
+  `resource_source_tests`;
+- `cmake --install` for all four Desktop core configurations, with the
+  resulting trees inspected to confirm that local ROMs, BIOS files, caches,
+  processed assets, configuration, saves, and NVRAM were not copied from the
+  validation tree;
+- PSP CPS1 no-GUI cross-build, producing `CPS1`, `CPS1.prx`, and
+  `EBOOT.PBP`;
+- PSP CPS2 no-GUI/`USE_CACHE=ON` cross-build, producing `CPS2`,
+  `CPS2.prx`, and `EBOOT.PBP`;
+- `git diff --check` for each committed cleanup.
+
+PS2 and PS Vita cross-compilers were not available in the active shell for
+this snapshot. Their packaging consumes the same explicit CMake manifests;
+cross-platform CI remains the required final coverage when these commits are
+pushed.
