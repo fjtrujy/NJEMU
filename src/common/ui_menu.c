@@ -535,6 +535,99 @@ static int menu_video_backend_settings(void)
 	return 0;
 }
 
+static int menu_fps_overlay_settings(void)
+{
+	static const int labels[] = {
+		FPS_X_OFFSET,
+		FPS_Y_OFFSET
+	};
+	int *values[] = {
+		&option_fps_offset_x,
+		&option_fps_offset_y
+	};
+	int original_x = option_fps_offset_x;
+	int original_y = option_fps_offset_y;
+	int selected = 0;
+	int update = 1;
+
+	pad_wait_clear();
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+
+	do
+	{
+		if (update)
+		{
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
+				TEXT(FPS_OVERLAY_SETTINGS_MENU));
+
+			for (int i = 0; i < 2; i++)
+			{
+				char value[16];
+				int y = 40 + i * 17;
+				int active = i == selected;
+				int width;
+
+				snprintf(value, sizeof(value), "%d px", *values[i]);
+				width = uifont_get_string_width(value);
+				if (active)
+				{
+					uifont_print_shadow(16, y, UI_COLOR(UI_PAL_SELECT),
+						TEXT(labels[i]));
+					if (*values[i] > 0)
+						uifont_print_shadow(190, y, UI_COLOR(UI_PAL_SELECT),
+							FONT_LEFTTRIANGLE);
+					uifont_print_shadow(210, y, UI_COLOR(UI_PAL_SELECT), value);
+					if (*values[i] < FPS_OVERLAY_OFFSET_MAX)
+						uifont_print_shadow(214 + width, y, UI_COLOR(UI_PAL_SELECT),
+							FONT_RIGHTTRIANGLE);
+				}
+				else
+				{
+					uifont_print(16, y, UI_COLOR(UI_PAL_NORMAL), TEXT(labels[i]));
+					uifont_print(210, y, UI_COLOR(UI_PAL_NORMAL), value);
+				}
+			}
+
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		}
+		else
+		{
+			video_driver->waitVsync(video_data);
+		}
+
+		pad_update();
+		update = 0;
+		if (pad_pressed(PLATFORM_PAD_UP) || pad_pressed(PLATFORM_PAD_DOWN))
+		{
+			selected ^= 1;
+			update = 1;
+		}
+		else if (pad_pressed(PLATFORM_PAD_LEFT) && *values[selected] > 0)
+		{
+			(*values[selected])--;
+			update = 1;
+		}
+		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
+			*values[selected] < FPS_OVERLAY_OFFSET_MAX)
+		{
+			(*values[selected])++;
+			update = 1;
+		}
+
+		if (Loop == LOOP_EXIT)
+			break;
+	} while (!pad_pressed(PLATFORM_PAD_B2));
+
+	if (option_fps_offset_x != original_x || option_fps_offset_y != original_y)
+		save_settings();
+	return 0;
+}
+
 #ifdef PS2
 static int menu_system_video_settings(void)
 {
@@ -2762,6 +2855,7 @@ static menu2_t mainmenu2[] =
 {
 	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
 	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_SYSTEM, MENUHELP_VIDEO_BACKEND_SETTINGS },
+	{ MENU_FPS_OVERLAY_SETTINGS, menu_fps_overlay_settings, ICON_SYSTEM, MENUHELP_FPS_OVERLAY_SETTINGS },
 #ifdef PS2
 	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
 #endif

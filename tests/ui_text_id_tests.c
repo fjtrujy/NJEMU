@@ -28,7 +28,12 @@ int main(void)
 	assert(VIDEO_BACKEND == 392);
 	assert(MENU_VIDEO_BACKEND_SETTINGS == 393);
 	assert(MENUHELP_VIDEO_BACKEND_SETTINGS == 394);
-	assert(UI_TEXT_MAX == 395);
+	assert(FPS_OVERLAY_SETTINGS_MENU == 395);
+	assert(FPS_X_OFFSET == 396);
+	assert(FPS_Y_OFFSET == 397);
+	assert(MENU_FPS_OVERLAY_SETTINGS == 398);
+	assert(MENUHELP_FPS_OVERLAY_SETTINGS == 399);
+	assert(UI_TEXT_MAX == 400);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

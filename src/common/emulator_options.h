@@ -2,6 +2,8 @@
 #define COMMON_EMULATOR_OPTIONS_H
 
 extern int option_showfps;
+extern int option_fps_offset_x;
+extern int option_fps_offset_y;
 extern int option_autoframeskip;
 extern int option_frameskip;
 extern int option_speedlimit;
@@ -10,6 +12,8 @@ extern int option_display_mode;
 extern int option_video_output_mode;
 extern int option_video_backend;
 extern int option_cache_read_size;
+
+#define FPS_OVERLAY_OFFSET_MAX 96
 
 enum
 {

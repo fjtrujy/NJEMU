@@ -78,6 +78,8 @@ char processed_dir[PATH_MAX];
 char cache_parent_name[16];
 
 int option_showfps;
+int option_fps_offset_x;
+int option_fps_offset_y;
 int option_speedlimit;
 int option_autoframeskip;
 int option_frameskip;
@@ -172,7 +174,10 @@ volatile int Sleep;
 
 static void show_fps(bool draw)
 {
-	size_t sx;
+	const ui_layout_metrics_t *layout;
+	int sx;
+	int sy;
+	int text_width;
 	char buf[32];
 
 	sprintf(buf, "%s%2d %.2f%% %.2ffps",
@@ -190,8 +195,17 @@ static void show_fps(bool draw)
 	if (!draw)
 		return;
 
-	sx = (size_t)ui_layout_get()->logical_width - (strlen(buf) << 3);
-	small_font_print((int)sx, 0, buf, 1);
+	layout = ui_layout_get();
+	text_width = (int)strlen(buf) << 3;
+	sx = layout->logical_width - text_width - option_fps_offset_x;
+	sy = option_fps_offset_y;
+	if (sx < 0)
+		sx = 0;
+	if (sy < 0)
+		sy = 0;
+	if (sy > layout->logical_height - 8)
+		sy = layout->logical_height > 8 ? layout->logical_height - 8 : 0;
+	small_font_print(sx, sy, buf, 1);
 }
 
 
