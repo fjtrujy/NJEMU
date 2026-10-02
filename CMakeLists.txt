@@ -178,7 +178,6 @@ if(PLATFORM STREQUAL "PS2")
 		add_definitions(-DDEFAULT_VIDEO_OUTPUT_MODE=VIDEO_OUTPUT_480I)
     endif()
 endif()
-option(USE_VITAGL "PS Vita: compile vitaGL alongside the native GXM/vita2d backend" OFF)
 option(PSVITA_VIDEO_STATS "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" OFF)
 if(PLATFORM STREQUAL "DESKTOP")
     set(USE_DESKTOP_GL_DEFAULT ON)
@@ -240,9 +239,6 @@ if(PS2_FAST_CACHE)
     add_definitions(-DPS2_FAST_CACHE=1)
 endif()
 
-if(USE_VITAGL AND NOT PLATFORM STREQUAL "PSVITA")
-    message(FATAL_ERROR "USE_VITAGL requires PLATFORM=PSVITA")
-endif()
 if(PSVITA_VIDEO_STATS AND NOT PLATFORM STREQUAL "PSVITA")
     message(FATAL_ERROR "PSVITA_VIDEO_STATS requires PLATFORM=PSVITA")
 endif()
@@ -538,11 +534,10 @@ endif()
 
 # GPU backends replaying a recorded work frame (see common/hw_recorder.h)
 if (PLATFORM STREQUAL "PSVITA")
-    if (USE_VITAGL)
-        add_definitions(-DHAVE_VIDEO_BACKEND_VITAGL=1)
-        list(APPEND OS_SRC psvita/psvita_video_gl.c)
-    endif()
+    # Vita always ships both renderers. GXM is the compatibility/default backend
+    # and vitaGL is selected at runtime through the global video backend setting.
     list(APPEND OS_SRC
+        psvita/psvita_video_gl.c
         psvita/psvita_power.c
         common/hw_recorder.c
     )
@@ -1011,19 +1006,17 @@ elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which
     # defines PATH_MAX as 4096: provide the same value to the whole build.
     target_compile_definitions(${TARGET} PRIVATE PATH_MAX=4096)
-    target_link_libraries(${TARGET} PUBLIC vita2d)
-    if (USE_VITAGL)
-        target_link_libraries(${TARGET} PUBLIC
-            vitaGL
-            vitashark
-            SceShaccCgExt
-            taihen_stub
-            SceShaccCg_stub
-            SceKernelDmacMgr_stub
-            mathneon
-            stdc++
-        )
-    endif()
+    target_link_libraries(${TARGET} PUBLIC
+        vita2d
+        vitaGL
+        vitashark
+        SceShaccCgExt
+        taihen_stub
+        SceShaccCg_stub
+        SceKernelDmacMgr_stub
+        mathneon
+        stdc++
+    )
     target_link_libraries(${TARGET} PUBLIC
         SceDisplay_stub
         SceGxm_stub

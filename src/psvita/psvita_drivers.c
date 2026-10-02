@@ -16,9 +16,7 @@ extern const power_driver_t power_psvita;
 extern thread_driver_t thread_psvita;
 extern ticker_driver_t ticker_psvita;
 extern video_driver_t video_psvita_gxm;
-#ifdef HAVE_VIDEO_BACKEND_VITAGL
 extern video_driver_t video_psvita_gl;
-#endif
 extern const ui_draw_driver_t psvita_ui_draw_driver;
 extern const ui_draw_driver_t null_ui_draw_driver;
 
@@ -33,16 +31,11 @@ video_driver_t *video_driver = &video_psvita_gxm;
 
 int video_backend_choice_count(void)
 {
-#ifdef HAVE_VIDEO_BACKEND_VITAGL
     return 3; /* Auto, native GXM, vitaGL */
-#else
-    return 1;
-#endif
 }
 
 video_backend_choice_t video_backend_choice_at(int index)
 {
-#ifdef HAVE_VIDEO_BACKEND_VITAGL
     static const video_backend_choice_t choices[] = {
         { VIDEO_BACKEND_AUTO, "Auto" },
         { VIDEO_BACKEND_NATIVE, "GXM" },
@@ -50,10 +43,6 @@ video_backend_choice_t video_backend_choice_at(int index)
     };
     if (index >= 0 && index < 3)
         return choices[index];
-#else
-    if (index == 0)
-        return (video_backend_choice_t){ VIDEO_BACKEND_NATIVE, "GXM" };
-#endif
     return (video_backend_choice_t){ -1, "" };
 }
 
@@ -69,14 +58,10 @@ int video_backend_option_available(int id)
 
 void video_backend_select(int id)
 {
-#ifdef HAVE_VIDEO_BACKEND_VITAGL
     if (id == VIDEO_BACKEND_OPENGL) {
         video_driver = &video_psvita_gl;
         return;
     }
-#else
-    (void)id;
-#endif
     /* Auto deliberately keeps the native GXM renderer as compatibility default. */
     video_driver = &video_psvita_gxm;
 }
