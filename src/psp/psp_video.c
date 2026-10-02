@@ -46,7 +46,6 @@ typedef struct psp_video
 	uintptr_t show_frame; // Relative VRAM offset
 	uintptr_t draw_frame; // Relative VRAM offset
 	uintptr_t scrbitmap;  // Relative VRAM offset
-	uintptr_t depth_frame; // Relative VRAM offset for depth buffer
 	texture_layer_t *tex_layers;
 	uint8_t tex_layers_count;
 	uint8_t *texturesMem;
@@ -99,16 +98,6 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 	psp->scrbitmap = offset; // Store relative offset
 	offset += framesize;
 	offset = VRAM_ALIGN_UP(offset);
-#if (EMU_SYSTEM == CPS2)
-	/* Only CPS2 uses the Z buffer (for sprite-priority masking).  Reserving a
-	 * fourth full-screen buffer for every core shifts MVS/NCDZ texture atlases
-	 * into the fixed GUI texture area at the end of the PSP's 2 MiB EDRAM. */
-	psp->depth_frame = offset; // Store relative offset for depth buffer (16-bit)
-	offset += framesize;
-	offset = VRAM_ALIGN_UP(offset);
-#else
-	psp->depth_frame = 0;
-#endif
 
 	// Original buffers containing clut indexes
 	psp->tex_layers =
@@ -130,6 +119,15 @@ static void *psp_init(layer_texture_info_t *layer_textures,
 			   i, psp->tex_layers[i].buffer, psp->tex_layers[i].width,
 			   psp->tex_layers[i].height, psp->tex_layers[i].stride,
 			   (size_t)(stride * layer_textures[i].height * layer_textures[i].bytes_per_pixel));
+	}
+	if (offset > PSP_UI_STATIC_EDRAM_OFFSET)
+	{
+		printf("[PSP_VIDEO] EDRAM layout overflow: %lu > %lu bytes before UI atlas\n",
+			(unsigned long)offset, (unsigned long)PSP_UI_STATIC_EDRAM_OFFSET);
+		free(psp->tex_layers);
+		free(psp->ui_scratch);
+		free(psp);
+		return NULL;
 	}
 
 	printf("[PSP_VIDEO] show_frame=0x%lx draw_frame=0x%lx scrbitmap=0x%lx\n",
@@ -904,7 +902,11 @@ static void psp_disableDepthTest(void *data)
 static void psp_clearDepthBuffer(void *data)
 {
 	psp_video_t *psp = (psp_video_t *)data;
-	sceGuDepthBuffer((void *)psp->depth_frame, BUF_WIDTH);
+	/* CPS2 renders its scene into scrbitmap, so the current presentation draw
+	 * buffer is dead until transferWorkFrame()/copyRect() replaces it.  Reuse
+	 * that buffer for depth just like the original PSP renderer did instead of
+	 * permanently consuming a fourth 512x272 EDRAM surface. */
+	sceGuDepthBuffer((void *)psp->draw_frame, BUF_WIDTH);
 	sceGuClearDepth(0);
 	sceGuClear(GU_DEPTH_BUFFER_BIT);
 }

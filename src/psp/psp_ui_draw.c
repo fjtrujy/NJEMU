@@ -74,7 +74,7 @@ static void *psp_ui_draw_init(void *video_data)
 		BUF_WIDTH * PSP_UI_SCRATCH_ROWS * sizeof(uint16_t));
 	if (!psp_ui.tex_font)
 		return NULL;
-	psp_ui.tex_smallfont = texture16_addr(0, 2032);
+	psp_ui.tex_smallfont = texture16_addr(0, PSP_UI_STATIC_EDRAM_ROW);
 	psp_ui.tex_boxshadow = NULL;  /* Set later during upload */
 
 	return &psp_ui;
@@ -231,8 +231,7 @@ const ui_draw_driver_t psp_ui_draw_driver = {
 	UI_DRAW_CAP_CACHE_CHROME |
 		UI_DRAW_CAP_TRANSLUCENT_CHROME |
 		UI_DRAW_CAP_FILTERED_SHADOWS |
-		UI_DRAW_CAP_ANIMATED_GLOW |
-		UI_DRAW_CAP_PARTIAL_REFRESH,
+		UI_DRAW_CAP_ANIMATED_GLOW,
 	psp_ui_draw_uploadTexture,
 	psp_ui_draw_clearTexture,
 	psp_ui_draw_getTextureBasePtr,
