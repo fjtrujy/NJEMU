@@ -76,13 +76,24 @@ NJEMU therefore uses the related upstream safe-task layer for discrete jobs:
 - `mcidclan/psp-media-engine-safe-task`
 - revision validated locally: `7d4c41f77b0be8815a720e0c8212ed504c01806d`
 - MIT license
-- Classic dispatcher path (`meSafeTaskInitDispatcher`)
+- PRX-free dispatcher path (`meSafeTaskInitDispatcher`, safe-task built with
+  `PRX_FREE=1` and `pspkubridge`)
 
-The Classic safe-task path is documented upstream as tested on both Phat and
-Slim.  It preserves System Controller ME syscalls, provides explicit dispatch
-and `waitReady` synchronization, and can load/unload the AV module used to
-exercise the patched EDRAM path.  This is a better match for bounded audio jobs
-and ROM/reset lifetime than replacing the ME with an infinite producer loop.
+The safe-task dispatcher preserves System Controller ME syscalls, provides
+explicit dispatch and `waitReady` synchronization, and can load/unload the AV
+module used to exercise the patched EDRAM path.  This is a better match for
+bounded audio jobs and ROM/reset lifetime than replacing the ME with an infinite
+producer loop.
+
+Real-hardware isolation found that safe-task's embedded kernel-PRX mode
+(`PRX_FREE=0`) is not viable on the test PSP: `meSafeTaskInitDispatcher()`
+returns `-4`, corresponding to failure to load its temporary `kcall.prx` into
+the kernel partition.  The same exact upstream revision rebuilt with
+`PRX_FREE=1` succeeds through `kubridge`: dispatcher init returns 0, the AV
+module loads, dispatch returns 0, `waitReady` completes, and the deterministic
+shared-memory result matches.  NJEMU therefore standardizes this experiment on
+the upstream PRX-free safe-task configuration instead of depending on runtime
+kernel-PRX loading.
 
 ### Build integration
 
@@ -91,18 +102,18 @@ the active PSPDEV toolchain:
 
 - headers `me-core-mapper/me-core-mapper.h` and `me-safe-task/me-stask.h`;
 - `libme-core-mapper.a`;
-- `libme-stask.a`.
+- `libme-stask.a` built with `PRX_FREE=1`;
+- PSP `kubridge` support (`pspkubridge`).
 
 The normal OFF build does not search for or link these libraries.  The regular
 PSP GitHub Actions matrix explicitly configures `PSP_ME_AUDIO=OFF`.
 
 The regular PSP matrix remains OFF-only.  A separate MVS build-only job installs
-the two upstream dependencies from the exact revisions above and compiles
-`PSP_ME_AUDIO=ON`; it does not run PPSSPP or claim ME runtime coverage.  The
-upstream builds generate and embed a small kernel PRX and use host utilities
-such as `xxd` and `sed`, so those tools are installed explicitly in that job.
-The inspected revisions use GNU-style `sed -i`; macOS local validation used GNU
-`sed` without modifying upstream source.
+the two upstream dependencies from the exact revisions above, builds safe-task
+with `PRX_FREE=1`, and compiles `PSP_ME_AUDIO=ON`; it does not run PPSSPP or
+claim ME runtime coverage.  The custom-core dependency still uses its own
+upstream kernel bridge build machinery, while NJEMU itself avoids loading a
+temporary safe-task kernel PRX at runtime.
 
 ## Memory and synchronization findings
 
@@ -224,10 +235,11 @@ with explicit state/input/output ownership and cache coherency; directly calling
 
 ### M2 - optional ME dependency/bootstrap [hardware validated for startup/clean teardown]
 
-The PSP producer now initializes the safe-task Classic dispatcher and loads the
-upstream AV module only when `PSP_ME_AUDIO=ON`.  Initialization failure logs the
-error and leaves the producer on CPU.  Reset/shutdown wait for outstanding ME
-work before unloading the module.
+The PSP producer now initializes the safe-task dispatcher and loads the upstream
+AV module only when `PSP_ME_AUDIO=ON`.  The dependency is built PRX-free and the
+NJEMU binary links `pspkubridge`.  Initialization failure logs the error and
+leaves the producer on CPU.  Reset/shutdown wait for outstanding ME work before
+unloading the module.
 
 On real PSP the dispatcher initializes successfully, the upstream AV module is
 loaded, and the ME-enabled MVS build reaches `mslug3` with the normal PSP sound

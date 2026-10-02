@@ -1230,6 +1230,7 @@ elseif(PLATFORM STREQUAL "PSP")
             "${PSP_ME_SAFE_TASK_LIBRARY}"
             "${PSP_ME_CORE_MAPPER_LIBRARY}"
             pspaudiocodec
+            pspkubridge
         )
     endif()
     if(ADHOC)

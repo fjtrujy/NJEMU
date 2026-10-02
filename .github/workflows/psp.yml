@@ -158,7 +158,7 @@ jobs:
         cmake -S /tmp/psp-media-engine-safe-task \
           -B /tmp/psp-media-engine-safe-task-build \
           -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
-          -DPRX_FREE=0
+          -DPRX_FREE=1
         cmake --build /tmp/psp-media-engine-safe-task-build --parallel $(getconf _NPROCESSORS_ONLN)
         cmake --install /tmp/psp-media-engine-safe-task-build
 
