@@ -23,7 +23,7 @@ static bool cpu_isAvailable(void)
 	return true;
 }
 
-static const audio_producer_driver_t audio_producer_cpu = {
+const audio_producer_driver_t audio_producer_cpu = {
 	"cpu",
 	cpu_init,
 	cpu_shutdown,
@@ -31,5 +31,3 @@ static const audio_producer_driver_t audio_producer_cpu = {
 	cpu_render,
 	cpu_isAvailable,
 };
-
-const audio_producer_driver_t *const audio_producer_driver = &audio_producer_cpu;

@@ -17,5 +17,6 @@ typedef struct audio_producer_driver
 } audio_producer_driver_t;
 
 extern const audio_producer_driver_t *const audio_producer_driver;
+extern const audio_producer_driver_t audio_producer_cpu;
 
 #endif /* AUDIO_PRODUCER_DRIVER_H */

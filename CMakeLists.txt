@@ -402,13 +402,14 @@ set(COMMON_SRC
 	    common/sound.c
 	    common/audio_profile.h
 	    common/audio_producer_driver.h
+	    common/audio_producer_cpu.c
 )
 
 if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     list(APPEND COMMON_SRC psp/psp_audio_producer.c)
     add_definitions(-DPSP_ME_AUDIO=1)
 else()
-    list(APPEND COMMON_SRC common/audio_producer_cpu.c)
+    list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
 endif()
 
 if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)

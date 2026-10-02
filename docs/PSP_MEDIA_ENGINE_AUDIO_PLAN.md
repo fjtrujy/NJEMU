@@ -49,6 +49,12 @@ needed by this work: `init`, `shutdown`, `reset`, `render`, and availability.
 The PSP ME producer owns ME synchronization/fallback.  Generic sound-chip code
 does not contain `PSP_ME_AUDIO` conditionals.
 
+The CPU producer implementation itself is compiled in both OFF and ON builds.
+OFF binds it directly; ON binds the PSP ME wrapper, which delegates lifecycle
+and PCM rendering to that same CPU producer whenever no proven ME workload is
+active.  This keeps the reference path available as a literal oracle/fallback,
+not a second reimplementation of it.
+
 ## Upstream dependencies investigated
 
 The primary library was inspected at:

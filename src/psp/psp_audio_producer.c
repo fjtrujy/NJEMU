@@ -52,6 +52,8 @@ static bool psp_audio_producer_init(void)
 
 	me_available = false;
 	me_module_loaded = false;
+	if (!audio_producer_cpu.init())
+		return false;
 
 	result = meSafeTaskInitDispatcher();
 	if (result < 0)
@@ -91,18 +93,20 @@ static void psp_audio_producer_shutdown(void)
 
 	me_module_loaded = false;
 	me_available = false;
+	audio_producer_cpu.shutdown();
 }
 
 static void psp_audio_producer_reset(void)
 {
 	if (me_available)
 		meSafeTaskWaitReady();
+	audio_producer_cpu.reset();
 }
 
 static void psp_audio_producer_render(audio_producer_render_fn cpu_render,
 	int16_t *buffer)
 {
-	cpu_render(buffer);
+	audio_producer_cpu.render(cpu_render, buffer);
 }
 
 static bool psp_audio_producer_isAvailable(void)
