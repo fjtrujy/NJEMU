@@ -862,6 +862,90 @@ set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 
+# Keep release/install contents independent from whatever local validation data
+# happens to exist under resources/<target>. The source resource tree is also
+# used as a convenient local ROM/BIOS/cache root, so package discovery must
+# never be a directory-wide glob/copy.
+set(NJEMU_DISTRIBUTED_RESOURCE_FILES
+    README.md
+    game_name.ini
+)
+if("${TARGET}" STREQUAL "CPS1")
+    list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+        gamelist_cps1.txt
+        rominfo.cps1
+        zipname.cps1
+        zipnamej.cps1
+        zipnamech1.cps1
+        zipnamech2.cps1
+    )
+elseif("${TARGET}" STREQUAL "CPS2")
+    list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+        gamelist_cps2.txt
+        rominfo.cps2
+        zipname.cps2
+        zipnamej.cps2
+        zipnamech1.cps2
+        zipnamech2.cps2
+    )
+elseif("${TARGET}" STREQUAL "MVS")
+    list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+        gamelist_mvs.txt
+        rominfo.mvs
+        zipname.mvs
+        zipnamej.mvs
+        zipnamech1.mvs
+        zipnamech2.mvs
+    )
+endif()
+
+foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
+    if(NOT EXISTS "${RESOURCE_DIR}${NJEMU_RESOURCE_FILE}")
+        message(FATAL_ERROR
+            "Distributed resource is missing: ${RESOURCE_DIR}${NJEMU_RESOURCE_FILE}")
+    endif()
+endforeach()
+
+# Package only the empty runtime directories the selected binary can actually
+# use. Generate private placeholders instead of borrowing placeholders from
+# resources/, because the latter historically contain directories that are not
+# meaningful to every core.
+set(NJEMU_RUNTIME_DATA_DIRS
+    roms
+    config
+)
+if(GUI)
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS cheats)
+endif()
+if(SAVE_STATE)
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS state)
+endif()
+if("${TARGET}" STREQUAL "CPS1")
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS nvram)
+elseif("${TARGET}" STREQUAL "CPS2")
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS nvram)
+    if(USE_CACHE)
+        list(APPEND NJEMU_RUNTIME_DATA_DIRS cache)
+    endif()
+elseif("${TARGET}" STREQUAL "MVS")
+    # processed/ is canonical even for full-resident builds because encrypted
+    # sets may require offline-converted C/S/V data. cache/ remains only a
+    # compatibility fallback for existing USE_CACHE installs.
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS processed memcard nvram)
+elseif("${TARGET}" STREQUAL "NCDZ")
+    list(APPEND NJEMU_RUNTIME_DATA_DIRS data)
+endif()
+
+set(NJEMU_RUNTIME_LAYOUT_DIR "${CMAKE_BINARY_DIR}/generated/runtime_layout")
+set(NJEMU_RUNTIME_PLACEHOLDER_FILES)
+foreach(NJEMU_RUNTIME_DATA_DIR IN LISTS NJEMU_RUNTIME_DATA_DIRS)
+    set(NJEMU_RUNTIME_PLACEHOLDER
+        "${NJEMU_RUNTIME_LAYOUT_DIR}/${NJEMU_RUNTIME_DATA_DIR}/_placeholder")
+    file(MAKE_DIRECTORY "${NJEMU_RUNTIME_LAYOUT_DIR}/${NJEMU_RUNTIME_DATA_DIR}")
+    file(WRITE "${NJEMU_RUNTIME_PLACEHOLDER}" "")
+    list(APPEND NJEMU_RUNTIME_PLACEHOLDER_FILES "${NJEMU_RUNTIME_PLACEHOLDER}")
+endforeach()
+
 # By default we don't want to duplicate a potentially large resource tree
 # in every build directory. Read-only assets are therefore linked back to the
 # source tree, while files/directories that the emulator writes at runtime are
@@ -1113,19 +1197,24 @@ if(PLATFORM STREQUAL "PSVITA")
         get_filename_component(TRANSLATION_NAME "${TRANSLATION_PACK}" NAME)
         list(APPEND VITA_VPK_FILE_ARGS FILE "${TRANSLATION_PACK}" "lang/${TRANSLATION_NAME}")
     endforeach()
-    # Top-level resource files plus the placeholders of the data folders: never
-    # package local ROMs, caches or saves. The app copies them to ux0:data/<target>.
-    file(GLOB_RECURSE VITA_RESOURCE_FILES RELATIVE "${RESOURCE_DIR}" "${RESOURCE_DIR}*")
-    foreach(VITA_RESOURCE_FILE IN LISTS VITA_RESOURCE_FILES)
-        if (VITA_RESOURCE_FILE MATCHES "/" AND NOT VITA_RESOURCE_FILE MATCHES "/_placeholder$")
-            continue()
-        endif()
-        list(APPEND VITA_VPK_FILE_ARGS FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
+    # Use the same explicit distribution manifest as cmake --install. Never let
+    # local ROMs, BIOS files, processed assets, caches, saves or configuration
+    # leak into a VPK merely because they exist under resources/<target>.
+    foreach(VITA_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
     endforeach()
 
-    if (GUI)
-        list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
-    endif()
+    foreach(VITA_RUNTIME_PLACEHOLDER IN LISTS NJEMU_RUNTIME_PLACEHOLDER_FILES)
+        get_filename_component(VITA_RUNTIME_DIR "${VITA_RUNTIME_PLACEHOLDER}" DIRECTORY)
+        get_filename_component(VITA_RUNTIME_DIR "${VITA_RUNTIME_DIR}" NAME)
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${VITA_RUNTIME_PLACEHOLDER}" "${VITA_RUNTIME_DIR}/_placeholder")
+    endforeach()
+
+    # ui_init() is common to GUI and no-GUI builds, so the external GBK font is
+    # a runtime asset in both configurations.
+    list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
 
     # Room after the text segment for the SCE module data that vita-elf-create
     # appends (vitasdk/vita-toolchain#303): recent binutils may place the data
@@ -1429,10 +1518,23 @@ else()
     install(TARGETS ${TARGET} DESTINATION .)
 endif()
 
-# Install resource files (copy entire directory structure, including README)
-install(DIRECTORY ${RESOURCE_DIR}
-    DESTINATION .
-)
+# Install only the explicit distribution manifest. resources/<target> is also
+# a local validation tree and may contain user ROMs, BIOS files, processed
+# assets, caches and runtime-generated data that must never enter an install
+# output by accident.
+foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
+    install(FILES "${RESOURCE_DIR}${NJEMU_RESOURCE_FILE}"
+        DESTINATION .
+    )
+endforeach()
+
+foreach(NJEMU_RUNTIME_PLACEHOLDER IN LISTS NJEMU_RUNTIME_PLACEHOLDER_FILES)
+    get_filename_component(NJEMU_RUNTIME_DIR "${NJEMU_RUNTIME_PLACEHOLDER}" DIRECTORY)
+    get_filename_component(NJEMU_RUNTIME_DIR "${NJEMU_RUNTIME_DIR}" NAME)
+    install(FILES "${NJEMU_RUNTIME_PLACEHOLDER}"
+        DESTINATION "${NJEMU_RUNTIME_DIR}"
+    )
+endforeach()
 
 # Translation packs are generated build artifacts shared by every platform.
 # Keep them as a separate install component so packaging validation does not
@@ -1441,9 +1543,7 @@ install(FILES ${TRANSLATION_PACKS}
     DESTINATION lang
     COMPONENT translations
 )
-if(GUI)
-    install(FILES "${GBK_FONT_ASSET}"
-        DESTINATION font
-        COMPONENT translations
-    )
-endif()
+install(FILES "${GBK_FONT_ASSET}"
+    DESTINATION font
+    COMPONENT translations
+)
