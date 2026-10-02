@@ -24,6 +24,12 @@ static uint8_t cpu_atlas[TEXTURE_LAYER_COUNT][512 * 512];
 static uint8_t gpu_atlas[TEXTURE_LAYER_COUNT][512 * 512];
 static unsigned layer_order[32], order_count;
 
+void video_get_pixel_aspect_ratio(int *numerator, int *denominator)
+{
+    if (numerator) *numerator = 1;
+    if (denominator) *denominator = 1;
+}
+
 static uint32_t read_tile(uint32_t offset)
 {
     assert(offset + 128 <= sizeof(source_tiles));
