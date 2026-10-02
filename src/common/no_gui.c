@@ -8,6 +8,7 @@
 
 #include "emucfg.h"
 #include "common/emulator_runtime.h"
+#include "common/path_utils.h"
 #include "common/runtime_paths.h"
 #include "common/ui_defs.h"
 
@@ -80,14 +81,18 @@ int ui_show_popup(int draw) {
 
 void file_browser(void) {
 	Loop = LOOP_EXEC;
-	strcpy(game_dir, "roms");
+	if (!path_format(game_dir, sizeof(game_dir), "%sroms", launchDir))
+		return;
 #if (EMU_SYSTEM == MVS)
-	strcpy(processed_dir, "processed");
+	if (!path_format(processed_dir, sizeof(processed_dir), "%sprocessed", launchDir))
+		return;
 #if USE_CACHE
-	strcpy(cache_dir, "cache");
+	if (!path_format(cache_dir, sizeof(cache_dir), "%scache", launchDir))
+		return;
 #endif
 #elif USE_CACHE
-	strcpy(cache_dir, "cache");
+	if (!path_format(cache_dir, sizeof(cache_dir), "%scache", launchDir))
+		return;
 #endif
 	// Get the game name from a file called game_name.ini
 	{
