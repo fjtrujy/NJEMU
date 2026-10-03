@@ -25,6 +25,7 @@
 #endif
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
+#include "common/game_metadata.h"
 #include "common/input_driver.h"
 #include "common/loadrom.h"
 #include "common/power_driver.h"
@@ -143,6 +144,46 @@ int use_parent_vrom;
 static memory_plan_t mvs_memory_plan;
 static int mvs_memory_plan_valid;
 static memory_allocation_shape_t mvs_memory_shape;
+
+static int configure_game_metadata(void)
+{
+	char path[PATH_MAX];
+	game_metadata_t metadata = {0};
+	game_metadata_entry_t entry;
+	game_metadata_error_t error;
+
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
+		return 0;
+	error = game_metadata_load(&metadata, path, GAME_METADATA_CORE_MVS);
+	if (error != GAME_METADATA_OK)
+	{
+		printf("game metadata: cannot load %s: %s\n", path,
+			game_metadata_error_string(error));
+		return 0;
+	}
+	if (!game_metadata_find(&metadata, game_name, &entry))
+	{
+		printf("game metadata: MVS set %s is missing\n", game_name);
+		game_metadata_unload(&metadata);
+		return 0;
+	}
+
+	if (parent_name[0])
+	{
+		use_parent_crom = (entry.core_flags & GAME_METADATA_MVS_OWNS_CROM) == 0;
+		use_parent_srom = (entry.core_flags & GAME_METADATA_MVS_OWNS_SROM) == 0;
+		use_parent_vrom = (entry.core_flags & GAME_METADATA_MVS_OWNS_VROM) == 0;
+	}
+	else
+	{
+		use_parent_crom = 0;
+		use_parent_srom = 0;
+		use_parent_vrom = 0;
+	}
+
+	game_metadata_unload(&metadata);
+	return 1;
+}
 
 
 /******************************************************************************
@@ -1785,34 +1826,21 @@ int memory_init(void)
 		return 0;
 	}
 
+	if (!configure_game_metadata())
+	{
+		msg_printf(TEXT(COULD_NOT_OPEN_GAME_METADATA), "mvs");
+		msg_printf(TEXT(PRESS_ANY_BUTTON2));
+		pad_wait_press(PAD_WAIT_INFINITY);
+		Loop = LOOP_BROWSER;
+		return 0;
+	}
+
 	if (parent_name[0])
 	{
-		int i = 0;
-
-		use_parent_crom = 1;
-		use_parent_srom = 1;
-		use_parent_vrom = 1;
-
-		while (MVS_cacheinfo[i].name)
-		{
-			if (strcmp(game_name, MVS_cacheinfo[i].name) == 0)
-			{
-				use_parent_crom = !MVS_cacheinfo[i].crom;
-				use_parent_srom = !MVS_cacheinfo[i].srom;
-				use_parent_vrom = !MVS_cacheinfo[i].vrom;
-				break;
-			}
-			i++;
-		}
-
 		msg_printf(TEXT(ROMSET_x_PARENT_x), game_name, parent_name);
 	}
 	else
 	{
-		use_parent_crom = 0;
-		use_parent_srom = 0;
-		use_parent_vrom = 0;
-
 		msg_printf(TEXT(ROMSET_x), game_name);
 	}
 

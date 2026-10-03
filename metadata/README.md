@@ -54,7 +54,8 @@ MVS uses:
 - `owns_vrom`: the clone has its own processed V-ROM asset.
 
 An MVS record with none of those bits follows the normal parent-inheritance
-behavior.
+behavior. Both the emulator and `romcnv_mvs` consume these same generated bits;
+there is no separate converter ownership table.
 
 NCDZ uses `data0` for the 16-bit NGH identifier. NGH values must be non-zero and
 unique. The NCDZ browser does not currently use friendly titles before opening

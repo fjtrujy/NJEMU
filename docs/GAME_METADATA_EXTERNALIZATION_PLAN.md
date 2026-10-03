@@ -420,10 +420,43 @@ pass in the migrated build.
 
 ### M4 — MVS executable metadata
 
-- [ ] Move runtime `MVS_cacheinfo[]` ownership bits into generated metadata.
-- [ ] Make `romcnv_mvs` consume the same canonical source/generated policy.
-- [ ] Preserve mixed parent/clone C/S/V fallback behavior.
-- [ ] Measure executable-size delta.
+- [x] Move runtime `MVS_cacheinfo[]` ownership bits into generated metadata.
+- [x] Make `romcnv_mvs` consume the same canonical source/generated policy.
+- [x] Preserve mixed parent/clone C/S/V fallback behavior.
+- [x] Measure executable-size delta.
+
+The MVS emulator now loads the selected record after `rominfo` establishes the
+normal parent and derives C/S/V processed-asset inheritance from the
+`owns_crom`, `owns_srom`, and `owns_vrom` bits. The metadata allocation is
+released immediately after those three booleans are copied, before large ROM
+regions are allocated.
+
+`romcnv_mvs` no longer embeds its own duplicate `MVS_cacheinfo[]`. Its CMake
+build generates `game_metadata.mvs` from the same canonical TSV plus
+`rominfo.mvs`, compiles the shared metadata reader, and loads that file once for
+the conversion process. Native converter builds stage the generated file beside
+the executable; the Emscripten configuration preloads it beside `rominfo.mvs`.
+The emulator and converter generated blobs were compared byte-for-byte and are
+identical.
+
+Representative tests pin full C/S/V ownership, C-only ownership, V-only
+ownership, and ordinary parent inheritance. The generator still requires exact
+MVS identity parity with `rominfo.mvs`, so stale ownership aliases cannot be
+reintroduced silently.
+
+Desktop object-size measurements against the pre-migration baseline:
+
+| Object(s) | Baseline | M4 | Delta |
+| --- | ---: | ---: | ---: |
+| emulator `driver.c.o` | 25,304 B | 20,762 B | **-4,542 B** |
+| emulator `memintrf.c.o` | 32,477 B | 33,151 B | +674 B |
+| emulator combined | 57,781 B | 53,913 B | **-3,868 B** |
+| converter `romcnv.c.o` + metadata reader | 29,973 B | 27,239 B | **-2,734 B** |
+
+The emulator `driver.c.o` data contribution falls from 11,826 B to 8,434 B.
+The converter's combined data contribution falls from 13,172 B to 9,952 B.
+The full 26-test MVS Desktop suite passes, along with release GUI and no-GUI
+streaming-cache builds and a clean `romcnv_mvs` build.
 
 ### M5 — NCDZ executable identity metadata
 

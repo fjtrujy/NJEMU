@@ -71,6 +71,20 @@ class GameMetadataGeneratorTests(unittest.TestCase):
         self.assertEqual(rows["ssf2ta"].aux_name, "ssf2t")
         self.assertTrue(rows["mpangj"].core_flags & independent)
 
+    def test_mvs_representative_processed_asset_ownership(self):
+        rows = {row.name: row for row in self.load("mvs")}
+        owns_crom = game_metadata.CORE_FLAGS["mvs"]["owns_crom"]
+        owns_srom = game_metadata.CORE_FLAGS["mvs"]["owns_srom"]
+        owns_vrom = game_metadata.CORE_FLAGS["mvs"]["owns_vrom"]
+
+        self.assertEqual(
+            rows["kof96ae"].core_flags,
+            owns_crom | owns_srom | owns_vrom,
+        )
+        self.assertEqual(rows["kof97ps"].core_flags, owns_crom)
+        self.assertEqual(rows["matrimbl"].core_flags, owns_vrom)
+        self.assertEqual(rows["mslug"].core_flags, 0)
+
     def test_stale_legacy_aliases_are_not_canonical_records(self):
         cps2 = {row.name for row in self.load("cps2")}
         mvs = {row.name for row in self.load("mvs")}

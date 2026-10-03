@@ -328,18 +328,6 @@ extern uint8_t auto_animation_speed;
 extern uint8_t auto_animation_disabled;
 extern uint8_t auto_animation_counter;
 
-struct cacheinfo_t
-{
-	const char *name;
-	const char *parent;
-	const int crom;
-	const int srom;
-	const int vrom;
-};
-
-extern struct cacheinfo_t MVS_cacheinfo[];
-
-
 void neogeo_driver_init(void);
 void neogeo_driver_exit(void);
 void neogeo_driver_reset(void);

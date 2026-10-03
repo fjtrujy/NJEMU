@@ -189,6 +189,35 @@ if(NOT EMSCRIPTEN)
     )
 endif()
 
+if(${TARGET} STREQUAL "MVS")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/mvs.tsv")
+    set(GAME_METADATA_TOOL "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py")
+    set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.mvs")
+    add_custom_command(
+        OUTPUT "${GAME_METADATA_OUTPUT}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${GAME_METADATA_TOOL}"
+            --core mvs
+            --source "${GAME_METADATA_SOURCE}"
+            --rominfo "${ROMINFO_SOURCE}"
+            --output "${GAME_METADATA_OUTPUT}"
+        DEPENDS
+            "${GAME_METADATA_TOOL}"
+            "${GAME_METADATA_SOURCE}"
+            "${ROMINFO_SOURCE}"
+        VERBATIM
+    )
+    add_custom_target(game_metadata_mvs ALL DEPENDS "${GAME_METADATA_OUTPUT}")
+    add_dependencies(${BINARY_TARGET} game_metadata_mvs)
+    target_sources(${BINARY_TARGET} PRIVATE
+        "${CMAKE_SOURCE_DIR}/../src/common/game_metadata.c"
+    )
+    target_include_directories(${BINARY_TARGET} PRIVATE
+        "${CMAKE_SOURCE_DIR}/../src"
+    )
+endif()
+
 target_compile_options(${BINARY_TARGET} PUBLIC ${WARNING_OPTIONS} ${ASAN_OPTIONS})
 
 # Platform-specific link options
@@ -208,6 +237,11 @@ if(EMSCRIPTEN)
         "SHELL:-s INVOKE_RUN=0"
         "SHELL:--preload-file ${ROMINFO_SOURCE}@/rominfo.${TARGET_LOWER}"
     )
+    if(${TARGET} STREQUAL "MVS")
+        target_link_options(${BINARY_TARGET} PUBLIC
+            "SHELL:--preload-file ${GAME_METADATA_OUTPUT}@/game_metadata.mvs"
+        )
+    endif()
 else()
     target_link_options(${BINARY_TARGET} PUBLIC ${ASAN_OPTIONS})
 endif()

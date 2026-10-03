@@ -444,7 +444,7 @@ Desktop and PS Vita.
 | `rominfo.mvs` | Runtime metadata | Any game boot | `src/mvs/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Game boot | `src/common/loadrom.c` |
 | `neogeo.zip` | BIOS ROM archive | MVS game boot | `src/mvs/biosmenu.c`, MVS memory loader |
-| `game_metadata.mvs` | Generated runtime metadata | GUI browser and per-game metadata | `src/common/game_metadata.c`, `src/common/filer.c` |
+| `game_metadata.mvs` | Generated runtime metadata | Any game boot; GUI browser; `romcnv_mvs` processed-asset policy | `src/common/game_metadata.c`, `src/mvs/memintrf.c`, `src/common/filer.c`, `romcnv/src/mvs/romcnv.c` |
 
 The MVS BIOS archive must provide compatible BIOS content plus the system FIX
 ROM and low ROM by CRC. In particular, the loader expects:
@@ -810,7 +810,7 @@ Legend:
 | Item | CPS1 | CPS2 | MVS | NCDZ |
 | --- | --- | --- | --- | --- |
 | `rominfo.<core>` | M | M | M | -- |
-| `game_metadata.<core>` | C: GUI/command list | M | C: GUI/command list | B |
+| `game_metadata.<core>` | C: GUI/command list | M | M | B |
 | arcade ROM ZIPs | M | M | M | -- |
 | `roms/neogeo.zip` | -- | -- | M | -- |
 | `neocd.bin` | -- | -- | -- | M |

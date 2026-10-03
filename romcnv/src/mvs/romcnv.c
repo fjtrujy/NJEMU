@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include "romcnv.h"
 #include "common.h"
+#include "common/game_metadata.h"
 #include "neogeo.h"
 #include "zip_writer.h"
 
@@ -102,147 +103,31 @@ static int convert_vrom;
 static int psp2k;
 
 static char game_names[MAX_GAMES][16];
+static game_metadata_t mvs_game_metadata;
 
-struct cacheinfo_t
+static int set_cache_conversion_policy(const char *game_name)
 {
-	const char *name;
-	const char *parent;
-	const int crom;
-	const int srom;
-	const int vrom;
-};
+	game_metadata_entry_t entry;
 
-struct cacheinfo_t MVS_cacheinfo[] =
-{
-//     name,  parent,     crom,  srom,  vrom
-	{ "aof2a",    "aof2",     0, 0, 0 },
-	{ "fatfursa", "fatfursp", 0, 0, 0 },
-	{ "kof95h",   "kof95",    0, 0, 0 },
-	{ "samsho3h", "samsho3",  0, 0, 0 },
-	{ "fswords",  "samsho3",  0, 0, 0 },
-	{ "aof3k",    "aof3",     0, 0, 0 },
-	{ "kof96ae",  "kof96",    1, 1, 1 },
-	{ "kof96cn",  "kof96",    1, 1, 0 },
-	{ "kof96h",   "kof96",    0, 0, 0 },
-	{ "kof96ep",  "kof96",    0, 0, 0 },
-	{ "kof96pm",  "kof96",    0, 0, 0 },
-	{ "kof96sp",  "kof96",    1, 1, 0 },
-	{ "kizuna",   "savagere", 1, 1, 1 },
-	{ "kof97h",   "kof97",    0, 0, 0 },
-	{ "kof97c",   "kof97",    1, 1, 0 },
-	{ "kof97cn",  "kof97",    1, 1, 0 },
-	{ "kof97d",   "kof97",    0, 0, 0 },
-	{ "kof97k",   "kof97",    0, 0, 0 },
-	{ "kof97pls", "kof97",    0, 0, 0 },
-	{ "kof97pla", "kof97",    0, 1, 0 },
-	{ "kof97prc", "kof97",    0, 0, 0 },
-	{ "kof97ps",  "kof97",    1, 0, 0 },
-	{ "kof97yk",  "kof97",    1, 1, 1 },
-	{ "kof97xt",  "kof97",    1, 1, 0 },
-	{ "kog",      "kof97",    1, 1, 0 },
-	{ "kogd",     "kof97",    1, 1, 0 },
-	{ "kof97oro", "kof97",    1, 1, 0 },
-	{ "lastbladh","lastblad", 0, 0, 0 },
-	{ "lastsold", "lastblad", 0, 0, 0 },
-	{ "shocktroa","shocktro", 0, 0, 0 },
-	{ "rbff2h",   "rbff2",    0, 0, 0 },
-	{ "rbff2k",   "rbff2",    0, 0, 0 },
-	{ "kof98a",   "kof98",    0, 0, 0 },
-	{ "kof98c",   "kof98",    1, 1, 0 },
-	{ "kof98cn",  "kof98",    1, 1, 0 },
-	{ "kof98evo", "kof98",    1, 0, 0 },
-	{ "kof98k",   "kof98",    0, 0, 0 },
-	{ "kof98ka",  "kof98",    0, 0, 0 },
-	{ "kof98h",   "kof98",    0, 0, 0 },
-	{ "kof98ae",  "kof98",    1, 1, 1 },
-	{ "breakrev", "breakers", 1, 1, 1 },
-	{ "lans2004", "shocktr2", 1, 1, 1 },
-	{ "kof99h",   "kof99",    0, 0, 0 },
-	{ "kof99e",   "kof99",    0, 0, 0 },
-	{ "kof99k",   "kof99",    0, 0, 0 },
-	{ "kof99p",   "kof99",    1, 1, 0 },
-	{ "kof99ae",  "kof99",    1, 1, 1 },
-	{ "garouh",   "garou",    0, 0, 0 },
-	{ "garoubl",  "garoup",   0, 1, 1 },
-	{ "mslugxc1", "mslugx",   0, 0, 0 },
-	{ "mslug3h",  "mslug3",   0, 0, 0 },
-	{ "mslug3b6", "mslug3",   0, 1, 0 },
-	{ "kof2000n", "kof2000",  0, 0, 0 },
-	{ "kof2kcn",  "kof2000",  1, 1, 0 },
-	{ "kof2kps2", "kof2000",  1, 1, 0 },
-	{ "kof2001h", "kof2001",  0, 0, 0 },
-	{ "kf2k1pls", "kof2001",  0, 0, 0 },
-	{ "kf2k1pa",  "kof2001",  0, 0, 0 },
-	{ "kof2k1bs", "kof2001",  1, 1, 0 },
-	{ "cthd2003", "kof2001",  1, 1, 0 },
-	{ "cthd2k3a", "kof2001",  1, 1, 1 },
-	{ "ct2k3sp",  "kof2001",  1, 1, 0 },
-	{ "ct2k3sa",  "kof2001",  1, 1, 0 },
-	{ "mslug4h",  "mslug4",   0, 0, 0 },
-	{ "ms4plus",  "mslug4",   0, 0, 0 },
-	{ "kof2002b", "kof2002",  1, 0, 0 },
-	{ "kof2k2cn", "kof2002",  1, 1, 0 },
-	{ "kf2k2pls", "kof2002",  0, 0, 0 },
-	{ "kf2k2pla", "kof2002",  0, 0, 0 },
-	{ "kf2k2plb", "kof2002",  0, 0, 0 },
-	{ "kf2k2plc", "kof2002",  0, 1, 0 },
-	{ "kf2k2mp",  "kof2002",  0, 1, 0 },
-	{ "kf2k2mp2", "kof2002",  0, 1, 0 },
-	{ "kf2k2ps2", "kof2002",  1, 1, 1 },
-	{ "kf2k2ur",  "kof2002",  1, 1, 1 },
-	{ "kof2k2tg3","kof2002",  1, 1, 1 },
-	{ "matrimbl", "matrim",   0, 0, 1 },
-	{ "mslug5b",  "mslug5",   0, 0, 0 },
-	{ "mslug5h",  "mslug5",   0, 0, 0 },
-	{ "ms5plus",  "mslug5",   0, 1, 0 },
-	{ "svcpcba",  "svcpcb",   0, 0, 0 },
-	{ "samsho5h", "samsho5",  0, 0, 0 },
-	{ "samsho5b", "samsho5",  1, 1, 1 },
-	{ "samsh5sph","samsh5sp", 0, 0, 0 },
-	{ "samsh5spho","samsh5sp", 0, 0, 0 },
-	{ "kof2k4se", "kof2002",  1, 1, 1 },
-	{ "kf2k4pls", "kof2k4se", 0, 1, 0 },
-	{ "kf10thep", "kof10th",  1, 1, 0 },
-	{ "kf2k5uni", "kof10th",  0, 0, 0 },
-	{ "svcplus",  "svcboot",  0, 1, 0 },
-	{ "svcplusa", "svcboot",  0, 0, 0 },
-	{ "svcsplus", "svcboot",  0, 1, 0 },
-	{ "svcps2",   "svc",      1, 1, 1 },
-	{ "kf2k3bla", "kf2k3bl",  0, 0, 0 },
-	{ "kf2k3pl",  "kf2k3bl",  0, 1, 0 },
-	{ "kf2k3upl", "kf2k3bl",  0, 1, 0 },
-	{ "kf2k3ps2", "kof2003",  1, 1, 1 },
-	{ "ironclado","ironclad", 0, 0, 0 },
-	{ "jockeygpa","jockeygp", 0, 0, 0 },
-	{ "rbff1a",   "rbff1",    0, 0, 0 },
-	{ "rbffspeck","rbffspec", 0, 0, 0 },
-	{ "samsho2k", "samsho2",  0, 0, 0 },
-	{ "samsho2k2","samsho2",  0, 0, 0 },
-	{ "samsho4k", "samsho4",  0, 0, 0 },
-	{ "shocktroa","shocktro", 0, 0, 0 },
-	{ NULL }
-};
-
-
-static void set_cache_conversion_policy(const char *game_name)
-{
-	int i = 0;
-
-	convert_crom = parent_name[0] ? 0 : 1;
-	convert_srom = parent_name[0] ? 0 : 1;
-	convert_vrom = parent_name[0] ? 0 : 1;
-
-	while (MVS_cacheinfo[i].name)
+	if (!game_metadata_find(&mvs_game_metadata, game_name, &entry))
 	{
-		if (strcmp(game_name, MVS_cacheinfo[i].name) == 0)
-		{
-			convert_crom = MVS_cacheinfo[i].crom;
-			convert_srom = MVS_cacheinfo[i].srom;
-			convert_vrom = MVS_cacheinfo[i].vrom;
-			break;
-		}
-		i++;
+		printf("ERROR: game metadata for %s is missing.\n", game_name);
+		return 0;
 	}
+
+	if (parent_name[0])
+	{
+		convert_crom = (entry.core_flags & GAME_METADATA_MVS_OWNS_CROM) != 0;
+		convert_srom = (entry.core_flags & GAME_METADATA_MVS_OWNS_SROM) != 0;
+		convert_vrom = (entry.core_flags & GAME_METADATA_MVS_OWNS_VROM) != 0;
+	}
+	else
+	{
+		convert_crom = 1;
+		convert_srom = 1;
+		convert_vrom = 1;
+	}
+	return 1;
 }
 
 
@@ -808,7 +693,8 @@ static int convert_rom(char *game_name)
 #else
 		printf("Clone set (parent: %s)\n", parent_name);
 #endif
-	set_cache_conversion_policy(game_name);
+	if (!set_cache_conversion_policy(game_name))
+		return 0;
 	if (!convert_crom && !convert_srom && !convert_vrom)
 	{
 		printf("INFO: Cache data inherited from parent; no conversion needed.\n");
@@ -1326,6 +1212,19 @@ int main(int argc, char *argv[])
 	getcwd(launchDir, PATH_MAX);
 	strcat(launchDir, "/");
 
+	snprintf(path, sizeof(path), "%sgame_metadata.mvs", launchDir);
+	{
+		game_metadata_error_t metadata_error = game_metadata_load(
+			&mvs_game_metadata, path, GAME_METADATA_CORE_MVS);
+		if (metadata_error != GAME_METADATA_OK)
+		{
+			printf("ERROR: Could not load game_metadata.mvs: %s\n",
+				game_metadata_error_string(metadata_error));
+			res = 0;
+			goto error;
+		}
+	}
+
 	if (all)
 	{
 		int total_games;
@@ -1467,5 +1366,6 @@ int main(int argc, char *argv[])
 	}
 
 error:
+	game_metadata_unload(&mvs_game_metadata);
 	return res;
 }
