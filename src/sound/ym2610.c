@@ -638,7 +638,7 @@ typedef struct
 
 
 /* SSG struct */
-static struct SSG_t
+typedef struct SSG_t
 {
 	int		lastEnable;
 	uint32_t		step;
@@ -660,7 +660,7 @@ static struct SSG_t
 	uint8_t		holding;
 	int		RNG;
 	uint32_t		vol_table[32];
-} SSG;
+} SSG_t;
 
 
 /* ADPCM type A channel struct */
@@ -734,7 +734,7 @@ typedef struct adpcmb_state
 #endif
 
 /* here's the virtual YM2610 */
-static struct ym2610_t
+typedef struct ym2610_chip
 {
 	uint8_t		regs[512];			/* registers            */
 	FM_OPN	OPN;				/* OPN state            */
@@ -751,22 +751,64 @@ static struct ym2610_t
 	ADPCMB	adpcmb;				/* Delta-T ADPCM unit   */
 #endif
 
-} ALIGN16_DATA YM2610;
+} ym2610_chip_t;
 
-
-/* current chip state */
-static int32_t	m2,c1,c2;		/* Phase Modulation input for operators 2,3,4 */
-static int32_t	mem;			/* one sample delay memory */
-
-static int32_t	ALIGN16_DATA out_fm[8];		/* outputs of working channels */
-static int32_t	out_ssg;					/* channel output CHENTER only for SSG */
-static int32_t	ALIGN16_DATA out_adpcma[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 ADPCM */
+typedef struct ym2610_context
+{
+	SSG_t ssg;
+	ym2610_chip_t chip;
+	int32_t m2, c1, c2;
+	int32_t mem;
+	int32_t ALIGN16_DATA out_fm[8];
+	int32_t out_ssg;
+	int32_t ALIGN16_DATA out_adpcma[4];
 #if (EMU_SYSTEM == MVS)
-static int32_t	ALIGN16_DATA out_delta[4];	/* channel output NONE,LEFT,RIGHT or CENTER for YM2608/YM2610 DELTAT*/
+	int32_t ALIGN16_DATA out_delta[4];
+	void (*adpcma_calc_chan)(int c, ADPCMA *ch);
+	void (*adpcmb_calc)(ADPCMB *adpcmb);
 #endif
+	uint32_t LFO_AM;
+	int32_t LFO_PM;
+	uint8_t *pcmbufA;
+	uint32_t pcmsizeA;
+#if (EMU_SYSTEM == MVS)
+	uint8_t *pcmbufB;
+	uint32_t pcmsizeB;
+#endif
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	ym2610_adpcma_job_t *adpcma_job;
+	volatile uint32_t adpcma_control_generation[YM2610_ADPCMA_JOB_CHANNELS];
+#endif
+} ym2610_context_t;
 
-static uint32_t	LFO_AM;			/* runtime LFO calculations helper */
-static int32_t	LFO_PM;			/* runtime LFO calculations helper */
+static ym2610_context_t ALIGN16_DATA ym2610_default_context;
+
+#define SSG                         (ym2610_default_context.ssg)
+#define YM2610                      (ym2610_default_context.chip)
+#define m2                          (ym2610_default_context.m2)
+#define c1                          (ym2610_default_context.c1)
+#define c2                          (ym2610_default_context.c2)
+#define mem                         (ym2610_default_context.mem)
+#define out_fm                      (ym2610_default_context.out_fm)
+#define out_ssg                     (ym2610_default_context.out_ssg)
+#define out_adpcma                  (ym2610_default_context.out_adpcma)
+#if (EMU_SYSTEM == MVS)
+#define out_delta                   (ym2610_default_context.out_delta)
+#define OPNB_ADPCMA_calc_chan       (ym2610_default_context.adpcma_calc_chan)
+#define OPNB_ADPCMB_calc            (ym2610_default_context.adpcmb_calc)
+#endif
+#define LFO_AM                      (ym2610_default_context.LFO_AM)
+#define LFO_PM                      (ym2610_default_context.LFO_PM)
+#define pcmbufA                     (ym2610_default_context.pcmbufA)
+#define pcmsizeA                    (ym2610_default_context.pcmsizeA)
+#if (EMU_SYSTEM == MVS)
+#define pcmbufB                     (ym2610_default_context.pcmbufB)
+#define pcmsizeB                    (ym2610_default_context.pcmsizeB)
+#endif
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#define adpcma_job                  (ym2610_default_context.adpcma_job)
+#define adpcma_control_generation   (ym2610_default_context.adpcma_control_generation)
+#endif
 
 
 /* log output level */
@@ -2174,27 +2216,11 @@ static void SSG_reset(void)
 
 /*********************************************************************************************/
 
-#if (EMU_SYSTEM == MVS)
-/* Phase 2b.2: function pointers always present for MVS. Set at init
- * to either _static (preload) or _dynamic (PCM cache streaming). */
-static void (*OPNB_ADPCMA_calc_chan)(int c, ADPCMA *ch);
-static void (*OPNB_ADPCMB_calc)(ADPCMB *adpcmb);
-#endif
-
 /*********************************************************************************************/
 
 /**** YM2610 ADPCM-A defines ****/
 #define ADPCM_SHIFT    (16)      /* frequency step rate   */
 #define ADPCMA_ADDRESS_SHIFT 8   /* adpcm A address shift */
-
-static uint8_t *pcmbufA;
-static uint32_t pcmsizeA;
-
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-static ym2610_adpcma_job_t *adpcma_job;
-static volatile uint32_t adpcma_control_generation[YM2610_ADPCMA_JOB_CHANNELS];
-#endif
-
 
 /* Algorithm and tables verified on real YM2610 */
 
@@ -2669,9 +2695,6 @@ static void OPNB_ADPCMA_write(int r, int v)
 #define ADPCMB_DECODE_RANGE 32768
 #define ADPCMB_DECODE_MIN (-(ADPCMB_DECODE_RANGE))
 #define ADPCMB_DECODE_MAX ((ADPCMB_DECODE_RANGE)-1)
-
-static uint8_t *pcmbufB;
-static uint32_t pcmsizeB;
 
 /* Forecast to next Forecast (rate = *8) */
 /* 1/8 , 3/8 , 5/8 , 7/8 , 9/8 , 11/8 , 13/8 , 15/8 */
