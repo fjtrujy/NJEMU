@@ -639,13 +639,51 @@ shrinks by 3,868 B, while the converter objects shrink by 2,734 B. CPS2's
 converter now consumes the same cache-parent policy as the emulator; that change
 is a correctness/ownership improvement rather than a converter-size win.
 
+Whole Desktop GUI/debug executables show the expected Mach-O page-rounding
+effect. CPS1 is large enough to cross segment boundaries and therefore exposes
+the DIP-table reduction directly in the file size; the smaller CPS2/MVS/NCDZ
+object wins are partly or fully hidden by segment alignment and the common
+metadata reader:
+
+| Core | Pre-migration executable | Final executable | File delta |
+| --- | ---: | ---: | ---: |
+| CPS1 | 1,149,848 B | 617,544 B | **-532,304 B** |
+| CPS2 | 526,472 B | 527,352 B | +880 B |
+| MVS | 583,936 B | 584,704 B | +768 B |
+| NCDZ | 529,560 B | 530,152 B | +592 B |
+
+For CPS1, the Mach-O `__DATA` segment itself drops by 524,288 B. MVS moves one
+16 KiB page from `__DATA` to `__TEXT`, leaving its aggregate page-rounded segment
+total unchanged. CPS2 and NCDZ aggregate segment totals are likewise unchanged;
+the object-level measurements above are therefore the authoritative measure for
+those migrations rather than the final Mach-O file length.
+
+The generated files are intentionally richer than the historical display-name
+catalogs: they include executable policy/identity data, and CPS1/MVS now also
+ship external DIP schemas. Comparing only the metadata portion of the package:
+
+| Core | Legacy `zipname*` catalogs | Final generated metadata | Contents |
+| --- | ---: | ---: | --- |
+| CPS1 | 34,964 B | 88,087 B | 27,304 B game + 60,783 B DIP |
+| CPS2 | 57,999 B | 68,883 B | game/key/cache policy |
+| MVS | 47,138 B | 57,066 B | 52,542 B game + 4,524 B DIP |
+| NCDZ | 0 B | 5,077 B | NGH identity |
+
+This phase optimizes executable/static memory ownership rather than minimizing
+release archive bytes at any cost. The metadata files are cold/transient, while
+the removed C tables permanently occupied executable/static address space.
+
 The final static-data audit deliberately retains renderer/sprite tables and
 game-specific behavior dispatch. Examples include roughly 599 KiB of CPS1
 `vidhrdw.c.o` data, 400 KiB of CPS2 `sprite.c.o` data and 348 KiB MVS/NCDZ
 sprite objects. These are hot decode/render state or behavior, not cold game
 metadata, so externalizing them would violate the no-hot-path-regression rule.
 
-Desktop validation at this milestone includes 23/23 CPS1 tests, 28/28 MVS
-tests, release GUI and no-GUI builds for both DIP-metadata cores, plus the
-earlier complete CPS2/NCDZ metadata suites. Cross-platform validation is tracked
-separately in `docs/GAME_METADATA_EXTERNALIZATION_PLAN.md` M7.
+Final local Desktop validation includes 23/23 CPS1, 22/22 CPS2, 28/28 MVS and
+22/22 NCDZ tests. Release GUI and no-GUI builds pass for all four cores. PSP and
+PS2 GUI/no-GUI base matrices also build/install for all four cores, as do the
+`COMMAND_LIST=ON` + `SAVE_STATE=ON` feature builds; PSP MVS AdHoc and the PS2
+MVS/CPS2 fast-cache/external-IRX variants pass as well. Vita compilation remains
+a CI-only gate on this host because no VitaSDK toolchain is installed. Detailed
+runtime cases and packaging validation are recorded in
+`docs/GAME_METADATA_EXTERNALIZATION_PLAN.md` M7.

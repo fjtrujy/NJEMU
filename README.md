@@ -278,9 +278,9 @@ For the complete per-core/per-platform classification and lookup order, see
 ├── lang/                       # Generated UI translation packs
 ├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
-├── rominfo.cps1                # ROM database (REQUIRED)
-├── game_metadata.cps1          # Generated names/game metadata (REQUIRED)
-├── dip_metadata.cps1           # Generated DIP menu metadata
+├── rominfo.cps1                # CPS1 ROM database (rominfo.cps2 for CPS2)
+├── game_metadata.cps1          # CPS1 names/metadata (game_metadata.cps2 for CPS2)
+├── dip_metadata.cps1           # CPS1 DIP menu metadata (CPS1 only)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 ├── cache/                      # CPS2 streaming cache, only when needed

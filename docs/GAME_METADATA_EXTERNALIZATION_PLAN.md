@@ -577,17 +577,92 @@ runtime data, not external game metadata:
 
 ### M7 — final validation
 
-- [ ] Run focused metadata generator/parser tests.
-- [ ] Build GUI and no-GUI variants for all relevant cores on Desktop.
-- [ ] Build PSP, PS2, and Vita matrices available in the local toolchains/CI
-  configuration.
-- [ ] Validate representative parent/clone browsing and boot paths.
-- [ ] Validate CPS2 encrypted and Phoenix sets.
-- [ ] Validate MVS mixed parent/clone processed-asset cases.
-- [ ] Validate NCDZ NGH identification.
-- [ ] Record before/after executable and packaged-metadata sizes.
-- [ ] Update `RUNTIME_FILES_AUDIT.md`, `BINARY_SIZE_AUDIT.md`, README, and this
+- [x] Run focused metadata generator/parser tests.
+- [x] Build GUI and no-GUI variants for all relevant cores on Desktop.
+- [x] Build the locally available PSP and PS2 matrices and validate generated
+  metadata in their install layouts.
+- [x] Validate representative parent/clone browser metadata and boot paths.
+- [x] Validate CPS2 encrypted runtime metadata and the Phoenix generated-record
+  path.
+- [x] Validate MVS mixed parent/clone processed-asset policy.
+- [x] Validate NCDZ NGH identification.
+- [x] Record before/after executable and packaged-metadata sizes.
+- [x] Update `RUNTIME_FILES_AUDIT.md`, `BINARY_SIZE_AUDIT.md`, README, and this
   plan with the final ownership model.
+- [ ] Run the Vita compiler matrix in CI after the branch is pushed. This host
+  has no VitaSDK installation, so a local Vita compile cannot be claimed.
+
+#### Final local build/test matrix
+
+The four final Desktop GUI/debug suites pass in full:
+
+- CPS1: 23/23;
+- CPS2: 22/22;
+- MVS: 28/28;
+- NCDZ: 22/22.
+
+Release GUI and release no-GUI builds also pass for every core. The shared
+runtime reader test now resolves representative records from the generated
+binary files themselves, including CPS1 parent/clone titles, CPS2 encrypted,
+Phoenix and cache-parent policy, MVS full/C-only/V-only ownership combinations,
+and NCDZ NGH lookup.
+
+Local PSP and PS2 toolchains each build/install all four cores with both
+`GUI=ON` and `GUI=OFF`. Every one of those 16 base install trees contains
+`game_metadata.<core>`; CPS1/MVS also contain `dip_metadata.<core>`; none contains
+a legacy `zipname*` catalog. Additional local feature builds pass for all four
+cores with `COMMAND_LIST=ON` and `SAVE_STATE=ON`. PSP MVS also passes the AdHoc
+build, and PS2 MVS/CPS2 pass the `USE_CACHE=ON` + fast-cache configurations with
+both embedded and external IRX images, including external-IRX no-GUI builds.
+
+Vita remains the only compile gate not runnable locally. The existing Vita VPK
+manifest is wired to include `game_metadata.<core>` and the CPS1/MVS DIP pack,
+using the same generated outputs exercised by Desktop/PSP/PS2, but this machine
+has neither `VITASDK` nor `arm-vita-eabi-gcc`. The repository's Vita CI matrix is
+therefore the authoritative compile check once this branch is pushed.
+
+#### Representative runtime validation
+
+- CPS1 Desktop/no-GUI real-ROM init/teardown passes for parent `ghouls` and clone
+  `ghoulsu`; the clone resolves `ghouls` as its parent while the generated
+  browser records resolve friendly titles for both names.
+- CPS2 Desktop/no-GUI real-ROM init/teardown passes for encrypted `avsp` and for
+  `mpangj`, including its normal `mpang` ROM parent and independent-cache
+  metadata policy. `ssf2tu` correctly resolves `ssf2t` as its parent but the
+  local ROM set is incomplete (`sfxu.03e` is missing), so that specific full
+  boot cannot be used as a cache-parent runtime smoke. No Phoenix ROM ZIP is
+  available locally; the generated binary-reader test therefore validates the
+  Phoenix path with `ddtodd` (Phoenix flag set, key/range cleared), while the
+  generator exhaustively requires every supported CPS2 set to be exactly keyed
+  or Phoenix.
+- MVS Desktop/no-GUI init/teardown passes for `pbobbl2n`, proving the generated
+  metadata is accepted by normal core startup. The locally available mixed
+  ownership clone `kog` resolves parent `kof97` and reaches child/parent ROM
+  loading, but its debug boot stops later at the existing decrypt workspace
+  limit (`Could not allocate memory for decrypt ROM`) before processed-asset
+  loading. The generated binary-reader test independently pins the policy that
+  drives the runtime booleans: `kof96ae` owns C/S/V, `kof97ps` owns C only,
+  `matrimbl` owns V only, and `mslug` inherits all processed assets normally.
+- NCDZ Desktop/no-GUI init/teardown passes with the locally supplied
+  `MetalSlug2` directory. `neogeo_check_game()` reads the disc NGH, resolves it
+  through `game_metadata.ncdz`, then continues through BIOS/low-ROM loading. The
+  generated binary-reader test additionally pins `lastbld2` NGH `0x0243` and
+  `fatfury3` NGH `0x069c`.
+
+#### Final size/accounting checkpoint
+
+`docs/BINARY_SIZE_AUDIT.md` contains the detailed object and executable
+measurements. The most visible whole-file result is CPS1 Desktop GUI/debug,
+which falls from 1,149,848 B to 617,544 B (**-532,304 B**). Smaller per-object
+wins in CPS2/MVS/NCDZ are obscured in whole Mach-O file sizes by page alignment
+and by the shared reader, so their object/section measurements remain the useful
+metric.
+
+The final generated runtime metadata sizes are 88,087 B for CPS1 (game + DIP),
+68,883 B for CPS2, 57,066 B for MVS (game + DIP), and 5,077 B for NCDZ. These
+replace the manually tracked runtime role of the old display-name catalogs and,
+more importantly, move cold policy/menu/identity data out of permanently
+resident executable/static storage.
 
 ## Safety and compatibility rules
 

@@ -315,10 +315,10 @@ Rules:
 - browser status flags and compact per-game metadata share the same record, so
   executable tables can move to this file without adding another game list;
 - the normal no-GUI selector still reads `game_name.ini`; generated metadata
-  is packaged for all builds because core initialization also consumes it as
-  executable metadata is externalized;
-- NCDZ currently packages the same format with NGH identity records; its
-  compiled lookup is migrated in a later milestone.
+  is packaged for all builds because CPS2/MVS core initialization and NCDZ NGH
+  identification consume it in addition to GUI/command-list users;
+- NCDZ uses the same generated format for NGH identity. The old compiled
+  `games[]`/`game_index` lookup has been removed.
 
 The tracked `resources/zipname*` files are legacy reference data. They are no
 longer part of the CMake distribution/install/Vita manifest and are not runtime
