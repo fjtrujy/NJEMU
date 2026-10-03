@@ -170,6 +170,12 @@ The first implementation audit measured the current CPS2 source as:
 - largest region size is `0x02000000`, largest ROM offset is `0x01000006`,
   and largest ROM length is `0x00800000`.
 
+The V1 CPS2 generator also treats region uniqueness and the existing runtime ROM
+array capacities as format-generation invariants: CPU1 <= 8, CPU2 <= 3,
+GFX1 <= 32, SOUND1 <= 8 and USER1 == 0 ROM records. A future source change that
+would exceed those runtime structures is rejected during generation rather than
+producing a database that fails only when a game is launched.
+
 Format V1 therefore uses explicit little-endian fixed records rather than native C
 struct serialization:
 

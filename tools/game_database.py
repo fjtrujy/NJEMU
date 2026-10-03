@@ -32,6 +32,13 @@ REGION_IDS = {
     "USER1": 5,
 }
 REGION_NAMES = {value: key for key, value in REGION_IDS.items()}
+REGION_ROM_LIMITS = {
+    "CPU1": 8,
+    "CPU2": 3,
+    "GFX1": 32,
+    "SOUND1": 8,
+    "USER1": 0,
+}
 ROM_FLAG_ROMX = 0x01
 
 # V1 is explicitly serialized little-endian. No native C layout is written.
@@ -126,11 +133,20 @@ def validate_v1(games: list[UnifiedGame]) -> None:
         _check_unsigned(len(topology.regions), 0xFF, "region count", metadata.name)
 
         total_regions += len(topology.regions)
+        seen_regions: set[str] = set()
         for region in topology.regions:
             if region.name not in REGION_IDS:
                 fail(f"{metadata.name}: unsupported CPS2 region {region.name}")
+            if region.name in seen_regions:
+                fail(f"{metadata.name}: duplicate CPS2 region {region.name}")
+            seen_regions.add(region.name)
             _check_unsigned(region.flags, 0xFFFF, f"{region.name} flags", metadata.name)
             _check_unsigned(len(region.roms), 0xFF, f"{region.name} ROM count", metadata.name)
+            if len(region.roms) > REGION_ROM_LIMITS[region.name]:
+                fail(
+                    f"{metadata.name}: {region.name} has {len(region.roms)} ROM records; "
+                    f"runtime limit is {REGION_ROM_LIMITS[region.name]}"
+                )
             total_roms += len(region.roms)
             for record in region.roms:
                 _check_unsigned(record.load_type, 0xFF, "ROM load type", metadata.name)

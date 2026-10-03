@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 import zlib
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +109,32 @@ class GameDatabaseGeneratorTests(unittest.TestCase):
         topology = [game.topology for game in self.games]
         with self.assertRaisesRegex(game_database.GameDatabaseError, "identity divergence"):
             game_database.merge_sources(metadata[:-1], topology)
+
+    def test_v1_rejects_duplicate_regions_and_runtime_array_overflow(self):
+        source = self.games[0]
+        region = source.topology.regions[0]
+
+        duplicate_topology = replace(
+            source.topology,
+            regions=(region, region),
+        )
+        with self.assertRaisesRegex(game_database.GameDatabaseError, "duplicate CPS2 region"):
+            game_database.validate_v1(
+                [game_database.UnifiedGame(source.metadata, duplicate_topology)]
+            )
+
+        cpu1 = next(
+            item for item in source.topology.regions if item.name == "CPU1"
+        )
+        overflow_cpu1 = replace(
+            cpu1,
+            roms=tuple(cpu1.roms[0] for _ in range(game_database.REGION_ROM_LIMITS["CPU1"] + 1)),
+        )
+        overflow_topology = replace(source.topology, regions=(overflow_cpu1,))
+        with self.assertRaisesRegex(game_database.GameDatabaseError, "runtime limit"):
+            game_database.validate_v1(
+                [game_database.UnifiedGame(source.metadata, overflow_topology)]
+            )
 
 
 if __name__ == "__main__":
