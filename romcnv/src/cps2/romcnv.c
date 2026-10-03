@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "common/game_metadata.h"
 #include "romcnv.h"
 #include "zip_writer.h"
 
@@ -54,11 +55,38 @@ static struct rom_t gfx1rom[MAX_GFX1ROM];
 static int num_gfx1rom;
 
 static uint8_t block_empty[0x200];
+static game_metadata_t cps2_game_metadata;
 
 static void change_directory(const char *path)
 {
 	if (chdir(path) != 0)
 		perror(path);
+}
+
+static int set_cache_parent_policy(const char *game_name)
+{
+	game_metadata_entry_t entry;
+
+	if (!game_metadata_find(&cps2_game_metadata, game_name, &entry))
+	{
+		printf("ERROR: game metadata for %s is missing.\n", game_name);
+		return 0;
+	}
+	if (entry.core_flags & GAME_METADATA_CPS2_CACHE_PARENT_OVERRIDE)
+	{
+		if (entry.aux_name == NULL || strlen(entry.aux_name) >= sizeof(cache_name))
+			return 0;
+		strcpy(cache_name, entry.aux_name);
+	}
+	else if (entry.core_flags & GAME_METADATA_CPS2_CACHE_INDEPENDENT)
+	{
+		cache_name[0] = '\0';
+	}
+	else
+	{
+		strcpy(cache_name, parent_name);
+	}
+	return 1;
 }
 
 static uint8_t null_tile[128] =
@@ -930,25 +958,8 @@ static int convert_rom(char *game_name)
 		return 0;
 	}
 
-	if (!strcmp(game_name, "ssf2ta")
-	||	!strcmp(game_name, "ssf2tu")
-	||	!strcmp(game_name, "ssf2tur1")
-	||	!strcmp(game_name, "ssf2xj"))
-	{
-		strcpy(cache_name, "ssf2t");
-	}
-	else if (!strcmp(game_name, "ssf2t"))
-	{
-		cache_name[0] = '\0';
-	}
-	else if (!strcmp(game_name, "mpangj"))
-	{
-		cache_name[0] = '\0';
-	}
-	else
-	{
-		strcpy(cache_name, parent_name);
-	}
+	if (!set_cache_parent_policy(game_name))
+		return 0;
 
 	if (strlen(parent_name))
 #ifdef CHINESE
@@ -1342,6 +1353,19 @@ int main(int argc, char *argv[])
 	getcwd(launchDir, PATH_MAX);
 	strcat(launchDir, "/");
 
+	snprintf(path, sizeof(path), "%sgame_metadata.cps2", launchDir);
+	{
+		game_metadata_error_t metadata_error = game_metadata_load(
+			&cps2_game_metadata, path, GAME_METADATA_CORE_CPS2);
+		if (metadata_error != GAME_METADATA_OK)
+		{
+			printf("ERROR: Could not load game_metadata.cps2: %s\n",
+				game_metadata_error_string(metadata_error));
+			res = 0;
+			goto error;
+		}
+	}
+
 	if (all)
 	{
 		strcpy(zip_dir, argv[path_found]);
@@ -1477,5 +1501,6 @@ int main(int argc, char *argv[])
 	}
 
 error:
+	game_metadata_unload(&cps2_game_metadata);
 	return res;
 }

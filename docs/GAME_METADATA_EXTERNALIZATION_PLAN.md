@@ -496,6 +496,21 @@ Desktop suite.
 - [ ] Externalize only candidates whose size/complexity tradeoff is positive.
 - [ ] Record intentionally retained tables and why.
 
+#### CPS2 converter policy follow-up
+
+`romcnv_cps2` previously duplicated the emulator's special cache-parent rules
+for the `ssf2t` family and `mpangj`. It now generates and loads the same
+`game_metadata.cps2` as the emulator and derives the cache parent from
+`cache_parent_override` / `cache_independent`. The converter and emulator blobs
+compare byte-for-byte identical.
+
+This cleanup is an ownership/correctness win rather than a converter-size win:
+the shared validated reader is larger than the small exception chain it
+replaces. The separate 43-entry `CPS2_cacheinfo[]` table remains under audit;
+it describes converter-specific graphics cache geometry rather than emulator
+identity or runtime behavior and should only be externalized if its measured
+size justifies an additional format.
+
 ### M7 — final validation
 
 - [ ] Run focused metadata generator/parser tests.

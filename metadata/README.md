@@ -46,6 +46,9 @@ CPS2 uses:
   default.
 
 Every CPS2 set must have exactly one of a decryption key or the `phoenix` flag.
+The emulator and `romcnv_cps2` both use the cache-parent flags from this same
+generated record set; converter-specific graphics cache geometry remains a
+separate concern.
 
 MVS uses:
 
