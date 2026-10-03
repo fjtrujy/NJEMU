@@ -9,6 +9,7 @@
 #include <limits.h>
 
 #include "common.h"
+#include "translation.h"
 #include "zip_reader.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
@@ -53,33 +54,21 @@ char cache_name[16];
 void error_memory(const char *mem_name)
 {
 	file_close();
-#ifdef CHINESE
-	printf("错误: 无法分配%s内存.\n", mem_name);
-#else
-	printf("ERROR: Could not allocate %s memory.\n", mem_name);
-#endif
+	printf(ROMCNV_TEXT(ERROR_ALLOCATE_NAMED_MEMORY), mem_name);
 }
 
 
 void error_file(const char *rom_name)
 {
 	file_close();
-#ifdef CHINESE
-	printf("错误: 没有找到文件. \"%s\"\n", rom_name);
-#else
-	printf("ERROR: File not found. \"%s\"\n", rom_name);
-#endif
+	printf(ROMCNV_TEXT(ERROR_FILE_NOT_FOUND), rom_name);
 }
 
 
 void error_crc(const char *rom_name)
 {
 	file_close();
-#ifdef CHINESE
-	printf("错误: CRC32不正确. \"%s\"\n", rom_name);
-#else
-	printf("ERROR: File not found. \"%s\"\n", rom_name);
-#endif
+	printf(ROMCNV_TEXT(ERROR_CRC_MISMATCH), rom_name);
 }
 
 

@@ -19,6 +19,7 @@
 #include "common.h"
 #include "common/game_metadata.h"
 #include "neogeo.h"
+#include "translation.h"
 #include "zip_writer.h"
 
 #define MAX_GAMES			512
@@ -239,11 +240,7 @@ static int load_rom_gfx2(void)
 					error_crc(fname);
 				return 0;
 			}
-#ifdef CHINESE
-			printf("正在读取 \"%s\"\n", fname);
-#else
-			printf("Loading \"%s\"\n", fname);
-#endif
+			printf(ROMCNV_TEXT(LOADING_FILE), fname);
 			i = rom_load(gfx2rom, memory_region_gfx2, i, num_gfx2rom);
 
 			file_close();
@@ -287,11 +284,7 @@ static int load_rom_gfx3(void)
 				error_crc(fname);
 			return 0;
 		}
-#ifdef CHINESE
-		printf("正在读取 \"%s\"\n", fname);
-#else
-		printf("Loading \"%s\"\n", fname);
-#endif
+		printf(ROMCNV_TEXT(LOADING_FILE), fname);
 		i = rom_load(gfx3rom, memory_region_gfx3, i, num_gfx3rom);
 
 		file_close();
@@ -328,11 +321,7 @@ static int load_rom_sound1(void)
 			return 0;
 		}
 
-#ifdef CHINESE
-		printf("正在读取 \"%s\"\n", fname);
-#else
-		printf("Loading \"%s\"\n", fname);
-#endif
+		printf(ROMCNV_TEXT(LOADING_FILE), fname);
 		i = rom_load(snd1rom, memory_region_sound1, i, num_snd1rom);
 
 		file_close();
@@ -652,11 +641,7 @@ void free_memory(void)
 static int convert_rom(char *game_name)
 {
 	int i, res;
-#ifdef CHINESE
-	printf("正在检查ROM文件... (%s)\n", game_name);
-#else
-	printf("Checking ROM file... (%s)\n", game_name);
-#endif
+	printf(ROMCNV_TEXT(CHECKING_ROM_FILE), game_name);
 	memory_region_gfx2   = NULL;
 	memory_region_gfx3   = NULL;
 	memory_region_sound1 = NULL;
@@ -672,27 +657,16 @@ static int convert_rom(char *game_name)
 	{
 		switch (res)
 		{
-#ifdef CHINESE
-		case 1: printf("错误: 此游戏暂时不支持.\n"); break;
-		case 2: printf("错误: 没有找到ROM. (zip文件名不正确)\n"); break;
-		case 3: printf("错误: 没有找到rominfo.mvs.\n"); break;
-		case 4: printf("消息: 不需要转换此游戏.\n"); break;
-#else
-		case 1: printf("ERROR: This game is not supported.\n"); break;
-		case 2: printf("ERROR: ROM not found. (zip file name incorrect)\n"); break;
-		case 3: printf("ERROR: rominfo.mvs not found.\n"); break;
-		case 4: printf("INFO: No need to convert this game.\n"); break;
-#endif
+		case 1: fputs(ROMCNV_TEXT(ERROR_GAME_NOT_SUPPORTED), stdout); break;
+		case 2: fputs(ROMCNV_TEXT(ERROR_ROM_NOT_FOUND), stdout); break;
+		case 3: fputs(ROMCNV_TEXT(ERROR_MVS_ROMINFO_NOT_FOUND), stdout); break;
+		case 4: fputs(ROMCNV_TEXT(INFO_NO_CONVERSION_REQUIRED), stdout); break;
 		}
 		return 0;
 	}
 
 	if (strlen(parent_name))
-#ifdef CHINESE
-		printf("子ROM版本 (主ROM名: %s)\n", parent_name);
-#else
-		printf("Clone set (parent: %s)\n", parent_name);
-#endif
+		printf(ROMCNV_TEXT(CLONE_SET_PARENT), parent_name);
 	if (!set_cache_conversion_policy(game_name))
 		return 0;
 	if (!convert_crom && !convert_srom && !convert_vrom)
@@ -955,21 +929,13 @@ static int create_raw_cache(char *game_name)
 	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
 	change_directory("processed");
-#ifdef CHINESE
-	printf("正在创建缓存文件...\n");
-#else
-	printf("Create processed asset...\n");
-#endif
+	fputs(ROMCNV_TEXT(MVS_CREATE_PROCESSED_ASSET), stdout);
 	sprintf(fname, "%s_cache", game_name);
 	if (chdir(fname) != 0)
 	{
 		if (mkdir(fname, 0777) != 0)
 		{
-#ifdef CHINESE
-			printf("错误: 无法创建文件夹.\n");
-#else
-			printf("ERROR: Could not create folder.\n");
-#endif
+			fputs(ROMCNV_TEXT(ERROR_CREATE_FOLDER), stdout);
 			change_directory(launchDir);
 			return 0;
 		}
@@ -1027,11 +993,7 @@ error:
 
 	sprintf(fname, "cache_%s", game_name);
 	rmdir(fname);
-#ifdef CHINESE
-	printf("错误: 无法创建文件.\n");
-#else
-	printf("ERROR: Could not create file.\n");
-#endif
+	fputs(ROMCNV_TEXT(ERROR_CREATE_FILE), stdout);
 	change_directory("..");
 	return 0;
 }
@@ -1052,29 +1014,16 @@ static int create_zip_cache(char *game_name)
 	sprintf(zipname, "%s%cprocessed%c%s_cache.zip", launchDir, delimiter, delimiter, game_name);
 	remove(zipname);
 
-#ifdef CHINESE
-	printf("缓存名: processed%c%s_cache.zip\n", delimiter, game_name);
-	printf("正在创建缓存文件...\n");
-#else
-	printf("processed asset: processed%c%s_cache.zip\n", delimiter, game_name);
-	printf("Create processed asset...\n");
-#endif
+	printf(ROMCNV_TEXT(MVS_PROCESSED_ASSET_ZIP), delimiter, game_name);
+	fputs(ROMCNV_TEXT(MVS_CREATE_PROCESSED_ASSET), stdout);
 
 	if (!zip_writer_open(&writer, zipname))
 	{
-#ifdef CHINESE
-		printf("错误: 无法创建zip文件 \"processed%c%s_cache.zip\".\n", delimiter, game_name);
-#else
-		printf("ERROR: Could not create zip file \"processed%c%s_cache.zip\".\n", delimiter, game_name);
-#endif
+		printf(ROMCNV_TEXT(MVS_ERROR_CREATE_ZIP), delimiter, game_name);
 		goto error;
 	}
 
-#ifdef CHINESE
-	printf("压缩为zip文件... \"processed%c%s_cache.zip\"\n", delimiter, game_name);
-#else
-	printf("Compress to zip file... \"processed%c%s_cache.zip\"\n", delimiter, game_name);
-#endif
+	printf(ROMCNV_TEXT(MVS_COMPRESS_ZIP), delimiter, game_name);
 
 	/* Write crom blocks */
 	if (convert_crom)
@@ -1137,11 +1086,7 @@ error:
 
 done:
 
-#ifdef CHINESE
-	if (!res) printf("错误: 无法创建文件.\n");
-#else
-	if (!res) printf("ERROR: Could not create file.\n");
-#endif
+	if (!res) fputs(ROMCNV_TEXT(ERROR_CREATE_FILE), stdout);
 
 	change_directory("..");
 
@@ -1154,22 +1099,22 @@ int main(int argc, char *argv[])
 	char *p, path[PATH_MAX];
 	int i, path_found = 0, all = 0, zip = 0, res = 1;
 	check_byte_order();
-#ifdef CHINESE
+	romcnv_translation_init(argc, argv);
 	printf("----------------------------------------------\n");
-	printf(" MVSPSP ROM 转换器  " VERSION_STR "\n");
+	printf(ROMCNV_TEXT(MVS_BANNER), VERSION_STR);
 	printf("----------------------------------------------\n\n");
-#else
-	printf("----------------------------------------------\n");
-	printf(" ROM converter for MVSPSP " VERSION_STR "\n");
-	printf("----------------------------------------------\n\n");
-#endif
 
 	psp2k = 0;
 	if (argc > 1)
 	{
 		for (i = 1; i < argc; i++)
 		{
-			if (!strcasecmp(argv[i], "-all"))
+			int translation_span = romcnv_translation_option_span(argc, argv, i);
+			if (translation_span != 0)
+			{
+				i += translation_span - 1;
+			}
+			else if (!strcasecmp(argv[i], "-all"))
 			{
 				all = 1;
 			}
@@ -1190,8 +1135,8 @@ int main(int argc, char *argv[])
 
 	if (!path_found)
 	{
-		printf("usage: romcnv_mvs fullpath%cgamename.zip [-zip]\n", DELIMITER);
-		printf("  or   romcnv_mvs fullpath -all [-zip]\n\n", DELIMITER);
+		printf("usage: romcnv_mvs fullpath%cgamename.zip [-zip] [-lang en|zh-Hans]\n", DELIMITER);
+		printf("  or   romcnv_mvs fullpath -all [-zip] [-lang en|zh-Hans]\n\n", DELIMITER);
 		return 0;
 	}
 
@@ -1199,11 +1144,7 @@ int main(int argc, char *argv[])
 	{
 		if (mkdir("processed", 0777) != 0)
 		{
-#ifdef CHINESE
-			printf("错误: 无法创建\"cache\"目录.\n");
-#else
-			printf("ERROR: Could not create directory \"processed\".\n");
-#endif
+			fputs(ROMCNV_TEXT(MVS_ERROR_CREATE_PROCESSED_DIR), stdout);
 			goto error;
 		}
 	}
@@ -1242,46 +1183,27 @@ int main(int argc, char *argv[])
 			res = 1;
 
 			strcpy(game_name, game_names[i]);
-#ifdef CHINESE
 			printf("\n-------------------------------------------\n");
 			printf("  ROM set: %s\n", game_name);
 			printf("-------------------------------------------\n\n");
-#else
-			printf("\n-------------------------------------------\n");
-			printf("  ROM set: %s\n", game_name);
-			printf("-------------------------------------------\n\n");
-#endif
 
 			change_directory(launchDir);
 			convert_result = convert_rom(game_name);
 			if (convert_result == 0)
 			{
-#ifdef CHINESE
-				printf("跳过.\n\n");
-#else
-				printf("Skip.\n\n");
-#endif
+				fputs(ROMCNV_TEXT(SKIP), stdout);
 			}
 			else if (convert_result == 1)
 			{
 				if (zip ? create_zip_cache(game_name) : create_raw_cache(game_name))
 				{
-#ifdef CHINESE
-					printf("完成.\n\n");
-#else
-					printf("Done.\n\n");
-#endif
+					fputs(ROMCNV_TEXT(DONE), stdout);
 				}
 			}
 			free_memory();
 		}
-#ifdef CHINESE
-		printf("完成.\n");
-		printf("请将cache内的文件复制到\"/PSP/GAMES/mvspsp/processed\".\n");
-#else
-		printf("complete.\n");
-		printf("Please copy these files to directory \"/PSP/GAMES/mvspsp/processed\".\n");
-#endif
+		fputs(ROMCNV_TEXT(COMPLETE), stdout);
+		fputs(ROMCNV_TEXT(MVS_COPY_ALL), stdout);
 	}
 	else
 	{
@@ -1305,28 +1227,15 @@ int main(int argc, char *argv[])
 			*p = tolower(*p);
 			*p++;
 		}
-#ifdef CHINESE
-		printf("路径: %s\n", zip_dir);
-		printf("文件名: %s\n", game_name);
-#else
-		printf("path: %s\n", zip_dir);
-		printf("filename: %s\n", game_name);
-#endif
+		printf(ROMCNV_TEXT(PATH), zip_dir);
+		printf(ROMCNV_TEXT(MVS_FILE_NAME), game_name);
 		if ((p = strrchr(game_name, '.')) == NULL)
 		{
-#ifdef CHINESE
-			printf("请输入正确的路径.\n");
-#else
-			printf("Please input correct path.\n");
-#endif
+			fputs(ROMCNV_TEXT(ERROR_INVALID_PATH), stdout);
 			goto error;
 		}
 		*p = '\0';
-#ifdef CHINESE
-		printf("缓存文件夹名: processed%c%s_cache\n", delimiter, game_name);
-#else
-		printf("processed folder name: processed%c%s_cache\n", delimiter, game_name);
-#endif
+		printf(ROMCNV_TEXT(MVS_PROCESSED_FOLDER_NAME), delimiter, game_name);
 
 		change_directory(launchDir);
 		{
@@ -1347,19 +1256,11 @@ int main(int argc, char *argv[])
 
 			if (res && convert_result == 1)
 			{
-#ifdef CHINESE
-				printf("完成.\n");
+				fputs(ROMCNV_TEXT(COMPLETE), stdout);
 				if (zip)
-					printf("请将\"processed%c%s_cache.zip\"文件复制到\"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
+					printf(ROMCNV_TEXT(MVS_COPY_ZIP), delimiter, game_name);
 				else
-					printf("请将\"processed%c%s_cache\"文件夹复制到\"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
-#else
-				printf("complete.\n");
-				if (zip)
-					printf("Please copy \"processed%c%s_cache.zip\" to directory \"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
-				else
-					printf("Please copy \"processed%c%s_cache\" folder to directory \"/PSP/GAMES/mvspsp/processed\".\n", delimiter, game_name);
-#endif
+					printf(ROMCNV_TEXT(MVS_COPY_FOLDER), delimiter, game_name);
 			}
 		}
 		free_memory();

@@ -38,6 +38,7 @@ romcnv_cps2 /path/to/game.zip
 | `-zip` | Create a ZIP compressed cache file (reduces storage space) |
 | `-folder` | Create a folder with individual block files instead of a single raw cache |
 | `-batch` | Batch mode - don't pause between conversions |
+| `-lang <tag>` | Select converter messages at runtime (`en` or `zh-Hans`) |
 
 > **Note:** Some games default to ZIP format for historical reasons. Use `-raw` to explicitly
 > force the single-file `.cache` format regardless of per-game defaults.
@@ -70,6 +71,11 @@ romcnv_cps2 "D:\roms" -all
 **Convert all ROMs with ZIP compression:**
 ```bash
 romcnv_cps2 "D:\roms" -all -zip
+```
+
+**Use Simplified Chinese converter messages:**
+```bash
+romcnv_cps2 "D:\roms\ssf2.zip" -lang zh-Hans
 ```
 
 **Convert with folder format:**
@@ -174,6 +180,7 @@ emmake make
 - Parent ROM sets must be in the same directory as the game ROM
 - The build generates `game_database.cps2`; keep that file in the same directory as the converter executable
 - `rominfo.cps2` remains a build-time source for the generator but is no longer a converter runtime dependency
+- Converter language is selected at runtime. `NJEMU_LANG`, `LC_ALL`, `LC_MESSAGES`, and `LANG` are used when `-lang` is omitted; unsupported languages fall back to English.
 - Cache files are version-specific - regenerate if you update the emulator
 - Some games fully fit in memory and don't require cache conversion
 

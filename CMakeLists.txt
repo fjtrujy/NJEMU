@@ -1772,6 +1772,10 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
         )
         add_test(
+            NAME romcnv_translation_source_validation
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_romcnv_translations.py
+        )
+        add_test(
             NAME translation_pack_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
         )

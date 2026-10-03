@@ -37,6 +37,7 @@ romcnv_mvs /path/to/game.zip
 | `-zip` | Create a ZIP-compressed processed asset instead of a folder |
 | `-batch` | Batch mode - don't pause between conversions |
 | `-slim` | PSP Slim mode - skip processed PCM data for unencrypted games (reduces asset size) |
+| `-lang <tag>` | Select converter messages at runtime (`en` or `zh-Hans`) |
 
 ### Examples
 
@@ -65,6 +66,11 @@ romcnv_mvs "D:\roms\kof99.zip" -zip
 **Convert for PSP Slim (reduced processed asset size):**
 ```bash
 romcnv_mvs "D:\roms\kof99.zip" -slim
+```
+
+**Use Simplified Chinese converter messages:**
+```bash
+romcnv_mvs "D:\roms\kof99.zip" -lang zh-Hans
 ```
 
 ### Linux/macOS Examples
@@ -199,6 +205,7 @@ emmake make
 
 - Parent ROM sets must be in the same directory as the game ROM
 - The converter requires `rominfo.mvs` file to be present in the same directory as the executable
+- Converter language is selected at runtime. `NJEMU_LANG`, `LC_ALL`, `LC_MESSAGES`, and `LANG` are used when `-lang` is omitted; unsupported languages fall back to English.
 - Processed assets are version-specific - regenerate if you update the emulator
 - Cache-enabled MVS builds can still read the legacy `cache/` layout for migration; `USE_CACHE=OFF` intentionally reads only `processed/`.
 

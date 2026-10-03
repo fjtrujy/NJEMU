@@ -68,3 +68,13 @@ manifest order, known escapes/tokens, supported font glyphs and the same
 
 Generated `.lng` runtime packs must not be hand-edited. Their exact binary
 layout is documented in `docs/TRANSLATION_BINARY_FORMAT.md`.
+
+## ROM converter messages
+
+`translations/romcnv/` is a separate catalog for the desktop/Web ROM
+converters. It is intentionally not part of the emulator `.lng` packs so
+converter-only text does not consume PSP/PS2 runtime memory.
+
+The ROMCNV catalog is validated at build time and compiled into the converter.
+Language selection is runtime-only; there is no `USE_CHINESE`/`CHINESE` build
+configuration.

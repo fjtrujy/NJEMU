@@ -23,13 +23,7 @@ endif()
 add_definitions(-DBUILD_${TARGET})
 
 # Different options availables
-option(USE_CHINESE "Use CHINESE" OFF)
 option(USE_ASAN "Use ASAN" OFF)
-
-# Add options to compiler definitions
-if (USE_CHINESE)
-    add_definitions(-DCHINESE)
-endif()
 
 # Emscripten/WASM build configuration
 if(EMSCRIPTEN)
@@ -82,11 +76,31 @@ include_directories(
 # Common source files
 set(COMMON_SRC
     common.c
+    translation.c
     zip_reader.c
     zip_reader.h
     zip_writer.c
     zip_writer.h
 )
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(ROMCNV_TRANSLATION_DIR "${CMAKE_SOURCE_DIR}/../translations/romcnv")
+set(ROMCNV_TRANSLATION_OUTPUT "${CMAKE_BINARY_DIR}/generated/romcnv_translation_data.inc")
+add_custom_command(
+    OUTPUT "${ROMCNV_TRANSLATION_OUTPUT}"
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/../tools/build_romcnv_translations.py"
+        --translations-dir "${ROMCNV_TRANSLATION_DIR}"
+        --output "${ROMCNV_TRANSLATION_OUTPUT}"
+    DEPENDS
+        "${CMAKE_SOURCE_DIR}/../tools/build_romcnv_translations.py"
+        "${CMAKE_SOURCE_DIR}/../tools/build_translations.py"
+        "${ROMCNV_TRANSLATION_DIR}/messages.def"
+        "${ROMCNV_TRANSLATION_DIR}/en.lang"
+        "${ROMCNV_TRANSLATION_DIR}/zh-Hans.lang"
+    VERBATIM
+)
+add_custom_target(romcnv_translations DEPENDS "${ROMCNV_TRANSLATION_OUTPUT}")
 
 # Prefer an installed miniz package, but keep the desktop/WASM converter
 # self-contained by fetching the exact upstream release when it is absent.
@@ -161,6 +175,12 @@ set(BINARY_TARGET "${PROJECT_LOWER}_${TARGET_LOWER}")
 add_executable(${BINARY_TARGET}
     ${ALL_SRC}
 )
+add_dependencies(${BINARY_TARGET} romcnv_translations)
+target_include_directories(${BINARY_TARGET} PRIVATE "${CMAKE_BINARY_DIR}/generated")
+set_source_files_properties(
+    src/translation.c
+    PROPERTIES OBJECT_DEPENDS "${ROMCNV_TRANSLATION_OUTPUT}"
+)
 
 set_source_files_properties(
     src/zip_reader.c
@@ -191,7 +211,6 @@ if(NOT EMSCRIPTEN AND NOT ${TARGET} STREQUAL "CPS2")
 endif()
 
 if(${TARGET} STREQUAL "MVS")
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/${TARGET_LOWER}.tsv")
     set(GAME_METADATA_TOOL "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py")
     set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
@@ -218,7 +237,6 @@ if(${TARGET} STREQUAL "MVS")
         "${CMAKE_SOURCE_DIR}/../src"
     )
 elseif(${TARGET} STREQUAL "CPS2")
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(GAME_DATABASE_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/cps2.tsv")
     set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
     add_custom_command(
