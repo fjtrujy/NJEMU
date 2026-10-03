@@ -1374,6 +1374,9 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_test(NAME game_metadata_generator_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
+
     if("${TARGET}" STREQUAL "CPS2")
         add_test(NAME cps2_partial_cache_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/cps2_partial_cache_tests.py

@@ -1,0 +1,307 @@
+# Canonical NJEMU game metadata. Generated runtime binaries are derived from this file.
+name	title_en	title_ja	title_zh_hans	title_zh_hant	display_flags	core_flags	aux_name	data0	data1	data2
+svcps2	SvC Chaos - SNK vs Capcom[EGHT]	SNK VS. CAPCOM SVC CHAOS[EGHT]	SNK VS CAPKOM 大乱斗[EGHT]	SNK VS CAPKOM 大亂鬥[EGHT]	hack	owns_crom|owns_srom|owns_vrom
+kf2k3ps2	The King of Fighters 2003 PlayStation 2 Version	ザ·キング·オブ·ファイターズ 2003 PlayStation 2 Version	拳皇 2003 仿PS2版	拳皇 2003 仿PS2版	hack	owns_crom|owns_srom|owns_vrom
+mslugxc1	Metal Slug X hack	メタルスラッグX hack	合金弹头X 多载具版	合金彈頭X 多載具版	hack
+kof99ae	The King of Fighters '99 Anniversary Edition 20140209[yashional]	ザ·キング·オブ·ファイターズ'99 AE 20140209[yashional]	拳皇 '99 Anniversary Edition 20140209[yashional]	拳皇 '99 Anniversary Edition 20140209[yashional]	hack	owns_crom|owns_srom|owns_vrom
+kof98ae	The King of Fighters '98 Anniversary Edition[EGCG]	ザ·キング·オブ·ファイターズ'98 Anniversary Edition[EGCG]	拳皇 '98 Anniversary Edition[EGCG]	拳皇 '98 Anniversary Edition[EGCG]	hack	owns_crom|owns_srom|owns_vrom
+sbp	Super Bubble Pop	Super Bubble Pop	Super Bubble Pop	Super Bubble Pop
+kof97ps	The King of Fighters '97 PlayStation Version[EGCG]	ザ·キング·オブ·ファイターズ'97 PlayStation Version[EGCG]	拳皇 '97 仿PS改良最终版[EGCG]	拳皇 '97 仿PS改良最終版[EGCG]	hack	owns_crom
+kof97oro	The King of Fighters '97 Plus 2003 (bootleg)	ザ·キング·オブ·ファイターズ'97 PLUS 2003 (bootleg)	拳皇 '97 Plus 2003 (盗版)	拳皇 '97 Plus 2003 (盜版)	bootleg	owns_crom|owns_srom
+kof2k1bs	The King of Fighters 2001 PlayStation 2 Version V1.0[EGCG]	ザ·キング·オブ·ファイターズ 2001 PlayStation 2 Version V1.0[EGCG]	拳皇 2001 仿PS2版 V1.0[EGCG]	拳皇 2001 仿PS2版 V1.0[EGCG]	hack	owns_crom|owns_srom
+kof97d	The King of Fighters '97 Dream	ザ·キング·オブ·ファイターズ'97 夢回	拳皇 '97 梦回	拳皇 '97 夢迴	bootleg
+kof97yk	The King of Fighters '97 tian xia bu wu	ザ·キング·オブ·ファイターズ'97 天下布武	拳皇 '97 天下布武	拳皇 '97 天下布武	hack	owns_crom|owns_srom|owns_vrom
+kf2k2ps2	The King of Fighters 2002 PlayStation 2 Version	ザ·キング·オブ·ファイターズ 2002 PlayStation 2 Version V0.4[EGCG]	拳皇 2002 仿PS2版 V0.4[EGCG]	拳皇 2002 仿PS2版 V0.4[EGCG]	hack	owns_crom|owns_srom|owns_vrom
+kof2kps2	The King of Fighters 2000 PlayStation 2 Version V1.0[EGCG]	ザ·キング·オブ·ファイターズ 2000 PlayStation 2 Version V1.0[EGCG]	拳皇 2000 仿PS2版 V1.0[EGCG]	拳皇 2000 仿PS2版 V1.0[EGCG]	hack	owns_crom|owns_srom
+kof2kd	The King of Fighters 2000 (decrypted program ROMs)
+kogd	King of Gladiator (KOF'97 bootleg / decrypt)	キング·オブ·グラディエーター (KOF'97 bootleg / decrypt)	拳皇 '97 KOG (盗版解密)	拳皇 '97 KOG (盜版解密)	bootleg	owns_crom|owns_srom
+kof2kcn	The King of Fighters 2000(Chinese)	ザ·キング·オブ·ファイターズ2000 (Chinese)	拳皇 2000 中文版	拳皇 2000 中文版	hack	owns_crom|owns_srom
+kof2k2tg3	The King of Fighters 2002 3rd Strike Of The Orichi[EGCG]	ザ·キング·オブ·ファイターズ2002 3rd Strike Of The Orichi[EGCG]	拳皇 2002 天国神族	拳皇 2002 天國神族	hack	owns_crom|owns_srom|owns_vrom
+kof98c	The King of Fighters '98 Combo 20140214[ivex]	ザ·キング·オブ·ファイターズ'98 Combo 20140214[ivex]	拳皇 '98 Combo 20140214[ivex]	拳皇 '98 Combo 20140214[ivex]	hack	owns_crom|owns_srom
+kof2k2cn	The King of Fighters 2002 (Chinese)	ザ·キング·オブ·ファイターズ2002 (Chinese)	拳皇 2002 中文版	拳皇 2002 中文版	hack	owns_crom|owns_srom
+kof98cn	The King of Fighters '98(Chinese)	ザ·キング·オブ·ファイターズ'98 (Chinese)	拳皇 '98 (中文版)	拳皇 '98 (中文版)	hack	owns_crom|owns_srom
+nam1975	NAM-1975	NAM-1975	越战 - 1975	越戰 - 1975
+bstars	Baseball Stars Professional (NGM-002)	ベースボールスターズプロフェッショナル (NGM-002)	棒球之星 (NGM-002)	棒球之星 (NGM-002)
+bstarsh	Baseball Stars Professional (NGH-002)	ベースボールスターズプロフェッショナル (NGH-002)	棒球之星 (NGH-002)	棒球之星 (NGH-002)
+tpgolf	Top Player's Golf	トッププレイヤーズゴルフ	顶尖高尔夫	頂尖高爾夫
+mahretsu	Mahjong Kyoretsuden	麻雀狂列伝 - 西日本編	麻雀狂列伝 - 西日本篇	麻雀狂列伝 - 西日本篇
+maglord	Magician Lord (NGM-005)	マジシャンロード (NGM-005)	幻魔大战 (NGM-005)	幻魔大戰 (NGM-005)
+maglordh	Magician Lord (NGH-005)	マジシャンロード (NGH-005)	幻魔大战 (NGH-005)	幻魔大戰 (NGH-005)
+ridhero	Riding Hero (set 1)	ライディングヒーロー (set 1)	风速英雄 (版本1)	風速英雄 (版本1)
+ridheroh	Riding Hero (set 2)	ライディングヒーロー (set 2)	风速英雄 (版本2)	風速英雄 (版本2)
+alpham2	Alpha Mission II	ASOⅡ - LAST GUARDIAN	阿尔法任务2	阿爾法任務2
+alpham2p	Alpha Mission II (prototype)	ASOⅡ - LAST GUARDIAN (prototype)	阿尔法任务2 (工程版)	阿爾法任務2 (工程版)
+ncombat	Ninja Combat (NGM-009)	ニンジャコンバット (NGM-009)	忍者大战 (NGM-009)	忍者大戰 (NGM-009)
+ncombath	Ninja Combat (NGH-009)	ニンジャコンバット (NGH-009)	忍者大战 (NGH-009)	忍者大戰 (NGH-009)
+cyberlip	Cyber-Lip	サイバーリップ	战斗边缘	戰鬥邊緣
+superspy	The Super Spy	ザ·スーパースパイ	谍报飞龙	諜報飛龍
+mutnat	Mutation Nation	ミューテーションネイション	外星游龙	外星游龍
+kotm	King of the Monsters (set 1)	キング·オブ·ザ·モンスターズ (set 1)	魔兽之王 (版本1)	魔獸之王 (版本1)
+kotmh	King of the Monsters (set 2)	キング·オブ·ザ·モンスターズ (set 2)	魔兽之王 (版本2)	魔獸之王 (版本2)
+sengoku	Sengoku (NGM-017)(NGH-017)	戦国伝承 (NGM-017)(NGH-017)	战国传承 (NGM-017)(NGH-017)	戰國傳承 (NGM-017)(NGH-017)
+sengokuh	Sengoku (NGH-017)(US)	戦国伝承 (NGH-017)(US)	战国传承 (NGH-017)(美版)	戰國傳承 (NGH-017)(美版)
+burningf	Burning Fight (NGM-018)(NGH-018)	バーニングファイト (NGM-018)(NGH-018)	热血快打 (NGM-018)(NGH-018)	熱血快打 (NGM-018)(NGH-018)
+burningfh	Burning Fight (NGH-018)(US)	バーニングファイト (NGH-018)(US)	热血快打 (NGH-018)(美版)	熱血快打 (NGH-018)(美版)
+burningfp	Burning Fight (prototype)	バーニングファイト (prototype)	热血快打 (工程版)	熱血快打 (工程版)
+lbowling	League Bowling	リーグボウリング	爆笑保龄球联盟	爆笑保齡球聯盟
+gpilots	Ghost Pilots (NGM-020)(NGH-020)	ゴーストパイロット (NGM-020)(NGH-020)	魔鬼飞行员 (NGM-020)(NGH-020)	魔鬼飛行員 (NGM-020)(NGH-020)
+gpilotsh	Ghost Pilots (NGH-020)(US)	ゴーストパイロット (NGH-020)(US)	魔鬼飞行员 (NGH-020)(美版)	魔鬼飛行員 (NGH-020)(美版)
+joyjoy	Puzzled	ジョイジョイキッド	阳光方块	陽光方塊
+bjourney	Blue's Journey	ラギ	蓝色之旅	藍色之旅
+quizdais	Quiz Daisousa Sen - The Last Count Down	クイズ大捜査線 - THE LAST COUNT DOWN	问答大搜查线 - 最后倒计时 (SAM-080)(SAH-080)	問答大搜查線 - 最後倒計時 (SAM-080)(SAH-080)
+quizdaisk	Quiz Daisousa Sen - The Last Count Down (Korean)	クイズ大捜査線 - THE LAST COUNT DOWN (Korean)	问答大搜查线 - 最后倒计时 (韩国版)	問答大搜查線 - 最後倒計時 (韓國版)
+lresort	Last Resort	ラストリゾート	终极手段	終極手段
+eightman	Eight Man	エイトマン	八超人	八超人
+minasan	Minnasanno Okagesamadesu	みなさんのおかげ様です	麻雀大富翁	麻雀大富翁
+legendos	Legend of Success Joe	明日のジョー伝説	小拳王	小拳王
+2020bb	2020 Super Baseball (set 1)	2020年スーパーベースボール (set 1)	2020年超级棒球 (版本1)	2020年超級棒球 (版本1)
+2020bba	2020 Super Baseball (set 2)	2020年スーパーベースボール (set 2)	2020年超级棒球 (版本2)	2020年超級棒球 (版本2)
+2020bbh	2020 Super Baseball (set 3)	2020年スーパーベースボール (set 3)	2020年超级棒球 (版本3)	2020年超級棒球 (版本3)
+socbrawl	Soccer Brawl (NGM-031)	サッカーブロール (NGM-031)	机器人足球 (NGM-031)	機器人足球 (NGM-031)
+socbrawlh	Soccer Brawl (NGH-031)	サッカーブロール (NGH-031)	机器人足球 (NGH-031)	機器人足球 (NGH-031)
+roboarmy	Robo Army	ロボアーミー	机甲神兵	機甲神兵
+roboarma	Robo Army (set 2)
+fatfury1	Fatal Fury - King of Fighters	餓狼伝説 - 宿命の闘い	饿狼传说1 - 格斗之王大会	餓狼傳說1 - 格鬥之王大會
+fbfrenzy	Football Frenzy	フットボールフレンジー	疯狂美式足球	瘋狂美式足球
+bakatono	Bakatonosama Mahjong Manyuki	バカ殿様 麻雀漫遊記	麻雀漫游记	麻雀漫遊記
+crsword	Crossed Swords	クロススォード	圣十字剑	聖十字劍
+trally	Thrash Rally	スラッシュラリー	极速英豪	極速英豪
+kotm2	King of the Monsters 2 - The Next Thing (NGM-039)(NGH-039)	キング·オブ·ザ·モンスターズ2 The Next Thing (NGM-039)(NGH-039)	魔兽之王2 - 下一个目标 (NGM-039)(NGH-039)	魔獸之王2 - 下一個目標 (NGM-039)(NGH-039)
+kotm2p	King of the Monsters 2 - The Next Thing (prototype)	キング·オブ·ザ·モンスターズ2 The Next Thing (prototype)	魔兽之王2 - 下一个目标 (工程版)	魔獸之王2 - 下一個目標 (工程版)
+sengoku2	Sengoku 2 / Sengoku Denshou 2	戦国伝承2	战国传承2	戰國傳承2
+bstars2	Baseball Stars 2	ベースボールスターズ2	棒球之星 2	棒球之星 2
+quizdai2	Quiz Meitantei Neo & Geo - Quiz Daisousa Sen part 2	クイズ迷探偵ネオ＆ジオ - クイズ大捜査線パート2	问答大搜查线Ⅱ - 问答侦探迷	問答大搜查線Ⅱ - 問答偵探迷
+3countb	3 Count Bout	ファイヤースープレックス	火线摔跤	火線摔跤
+aof	Art of Fighting	龍虎の拳	龙虎之拳	龍虎之拳
+samsho	Samurai Shodown (NGM-045)	サムライスピリッツ (NGM-045)	侍魂 (NGM-045)	侍魂 (NGM-045)
+samshoh	Samurai Shodown (NGH-045)	サムライスピリッツ (NGH-045)	侍魂 (NGH-045)	侍魂 (NGH-045)
+tophuntr	Top Hunter - Roddy & Cathy (NGM-046)	トップハンター (NGM-046)	顶尖猎人 (NGM-046)	頂尖獵人 (NGM-046)
+tophuntrh	Top Hunter - Roddy & Cathy (NGH-046)	トップハンター (NGH-046)	顶尖猎人 (NGH-046)	頂尖獵人 (NGH-046)
+fatfury2	Fatal Fury 2	餓狼伝説2 - 新たなる闘い	饿狼传说2 - 新的战斗	餓狼傳說2 - 新的戰鬥
+janshin	Jyanshin Densetsu - Quest of Jongmaster	雀神伝説 - QUEST OF JONGMASTER	雀神传说	雀神傳說
+androdun	Andro Dunos	アンドロデュノス	雷霆任务	雷霆任務
+ncommand	Ninja Commando	ニンジャコマンドー	忍者指令	忍者指令
+viewpoin	Viewpoint	ビューポイント	视点 - V 计划	視點 - V 計劃
+ssideki	Super Sidekicks	得点王	得点王	得點王
+wh1	World Heroes (set 1)	ワールドヒーローズ (set 1)	世界英雄 (版本1)	世界英雄 (版本1)
+wh1h	World Heroes (set 2)	ワールドヒーローズ (set 2)	世界英雄 (版本2)	世界英雄 (版本2)
+wh1ha	World Heroes (set 3)	ワールドヒーローズ (set 3)	世界英雄 (版本3)	世界英雄 (版本3)
+kof94	The King of Fighters '94	ザ·キング·オブ·ファイターズ'94	拳皇 '94	拳皇 '94
+aof2	Art of Fighting 2 (NGM-056)	龍虎の拳2 (NGM-056)	龙虎之拳2 (版本1)	龍虎之拳2 (版本1)
+aof2a	Art of Fighting 2 (NGH-056)	龍虎の拳2 (NGH-056)	龙虎之拳2 (版本2)	龍虎之拳2 (版本2)
+wh2	World Heroes 2	ワールドヒーローズ2	世界英雄 2	世界英雄 2
+fatfursp	Fatal Fury Special (set 1)		饿狼传说 特别版 (版本1)	餓狼傳說 特別版 (版本1)
+fatfurspa	Fatal Fury Special (set 2)	餓狼伝説スペシャル (set 2)	饿狼传说 特别版 (版本2)	餓狼傳說 特別版 (版本2)
+savagere	Savage Reign	風雲黙示録 - 格闘創世	风云默示录 - 格斗创世	風雲默示錄 - 格鬥創世
+fightfev	Fight Fever (set 1)	ファイトフィーバー (set 1)	狂热格斗	狂熱格鬥
+fightfeva	Fight Fever (set 2)	ファイトフィーバー (set 2)	狂热格斗 (替换版)	狂熱格鬥 (替換版)
+ssideki2	Super Sidekicks 2 - The World Championship	得点王2 - リアルファイトフットボール	得点王2 - 世界冠军	得點王2 - 世界冠軍
+spinmast	Spin Master	ミラクルアドベンチャー	风雨兄弟 - 强尼大冒险	風雨兄弟 - 強尼大冒險
+samsho2	Samurai Shodown II	真サムライスピリッツ - 覇王丸地獄変	侍魂Ⅱ - 霸王丸地狱变	侍魂Ⅱ - 霸王丸地獄變
+samsho2k	Samurai Shodown II - Jin Saulabi Tu Hon (Korean release)	真サムライスピリッツ (Korean release)	侍魂Ⅱ - 真武士斗魂 (韩国版)	侍魂Ⅱ - 真武士鬥魂 (韓國版)
+samsho2k2	Saulabi Spirits: Jin Saulabi Tu Hon (Korean version set 2)
+wh2j	World Heroes 2 Jet	ワールドヒーローズ2 JET	世界英雄 2 喷射版	世界英雄 2 噴射版
+wjammers	Windjammers	フライングパワーディスク	超级飞碟球	超級飛碟球
+karnovr	Karnov's Revenge	ファイターズヒストリーダイナマイト	斗士的历史	鬥士的歷史
+gururin	Gururin	ぐるりん	梦幻天堂	夢幻天堂
+pspikes2	Power Spikes II	パワースパイクスⅡ	超级排球Ⅱ	超級排球Ⅱ
+fatfury3	Fatal Fury 3 - Road to the Final Victory	餓狼伝説3 - 遥かなる闘い	饿狼传说3 - 通向最终胜利的道路	餓狼傳說3 - 通向最終勝利的道路
+zupapa	Zupapa!	ズパパ!	欢乐精灵! - 星星大作战	歡樂精靈! - 星星大作戰
+panicbom	Panic Bomber	ぱにっくボンバー	炸弹人方块	炸彈人方塊
+aodk	Aggressors of Dark Kombat	痛快GANGAN行進曲	痛快行进曲	痛快行進曲
+sonicwi2	Aero Fighters 2	ソニックウィングス2	音速战机 2	音速戰機 2
+zedblade	Zed Blade	オペレーションラグナロク	末日之战	末日之戰
+galaxyfg	Galaxy Fight - Universal Warriors	ギャラクシーファイト - UNIVERSAL WARRIORS	银河快打	銀河快打
+strhoop	Street Hoop / Street Slam	ダンクドリーム	街头篮球	街頭籃球
+sthoopcd	Street Hoop/Street Slam/Dunk Dream (CD to MVS Conversion)		街头篮球 (Neo CD 转换)	街頭籃球 (Neo CD 轉換)	hack
+quizkof	Quiz King of Fighters (SAM-080)(SAH-080)	クイズ·キング·オブ·ファイターズ	拳皇问答	拳皇問答
+quizkofk	Quiz King of Fighters (Korean release)	クイズ·キング·オブ·ファイターズ (Korean)	拳皇问答 (韩国版)	拳皇問答 (韓國版)
+ssideki3	Super Sidekicks 3 - The Next Glory	得点王3 - 栄光への道	得点王3 - 下一次的荣誉	得點王3 - 下一次的榮譽
+doubledr	Double Dragon	ダブルドラゴン	双截龙	雙截龍
+pbobblen	Puzzle Bobble / Bust-A-Move	パズルボブル	泡泡龙	泡泡龍
+pbobblenb	Puzzle Bobble / Bust-A-Move (bootleg)	パズルボブル (bootleg)	泡泡龙 (盗版)	泡泡龍 (盜版)	bootleg
+kof95	The King of Fighters '95 (NGM-084)	ザ·キング·オブ·ファイターズ'95 (NGM-084)	拳皇 '95 (NGM-084)	拳皇 '95 (NGM-084)
+kof95h	The King of Fighters '95 (NGH-084)	ザ·キング·オブ·ファイターズ'95 (NGH-084)	拳皇 '95 (NGH-084)	拳皇 '95 (NGH-084)
+tws96	Tecmo World Soccer '96	テクモワールドサッカー'96	Tecmo 世界杯足球 '96	Tecmo 世界盃足球 '96
+samsho3	Samurai Shodown III (NGM-087)	サムライスピリッツ 斬紅朗無双剣 (NGM-087)	侍魂Ⅲ - 斩红朗无双剑 (版本1)	侍魂Ⅲ - 斬紅朗無雙劍 (版本1)
+samsho3h	Samurai Shodown III (NGH-087)	サムライスピリッツ 斬紅朗無双剣 (NGH-087)	侍魂Ⅲ - 斩红朗无双剑 (版本2)	侍魂Ⅲ - 斬紅朗無雙劍 (版本2)
+fswords	Samurai Shodown III [Fighters Swords] (Korean release)	サムライスピリッツ 斬紅朗無双剣 [FIGHTERS SWORDS] (Korean release)	侍魂Ⅲ - 战士之剑 (韩国版)	侍魂Ⅲ - 戰士之劍 (韓國版)
+stakwin	Stakes Winner	ステークスウイナー - GⅠ完全制覇への道	赛马大亨	賽馬大亨
+pulstar	Pulstar	パルスター	惑星传	惑星傳
+whp	World Heroes Perfect	ワールドヒーローズパーフェクト	世界英雄完美版	世界英雄完美版
+kabukikl	Far East of Eden - Kabuki Klash	天外魔境 真伝	天外魔境真传 - 东方伊甸园	天外魔境真傳 - 東方伊甸園
+neobombe	Neo Bomberman	ネオボンバーマン	Neo 炸弹人机皇版	Neo 炸彈人機皇版
+gowcaizr	Voltage Fighter - Gowcaizer	超人学園ゴウカイザー	超人学园 - 钢帝王	超人學園 - 鋼帝王
+rbff1	Real Bout Fatal Fury (NGM-095)(NGH-095)	リアルバウト餓狼伝説 (NGM-095)(NGH-095)	饿狼传说 (NGM-095)(NGH-095)	餓狼傳說 (NGM-095)(NGH-095)
+rbff1a	Real Bout Fatal Fury (bug fix revision)	リアルバウト餓狼伝説 (bug fix revision)	饿狼传说 (修正版)	餓狼傳說 (修正版)
+aof3	Art of Fighting 3 - The Path of the Warrior	アートオブファイティング龍虎の拳外伝	龙虎之拳3 - 斗士的路途	龍虎之拳3 - 鬥士的路途
+aof3k	Art of Fighting 3 - The Path of the Warrior (Korean release)	アートオブファイティング龍虎の拳外伝 (Korean release)	龙虎之拳3 - 斗士的路途 (韩国版)	龍虎之拳3 - 鬥士的路途 (韓國版)
+sonicwi3	Aero Fighters 3	ソニックウィングス3	音速战机 3	音速戰機 3
+turfmast	Neo Turf Masters	ビッグトーナメントゴルフ	大赛高尔夫	大賽高爾夫
+mslug	Metal Slug - Super Vehicle-001	メタルスラッグ Super Vehicle 001	合金弹头1 超级坦克 001	合金彈頭1 超級坦克 001
+puzzledp	Puzzle De Pon!	パズルでポン!	解谜气泡!	解謎氣泡!
+mosyougi	Syougi No Tatsujin - Master of Syougi	将棋の達人	将棋达人	將棋達人
+marukodq	Chibi Marukochan Deluxe Quiz	ちびまる子ちゃん まる子デラックスクイズ	小丸子问答	小丸子問答
+neomrdo	Neo Mr. Do!	Neo Mr. Do!	Neo 嘟！先生	Neo 嘟！先生
+sdodgeb	Super Dodge Ball	くにおの熱血闘球伝説	热血斗球传说	熱血鬥球傳說
+goalx3	Goal! Goal! Goal!	ゴール! ゴール! ゴール!	射门！射门！射门！	射門！射門！射門！
+zintrckb	Zintrick / Oshidashi Zentrix (bootleg)	押し出しジントリック (hack / bootleg)	水滴对战气泡 (Hack)	水滴對戰氣泡 (Hack)	bootleg
+zintrkcd	Zintrick / Oshidashi Zentrix (CD to MVS Conversion)	押し出しジントリック (CD→MVS変換)	水滴对战气泡 (Neo CD 转换)	水滴對戰氣泡 (Neo CD 轉換)	hack
+overtop	Over Top	オーバートップ	跨越巅峰	跨越巔峰
+neodrift	Neo Drift Out - New Technology	NEOドリフトアウト - New Technology	Neo 拉力赛车机皇版	Neo 拉力賽車機皇版
+kof96	The King of Fighters '96 (NGM-214)	ザ·キング·オブ·ファイターズ'96 (NGM-214)	拳皇 '96 (NGM-214)	拳皇 '96 (NGM-214)
+kof96ae	The King Of Fighters '96 AE 2.0[EGCG]	ザ·キング·オブ·ファイターズ'96 AE 2.0[EGCG]	拳皇 '96 AE 2.0[EGCG]	拳皇 '96 AE 2.0[EGCG]	hack	owns_crom|owns_srom|owns_vrom
+kof96sp	The King of Fighters '96 Remix PLUS 2007 SP[EGCG]		拳皇 '96 Remix PLUS 2007 SP[EGCG]	拳皇 '96 Remix PLUS 2007 SP[EGCG]	hack	owns_crom|owns_srom
+kof96cn	The King of Fighters '96 (Chinese)	ザ·キング·オブ·ファイターズ'96 (Chinese)	拳皇 '96 (中文版)	拳皇 '96 (中文版)	hack	owns_crom|owns_srom
+kof96h	The King of Fighters '96 (NGH-214)	ザ·キング·オブ·ファイターズ'96 (NGH-214)	拳皇 '96 (NGH-214)	拳皇 '96 (NGH-214)
+kof96ep	The King of Fighters '96 (bootleg)	ザ·キング·オブ·ファイターズ'96 (bootleg)	拳皇 '96 (盗版)	拳皇 '96 (盜版)	bootleg
+ssideki4	Ultimate 11 - The SNK Football Championship	得点王4 - 炎のリベロ	得点王4 - 终极十一人	得點王4 - 終極十一人
+kizuna	Kizuna Encounter - Super Tag Battle	風雲スーパータッグバトル	风云默示录 2 - 超级组队战	風雲默示錄 2 - 超級組隊戰		owns_crom|owns_srom|owns_vrom
+ninjamas	Ninja Master's - haoh-ninpo-cho	ニンジャマスターズ - 覇王忍法帖	霸王忍法帖	霸王忍法帖
+ragnagrd	Ragnagard	神凰拳	神凰拳	神凰拳
+pgoal	Pleasure Goal	フットサル - 5 on 5 Mini Soccer	五对五小型足球 - 轻松得点	五對五小型足球 - 輕鬆得點
+ironclad	Choutetsu Brikin'ger - Iron clad (Prototype)	超鉄ブリキンガー (prototype)	超铁战记 (工程版)	超鐵戰記 (工程版)
+ironclado	Choutetsu Brikin'ger - Iron clad (Prototype / bootleg)	超鉄ブリキンガー (prototype / bootleg)	超铁战记 (工程版/盗版)	超鐵戰記 (工程版/盜版)	bootleg
+magdrop2	Magical Drop II	マジカルドロップⅡ	魔法气泡Ⅱ	魔法氣泡Ⅱ
+samsho4	Samurai Shodown IV	サムライスピリッツ 天草光臨	侍魂Ⅳ - 天草降临	侍魂Ⅳ - 天草降臨
+samsho4k	Samurai Shodown IV [Legend of a Warrior] (Korean censored)	サムライスピリッツ 覇王伝説 (Korean release)	侍魂Ⅳ - 霸王传说 武士传奇 (韩国版)	侍魂Ⅳ - 霸王傳說 武士傳奇 (韓國版)
+rbffspec	Real Bout Fatal Fury Special	リアルバウト餓狼伝説スペシャル	饿狼传说 特别版	餓狼傳說 特別版
+rbffspeck	Real Bout Fatal Fury Special (Korean release)	リアルバウト餓狼伝説スペシャル (Korean release)	饿狼传说 特别版 (韩国版)	餓狼傳說 特別版 (韓國版)
+twinspri	Twinkle Star Sprites	ティンクルスタースプライツ	梦幻小妖精	夢幻小妖精
+wakuwak7	Waku Waku 7	わくわく7	火热火热七	火熱火熱七
+stakwin2	Stakes Winner 2	ステークスウイナー2	赛马大亨2	賽馬大亨2
+ghostlop	Ghostlop (prototype)	ゴーストロップ (prototype)	幽灵球 (工程版)	幽靈球 (工程版)
+breakers	Breakers	ブレイカーズ	爆裂人	爆裂人
+miexchng	Money Puzzle Exchanger	マネーアイドルエクスチェンジャー	钱币对抗赛	錢幣對抗賽
+kof97	The King of Fighters '97 (NGM-2320)	ザ·キング·オブ·ファイターズ'97 (NGM-2320)	拳皇 '97 (NGM-2320)	拳皇 '97 (NGM-2320)
+kof97h	The King of Fighters '97 (NGH-2320)	ザ·キング·オブ·ファイターズ'97 (NGH-2320)	拳皇 '97 (NGH-2320)	拳皇 '97 (NGH-2320)
+kof97cn	The King of Fighters '97 (Chinese)	ザ·キング·オブ·ファイターズ'97 (Chinese)	拳皇 '97 (中文版)	拳皇 '97 (中文版)	hack	owns_crom|owns_srom
+kof97k	The King of Fighters '97 (Korean release)	ザ·キング·オブ·ファイターズ'97 (Korean board)	拳皇 '97 (韩国版)	拳皇 '97 (韓國版)
+kof97pls	The King of Fighters '97 Plus (bootleg)	ザ·キング·オブ·ファイターズ'97 PLUS (bootleg)	拳皇 '97 Plus (盗版)	拳皇 '97 Plus (盜版)	bootleg
+kof97pla	The King of Fighters '97 Plus 2003 (bootleg / hack)	ザ·キング·オブ·ファイターズ'97 PLUS 2003 (bootleg / hack)	拳皇 '97 Plus 2003 (盗版/hack)	拳皇 '97 Plus 2003 (盜版/hack)	bootleg	owns_srom
+kog	King of Gladiator (KOF'97 bootleg)	キング·オブ·グラディエーター (KOF'97 bootleg)	拳皇 '97 KOG (盗版)	拳皇 '97 KOG (盜版)	bootleg	owns_crom|owns_srom
+magdrop3	Magical Drop III	マジカルドロップⅢ	魔法气泡Ⅲ	魔法氣泡Ⅲ
+lastblad	The Last Blade (NGM-2340)	幕末浪漫 月華の剣士 (NGM-2340)	幕末浪漫 月华剑士 (NGM-2340)	幕末浪漫 月華劍士 (NGM-2340)
+lastbladh	The Last Blade (NGH-2340)	幕末浪漫 月華の剣士 (NGH-2340)	幕末浪漫 月华剑士 (NGH-2340)	幕末浪漫 月華劍士 (NGH-2340)
+lastsold	The Last Blade [The Last Soldier] (Korean release)	幕末浪漫 月華の剣士 [THE LAST SOLDIER] (Korean release)	幕末浪漫 月华剑士 (THE LAST SOLDIER) (韩国版)	幕末浪漫 月華劍士 (THE LAST SOLDIER) (韓國版)
+puzzldpr	Puzzle De Pon! R!	パズルでポン! R!	解谜气泡! R	解謎氣泡! R
+irrmaze	The Irritating Maze	ウッチャンナンチャンの炎のチャレンジャー ウルトラ電流イライラ棒	电流急急棒	電流急急棒
+popbounc	Pop 'n Bounce	ガッポリン	动物砖块	動物磚塊
+shocktro	Shock Troopers (set 1)	ショックトルーパーズ (set 1)	突击奇兵 (版本1)	突擊奇兵 (版本1)
+shocktroa	Shock Troopers (set 2)	ショックトルーパーズ (set 2)	突击奇兵 (版本2)	突擊奇兵 (版本2)
+blazstar	Blazing Star	ブレイジングスター	闪亮之星	閃亮之星
+rbff2	Real Bout Fatal Fury 2 - The Newcomers (NGM-2400)	リアルバウト餓狼伝説2 - THE NEWCOMMERS (NGM-2400)	饿狼传说2 - 新挑战者 (NGM-2400)	餓狼傳說2 - 新挑戰者 (NGM-2400)
+rbff2h	Real Bout Fatal Fury 2 - The Newcomers (NGH-2400)		饿狼传说2 - 新挑战者 (NGH-2400)	餓狼傳說2 - 新挑戰者 (NGH-2400)
+rbff2k	Real Bout Fatal Fury 2 - The Newcomers (Korean release)	リアルバウト餓狼伝説2 - THE NEWCOMMERS (Korean release)	饿狼传说2 - 新挑战者 (韩国版)	餓狼傳說2 - 新挑戰者 (韓國版)
+mslug2	Metal Slug 2 - Super Vehicle-001/II (NGM-2410)(NGH-2410)	メタルスラッグ2 Super Vehicle 001/Ⅱ (NGM-2410)(NGH-2410)	合金弹头2 超级坦克 001/Ⅱ (NGM-2410)(NGH-2410)	合金彈頭2 超級坦克 001/Ⅱ (NGM-2410)(NGH-2410)
+kof98	The King of Fighters '98 (NGM-2420)	ザ·キング·オブ·ファイターズ'98 (NGM-2420)	拳皇 '98 (NGM-2420)	拳皇 '98 (NGM-2420)
+kof98k	The King of Fighters '98 - The Slugfest (Korean board 1)	ザ·キング·オブ·ファイターズ'98 (Korean board 1)	拳皇 '98 (韩国版1)	拳皇 '98 (韓國版1)
+kof98ka	The King of Fighters '98 - The Slugfest (Korean board 2)	ザ·キング·オブ·ファイターズ'98 (Korean board 2)	拳皇 '98 (韩国版2)	拳皇 '98 (韓國版2)
+kof98h	The King of Fighters '98 (NGH-2420)	ザ·キング·オブ·ファイターズ'98 (NGH-2420)	拳皇 '98 (NGH-2420)	拳皇 '98 (NGH-2420)
+lastbld2	The Last Blade 2 (NGM-2430)(NGH-2430)	幕末浪漫第二幕 月華の剣士 - 月に咲く華、散りゆく花(NGM-2430)(NGH-2430)	幕末浪漫第二幕 月华剑士 - 月中芳华 散落月下 (NGM-2430)(NGH-2430)	幕末浪漫第二幕 月華劍士 - 月中芳華 散落月下 (NGM-2430)(NGH-2430)
+neocup98	Neo-Geo Cup '98 - The Road to the Victory	ネオジオカップ'98 - 勝利への道	Neo 足球 '98 - 胜利之路	Neo 足球 '98 - 勝利之路	not_work
+breakrev	Breakers Revenge	ブレイカーズリベンジ	爆裂人复仇	爆裂人復仇		owns_crom|owns_srom|owns_vrom
+shocktr2	Shock Troopers - 2nd Squad	ショックトルーパーズ セカンドスカッド	突击奇兵 - 第二分队	突擊奇兵 - 第二分隊
+lans2004	Lansquenet 2004 (Shock Troopers - 2nd Squad bootleg)	ランスクネー2004 (ショックトルーパーズ セカンドスカッド bootleg)	突击奇兵2004 (突击奇兵 盗版)	突擊奇兵2004 (突擊奇兵 盜版)	bootleg	owns_crom|owns_srom|owns_vrom
+flipshot	Battle Flip Shot	フリップショット	盾牌大战	盾牌大戰
+pbobbl2n	Puzzle Bobble 2 / Bust-A-Move Again	パズルボブル2	泡泡龙2	泡泡龍2
+ctomaday	Captain Tomaday	キャプテントマディ	番茄超人	番茄超人
+mslugx	Metal Slug X - Super Vehicle-001 (NGM-2500)(NGH-2500)	メタルスラッグX Super Vehicle 001 (NGM-2500)(NGH-2500)	合金弹头X 超级坦克 001 (NGM-2500)(NGH-2500)	合金彈頭X 超級坦克 001 (NGM-2500)(NGH-2500)
+kof99	The King of Fighters '99 (NGM-2510)	ザ·キング·オブ·ファイターズ'99 (NGM-2510)	拳皇 '99 (NGM-2510)	拳皇 '99 (NGM-2510)
+kof99h	The King of Fighters '99 (NGH-2510)	ザ·キング·オブ·ファイターズ'99 (NGH-2510)	拳皇 '99 (NGH-2510)	拳皇 '99 (NGH-2510)
+kof99e	The King of Fighters '99 (earlier)	ザ·キング·オブ·ファイターズ'99 (earlier)	拳皇 '99 (早期版)	拳皇 '99 (早期版)
+kof99k	The King of Fighters '99 (Korean release)	ザ·キング·オブ·ファイターズ'99 (Korean)	拳皇 '99 (韩国版)	拳皇 '99 (韓國版)
+kof99p	The King of Fighters '99 (prototype)	ザ·キング·オブ·ファイターズ'99 (prototype)	拳皇 '99 (工程版)	拳皇 '99 (工程版)		owns_crom|owns_srom
+ganryu	Ganryu	武蔵巌流記	武藏严流记	武藏嚴流記
+garou	Garou - Mark of the Wolves (NGM-2530)	餓狼 - MARK OF THE WOLVES (NGM-2530)	饿狼传说 - 狼之印记 (NGM-2530)	餓狼傳說 - 狼之印記 (NGM-2530)
+garouh	Garou - Mark of the Wolves (NGM-2530)(NGH-2530)	餓狼 - MARK OF THE WOLVES (NGM-2530)(NGH-2530)	饿狼传说 - 狼之印记 (NGM-2530)(NGH-2530)	餓狼傳說 - 狼之印記 (NGM-2530)(NGH-2530)
+garoup	Garou - Mark of the Wolves (prototype)	餓狼 - MARK OF THE WOLVES (prototype)	饿狼传说 - 狼之印记 (工程版)	餓狼傳說 - 狼之印記 (工程版)
+garoubl	Garou - Mark of the Wolves (bootleg)	餓狼 - MARK OF THE WOLVES (bootleg)	饿狼传说 - 狼之印记 (盗版)	餓狼傳說 - 狼之印記 (盜版)	bootleg	owns_srom|owns_vrom
+s1945p	Strikers 1945 Plus	ストライカー1945 Plus	打击者 1945 Plus	打擊者 1945 Plus
+preisle2	Prehistoric Isle 2	原始島2	原始岛2	原始島2
+mslug3	Metal Slug 3 (NGM-2560)	メタルスラッグ3 (NGM-2560)	合金弹头3 (NGM-2560)	合金彈頭3 (NGM-2560)
+mslug3h	Metal Slug 3 (NGH-2560)	メタルスラッグ3  (NGH-2560)	合金弹头3 (NGH-2560)	合金彈頭3 (NGH-2560)
+mslug3b6	Metal Slug 6 (Metal Slug 3 bootleg)	メタルスラッグ6 (メタルスラッグ3 bootleg)	合金弹头6 (合金弹头3 盗版)	合金彈頭6 (合金彈頭3 盜版)	bootleg	owns_srom
+kof2000	The King of Fighters 2000 (NGM-2570)(NGH-2570)	ザ·キング·オブ·ファイターズ2000 (NGM-2570)(NGH-2570)	拳皇 2000 (NGM-2570)(NGH-2570)	拳皇 2000 (NGM-2570)(NGH-2570)
+kof2000n	The King of Fighters 2000 (not encrypted)	ザ·キング·オブ·ファイターズ2000 (not encrypted)	拳皇 2000 (未加密)	拳皇 2000 (未加密)
+bangbead	Bang Bead	バンビード	碰碰球	碰碰球
+nitd	Nightmare in the Dark	ナイトメア·イン·ザ·ダーク	午夜噩梦	午夜噩夢
+nitdbl	Nightmare in the Dark (bootleg)	ナイトメア·イン·ザ·ダーク (bootleg)	午夜噩梦 (盗版)	午夜噩夢 (盜版)	bootleg
+sengoku3	Sengoku 3	戦国伝承2001	战国传承2001	戰國傳承2001
+kof2001	The King of Fighters 2001 (NGM-262?)	ザ·キング·オブ·ファイターズ2001 (NGM-262?)	拳皇 2001 (NGM-262?)	拳皇 2001 (NGM-262?)
+kof2001h	The King of Fighters 2001 (NGH-2621)	ザ·キング·オブ·ファイターズ2001 (NGH-2621)	拳皇 2001 (NGH-2621)	拳皇 2001 (NGH-2621)
+kof2001d	The King of Fighters 2001 (decrypted C-ROMs)
+kof2k1hd	The King of Fighters 2001 (AES version, decrypted C-ROMs)
+kf2k1pls	The King of Fighters 2001 Plus (set 1 / bootleg)	ザ·キング·オブ·ファイターズ2001 PLUS (set 1 / bootleg)	拳皇 2001 Plus (盗版1)	拳皇 2001 Plus (盜版1)	bootleg
+kf2k1pa	The King of Fighters 2001 Plus (set 2 / bootleg)	ザ·キング·オブ·ファイターズ2001 PLUS (set 2 / bootleg)	拳皇 2001 Plus (盗版2)	拳皇 2001 Plus (盜版2)	bootleg
+cthd2003	Crouching Tiger Hidden Dragon 2003 (KOF2001 bootleg / set 1)	臥虎蔵龍 CROUCHING TIGER HIDDEN DRAGON 2003 (KOF2001 bootleg / set 1)	拳皇 2001 卧虎藏龙 2003 (盗版1)	拳皇 2001 臥虎藏龍 2003 (盜版1)	bootleg	owns_crom|owns_srom
+ct2k3sp	Crouching Tiger Hidden Dragon 2003 Super Plus (KOF2001 bootleg)	臥虎蔵龍 CROUCHING TIGER HIDDEN DRAGON 2003 SUPER PLUS (KOF2001 bootleg)	拳皇 2001 卧虎藏龙 2003 Super Plus (盗版)	拳皇 2001 臥虎藏龍  2003 Super Plus (盜版)	bootleg	owns_crom|owns_srom
+ct2k3sa	Crouching Tiger Hidden Dragon 2003 Super Plus alternate (KOF2001 bootleg)	臥虎蔵龍 CROUCHING TIGER HIDDEN DRAGON 2003 SUPER PLUS alternate (KOF2001 bootleg)	拳皇 2001 卧虎藏龙 2003 Super Plus alternate (盗版)	拳皇 2001 臥虎藏龍 2003 Super Plus alternate (盜版)	bootleg	owns_crom|owns_srom
+cthd2k3a	Crouching Tiger Hidden Dragon 2003 (KOF2001 bootleg / set 2)	臥虎蔵龍 CROUCHING TIGER HIDDEN DRAGON 2003 (KOF2001 bootleg / set 2)	拳皇 2001 卧虎藏龙 2003 (盗版2)	拳皇 2001 臥虎藏龍 2003 (盜版2)	bootleg	owns_crom|owns_srom|owns_vrom
+mslug4	Metal Slug 4 (NGM-2630)	メタルスラッグ4 (NGM-2630)	合金弹头4 (NGM-2630)	合金彈頭4 (NGM-2630)
+mslug4h	Metal Slug 4 (NGH-2630)	メタルスラッグ4 (NGH-2630)	合金弹头4 (NGH-2630)	合金彈頭4 (NGH-2630)
+ms4plus	Metal Slug 4 Plus (bootleg)	メタルスラッグ4 PLUS (bootleg)	合金弹头4 Plus (盗版)	合金彈頭4 Plus (盜版)	bootleg
+rotd	Rage of the Dragons	レイジ·オブ·ザ·ドラゴンズ	龙吼	龍吼
+kof2002	The King of Fighters 2002 (NGM-2650)(NGH-2650)	ザ·キング·オブ·ファイターズ2002 (NGM-2650)(NGH-2650)	拳皇 2002 (NGM-2650)(NGH-2650)	拳皇 2002 (NGM-2650)(NGH-2650)
+kof2002b	The King of Fighters 2002 (bootleg)	ザ·キング·オブ·ファイターズ2002 (bootleg)	拳皇 2002 (盗版)	拳皇 2002 (盜版)	bootleg	owns_crom
+kf2k2pls	The King of Fighters 2002 Plus (set 1 / bootleg)	ザ·キング·オブ·ファイターズ2002 PLUS (set 1 / bootleg)	拳皇 2002 Plus (盗版1)	拳皇 2002 Plus (盜版1)	bootleg
+kf2k2pla	The King of Fighters 2002 Plus (set 2 / bootleg)	ザ·キング·オブ·ファイターズ2002 PLUS (set 2 / bootleg)	拳皇 2002 Plus (盗版2)	拳皇 2002 Plus (盜版2)	bootleg
+kf2k2plb	The King of Fighters 2002 Plus (set 3 / bootleg)	ザ·キング·オブ·ファイターズ2002 PLUS (set 3 / bootleg)	拳皇 2002 Plus (盗版3)	拳皇 2002 Plus (盜版3)	bootleg
+kf2k2plc	The King of Fighters 2002 Super (set 4 / bootleg)	ザ·キング·オブ·ファイターズ2002 SUPER (set 4 / bootleg)	拳皇 2002 Super (盗版4)	拳皇 2002 Super (盜版4)	bootleg	owns_srom
+kf2k2mp	The King of Fighters 2002 Magic Plus (bootleg)	ザ·キング·オブ·ファイターズ2002 MAGIC PLUS (bootleg)	拳皇 2002 神奇加强版 (盗版)	拳皇 2002 神奇加強版 (盜版)	bootleg	owns_srom
+kf2k2mp2	The King of Fighters 2002 Magic Plus II (bootleg)	ザ·キング·オブ·ファイターズ2002 MAGIC PLUSⅡ (bootleg)	拳皇 2002 神奇加强版Ⅱ (盗版)	拳皇 2002 神奇加強版Ⅱ (盜版)	bootleg	owns_srom
+matrim	Matrimelee (NGM-2660)(NGH-2660)	新豪血寺一族「闘婚」(NGM-2660)(NGH-2660)	新豪血寺一族“斗婚”(NGM-2660)(NGH-2660)	新豪血寺一族「斗婚」(NGM-2660)(NGH-2660)
+matrimbl	Matrimelee (bootleg)	新豪血寺一族「闘婚」(bootleg)	新豪血寺一族“斗婚”(盗版)	新豪血寺一族「斗婚」(盜版)	bootleg	owns_vrom
+pnyaa	Pochi and Nyaa	ポチッとにゃー	波奇和娜亚	波奇和娜亞
+mslug5	Metal Slug 5 (NGM-2680)	メタルスラッグ5 (NGM-2680)	合金弹头5 (NGM-2680)	合金彈頭5 (NGM-2680)
+mslug5h	Metal Slug 5 (NGH-2680)	メタルスラッグ5 (NGH-2680)	合金弹头5 (NGH-2680)	合金彈頭5 (NGH-2680)
+ms5pcb	Metal Slug 5 (JAMMA PCB)	メタルスラッグ5 (JAMMA PCB)	合金弹头5 (JAMMA PCB)	合金彈頭5 (JAMMA PCB)
+mslug5b	Metal Slug 5 (bootleg)	メタルスラッグ5 (bootleg)	合金弹头5 (盗版)	合金彈頭5 (盜版)	bootleg
+ms5plus	Metal Slug 5 Plus (bootleg)	メタルスラッグ5 PLUS (bootleg)	合金弹头5 Plus (盗版)	合金彈頭5 Plus (盜版)	bootleg	owns_srom
+svcpcb	SvC Chaos - SNK vs Capcom (JAMMA PCB / set 1)	SNK VS. CAPCOM SVC CHAOS (JAMMA PCB /set 1)	SNK VS CAPKOM 大乱斗 (JAMMA PCB/版本1)	SNK VS CAPKOM 大亂鬥 (JAMMA PCB/版本1)
+svcpcba	SVC Chaos - SNK vs CAPCOM (JAMMA PCB / set 2)	SNK VS. CAPCOM SVC CHAOS (JAMMA PCB / set 2)	SNK VS CAPKOM 大乱斗 (JAMMA PCB/版本2)	SNK VS CAPKOM 大亂鬥 (JAMMA PCB/版本2)
+svc	SvC Chaos - SNK vs Capcom	SNK VS. CAPCOM SVC CHAOS	SNK VS. CAPKOM 大乱斗	SNK VS. CAPKOM 大亂鬥
+samsho5	Samurai Shodown V (NGM-2700)	サムライスピリッツ零 (NGM-2700)	侍魂零 (NGM-2700)	侍魂零 (NGM-2700)
+samsho5h	Samurai Shodown V (NGH-2700)	サムライスピリッツ零 (NGH-2700)	侍魂零 (NGH-2700)	侍魂零 (NGH-2700)
+samsho5b	Samurai Shodown V / Samurai Spirits Zero (bootleg)	サムライスピリッツ零 (bootleg)	侍魂零 (盗版)	侍魂零 (盜版)	bootleg	owns_crom|owns_srom|owns_vrom
+kf2k3pcb	The King of Fighters 2003 (Japan / JAMMA PCB)	ザ·キング·オブ·ファイターズ2003 (Japan / JAMMA PCB)	拳皇 2003 (日版/JAMMA PCB)	拳皇 2003 (日版/JAMMA PCB)
+kof2003	The King of Fighters 2003 (NGM-2710)	ザ·キング·オブ·ファイターズ2003 (NGM-2710)	拳皇 2003 (NGM-2710)	拳皇 2003 (NGM-2710)
+kof2003h	The King of Fighters 2003 (NGH-2710)	ザ·キング·オブ·ファイターズ2003 (NGH-2710)	拳皇 2003 (NGH-2710)	拳皇 2003 (NGH-2710)
+samsh5sp	Samurai Shodown V Special	サムライスピリッツ零スペシャル	侍魂零 特别版	侍魂零 特別版
+samsh5sph	Samurai Shodown V Special (2nd release less censored)	サムライスピリッツ零スペシャル (2nd release less censored)	侍魂零 特别版 (未审查的替换版)	侍魂零 特別版 (未審查的替換版)
+samsh5spho	Samurai Shodown V Special (1st release censored)	サムライスピリッツ零スペシャル (1st release censored)	侍魂零 特别版 (已审查的替换版)	侍魂零 特別版 (已審查的替換版)
+jockeygp	Jockey Grand Prix (set 1)	ジョッキーグランプリ (set 1)	赌马大亨 (版本1)	賭馬大亨 (版本1)
+jockeygpa	Jockey Grand Prix (set 2)	ジョッキーグランプリ (set 2)	赌马大亨 (版本2)	賭馬大亨 (版本2)
+vliner	V-Liner (set 1)	V-Liner (set 1)	赌博机 (版本1)	賭博機 (版本1)
+vlinero	V-Liner (set 2)	V-Liner (set 2)	赌博机 (版本2)	賭博機 (版本2)
+kof2k4se	The King of Fighters Special Edition 2004 (KOF2002 bootleg)	ザ·キング·オブ·ファイターズ Special Edition 2004 (KOF2002 bootleg)	拳皇 特别版 2004 (KOF2002盗版)	拳皇 特別版 2004 (KOF2002盜版)	bootleg	owns_crom|owns_srom|owns_vrom
+kf2k4pls	The King of Fighters Special Edition 2004 Plus (KOF2002 bootleg)	ザ·キング·オブ·ファイターズ Special Edition 2004 PLUS (KOF2002 bootleg)	拳皇 特别版 2004 Plus (KOF2002盗版)	拳皇 特別版 2004 Plus (KOF2002盜版)	bootleg	owns_srom
+kof10th	The King of Fighters 10th Anniversary (KOF2002 bootleg)	ザ·キング·オブ·ファイターズ 10th Anniversary (KOF2002 bootleg)	拳皇 10 周年纪念版 (KOF2002盗版)	拳皇 10 週年紀念版 (KOF2002盜版)	bootleg
+kf10thep	The King of Fighters 10th Anniversary Extra Plus (KOF2002 bootleg)	ザ·キング·オブ·ファイターズ 10th Anniversary Extra Plus (KOF2002 bootleg)	拳皇 10 周年纪念额外加强版 (KOF2002盗版)	拳皇 10 週年紀念額外加強版 (KOF2002盜版)	bootleg	owns_crom|owns_srom
+kf2k5uni	The King of Fighters 10th Anniversary 2005 Unique (KOF2002 bootleg)	ザ·キング·オブ·ファイターズ 10th Anniversary 2005 Unique (KOF2002 bootleg)	拳皇 10 周年纪念 2005 特别版 (KOF2002盗版)	拳皇 10 週年紀念 2005 特別版 (KOF2002盜版)	bootleg
+svcboot	SVC Chaos - SNK vs CAPCOM (bootleg)	SNK VS. CAPCOM SVC CHAOS (bootleg)	SNK VS CAPKOM 大乱斗 (盗版)	SNK VS CAPKOM 大亂鬥 (盜版)	bootleg
+svcplus	SvC Chaos - SNK vs Capcom Plus (set 1 / bootleg)	SNK VS. CAPCOM SVC CHAOS PLUS (set 1 / bootleg)	SNK VS CAPKOM 大乱斗 Plus (盗版1)	SNK VS CAPKOM 大亂鬥 Plus (盜版1)	bootleg	owns_srom
+svcplusa	SvC Chaos - SNK vs Capcom Plus (set 2 / bootleg)	SNK VS. CAPCOM SVC CHAOS PLUS (set 2 / bootleg)	SNK VS CAPKOM 大乱斗 Plus (盗版2)	SNK VS CAPKOM 大亂鬥 Plus (盜版2)	bootleg
+svcsplus	SvC Chaos - SNK vs Capcom Super Plus (bootleg)	SNK VS. CAPCOM SVC CHAOS SUPER PLUS (bootleg)	SNK VS CAPKOM 大乱斗 Super Plus (盗版)	SNK VS CAPKOM 大亂鬥 Super Plus (盜版)	bootleg	owns_srom
+kf2k3bl	The King of Fighters 2003 (set 1 / bootleg)	ザ·キング·オブ·ファイターズ2003 (set 1 / bootleg)	拳皇 2003 (盗版1)	拳皇 2003 (盜版1)	bootleg
+kf2k3bla	The King of Fighters 2003 (set 2 / bootleg)	ザ·キング·オブ·ファイターズ2003 (set 2 / bootleg)	拳皇 2003 (盗版2)	拳皇 2003 (盜版2)	bootleg
+kf2k3pl	The King of Fighters 2004 Plus / Hero (KOF2003 bootleg)	ザ·キング·オブ·ファイターズ2004 PLUS / HERO (KOF2003 bootleg)	拳皇 2004 Plus/Hero (KOF2003盗版)	拳皇 2004 Plus/Hero (KOF2003盜版)	bootleg	owns_srom
+kf2k3upl	The King of Fighters 2004 Ultra Plus (KOF2003 bootleg)	ザ·キング·オブ·ファイターズ2004 ULTRA PLUS (KOF2003 bootleg)	拳皇 2004 Ultra Plus (KOF2003盗版)	拳皇 2004 Ultra Plus (KOF2003盜版)	bootleg	owns_srom
+diggerma	Digger Man (prototype)	ディガーマン (prototype)	挖地先生 (工程版)	挖地先生 (工程版)	bootleg
+ltorb1	Jonas Indiana and the Lost Temple of RA (20050717 / PD)	インディ·ジョーンズ·アンド·ザ·ロスト·テンプル·オブ RA (20050717 / PD)	Jonas Indiana and the Lost Temple of RA (20050717/PD)	Jonas Indiana and the Lost Temple of RA (20050717/PD)	hack
+neodemo	Neo-Demo (PD)	NEOデモ (PD)	Neo-Demo (PD)	Neo-Demo (PD)	hack
+fr2ch	Idol Mahjong - final romance 2 (CD to MVS Conversion)	アイドル麻雀 ファイナルロマンス2 (CD→MVS変換)	偶像麻将 最终罗曼史2 (Neo CD转换)	偶像麻將 最終羅曼史2 (Neo CD轉換)	hack
+cnbe	Codename - Blut Engel (2006-01-19 / PD)	コードネーム - ブルーエンジェル (2006-01-19 / PD)	Codename - Blut Engel (2006-01-19/PD)	Codename - Blut Engel (2006-01-19/PD)	hack
+ngem2k	NGEM2K (beta 2006-01-18 / PD)	NGEM2K (beta 2006-01-18 / PD)	NGEM2K (beta 2006-01-18/PD)	NGEM2K (beta 2006-01-18/PD)	hack
+neo2500	Neo 2500 Demo (PD)	Neo 2500デモ (PD)	Neo 2500 Demo (PD)	Neo 2500 Demo (PD)	hack
+neopong	Neo Pong (v1.1 / PD)	ネオ·ポン (V1.1 / PD)	Neo 弹球 (v1.1 / PD)	Neo 彈球 (v1.1 / PD)	hack
+neonopon	Neo No Panepon (beta / PD)	ネオのパネポン (beta / PD)	Neo 智力方块 (beta/PD)	Neo 智力方塊 (beta/PD)	hack
+neoponga	Neo Pong (v1.0 / PD)	ネオ·ポン (V1.0 / PD)	Neo 弹球 (v1.0 / PD)	Neo 彈球 (v1.0 / PD)	hack
+beast	Shadow of the Beast (demo / PD)	シャドウ·オブ·ザ·ビースト (demo / PD)	兽之影 (demo / PD)	獸之影 (demo / PD)	hack
+columnsh	Columns (PD)	コラムス (PD)	魔法宝石 (PD)	魔法寶石 (PD)	hack
+poknight	Poker Night (PD)	ポーカーナイト (PD)	扑克之夜 (PD)	撲克之夜 (PD)	hack
+frogfest	Frog Feast (PD)	フロッグフェスト (PD)	浮游城 (PD)	浮游城 (PD)	hack
+syscheck	Neo System Check (ver 1.0b / PD)	NEOシステムチェック (ver 1.0b / PD)	Neo System Check (ver 1.0b/PD)	Neo System Check (ver 1.0b/PD)	hack
+bbbuster	Bang Bang Busters	Bang Bang Busters	泡泡大作战	泡泡大作戰
+totcarib	Treasure of the Caribbean	Treasure of the Caribbean	加勒比海盗	加勒比海盜
+lhcdb	The Last Hope (CD To MVS Conversion)	最后的希望 (Neo CD转换)	最后的希望 (Neo CD 转换)	最後的希望 (Neo CD 轉換)	hack

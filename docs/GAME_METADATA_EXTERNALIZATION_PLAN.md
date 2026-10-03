@@ -121,6 +121,17 @@ The divergence is already observable in the current tree:
   `samsho2k2` are missing from the English browser catalog. The Japanese
   catalog also contains missing, extra, and case-drifted identities.
 
+The localized legacy files also use mixed encodings rather than one text
+contract: current files include UTF-8, CP932, and GBK content depending on core
+and locale. The canonical metadata source normalizes strings to UTF-8.
+
+The executable metadata had stale entries too. The CPS2 Phoenix list contains
+the unsupported alias `gigaman2`. MVS `MVS_cacheinfo[]` contains eight names
+absent from current `rominfo.mvs` (`fatfursa`, `kf2k2ur`, `kof96pm`, `kof97c`,
+`kof97prc`, `kof97xt`, `kof98a`, `kof98evo`) plus a duplicate `shocktroa`
+record. These are omitted from the canonical source rather than preserved as
+dead runtime metadata.
+
 This is not a loader bug that should be hidden with a broader fallback. It is a
 data-ownership problem: supported game identities, parent relationships,
 friendly titles, localized titles, and per-game runtime flags are maintained in
@@ -334,13 +345,13 @@ checked-in generated artifact.
 
 ### M1 — canonical metadata source and deterministic generator
 
-- [ ] Define the source schema and versioned binary format.
-- [ ] Seed CPS1/CPS2/MVS titles and display flags without modifying
+- [x] Define the source schema and versioned binary format.
+- [x] Seed CPS1/CPS2/MVS titles and display flags without modifying
   `resources/`.
-- [ ] Correct known stale/missing identities in the new canonical source.
-- [ ] Add NCDZ NGH identity records.
-- [ ] Add generator validation against `rominfo` and NCDZ constraints.
-- [ ] Add deterministic-generation tests.
+- [x] Correct known stale/missing identities in the new canonical source.
+- [x] Add NCDZ NGH identity records.
+- [x] Add generator validation against `rominfo` and NCDZ constraints.
+- [x] Add deterministic-generation tests.
 
 ### M2 — replace GUI `zipname*` runtime dependency
 

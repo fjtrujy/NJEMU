@@ -1,0 +1,139 @@
+# Canonical NJEMU game metadata. Generated runtime binaries are derived from this file.
+name	title_en	title_ja	title_zh_hans	title_zh_hant	display_flags	core_flags	aux_name	data0	data1	data2
+forgottn	Forgotten Worlds (US)	ロストワールド [Forgotton Worlds] (US)	失落的世界 (世界版)	失落的世界 (世界版)
+lostwrld	Lost Worlds (Japan)	ロストワールド (Japan)	失落的世界 (日版)	失落的世界 (日版)
+ghouls	Ghouls'n Ghosts (World)	大魔界村 [Ghouls'n Ghosts] (World)	魔界村 (世界版)	魔界村 (世界版)
+ghoulsu	Ghouls'n Ghosts (US)	大魔界村 [Ghouls'n Ghosts] (US)	魔界村 (美版)	魔界村 (美版)
+daimakai	Dai Makai-Mura (Japan)	大魔界村 (Japan)	魔界村 (日版)	魔界村 (日版)
+strider	Strider (US set 1)	ストライダー飛竜 [Strider] (US set 1)	出击飞龙 (美版1)	出擊飛龍 (美版1)
+stridrua	Strider (US set 2)	ストライダー飛竜 [Strider] (US set 2)
+striderj	Strider Hiryu (Japan set 1)	ストライダー飛竜 (Japan set 1)	出击飞龙 (日版1)	出擊飛龍 (日版1)
+stridrja	Strider Hiryu (Japan set 2)	ストライダー飛竜 (Japan set 2)
+dynwar	Dynasty Wars (World)	天地を喰らう [Dynasty Wars] (World)	吞食天地 (世界版)	吞食天地 (世界版)
+dynwarj	Tenchi wo Kurau (Japan)	天地を喰らう (Japan)	吞食天地 (日版)	吞食天地 (日版)
+willow	Willow (US)	ウィロー (US)	威洛之旅 (美版)	威洛之旅 (美版)
+willowj	Willow (Japan - Japanese)	ウィロー (Japan - Japanese)	威洛之旅 (日版)	威洛之旅 (日版)
+willowje	Willow (Japan - English)	ウィロー (Japan - English)
+unsquad	U.N. Squadron (US)	エリア88 [U.N. Squadron] (US)	战区88 (美版)	戰區88 (美版)
+area88	Area 88 (Japan)	エリア88 (Japan)	战区88 (日版)	戰區88 (日版)
+ffight	Final Fight (World)	ファイナルファイト (World)	快打旋风 (世界版1)	快打旋風 (世界版1)
+ffightu	Final Fight (US)	ファイナルファイト (US)	快打旋风 (美版1)	快打旋風 (美版1)
+ffightua	Final Fight (US 900112)	ファイナルファイト (US 900112)	快打旋风 (美版 900112)	快打旋風 (美版 900112)
+ffightub	Final Fight (US 900613)	ファイナルファイト (US 900613)	快打旋风 (美版 900613)	快打旋風 (美版 900613)
+ffightj	Final Fight (Japan)	ファイナルファイト (Japan)	快打旋风 (日版)	快打旋風 (日版)
+ffightj1	Final Fight (Japan 900305)	ファイナルファイト (Japan 900305)	快打旋风 (日版 900112)	快打旋風 (日版 900112)
+1941	1941 - Counter Attack (World)	1941 - Counter Attack (World)	1941 反击战 (世界版 900227)	1941 反擊戰 (世界版 900227)
+1941j	1941 - Counter Attack (Japan)	1941 - Counter Attack (Japan)	1941 反击战 (日版)	1941 反擊戰 (日版)
+mercs	Mercs (World 900302)	戦場の狼Ⅱ [Mercs] (World 900302)	战场之狼2 (世界版 900302)	戰場之狼2 (世界版 900302)
+mercsu	Mercs (US 900302)	戦場の狼Ⅱ [Mercs] (US 900302)	战场之狼2 (美版 900608)	戰場之狼2 (美版 900608)
+mercsua	Mercs (US 900608)	戦場の狼Ⅱ [Mercs] (US 900608)
+mercsj	Senjou no Ookami II (Japan 900302)	戦場の狼Ⅱ (Japan 900302)	战场之狼2 (日版 900302)	戰場之狼2 (日版 900302)
+mtwins	Mega Twins (World 900619)	チキチキボーイズ [Mega Twins] (World 900619)	双麟儿 (世界版 900619)	雙麟兒 (世界版 900619)
+chikij	Chiki Chiki Boys (Japan 900619)	チキチキボーイズ (Japan 900619)	双麟儿 (日版 900619)	雙麟兒 (日版 900619)
+msword	Magic Sword - Heroic Fantasy (World 900725)	マジックソード - Heroic Fantasy (World 900725)	魔法剑 勇敢的幻想 (世界版 900725)	魔法劍 勇敢的幻想 (世界版 900725)
+mswordr1	Magic Sword - Heroic Fantasy (World 900623)	マジックソード - Heroic Fantasy (World 900623)	魔法剑 勇敢的幻想 (世界版 900623)	魔法劍 勇敢的幻想 (世界版 900623)
+mswordu	Magic Sword - Heroic Fantasy (US 900725)	マジックソード - Heroic Fantasy (US 900725)	魔法剑 勇敢的幻想 (美版 900725)	魔法劍 勇敢的幻想 (美版 900725)
+mswordj	Magic Sword (Japan 900623)	マジックソード (Japan 900623)	魔法剑 (日版 900623)	魔法劍 (日版 900623)
+cawing	Carrier Air Wing (World 901012)	U.S.ネイビー [Carrier Air Wing] (World 901012)	飞空之翼 (世界版 901012)	飛空之翼 (世界版 901012)
+cawingr1	Carrier Air Wing (World 901009)	U.S.ネイビー [Carrier Air Wing] (World 901009)	飞空之翼 (世界版 901009)	飛空之翼 (世界版 901009)
+cawingu	Carrier Air Wing (US 901012)	U.S.ネイビー [Carrier Air Wing] (US 901012)	飞空之翼 (美版 901012)	飛空之翼 (美版 901012)
+cawingj	U.S. Navy (Japan 901012)	U.S.ネイビー (Japan 901012)	飞空之翼 (日版 901012)	飛空之翼 (日版 901012)
+nemo	Nemo (World 901130)	ニモ (World 901130)	梦幻冒险 (世界版 901130)	夢幻冒險 (世界版 901130)
+nemoj	Nemo (Japan 901120)	ニモ (Japan 901120)	梦幻冒险 (日版 901120)	夢幻冒險 (日版 901120)
+sf2	Street Fighter II - The World Warrior (World 910522)	ストリートファイターⅡ - The World Warrior (World 910522)	街头霸王2 天下斗士 (世界版 910522)	街頭霸王2 天下鬥士 (世界版 910522)
+sf2eb	Street Fighter II - The World Warrior (World 910214)	ストリートファイターⅡ - The World Warrior (World 910214)	街头霸王2 天下斗士 (世界版 910214)	街頭霸王2 天下鬥士 (世界版 910214)
+sf2ua	Street Fighter II - The World Warrior (US 910206)	ストリートファイターⅡ - The World Warrior (US 910206)	街头霸王2 天下斗士 (美版 910206)	街頭霸王2 天下鬥士 (美版 910206)
+sf2ub	Street Fighter II - The World Warrior (US 910214)	ストリートファイターⅡ - The World Warrior (US 910214)	街头霸王2 天下斗士 (美版 910214)	街頭霸王2 天下鬥士 (美版 910214)
+sf2ud	Street Fighter II - The World Warrior (US 910318)	ストリートファイターⅡ - The World Warrior (US 910318)	街头霸王2 天下斗士 (美版 910318)	街頭霸王2 天下鬥士 (美版 910318)
+sf2ue	Street Fighter II - The World Warrior (US 910228)	ストリートファイターⅡ - The World Warrior (US 910228)	街头霸王2 天下斗士 (美版 910228)	街頭霸王2 天下鬥士 (美版 910228)
+sf2uf	Street Fighter II - The World Warrior (US 910411)	ストリートファイターⅡ - The World Warrior (US 910411)	街头霸王2 天下斗士 (美版 910411)	街頭霸王2 天下鬥士 (美版 910411)
+sf2ui	Street Fighter II - The World Warrior (US 910522)	ストリートファイターⅡ - The World Warrior (US 910522)	街头霸王2 天下斗士 (美版 910522 Rev. I)	街頭霸王2 天下鬥士 (美版 910522 Rev. I)
+sf2uk	Street Fighter II - The World Warrior (US 911101)	ストリートファイターⅡ - The World Warrior (US 911101)	街头霸王2 天下斗士 (美版 911101)	街頭霸王2 天下鬥士 (美版 911101)
+sf2j	Street Fighter II - The World Warrior (Japan 911210)	ストリートファイターⅡ - The World Warrior (Japan 911210)	街头霸王2 天下斗士 (日版 911210)	街頭霸王2 天下鬥士 (日版 911210)
+sf2ja	Street Fighter II - The World Warrior (Japan 910214)	ストリートファイターⅡ - The World Warrior (Japan 910214)	街头霸王2 天下斗士 (日版 910214)	街頭霸王2 天下鬥士 (日版 910214)
+sf2jc	Street Fighter II - The World Warrior (Japan 910306)	ストリートファイターⅡ - The World Warrior (Japan 910306)	街头霸王2 天下斗士 (日版 910306)	街頭霸王2 天下鬥士 (日版 910306)
+3wonders	Three Wonders (World 910520)	ワンダー3 [Three Wonders] (World 910520)	三个奇迹 (世界版 910520)	三個奇跡 (世界版 910520)
+3wonderu	Three Wonders (US 910520)	ワンダー3 [Three Wonders] (US 910520)
+wonder3	Wonder 3 (Japan 910520)	ワンダー3 (Japan 910520)	三个奇迹 (日版 910520)	三個奇跡 (日版 910520)
+kod	The King of Dragons (World 910711)	キング・オブ・ドラゴンズ [The King of Dragons] (World 910711)	龙王 (世界版 910805)	龍王 (世界版 910805)
+kodu	The King of Dragons (US 910910)	キング・オブ・ドラゴンズ [The King of Dragons] (US 910910)	龙王 (美版 910910)	龍王 (美版 910910)
+kodj	The King of Dragons (Japan 910805)	キング・オブ・ドラゴンズ (Japan 910805)	龙王 (日版1 910805)	龍王 (日版1 910805)
+kodb	The King of Dragons (bootleg)	キング・オブ・ドラゴンズ (bootleg)	龙王 (盗版)	龍王 (盜版)	bootleg
+captcomm	Captain Commando (World 911014)	キャプテンコマンドー (World 911014)	名将 (世界版 911202)	名將 (世界版 911202)
+captcomu	Captain Commando (US 910928)	キャプテンコマンドー (US 910928)
+captcomj	Captain Commando (Japan 911202)	キャプテンコマンドー (Japan 911202)
+knights	Knights of the Round (World 911127)	ナイツ・オブ・ザ・ラウンド (World 911127)	圆卓骑士 (世界版 911127)	圓卓騎士 (世界版 911127)
+knightsu	Knights of the Round (US 911127)	ナイツ・オブ・ザ・ラウンド (US 911127)	圆卓骑士 (美版 911127)	圓卓騎士 (美版 911127)
+knightsj	Knights of the Round (Japan 911127)	ナイツ・オブ・ザ・ラウンド (Japan 911127)	圆卓骑士 (日版2 911127)	圓卓騎士 (日版2 911127)
+knightsb	Knights of the Round (bootleg)	ナイツ・オブ・ザ・ラウンド (bootleg)	圆卓骑士 (盗版1)	圓卓騎士 (盜版1)
+knightsh	Knights of the Round (hack)	ナイツ・オブ・ザ・ラウンド (hack)	圆卓骑士 (hack版)	圓卓騎士 (hack版)
+sf2ce	Street Fighter II' - Champion Edition (World 920313)	ストリートファイターⅡ' - Champion Edition (World 920313)	街头霸王2 四大天王 (世界版 920513)	街頭霸王2 四大天王 (世界版 920513)
+sf2ceua	Street Fighter II' - Champion Edition (US 920313)	ストリートファイターⅡ' - Champion Edition (US 920313)	街头霸王2 四大天王 (美版 920313)	街頭霸王2 四大天王 (美版 920313)
+sf2ceub	Street Fighter II' - Champion Edition (US 920513)	ストリートファイターⅡ' - Champion Edition (US 920513)	街头霸王2 四大天王 (美版 920513)	街頭霸王2 四大天王 (美版 920513)
+sf2ceuc	Street Fighter II' - Champion Edition (US 920803)	ストリートファイターⅡ' - Champion Edition (US 920803)	街头霸王2 四大天王 (美版 920803)	街頭霸王2 四大天王 (美版 920803)
+sf2cej	Street Fighter II' - Champion Edition (Japan 920513)	ストリートファイターⅡ' - Champion Edition (Japan 920513)
+sf2rb	Street Fighter II' - Champion Edition (Rainbow set 1)	ストリートファイターⅡ' - Champion Edition (Rainbow set 1)	街头霸王2 四大天王 (彩虹版1)	街頭霸王2 四大天王 (彩虹版1)	bootleg
+sf2rb2	Street Fighter II' - Champion Edition (Rainbow set 2)	ストリートファイターⅡ' - Champion Edition (Rainbow set 2)	街头霸王2 四大天王 (彩虹版2)	街頭霸王2 四大天王 (彩虹版2)	bootleg
+sf2red	Street Fighter II' - Champion Edition (Red Wave)	ストリートファイターⅡ' - Champion Edition (Red Wave)	街头霸王2 四大天王 (赤色波动)	街頭霸王2 四大天王 (赤色波動)	bootleg
+sf2v004	Street Fighter II! - Champion Edition (V004)	ストリートファイターⅡ! - Champion Edition (V004)	街头霸王2 四大天王 (V004)	街頭霸王2 四大天王 (V004)	not_work|bootleg
+sf2accp2	Street Fighter II' - Champion Edition (Accelerator Pt.II)	ストリートファイターⅡ' - Champion Edition (Accelerator Pt.II)	街头霸王2 四大天王 (加速版3)	街頭霸王2 四大天王 (加速版3)	bootleg
+sf2m1	Street Fighter II' - Champion Edition (M1)	ストリートファイターⅡ' - Champion Edition (M1)	街头霸王2 四大天王 (M1)	街頭霸王2 四大天王 (M1)	not_work|bootleg
+sf2m2	Street Fighter II' - Champion Edition (M2)	ストリートファイターⅡ' - Champion Edition (M2)	街头霸王2 四大天王 (M2)	街頭霸王2 四大天王 (M2)	bootleg
+sf2m3	Street Fighter II' - Champion Edition (M3)	ストリートファイターⅡ' - Champion Edition (M3)	街头霸王2 四大天王 (M3)	街頭霸王2 四大天王 (M3)	not_work|bootleg
+sf2m4	Street Fighter II' - Champion Edition (M4)	ストリートファイターⅡ' - Champion Edition (M4)	街头霸王2 四大天王 (M4)	街頭霸王2 四大天王 (M4)	bootleg
+sf2m5	Street Fighter II' - Champion Edition (M5)	ストリートファイターⅡ' - Champion Edition (M5)	街头霸王2 四大天王 (M5)	街頭霸王2 四大天王 (M5)	bootleg
+sf2m6	Street Fighter II' - Champion Edition (Subdue the Dragon set 2)	ストリートファイターⅡ' - Champion Edition (降龍 set 2)	街头霸王2 四大天王 (M6) 降龙	街頭霸王2 四大天王 (M6) 降龍	bootleg
+sf2m7	Street Fighter II' - Champion Edition (M7)	ストリートファイターⅡ' - Champion Edition (M7)	街头霸王2 四大天王 (M7)	街頭霸王2 四大天王 (M7)	bootleg
+sf2m8	Street Fighter II' - Champion Edition (M8)	ストリートファイターⅡ' - Champion Edition (M8)	街头霸王2 四大天王 (M8)	街頭霸王2 四大天王 (M8)	not_work|bootleg
+sf2m13	Street Fighter II' - Champion Edition (M13)	ストリートファイターⅡ' - Champion Edition (M13)	街头霸王2 四大天王 (M13)	街頭霸王2 四大天王 (M13)	bootleg
+sf2yyc	Street Fighter II' - Champion Edition (YYC)	ストリートファイターⅡ' - Champion Edition (YYC)	街头霸王2 四大天王 YYC	街頭霸王2 四大天王 YYC	bootleg
+sf2koryu	Street Fighter II' - Champion Edition (Subdue the Dragon set 1)	ストリートファイターⅡ' - Champion Edition (降龍 set 1)	街头霸王2 四大天王 (降龙)	街頭霸王2 四大天王 (降龍)	bootleg
+sf2tlona	Street Fighter II' - Champion Edition (Slay the Dragon set 1)	ストリートファイターⅡ' - Champion Edition (屠龍 set 1)	街头霸王2 四大天王 (屠龙1)	街頭霸王2 四大天王 (屠龍1)	bootleg
+sf2tlonb	Street Fighter II' - Champion Edition (Slay the Dragon set 2)	ストリートファイターⅡ' - Champion Edition (屠龍 set 2)	街头霸王2 四大天王 (屠龙2)	街頭霸王2 四大天王 (屠龍2)	bootleg
+varth	Varth - Operation Thunderstorm (World 920714)	バース - Operation Thunderstorm (World 920714)	威虎战机 雷雨行动 (世界版 920714)	威虎戰機 雷雨行動 (世界版 920714)
+varthr1	Varth - Operation Thunderstorm (World 920612)	バース - Operation Thunderstorm (World 920612)	威虎战机 雷雨行动 (世界版 920612)	威虎戰機 雷雨行動 (世界版 920612)
+varthu	Varth - Operation Thunderstorm (US 920612)	バース - Operation Thunderstorm (US 920612)	威虎战机 雷雨行动 (美版 920612)	威虎戰機 雷雨行動 (美版 920612)
+varthj	Varth - Operation Thunderstorm (Japan 920714)	バース - Operation Thunderstorm (Japan 920714)	威虎战机 雷雨行动 (日版 920714)	威虎戰機 雷雨行動 (日版 920714)
+cworld2j	Capcom World 2 (Japan 920611)	カプコンワールド2 (Japan 920611)	卡普空世界2 (日版 920611)	卡普空世界2 (日版 920611)
+wof	Warriors of Fate (World 921002)	天地を喰らうⅡ [Warriors of Fate] (World 921002)	三国志Ⅱ 天命勇士 (世界版 921031)	三國誌Ⅱ 天命勇士 (世界版 921031)
+wofa	Sangokushi II (Asia 921005)	天地を喰らうⅡ [三國誌Ⅱ] (Asia 921005)	三国志Ⅱ 吞食天地 (亚洲版 921005)	三國誌Ⅱ 吞食天地 (亞洲版 921005)
+wofu	Warriors of Fate (US 921031)	天地を喰らうⅡ [Warriors of Fate] (US 921031)	三国志Ⅱ 天命勇士 (美版 921031)	三國誌Ⅱ 天命勇士 (美版 921031)
+wofj	Tenchi wo Kurau II - Sekiheki no Tatakai (Japan 921031)	天地を喰らうⅡ - 赤壁の戦い (Japan 921031)	三国志Ⅱ 吞食天地 (日版 921031)	三國誌Ⅱ 吞食天地 (日版 921031)
+wofb	Warriors of Fate (bootleg)	天地を喰らうⅡ - 赤壁の戦い (bootleg)	三国志Ⅱ 吞食天地 (盗版)	三國誌Ⅱ 吞食天地 (盜版)	not_work|bootleg
+wofh	Legend of Three Kingdoms' Heroes (bootleg / set 1)	天地を喰らうⅡ - 赤壁の戦い (三國英雄傳 set 1)	三国志Ⅱ 三国英雄传 (盗版1)	三國誌Ⅱ 三國英雄傳 (盜版1)	bootleg
+wof3js	Three Sword Masters (bootleg)	天地を喰らうⅡ - 赤壁の戦い (三劍聖)	三国志Ⅱ 三剑圣 (盗版)	三國誌Ⅱ 三劍聖 (盜版)	bootleg
+wof3sj	Three Holy Swords (bootleg / set 1)	天地を喰らうⅡ - 赤壁の戦い  (三聖劍 set 1)	三国志Ⅱ 三圣剑 (盗版1)	三國誌Ⅱ 三聖劍 (盜版1)	bootleg
+wofha	Legend of Three Kingdoms' Heroes (bootleg / set 2)	天地を喰らうⅡ - 赤壁の戦い (三國英雄傳 set 2)	三国志Ⅱ 三国英雄传 (盗版2)	三國誌Ⅱ 三國英雄傳 (盜版2)	bootleg
+wof3sja	Three Holy Swords (bootleg / set 2)	天地を喰らうⅡ - 赤壁の戦い  (三聖劍 set 2)	三国志Ⅱ 三圣剑 (盗版2)	三國誌Ⅱ 三聖劍 (盜版2)	bootleg
+wofsj	Holy Sword Three Kingdoms (bootleg / set 1)	天地を喰らうⅡ - 赤壁の戦い (聖劍三國 set 1)	三国志Ⅱ 圣剑三国 (盗版1)	三國誌Ⅱ 聖劍三國 (盜版1)	bootleg
+wofsja	Holy Sword Three Kingdoms (bootleg / set 2)	天地を喰らうⅡ - 赤壁の戦い (聖劍三國 set 2)	三国志Ⅱ 圣剑三国 (盗版2)	三國誌Ⅱ 聖劍三國 (盜版2)	bootleg
+wofsjb	Holy Sword Three Kingdoms (bootleg / set 3)	天地を喰らうⅡ - 赤壁の戦い (聖劍三國 set 3)	三国志Ⅱ 圣剑三国 (盗版3)	三國誌Ⅱ 聖劍三國 (盜版3)	bootleg
+sf2hf	Street Fighter II' - Hyper Fighting (World 921209)	ストリートファイターⅡ' - Hyper Fighting (World 921209)	街头霸王2 加速版 终极格斗 (世界版 921209)	街頭霸王2 加速版 終極格鬥 (世界版 921209)
+sf2t	Street Fighter II' - Hyper Fighting (US 921209)	ストリートファイターⅡ' - Hyper Fighting (US 921209)
+sf2tj	Street Fighter II' Turbo - Hyper Fighting (Japan 921209)	ストリートファイターⅡ' Turbo - Hyper Fighting (Japan 921209)
+dino	Cadillacs and Dinosaurs (World 930201)	キャディラックス [Cadillacs and Dinosaurs] (World 930201)	恐龙世纪 (世界版 930201)	恐龍世紀 (世界版 930201)
+dinou	Cadillacs and Dinosaurs (US 930201)	キャディラックス [Cadillacs and Dinosaurs] (US 930201)	恐龙世纪 (美版 930201)	恐龍世紀 (美版 930201)
+dinoj	Cadillacs Kyouryuu-Shinseiki (Japan 930201)	キャディラックス 恐竜新世紀 (Japan 930201)	恐龙世纪 (日版 930201)	恐龍世紀 (日版 930201)
+dinob	Cadillacs and Dinosaurs (bootleg)	キャディラックス 恐竜新世紀 (bootleg)	恐龙世纪 (盗版)	恐龍世紀 (盜版)	bootleg
+dinoh	Cadillacs and Dinosaurs (bootleg / set 1)	キャディラックス 恐竜新世紀 (hack set 1)	恐龙世纪 (盗版1)	恐龍世紀 (盜版1)	bootleg
+dinoha	Cadillacs and Dinosaurs (bootleg / set 2)	キャディラックス 恐竜新世紀 (hack set 2)	恐龙世纪 (盗版2)	恐龍世紀 (盜版2)	bootleg
+dinohb	Cadillacs and Dinosaurs (bootleg / set 3)	キャディラックス 恐竜新世紀 (hack set 3)	恐龙世纪 (盗版3)	恐龍世紀 (盜版3)	bootleg
+punisher	The Punisher (World 930422)	パニッシャー [The Punisher] (World 930422)	惩罚者 (世界版 930422)	懲罰者 (世界版 930422)
+punishru	The Punisher (US 930422)	パニッシャー [The Punisher] (US 930422)
+punishrj	The Punisher (Japan 930422)	パニッシャー (Japan 930422)
+slammast	Saturday Night Slam Masters (World 930713)	マッスルボマー [Saturday Night Slam Masters] (World 930713)	摔角霸王 (世界版 930713)	摔角霸王 (世界版 930713)
+slammasu	Saturday Night Slam Masters (US 930713)	マッスルボマー [Saturday Night Slam Masters] (US 930713)
+mbomberj	Muscle Bomber - The Body Explosion (Japan 930713)	マッスルボマー - The Body Explosion (Japan 930713)	摔角霸王 肌肉爆弹 (日版 930713)	摔角霸王 肌肉爆彈 (日版 930713)
+mbombrd	Muscle Bomber Duo - Ultimate Team Battle (World 931206)	マッスルボマーDuo - Ultimate Team Battle (World 931206)	摔角霸王 热力战士 (世界版 931206)	摔角霸王 熱力戰士 (世界版 931206)
+mbombrdj	Muscle Bomber Duo - Heat Up Warriors (Japan 931206)	マッスルボマーDuo - Heat Up Warriors (Japan 931206)	摔角霸王 热力战士 (日版 931206)	摔角霸王 熱力戰士 (日版 931206)
+pnickj	Pnickies (Japan 940608)	ぷにっきぃず (Japan 940608)	魔法方块 (日版 940608)	魔法方塊 (日版 940608)
+pnicku	Pnickies (USA 940608 Loca Test Version)	ぷにっきぃず (USA 940608 Loca Test Version)	魔法方块 (美版 940608 Loca Test Version)	魔法方塊 (美版 940608 Loca Test Version)
+qad	Quiz & Dragons (US 920701)	クイズ＆ドラゴンズ (US 920701)	龙之谜题 (美版 920701)	龍之謎題 (美版 920701)
+qadj	Quiz & Dragons (Japan 940921)	クイズ＆ドラゴンズ (Japan 940921)
+qtono2	Quiz Tonosama no Yabou 2 Zenkoku-ban (Japan 950123)	クイズ殿様の野望2 全国版 (Japan 950123)
+pang3	Pang! 3 (Euro 950511)	パン! 3 (Euro 950511)	魔法气泡3 (欧版 950601)	魔法氣泡3 (歐版 950601)
+pang3j	Pang! 3 (Japan 950511)	パン! 3 - 怪盗たちの華麗な午後 - (Japan 950511)	魔法气泡3 (日版 950511)	魔法氣泡3 (日版 950511)
+megaman	Mega Man - The Power Battle (CPS1 Asia 951006)	ロックマン ザ・パワー・バトル [Mega Man - The Power Battle] (Asia 951006)	洛克人 力量之战 (CPS1 美版 951006)	洛克人 力量之戰 (CPS1 美版 951006)
+rockmanj	Rockman - The Power Battle (CPS1 Japan 950922)	ロックマン ザ・パワー・バトル (Japan 950922)	洛克人 力量之战 (CPS1 日版 950922)	洛克人 力量之戰 (CPS1 日版 950922)
+sfzch	Street Fighter ZERO (Japan 951020 CPS Changer)	ストリートファイターZERO (Japan CPS Changer)	少年街霸 Zero (CPS 转换版/日版 951020)	少年街王 Zero (CPS 轉換版/日版 951020)
+sfach	Street Fighter ALPHA (USA 950727 Publicity)	ストリートファイターALPHA (USA 950727 Publicity)	少年街霸 Alpha (CPS 转换版/公开版 美版 950727)	少年街王 Alpha (CPS 轉換版/公開版/美版 950727)

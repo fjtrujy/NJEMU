@@ -1,0 +1,288 @@
+# Canonical NJEMU game metadata. Generated runtime binaries are derived from this file.
+name	title_en	title_ja	title_zh_hans	title_zh_hant	display_flags	core_flags	aux_name	data0	data1	data2
+1944	1944: The Loop Master (USA 000620)	1944: The Loop Master (USA 000620)	1944 循环征服者 (美版 000620)	1944 循環征服者 (美版 000620)				0x1d3e724c	0x8b59fc7a	0x080000
+1944j	1944: The Loop Master (Japan 000620)	1944: The Loop Master (Japan 000620)	1944 循环征服者 (日版 000620)	1944 循環征服者 (日版 000620)				0x23d79c3a	0xe18b2746	0x080000
+19xx	19XX: The War Against Destiny (USA 951207)	19XX: The War Against Destiny (USA 951207)	19XX 命运否决战 (美版 951207)	19XX 命運否決戰 (美版 951207)				0x0e07181f	0x5fd0f080	0x200000
+19xxj	19XX: The War Against Destiny (Japan 960104)	19XX: The War Against Destiny (Japan 960104)	19XX 命运否决战 (日版 960104)	19XX 命運否決戰 (日版 960104)				0x00115df8	0x000ff87e	0x200000
+19xxjr1	19XX: The War Against Destiny (Japan 951225)	19XX: The War Against Destiny (Japan 951225)	19XX 命运否决战 (日版 951225)	19XX 命運否決戰 (日版 951225)				0x00115df8	0x000ff87e	0x200000
+19xxjr2	19XX: The War Against Destiny (Japan 951207)	19XX: The War Against Destiny (Japan 951207)	19XX 命运否决战 (日版 951207)	19XX 命運否決戰 (日版 951207)				0x00115df8	0x000ff87e	0x200000
+19xxa	19XX: The War Against Destiny (Asia 951207)	19XX: The War Against Destiny (Asia 951207)	19XX 命运否决战 (亚洲版 951207)	19XX 命運否決戰 (亞洲版 951207)				0xcce74cf5	0xb7da3711	0x200000
+19xxh	19XX: The War Against Destiny (Hispanic 951218)	19XX: The War Against Destiny (Hispanic 951218)	19XX 命运否决战 (西班牙版 951218)	19XX 命運否決戰 (西班牙版 951218)				0x5d49bafa	0xf7216c9f	0x200000
+19xxb	19XX: The War Against Destiny (Brazil 951218)	19XX: The War Against Destiny (Brazil 951218)	19XX 命运否决战 (巴西版 951218)	19XX 命運否決戰 (巴西版 951218)				0xe5f9476a	0x2dfb623f	0x200000
+armwar	Armored Warriors (Euro 941024)	パワードギア (Euro 941024)	装甲勇士 (欧洲版 941024)	裝甲勇士 (歐洲版 941024)				0x9e9d4c0b	0x8a39081f	0x100000
+armwarr1	Armored Warriors (Euro 941011)	パワードギア (Euro 941011)	装甲勇士 (欧洲版 941011)	裝甲勇士 (歐洲版 941011)				0x9e9d4c0b	0x8a39081f	0x100000
+armwaru	Armored Warriors (USA 941024)	パワードギア (USA 941024)	装甲勇士 (美版 941024)	裝甲勇士 (美版 941024)				0xd4c0b8a3	0x9081f9e9	0x100000
+armwaru1	Armored Warriors (USA 940920)	パワードギア (Asia 940920)	装甲勇士 (美版 940920)	裝甲勇士 (美版 940920)				0xd4c0b8a3	0x9081f9e9	0x100000
+pgear	Powered Gear: Strategic Variant Armor Equipment (Japan 941024)	パワードギア Strategic Variant Armor Equipment (Japan 941024)	装甲勇士 (日版 941024)	裝甲勇士 (日版 941024)				0x9d4c0b8a	0x39081f9e	0x100000
+pgearr1	Powered Gear: Strategic Variant Armor Equipment (Japan 940916)	パワードギア Strategic Variant Armor Equipment (Japan 940916)	装甲勇士 (日版 940916)	裝甲勇士 (日版 940916)				0x9d4c0b8a	0x39081f9e	0x100000
+armwara	Armored Warriors (Asia 940920)	パワードギア (Asia 940920)	装甲勇士 (亚洲版 941024)	裝甲勇士 (亞洲版 941024)				0x1f9e9d4c	0x0b8a3908	0x100000
+avsp	Alien vs. Predator (Euro 940520)	エイリアン VS. プレデター (Euro 940520)	异形对终极战士 (欧洲版 940520)	異形對終極戰士 (歐洲版 940520)				0x15208f79	0x4ade6cb3	0x100000
+avspu	Alien vs. Predator (USA 940520)	エイリアン VS. プレデター (USA 940520)	异形对终极战士 (美版 940520)	異形對終極戰士 (美版 940520)				0xb4f61089	0xccf75a23	0x100000
+avspj	Alien vs. Predator (Japan 940520)	エイリアン VS. プレデター (Japan 940520)	异形对终极战士 (日版 940520)	異形對終極戰士 (日版 940520)				0xe9dcb8fa	0x51372064	0x100000
+avspa	Alien vs. Predator (Asia 940520)	エイリアン VS. プレデター (Asia 940520)	异形对终极战士 (亚洲版 940520)	異形對終極戰士 (亞洲版 940520)				0xc168f3bd	0x2e4a5970	0x100000
+avsph	Alien vs. Predator (Hispanic 940520)	エイリアン VS. プレデター (Hispanic 940520)	异形对终极战士 (西班牙版 940520)	異形對終極戰士 (西班牙版 940520)				0x712b690a	0x43cd8e5f	0x100000
+batcir	Battle Circuit (Euro 970319)	バトルサーキット (Euro 970319)	战斗回路 (欧洲版 970319)	戰鬥回路 (歐洲版 970319)				0xd195e597	0x3cbce2b5	0x200000
+batcirj	Battle Circuit (Japan 970319)	バトルサーキット (Japan 970319)	战斗回路 (日版 970319)	戰鬥回路 (日版 970319)				0x00ff4dd8	0x000008e8	0x200000
+batcira	Battle Circuit (Asia 970319)	バトルサーキット (Asia 970319)	战斗回路 (亚洲版 970319)	戰鬥回路 (亞洲版 970319)				0x1e5d80cb	0x98882ec7	0x200000
+choko	Choko (Japan 010820)	雀牌パズル 長江 (Japan 010820)	长江 雀牌游戏 (日版 010820)	長江 雀牌遊戲 (日版 010820)				0xd3fb12c6	0x7f8e17b5	0x400000
+csclub	Capcom Sports Club (Euro 971017)	カプコンスポーツクラブ (Euro 971017)	卡普空运动俱乐部 (欧洲版 971017)	卡普空運動俱樂部 (歐洲版 971017)				0x662e9fa0	0x4210e7c1	0x200000
+csclub1	Capcom Sports Club (Euro 970722)	カプコンスポーツクラブ (Euro 970722)	卡普空运动俱乐部 (欧洲版 970722)	卡普空運動俱樂部 (歐洲版 970722)				0x662e9fa0	0x4210e7c1	0x200000
+csclubj	Capcom Sports Club (Japan 970722)	カプコンスポーツクラブ (Japan 970722)	卡普空运动俱乐部 (日版 970722)	卡普空運動俱樂部 (日版 970722)				0x4a2d0be5	0x56c013c0	0x200000
+csclubjy	Capcom Sports Club (Japan 970722 yellow case)	カプコンスポーツクラブ (Japan 970722 yellow case)	卡普空运动俱乐部 (日版 970722 黄色卡带)	卡普空運動俱樂部 (日版 970722 黃色卡帶)				0x4a2d0be5	0x56c013c0	0x200000
+cscluba	Capcom Sports Club (Asia 970722)	カプコンスポーツクラブ (Asia 970722)	卡普空运动俱乐部 (亚洲版 970722)	卡普空運動俱樂部 (亞洲版 970722)				0x1366de2a	0x9ab42937	0x200000
+csclubh	Capcom Sports Club (Hispanic 970722)	カプコンスポーツクラブ (Hispanic 970722)	卡普空运动俱乐部 (西班牙版 970722)	卡普空運動俱樂部 (西班牙版 970722)				0xf014a8a7	0x2e7794d0	0x200000
+cybots	Cyberbots: Fullmetal Madness (Euro 950424)	サイバーボッツ Fullmetal Madness (Euro 950424)	装甲之战 全金属狂潮 (欧洲版 950424)	裝甲之戰 全金屬狂潮 (歐洲版 950424)				0x45425943	0x05090901	0x100000
+cybotsu	Cyberbots: Fullmetal Madness (USA 950424)	サイバーボッツ Fullmetal Madness (USA 950424)	装甲之战 全金属狂潮 (美版 950424)	裝甲之戰 全金屬狂潮 (美版 950424)				0x43050909	0x01554259	0x100000
+cybotsj	Cyberbots: Fullmetal Madness (Japan 950420)	サイバーボッツ Fullmetal Madness (Japan 950420)	装甲之战 全金属狂潮 (日版 950420)	裝甲之戰 全金屬狂潮 (日版 950420)				0x05090901	0x4a425943	0x100000
+ddtod	Dungeons & Dragons: Tower of Doom (Euro 940412)	ダンジョンズ＆ドラゴンズ Tower of Doom (Euro 940412)	龙与地下城1 毁灭之塔 (欧洲版 940412)	龍與地下城1 毀滅之塔 (歐洲版 940412)				0x4767fe08	0x14ca35d9	0x180000
+ddtodr1	Dungeons & Dragons: Tower of Doom (Euro 940113)	ダンジョンズ＆ドラゴンズ Tower of Doom (Euro 940113)	龙与地下城1 毁灭之塔 (欧洲版 940113)	龍與地下城1 毀滅之塔 (歐洲版 940113)				0x4767fe08	0x14ca35d9	0x180000
+ddtodu	Dungeons & Dragons: Tower of Doom (USA 940125)	ダンジョンズ＆ドラゴンズ Tower of Doom (USA 940125)	龙与地下城1 毁灭之塔 (美版 940125)	龍與地下城1 毀滅之塔 (美版 940125)				0xeca19c3d	0x24736bf0	0x180000
+ddtodur1	Dungeons & Dragons: Tower of Doom (USA 940113)	ダンジョンズ＆ドラゴンズ Tower of Doom (USA 940113)	龙与地下城1 毁灭之塔 (美版 940113)	龍與地下城1 毀滅之塔 (美版 940113)				0xeca19c3d	0x24736bf0	0x180000
+ddtodj	Dungeons & Dragons: Tower of Doom (Japan 940412)	ダンジョンズ＆ドラゴンズ Tower of Doom (Japan 940412)	龙与地下城1 毁灭之塔 (日版 940412)	龍與地下城1 毀滅之塔 (日版 940412)				0x4510e79c	0xf36b8a2d	0x180000
+ddtodjr1	Dungeons & Dragons: Tower of Doom (Japan 940125)	ダンジョンズ＆ドラゴンズ Tower of Doom (Japan 940125)	龙与地下城1 毁灭之塔 (日版 940125)	龍與地下城1 毀滅之塔 (日版 940125)				0x4510e79c	0xf36b8a2d	0x180000
+ddtodjr2	Dungeons & Dragons: Tower of Doom (Japan 940113)	ダンジョンズ＆ドラゴンズ Tower of Doom (Japan 940113)	龙与地下城1 毁灭之塔 (日版 940113)	龍與地下城1 毀滅之塔 (日版 940113)				0x4510e79c	0xf36b8a2d	0x180000
+ddtoda	Dungeons & Dragons: Tower of Doom (Asia 940412)	ダンジョンズ＆ドラゴンズ Tower of Doom (Asia 940412)	龙与地下城1 毁灭之塔 (亚洲版 940412)	龍與地下城1 毀滅之塔 (亞洲版 940412)				0xdecac105	0x19710411	0x180000
+ddtodar1	Dungeons & Dragons: Tower of Doom (Asia 940113)	ダンジョンズ＆ドラゴンズ Tower of Doom (Asia 940113)	龙与地下城1 毁灭之塔 (亚洲版 940113)	龍與地下城1 毀滅之塔 (亞洲版 940113)				0xdecac105	0x19710411	0x180000
+ddtodh	Dungeons & Dragons: Tower of Doom (Hispanic 940412)	ダンジョンズ＆ドラゴンズ Tower of Doom (Hispanic 940125)	龙与地下城1 毁灭之塔 (西班牙版 940412)	龍與地下城1 毀滅之塔 (西班牙版 940412)				0x19691019	0xe825dde0	0x180000
+ddtodhr1	Dungeons & Dragons: Tower of Doom (Hispanic 940125)	ダンジョンズ＆ドラゴンズ Tower of Doom (Hispanic 940125)	龙与地下城1 毁灭之塔 (西班牙版 940125)	龍與地下城1 毀滅之塔 (西班牙版 940125)				0x19691019	0xe825dde0	0x180000
+ddtodhr2	Dungeons & Dragons: Tower of Doom (Hispanic 940113)	ダンジョンズ＆ドラゴンズ Tower of Doom (Hispanic 940113)	龙与地下城1 毁灭之塔 (西班牙版 940113)	龍與地下城1 毀滅之塔 (西班牙版 940113)				0x19691019	0xe825dde0	0x180000
+ddsom	Dungeons & Dragons: Shadow over Mystara (Euro 960619)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Euro 960619)	龙与地下城2 暗黑秘影 (欧洲版 960619)	龍與地下城2 暗黑秘影 (歐洲版 960619)				0x87889abc	0xd81f5f63	0x100000
+ddsomr1	Dungeons & Dragons: Shadow over Mystara (Euro 960223)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Euro 960223)	龙与地下城2 暗黑秘影 (欧洲版 960223)	龍與地下城2 暗黑秘影 (歐洲版 960223)				0x87889abc	0xd81f5f63	0x100000
+ddsomr2	Dungeons & Dragons: Shadow over Mystara (Euro 960209)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Euro 960209)	龙与地下城2 暗黑秘影 (欧洲版 960209)	龍與地下城2 暗黑秘影 (歐洲版 960209)				0x87889abc	0xd81f5f63	0x100000
+ddsomr3	Dungeons & Dragons: Shadow over Mystara (Euro 960208)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Euro 960208)	龙与地下城2 暗黑秘影 (欧洲版 960208)	龍與地下城2 暗黑秘影 (歐洲版 960208)				0x87889abc	0xd81f5f63	0x100000
+ddsomu	Dungeons & Dragons: Shadow over Mystara (USA 960619)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (USA 960619)	龙与地下城2 暗黑秘影 (美版 960619)	龍與地下城2 暗黑秘影 (美版 960619)				0x489f0526	0x1bcd3e7a	0x100000
+ddsomur1	Dungeons & Dragons: Shadow over Mystara (USA 960209)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (USA 960209)	龙与地下城2 暗黑秘影 (美版 960209)	龍與地下城2 暗黑秘影 (美版 960209)				0x489f0526	0x1bcd3e7a	0x100000
+ddsomj	Dungeons & Dragons: Shadow over Mystara (Japan 960619)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Japan 960619)	龙与地下城2 暗黑秘影 (日版 960619)	龍與地下城2 暗黑秘影 (日版 960619)				0xae92fa94	0x315a9045	0x100000
+ddsomjr1	Dungeons & Dragons: Shadow over Mystara (Japan 960206)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Japan 960206)	龙与地下城2 暗黑秘影 (日版 960206)	龍與地下城2 暗黑秘影 (日版 960206)				0xae92fa94	0x315a9045	0x100000
+ddsoma	Dungeons & Dragons: Shadow over Mystara (Asia 960619)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Asia 960619)	龙与地下城2 暗黑秘影 (亚洲版 960619)	龍與地下城2 暗黑秘影 (亞洲版 960619)				0x8719abcd	0xef028345	0x100000
+ddsomb	Dungeons & Dragons: Shadow over Mystara (Brazil 960223)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Brazil 960223)	龙与地下城2 暗黑秘影 (巴西版 960223)	龍與地下城2 暗黑秘影 (巴西版 960223)				0x7149a782	0xf3a5bfce	0x100000
+ddsomh	Dungeons & Dragons: Shadow over Mystara (Hispanic 960223)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (Hispanic 960223)	龙与地下城2 暗黑秘影 (西班牙版 960223)	龍與地下城2 暗黑秘影 (西班牙版 960223)				0x42134245	0x120de607	0x100000
+dimahoo	Dimahoo (Euro 000121)	グレート魔法大作戦 (Euro 000121)	超级魔法大作战 (欧洲版 000121)	超級魔法大作戰 (歐洲版 000121)				0x0ddb8e40	0x2817fd2b	0x080000
+dimahoou	Dimahoo (USA 000121)	グレート魔法大作戦 (USA 000121)	超级魔法大作战 (美版 000121)	超級魔法大作戰 (美版 000121)				0x6575af59	0xb0fea691	0x080000
+gmahou	Great Mahou Daisakusen (Japan 000121)	グレート魔法大作戦 (Japan 000121)	超级魔法大作战 (日版 000121)	超級魔法大作戰 (日版 000121)				0x97f7be58	0x6121eb62	0x080000
+dstlk	Darkstalkers: The Night Warriors (Euro 940705)	ヴァンパイア (Euro 940705)	恶魔战士 午夜斗士 (欧版 940705)	惡魔戰士 午夜鬥士 (歐版 940705)				0x13d8a7a8	0x0008b090	0x100000
+dstlku	Darkstalkers: The Night Warriors (USA 940818)	ヴァンパイア (USA 940818)	恶魔战士 午夜斗士 (美版 940818)	惡魔戰士 午夜鬥士 (美版 940818)				0x1e80ebf0	0x10227119	0x100000
+dstlkur1	Darkstalkers: The Night Warriors (USA 940705)	ヴァンパイア (USA 940705)	恶魔战士 午夜斗士 (美版 940705)	惡魔戰士 午夜鬥士 (美版 940705)				0x1e80ebf0	0x10227119	0x100000
+vampj	Vampire: The Night Warriors (Japan 940705)	ヴァンパイア The Night Warriors (Japan 940705)	恶魔战士 午夜斗士 (日版 940705)	惡魔戰士 午夜鬥士 (日版 940705)				0xefcb0804	0x026819ae	0x100000
+vampja	Vampire: The Night Warriors (Japan 940705 alt)	ヴァンパイア The Night Warriors (Japan 940705 alt)	恶魔战士 午夜斗士 (日版 940705 alt)	惡魔戰士 午夜鬥士 (日版 940705 alt)				0xefcb0804	0x026819ae	0x100000
+vampjr1	Vampire: The Night Warriors (Japan 940630)	ヴァンパイア The Night Warriors (Japan 940630)	恶魔战士 午夜斗士 (日版 940630)	惡魔戰士 午夜鬥士 (日版 940630)				0xefcb0804	0x026819ae	0x100000
+dstlka	Darkstalkers: The Night Warriors (Asia 940705)	ヴァンパイア(Asia 940705)	恶魔战士 午夜斗士 (亚洲版 940705)	惡魔戰士 午夜鬥士 (亞洲版 940705)				0x205d8398	0x06221971	0x100000
+dstlkh	Darkstalkers: The Night Warriors (Hispanic 940818)	ヴァンパイア (Hispanic 940818)	恶魔战士 午夜斗士 (西班牙版 940818)	惡魔戰士 午夜鬥士 (西班牙版 940818)				0x22463efe	0x011169aa	0x100000
+ecofghtr	Eco Fighters (World 931203)	アルティメイトエコロジー (World 931203)	ECO 超战机 (世界版 931203)	ECO 超戰機 (世界版 931203)				0x931031dc	0xba987654	0x200000
+ecofghtru	Eco Fighters (USA 940215)	アルティメイトエコロジー (USA 940215)	ECO 超战机 (美版 940215)	ECO 超戰機 (美版 940215)				0x931031ed	0xcba98765	0x200000
+ecofghtru1	Eco Fighters (USA 931203)	アルティメイトエコロジー (USA 931203)	ECO 超战机 (美版 931203)	ECO 超戰機 (美版 931203)				0x931031ed	0xcba98765	0x200000
+uecology	Ultimate Ecology (Japan 931203)	アルティメイトエコロジー (Japan 931203)	ECO 超战机 (日版 931203)	ECO 超戰機 (日版 931203)				0x931031fe	0xdcba9876	0x200000
+ecofghtra	Eco Fighters (Asia 931203)	アルティメイトエコロジー (Asia 931203)	ECO 超战机 (亚洲版 931203)	ECO 超戰機 (亞洲版 931203)				0x931031ba	0x98765432	0x200000
+ecofghtrh	Eco Fighters (Hispanic 931203)	アルティメイトエコロジー (Hispanic 931203)	ECO 超战机 (西班牙版 931203)	ECO 超戰機 (西班牙版 931203)				0x931031cb	0xa9876543	0x200000
+gigawing	Giga Wing (USA 990222)	ギガウイング (USA 990222)	雷鸟之翼 (美版 990222)	雷鳥之翼 (美版 990222)				0xe52de290	0x1b60d780	0x100000
+gigawingj	Giga Wing (Japan 990223)	ギガウイング (Japan 990223)	雷鸟之翼 (日版 990223)	雷鳥之翼 (日版 990223)				0x1126196a	0xbef50895	0x100000
+gigawinga	Giga Wing (Asia 990222)	ギガウイング (Asia 990222)	雷鸟之翼 (亚洲版 990222)	雷鳥之翼 (亞洲版 990222)				0x3506a85a	0x66b1b768	0x100000
+gigawingh	Giga Wing (Hispanic 990222)	ギガウイング (Hispanic 990222)	雷鸟之翼 (西班牙版 990222)	雷鳥之翼 (西班牙版 990222)				0xcea74211	0x400da385	0x100000
+gigawingb	Giga Wing (Brazil 990222)	ギガウイング (Brazil 990222)	雷鸟之翼 (巴西版 990222)	雷鳥之翼 (巴西版 990222)				0x0fe745b0	0x96ef7f9d	0x100000
+hsf2	Hyper Street Fighter II: The Anniversary Edition (USA 040202)	ハイパーストリートファイターⅡ The Anniversary Edition (Asia 040202)	超级街头霸王2 纪念版 (美版 040202)	超級街頭霸王2 紀念版 (美版 040202)				0x5a369ddd	0xfea3189c	0x100000
+hsf2a	Hyper Street Fighter II: The Anniversary Edition (Asia 040202)	ハイパーストリートファイターⅡ The Anniversary Edition (Asia 040202)	超级街头霸王2 纪念版 (亚洲版 040202)	超級街頭霸王2 紀念版 (亞洲版 040202)				0xb8ed3630	0xaae30a3d	0x100000
+hsf2j	Hyper Street Fighter II: The Anniversary Edition (Japan 031222)	ハイパーストリートファイターⅡ The Anniversary Edition (Japan 031222)	超级街头霸王2 纪念版 (日版 031222)	超級街頭霸王2 紀念版 (日版 031222)				0x65d82fe0	0xdbb83e47	0x100000
+jyangoku	Jyangokushi: Haoh no Saihai (Japan 990527)	雀國志 覇王の采牌 (Japan 990527)	雀三国志 (日版 990527)	雀三國誌 (日版 990527)				0x6ca42ae6	0x92f63f59	0
+megaman2	Mega Man 2: The Power Fighters (USA 960708)	ロックマン2 The Power Fighters (USA 960708)	洛克人2 力量对决 (美版 960708)	洛克人2 力量對決 (美版 960708)				0x50501cac	0xed346550	0x100000
+megaman2a	Mega Man 2: The Power Fighters (Asia 960708)	ロックマン2 The Power Fighters (Asia 960708)	洛克人2 力量对决 (亚洲版 960708)	洛克人2 力量對決 (亞洲版 960708)				0x3f148a2b	0xd6790a15	0x100000
+rockman2j	Rockman 2: The Power Fighters (Japan 960708)	ロックマン2 The Power Fighters (Japan 960708)	洛克人2 力量对决 (日版 960708)	洛克人2 力量對決 (日版 960708)				0x319eca73	0x10551270	0x100000
+megaman2h	Mega Man 2: The Power Fighters (Hispanic 960712)	ロックマン2: The Power Fighters (Hispanic 960712)	洛克人2 力量对决 (西班牙版 960712)	洛克人2 力量對決 (西班牙版 960712)				0x765573ca	0x250210d0	0x100000
+mmatrix	Mars Matrix: Hyper Solid Shooting (USA 000412)	マーズマトリックス Hyper Solid Shooting (USA 000412)	弹丸地狱 (美版 000412)	彈丸地獄 (美版 000412)				0xac9ebd79	0x410467df	0x180000
+mmatrixj	Mars Matrix: Hyper Solid Shooting (Japan 000412)	マーズマトリックス Hyper Solid Shooting (Japan 000412)	弹丸地狱 (日版 000412)	彈丸地獄 (日版 000412)				0x4df81e95	0x72ed9823	0x180000
+msh	Marvel Super Heroes (Euro 951024)	マーヴルスーパーヒーローズ (Euro 951024)	超级漫画英雄 (欧洲版 951024)	超級漫畫英雄 (歐洲版 951024)				0x1a11ee26	0xe7955d17	0x100000
+mshu	Marvel Super Heroes (USA 951024)	マーヴルスーパーヒーローズ (USA 951024)	超级漫画英雄 (美版 951024)	超級漫畫英雄 (美版 951024)				0x8705a24e	0x4a17319b	0x100000
+mshj	Marvel Super Heroes (Japan 951117)	マーヴルスーパーヒーローズ (Japan 951117)	超级漫画英雄 (日版 951117)	超級漫畫英雄 (日版 951117)				0x05e88219	0x31ad2142	0x100000
+mshjr1	Marvel Super Heroes (Japan 951024)	マーヴルスーパーヒーローズ (Japan 951024)	超级漫画英雄 (日版 951024)	超級漫畫英雄 (日版 951024)				0x05e88219	0x31ad2142	0x100000
+msha	Marvel Super Heroes (Asia 951024)	マーヴルスーパーヒーローズ (Asia 951024)	超级漫画英雄 (亚洲版 951024)	超級漫畫英雄 (亞洲版 951024)				0x457aeb01	0x3897c53d	0x100000
+mshh	Marvel Super Heroes (Hispanic 951117)	マーヴルスーパーヒーローズ (Hispanic 951117)	超级漫画英雄 (西班牙版 951117)	超級漫畫英雄 (西班牙版 951117)				0xfc4c5a50	0xb59cc190	0x100000
+mshb	Marvel Super Heroes (Brazil 951117)	マーヴルスーパーヒーローズ (Brazil 951117)	超级漫画英雄 (巴西版 951117)	超級漫畫英雄 (巴西版 951117)				0x7a152416	0xad27f8e6	0x100000
+mshvsf	Marvel Super Heroes Vs. Street Fighter (Euro 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (Euro 970625)	超级漫画英雄对街头霸王 (欧洲版 970625)	超級漫畫英雄對街頭霸王 (歐洲版 970625)				0x1384ae60	0x9cd725bf	0x100000
+mshvsfu	Marvel Super Heroes Vs. Street Fighter (USA 970827)	マーヴルスーパーヒーローズ VS. ストリートファイター (USA 970827)	超级漫画英雄对街头霸王 (美版 970827)	超級漫畫英雄對街頭霸王 (美版 970827)				0xa36d4971	0xcef51b28	0x100000
+mshvsfu1	Marvel Super Heroes Vs. Street Fighter (USA 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (USA 970625)	超级漫画英雄对街头霸王 (美版 970625)	超級漫畫英雄對街頭霸王 (美版 970625)				0xa36d4971	0xcef51b28	0x100000
+mshvsfj	Marvel Super Heroes Vs. Street Fighter (Japan 970707)	マーヴルスーパーヒーローズ VS. ストリートファイター (Japan 970707)	超级漫画英雄对街头霸王 (日版 970707)	超級漫畫英雄對街頭霸王 (日版 970707)				0x5dc391f8	0xa627e0b4	0x100000
+mshvsfj1	Marvel Super Heroes Vs. Street Fighter (Japan 970702)	マーヴルスーパーヒーローズ VS. ストリートファイター (Japan 970702)	超级漫画英雄对街头霸王 (日版 970702)	超級漫畫英雄對街頭霸王 (日版 970702)				0x5dc391f8	0xa627e0b4	0x100000
+mshvsfj2	Marvel Super Heroes Vs. Street Fighter (Japan 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (Japan 970625)	超级漫画英雄对街头霸王 (日版 970625)	超級漫畫英雄對街頭霸王 (日版 970625)				0x5dc391f8	0xa627e0b4	0x100000
+mshvsfh	Marvel Super Heroes Vs. Street Fighter (Hispanic 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (Hispanic 970625)	超级漫画英雄对街头霸王 (西班牙版 970625)	超級漫畫英雄對街頭霸王 (西班牙版 970625)				0x7e916fc4	0x03ab852d	0x100000
+mshvsfa	Marvel Super Heroes Vs. Street Fighter (Asia 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (Asia 970625)	超级漫画英雄对街头霸王 (亚洲版 970625)	超級漫畫英雄對街頭霸王 (亞洲版 970625)				0x52e3fa61	0x0c497bd8	0x100000
+mshvsfa1	Marvel Super Heroes Vs. Street Fighter (Asia 970620)	マーヴルスーパーヒーローズ VS. ストリートファイター (Asia 970620)	超级漫画英雄对街头霸王 (亚洲版 970620)	超級漫畫英雄對街頭霸王 (亞洲版 970620)				0x52e3fa61	0x0c497bd8	0x100000
+mshvsfb	Marvel Super Heroes Vs. Street Fighter (Brazil 970827)	マーヴルスーパーヒーローズ VS. ストリートファイター (Brazil 970827)	超级漫画英雄对街头霸王 (巴西版 970827)	超級漫畫英雄對街頭霸王 (巴西版 970827)				0xda68c749	0x5bf3e201	0x100000
+mshvsfb1	Marvel Super Heroes Vs. Street Fighter (Brazil 970625)	マーヴルスーパーヒーローズ VS. ストリートファイター (Brazil 970625)	超级漫画英雄对街头霸王 (巴西版 970625)	超級漫畫英雄對街頭霸王 (巴西版 970625)				0xda68c749	0x5bf3e201	0x100000
+mvsc	Marvel Vs. Capcom: Clash of Super Heroes (Euro 980123)	マーヴル VS.カプコン Clash of Super Heroes (Euro 980123)	超级漫画英雄对CAPCOM (欧洲版 980123)	超級漫畫英雄對CAPCOM (歐洲版 980123)				0x48025ade	0x1c697b27	0x100000
+mvscr1	Marvel Vs. Capcom: Clash of Super Heroes (Euro 980112)	マーヴル VS.カプコン Clash of Super Heroes (Euro 980112)	超级漫画英雄对CAPCOM (欧洲版 980112)	超級漫畫英雄對CAPCOM (歐洲版 980112)				0x48025ade	0x1c697b27	0x100000
+mvscu	Marvel Vs. Capcom: Clash of Super Heroes (USA 980123)	マーヴル VS.カプコン Clash of Super Heroes (USA 980123)	超级漫画英雄对CAPCOM (美版 980123)	超級漫畫英雄對CAPCOM (美版 980123)				0x692dc41b	0x7ef1c805	0x100000
+mvscur1	Marvel Vs. Capcom: Clash of Super Heroes (USA 971222)	マーヴル VS.カプコン Clash of Super Heroes (USA 971222)	超级漫画英雄对CAPCOM (美版 971222)	超級漫畫英雄對CAPCOM (美版 971222)				0x692dc41b	0x7ef1c805	0x100000
+mvscj	Marvel Vs. Capcom: Clash of Super Heroes (Japan 980123)	マーヴル VS.カプコン Clash of Super Heroes (Japan 980123)	超级漫画英雄对CAPCOM (日版 980123)	超級漫畫英雄對CAPCOM (日版 980123)				0xafc16138	0x97123eb0	0x100000
+mvscjr1	Marvel Vs. Capcom: Clash of Super Heroes (Japan 980112)	マーヴル VS.カプコン Clash of Super Heroes (Japan 980112)	超级漫画英雄对CAPCOM (日版 980112)	超級漫畫英雄對CAPCOM (日版 980112)				0xafc16138	0x97123eb0	0x100000
+mvscjsing	Marvel Vs. Capcom: Clash of Super Heroes (Japan 980123) (Single PCB)	マーヴル VS.カプコン Clash of Super Heroes (Japan 980123) (Single PCB)	超级漫画英雄对CAPCOM (日版 980123) (Single PCB)	超級漫畫英雄對CAPCOM (日版 980123) (Single PCB)				0xafc16138	0x97123eb0	0x100000
+mvsca	Marvel Vs. Capcom: Clash of Super Heroes (Asia 980123)	マーヴル VS.カプコン Clash of Super Heroes (Asia 980123)	超级漫画英雄对CAPCOM (亚洲版 980123)	超級漫畫英雄對CAPCOM (亞洲版 980123)				0xf248aec6	0x7905cd17	0x100000
+mvscar1	Marvel Vs. Capcom: Clash of Super Heroes (Asia 980112)	マーヴル VS.カプコン Clash of Super Heroes (Asia 980112)	超级漫画英雄对CAPCOM (亚洲版 980112)	超級漫畫英雄對CAPCOM (亞洲版 980112)				0xf248aec6	0x7905cd17	0x100000
+mvsch	Marvel Vs. Capcom: Clash of Super Heroes (Hispanic 980123)	マーヴル VS.カプコン Clash of Super Heroes (Hispanic 980123)	超级漫画英雄对CAPCOM (西班牙版 980123)	超級漫畫英雄對CAPCOM (西班牙版 980123)				0x9d5c7a23	0xe56b18ef	0x100000
+mvscb	Marvel Vs. Capcom: Clash of Super Heroes (Brazil 980123)	マーヴル VS.カプコン Clash of Super Heroes (Brazil 980123)	超级漫画英雄对CAPCOM (巴西版 980123)	超級漫畫英雄對CAPCOM (巴西版 980123)				0x0874d6eb	0x51c2b798	0x100000
+mpang	Mighty! Pang (Euro 001010)	マイティ！パン (USA 001010)	魔鬼气泡 (欧洲版 001010)	魔鬼氣泡 (歐洲版 001010)				0x95f741c6	0xe547a21b	0x100000
+mpangr1	Mighty! Pang (Euro 000925)	マイティ！パン (Euro 000925)	魔鬼气泡 (欧洲版 000925)	魔鬼氣泡 (歐洲版 000925)				0x95f741c6	0xe547a21b	0x100000
+mpangu	Mighty! Pang (USA 001010)	マイティ！パン (USA 001010)	魔鬼气泡 (美版 001010)	魔鬼氣泡 (美版 001010)				0x95f741c6	0xe547a21b	0x100000
+mpangj	Mighty! Pang (Japan 001011)	マイティ！パン (Japan 001011)	魔鬼气泡 (日版 001011)	魔鬼氣泡 (日版 001011)		cache_independent		0x95f741c6	0xe547a21b	0x100000
+nwarr	Night Warriors: Darkstalkers' Revenge (Euro 950316)	ヴァンパイアハンター (Euro 950316)	恶魔战士 恶魔的复仇 (美版 950316)	惡魔戰士 惡魔的復仇 (美版 950316)				0x1019d145	0x03f05a05	0x180000
+nwarru	Night Warriors: Darkstalkers' Revenge (USA 950406)	ヴァンパイアハンター (USA 950406)	恶魔战士 恶魔的复仇 (美版 950406)	惡魔戰士 惡魔的復仇 (美版 950406)				0x104a7d0c	0x3f1b7a1e	0x180000
+nwarrh	Night Warriors: Darkstalkers' Revenge (Hispanic 950403)	ヴァンパイアハンター (Hispanic 950403)	恶魔战士 恶魔的复仇 (西班牙版 950403)	惡魔戰士 惡魔的復仇 (西班牙版 950403)				0xc4961b01	0x2a946020	0x180000
+nwarrb	Night Warriors: Darkstalkers' Revenge (Brazil 950403)	ヴァンパイアハンター (Brazil 950403)	恶魔战士 恶魔的复仇 (巴西版 950403)	惡魔戰士 惡魔的復仇 (巴西版 950403)				0x17c67109	0xb7362a20	0x180000
+nwarra	Night Warriors: Darkstalkers' Revenge (Asia 950302)	ヴァンパイアハンター (Asia 950302)	恶魔战士 恶魔的复仇 (亚洲版 950302)	惡魔戰士 惡魔的復仇 (亞洲版 950302)				0x4e940d0c	0x39b861a4	0x180000
+vhuntj	Vampire Hunter: Darkstalkers' Revenge (Japan 950316)	ヴァンパイアハンター Darkstalkers' Revenge (Japan 950316)	恶魔战士 恶魔的复仇 (日版 950316)	惡魔戰士 惡魔的復仇 (日版 950316)				0x1135b2c3	0xa4e9d7f2	0x180000
+vhuntjr1s	Vampire Hunter: Darkstalkers' Revenge (Japan 950307 stop version)	ヴァンパイアハンター Darkstalkers' Revenge (Japan 950307 stop version)	恶魔战士 恶魔的复仇 (日版 950307 stop version)	惡魔戰士 惡魔的復仇 (日版 950307 stop version)				0x1135b2c3	0xa4e9d7f2	0x180000
+vhuntjr1	Vampire Hunter: Darkstalkers' Revenge (Japan 950307)	ヴァンパイアハンター Darkstalkers' Revenge (Japan 950307)	恶魔战士 恶魔的复仇 (日版 950307)	惡魔戰士 惡魔的復仇 (日版 950307)				0x1135b2c3	0xa4e9d7f2	0x180000
+vhuntjr2	Vampire Hunter: Darkstalkers' Revenge (Japan 950302)	ヴァンパイアハンター Darkstalkers' Revenge (Japan 950302)	恶魔战士 恶魔的复仇 (日版 950302)	惡魔戰士 惡魔的復仇 (日版 950302)				0x1135b2c3	0xa4e9d7f2	0x180000
+progear	Progear (USA 010117)	プロギアの嵐 (USA 010117)	逆转之岚 (美版 010117)	逆轉之嵐 (美版 010117)				0x639ad8c6	0xef130df3	0x400000
+progearj	Progear no Arashi (Japan 010117)	プロギアの嵐 (Japan 010117)	逆转之岚 (日版 010117)	逆轉之嵐 (日版 010117)				0x9f7edc56	0x39fb47be	0x400000
+progeara	Progear (Asia 010117)	プロギアの嵐 (Asia 010117)	逆转之岚 (亚洲版 010117)	逆轉之嵐 (亞洲版 010117)				0x658ab128	0xfddc9b5e	0x400000
+pzloop2	Puzz Loop 2 (Euro 010302)	パズループ2 (Euro 010302)	旋转气泡2 (欧洲版 010302)	旋轉氣泡2 (歐洲版 010302)				0xa054f812	0xc40d36b4	0x400000
+pzloop2j	Puzz Loop 2 (Japan 010226)	パズループ2 (Japan 010205)	旋转气泡2 (日版 010226)	旋轉氣泡2 (日版 010226)				0xa054f812	0xc40d36b4	0x400000
+pzloop2jr1	Puzz Loop 2 (Japan 010205)	パズループ2 (Japan 010205)	旋转气泡2 (日版 010205)	旋轉氣泡2 (日版 010205)				0xa054f812	0xc40d36b4	0x400000
+qndream	Quiz Nanairo Dreams: Nijiirochou no Kiseki (Japan 960826)	クイズなないろDREAMS 虹色町の奇跡 (Japan 960826)	七彩梦 虹色町的奇迹 (日版 960826)	七彩夢 虹色町的奇跡 (日版 960826)				0x5804ea73	0xf66b0798	0x080000
+ringdest	Ring of Destruction: Slammasters II (Euro 940902)	スーパーマッスルボマー (Euro 940902)	摔角霸王2 连环爆裂 (欧洲版 940902)	摔角霸王2 連環爆裂 (歐洲版 940902)				0x19940727	0x17444903	0x180000
+smbomb	Super Muscle Bomber: The International Blowout (Japan 940831)	スーパーマッスルボマー The International Blowout (Japan 940831)	摔角霸王2 连环爆裂 (日版 940831)	摔角霸王2 連環爆裂 (日版 940831)				0x19940209	0x17031403	0x180000
+smbombr1	Super Muscle Bomber: The International Blowout (Japan 940808)	スーパーマッスルボマー The International Blowout (Japan 940808)	摔角霸王2 连环爆裂 (日版 940808)	摔角霸王2 連環爆裂 (日版 940808)				0x19940209	0x17031403	0x180000
+ringdesta	Ring of Destruction: Slammasters II (Asia 940831)	スーパーマッスルボマー (Asia 940831)	摔角霸王2 连环爆裂 (亚洲版 940831)	摔角霸王2 連環爆裂 (亞洲版 940831)				0x19940727	0x17452103	0x180000
+mmancp2u	Mega Man: The Power Battle (CPS2 - USA 951006 / SAMPLE Version)	ロックマン The Power Battle (CPS2 / USA 951006 / SAMPLE Version)	洛克人 力量对决 (CPS2 美版 951006 样品版)	洛克人 力量對決 (CPS2 美版 951006 樣品版)				0x054893fa	0x94642525	0x100000
+rmancp2j	Rockman: The Power Battle (CPS2 - Japan 950922)	ロックマン The Power Battle (CPS2 / Japan 950922)	洛克人 力量对决 (CPS2 日版 950922)	洛克人 力量對決 (CPS2 日版 950922)				0x07215501	0x37fa32d0	0x100000
+sfa	Street Fighter Alpha: Warriors' Dreams (Euro 950727)	ストリートファイターZERO (Euro 950727)	街头霸王 Alpha 斗士之梦 (欧洲版 950727)	街頭霸王 Alpha 鬥士之夢 (歐洲版 950727)				0x0f895d6e	0xc4273a1b	0x080000
+sfar1	Street Fighter Alpha: Warriors' Dreams (Euro 950718)	ストリートファイターZERO (Euro 950718)	街头霸王 Alpha 斗士之梦 (欧洲版 950718)	街頭霸王 Alpha 鬥士之夢 (歐洲版 950718)				0x0f895d6e	0xc4273a1b	0x080000
+sfar2	Street Fighter Alpha: Warriors' Dreams (Euro 950627)	ストリートファイターZERO (Euro 950627)	街头霸王 Alpha 斗士之梦 (欧洲版 950627)	街頭霸王 Alpha 鬥士之夢 (歐洲版 950627)				0x0f895d6e	0xc4273a1b	0x080000
+sfar3	Street Fighter Alpha: Warriors' Dreams (Euro 950605)	ストリートファイターZERO (Euro 950605)	街头霸王 Alpha 斗士之梦 (欧洲版 950605)	街頭霸王 Alpha 鬥士之夢 (歐洲版 950605)				0x0f895d6e	0xc4273a1b	0x080000
+sfau	Street Fighter Alpha: Warriors' Dreams (USA 950627)	ストリートファイターZERO (USA 950627)	街头霸王 Alpha 斗士之梦 (美版 950627)	街頭霸王 Alpha 鬥士之夢 (美版 950627)				0x25bead36	0x97cf4018	0x080000
+sfza	Street Fighter Zero (Asia 950627)	ストリートファイターZERO (Asia 950627)	街头霸王 Zero (亚洲版 950627)	街頭霸王 Zero (亞洲版 950627)				0xe43dc508	0x621b9a7f	0x080000
+sfzar1	Street Fighter Zero (Asia 950605)	ストリートファイターZERO (Asia 950605)	街头霸王 Zero (亚洲版 950605)	街頭霸王 Zero (亞洲版 950605)				0xe43dc508	0x621b9a7f	0x080000
+sfzj	Street Fighter Zero (Japan 950727)	ストリートファイターZERO (Japan 950727)	街头霸王 Zero (日版 950727)	街頭霸王 Zero (日版 950727)				0x8db3167a	0xc29e0f45	0x080000
+sfzjr1	Street Fighter Zero (Japan 950627)	ストリートファイターZERO (Japan 950627)	街头霸王 Zero (日版 950627)	街頭霸王 Zero (日版 950627)				0x8db3167a	0xc29e0f45	0x080000
+sfzjr2	Street Fighter Zero (Japan 950605)	ストリートファイターZERO (Japan 950605)	街头霸王 Zero (日版 950605)	街頭霸王 Zero (日版 950605)				0x8db3167a	0xc29e0f45	0x080000
+sfzh	Street Fighter Zero (Hispanic 950718)	ストリートファイターZERO (Hispanic 950627)	街头霸王 Zero (西班牙版 950718)	街頭霸王 Zero (西班牙版 950718)				0x876b0e39	0x5ca24fd1	0x080000
+sfzhr1	Street Fighter Zero (Hispanic 950627)	ストリートファイターZERO (Hispanic 950627)	街头霸王 Zero (西班牙版 950627)	街頭霸王 Zero (西班牙版 950627)				0x876b0e39	0x5ca24fd1	0x080000
+sfzb	Street Fighter Zero (Brazil 951109)	ストリートファイターZERO (Brazil 951109)	街头霸王 Zero (巴西版 951109)	街頭霸王 Zero (巴西版 951109)				0xef415bd3	0x7a92c680	0x080000
+sfzbr1	Street Fighter Zero (Brazil 950727)	ストリートファイターZERO (Brazil 950727)	街头霸王 Zero (巴西版 950727)	街頭霸王 Zero (巴西版 950727)				0xef415bd3	0x7a92c680	0x080000
+sfa2	Street Fighter Alpha 2 (Euro 960229)	ストリートファイターZERO2 (USA 960306)	街头霸王 Alpha 2 (欧版 960229)	街頭霸王 Alpha 2 (歐版 960229)				0xfc4acf9c	0x3bfbe1f9	0x100000
+sfa2u	Street Fighter Alpha 2 (USA 960430)	ストリートファイターZERO2 (USA 960430)	街头霸王 Alpha 2 (美版 960430)	街頭霸王 Alpha 2 (美版 960430)				0x1bbf3d96	0x8af4614a	0x100000
+sfa2ur1	Street Fighter Alpha 2 (USA 960306)	ストリートファイターZERO2 (USA 960306)	街头霸王 Alpha 2 (美版 960306)	街頭霸王 Alpha 2 (美版 960306)				0x1bbf3d96	0x8af4614a	0x100000
+sfz2j	Street Fighter Zero 2 (Japan 960430)	ストリートファイターZERO2 (Japan 960227)	街头霸王 Zero 2 (日版 960430)	街頭霸王 Zero 2 (日版 960430)				0x83f47e99	0xda772111	0x100000
+sfz2jr1	Street Fighter Zero 2 (Japan 960227)	ストリートファイターZERO2 (Japan 960227)	街头霸王 Zero 2 (日版 960227)	街頭霸王 Zero 2 (日版 960227)				0x83f47e99	0xda772111	0x100000
+sfz2a	Street Fighter Zero 2 (Asia 960227)	ストリートファイターZERO2 (Asia 960227)	街头霸王 Zero 2 (亚洲版 960227)	街頭霸王 Zero 2 (亞洲版 960227)				0xafc2e8f4	0x43789487	0x100000
+sfz2b	Street Fighter Zero 2 (Brazil 960531)	ストリートファイターZERO2 (Brazil 960531)	街头霸王 Zero 2 (巴西版 960531)	街頭霸王 Zero 2 (巴西版 960531)				0xac134599	0x61f8bb2e	0x100000
+sfz2br1	Street Fighter Zero 2 (Brazil 960304)	ストリートファイターZERO2 (Brazil 960304)	街头霸王 Zero 2 (巴西版 960304)	街頭霸王 Zero 2 (巴西版 960304)				0xac134599	0x61f8bb2e	0x100000
+sfz2h	Street Fighter Zero 2 (Hispanic 960304)	ストリートファイターZERO2 (Hispanic 960304)	街头霸王 Zero 2 (西班牙版 960304)	街頭霸王 Zero 2 (西班牙版 960304)				0xf98a2d42	0x597b089f	0x100000
+sfz2n	Street Fighter Zero 2 (Oceania 960229)	ストリートファイターZERO2 (Oceania 960229)	街头霸王 Zero 2 (大洋洲版 960229)	街頭霸王 Zero 2 (大洋洲版 960229)				0xe32bf89c	0xa57b46dc	0x100000
+sfz2al	Street Fighter Zero 2 Alpha (Asia 960826)	ストリートファイターZERO2 ALPHA (Asia 960826)	街头霸王 Zero 2 Alpha (亚洲版 960826)	街頭霸王 Zero 2 Alpha (亞洲版 960826)				0xf172c0d0	0x040621a6	0x100000
+sfz2alj	Street Fighter Zero 2 Alpha (Japan 960805)	ストリートファイターZERO2 ALPHA (Japan 960805)	街头霸王 Zero 2 Alpha (日版 960805)	街頭霸王 Zero 2 Alpha (日版 960805)				0x99450c88	0xa00a2c4d	0x100000
+sfz2alh	Street Fighter Zero 2 Alpha (Hispanic 960813)	ストリートファイターZERO2 ALPHA (Hispanic 960813)	街头霸王 Zero 2 Alpha (西班牙版 960813)	街頭霸王 Zero 2 Alpha (西班牙版 960813)				0x95f15b7c	0x200c08c6	0x100000
+sfz2alb	Street Fighter Zero 2 Alpha (Brazil 960813)	ストリートファイターZERO2 ALPHA (Brazil 960813)	街头霸王 Zero 2 Alpha (巴西版 960813)	街頭霸王 Zero 2 Alpha (巴西版 960813)				0x73cd4a28	0xff83af1c	0x100000
+sfa3	Street Fighter Alpha 3 (Euro 980904)	ストリートファイターZERO3 (Euro 980904)	街头霸王 Alpha 3 (欧版 980904)	街頭霸王 Alpha 3 (歐版 980904)				0x6abfc8e0	0x2780ddc1	0x100000
+sfa3u	Street Fighter Alpha 3 (USA 980904)	ストリートファイターZERO3 (USA 980904)	街头霸王 Alpha 3 (美版 980904)	街頭霸王 Alpha 3 (美版 980904)				0xe7bbf0e5	0x67943248	0x100000
+sfa3ur1	Street Fighter Alpha 3 (USA 980629)	ストリートファイターZERO3 (USA 980629)	街头霸王 Alpha 3 (美版 980629)	街頭霸王 Alpha 3 (美版 980629)				0xe7bbf0e5	0x67943248	0x100000
+sfz3j	Street Fighter Zero 3 (Japan 980904)	ストリートファイターZERO3 (Japan 980904)	街头霸王 Zero 3 (日版 980904)	街頭霸王 Zero 3 (日版 980904)				0x7d49f803	0x0cbe2d79	0x100000
+sfz3jr1	Street Fighter Zero 3 (Japan 980727)	ストリートファイターZERO3 (Japan 980727)	街头霸王 Zero 3 (日版 980727)	街頭霸王 Zero 3 (日版 980727)				0x7d49f803	0x0cbe2d79	0x100000
+sfz3jr2	Street Fighter Zero 3 (Japan 980629)	ストリートファイターZERO3 (Japan 980629)	街头霸王 Zero 3 (日版 980629)	街頭霸王 Zero 3 (日版 980629)				0x7d49f803	0x0cbe2d79	0x100000
+sfz3a	Street Fighter Zero 3 (Asia 980904)	ストリートファイターZERO3 (Asia 980904)	街头霸王 Zero 3 (亚洲版 980904)	街頭霸王 Zero 3 (亞洲版 980904)				0x990b9301	0xa4e42c7e	0x100000
+sfz3ar1	Street Fighter Zero 3 (Asia 980701)	ストリートファイターZERO3 (Asia 980701)	街头霸王 Zero 3 (亚洲版 980701)	街頭霸王 Zero 3 (亞洲版 980701)				0x990b9301	0xa4e42c7e	0x100000
+sfa3h	Street Fighter Alpha 3 (Hispanic 980904)	ストリートファイターZERO3 (Hispanic 980904)	街头霸王 Alpha 3 (西班牙版 980904)	街頭霸王 Alpha 3 (西班牙版 980904)				0x8422df8c	0x7b17a361	0x100000
+sfa3hr1	Street Fighter Alpha 3 (Hispanic 980629)	ストリートファイターZERO3 (Hispanic 980629)	街头霸王 Alpha 3 (西班牙版 980629)	街頭霸王 Alpha 3 (西班牙版 980629)				0x8422df8c	0x7b17a361	0x100000
+sfa3b	Street Fighter Alpha 3 (Brazil 980629)	ストリートファイターZERO3 (Brazil 980629)	街头霸王 Alpha 3 (巴西版 980629)	街頭霸王 Alpha 3 (巴西版 980629)				0xd421c0b2	0x8116d296	0x100000
+sgemf	Super Gem Fighter Mini Mix (USA 970904)	ポケットファイター (USA 970904)	口袋战士 (美版 970904)	口袋戰士 (美版 970904)				0x84234976	0x5e0fbb7e	0x080000
+pfghtj	Pocket Fighter (Japan 970904)	ポケットファイター (Japan 970904)	口袋战士 (日版 970904)	口袋戰士 (日版 970904)				0x97d2ebc0	0x308f94d7	0x080000
+sgemfa	Super Gem Fighter: Mini Mix (Asia 970904)	ポケットファイター (Asia 970904)	口袋战士 (亚洲版 970904)	口袋戰士 (亞洲版 970904)				0x090b412a	0xc47ee993	0x080000
+sgemfh	Super Gem Fighter: Mini Mix (Hispanic 970904)	ポケットファイター (Hispanic 970904)	口袋战士 (西班牙版 970904)	口袋戰士 (西班牙版 970904)				0x8163a71b	0x7c8fd224	0x080000
+spf2t	Super Puzzle Fighter II Turbo (USA 960620)	スーパーパズルファイターⅡX (USA 960620)	超级方块战士Ⅱ 加速版 (美版 960620)	超級方塊戰士Ⅱ 加速版 (美版 960620)				0x706a8750	0x7d0fc185	0x040000
+spf2xj	Super Puzzle Fighter II X (Japan 960531)	スーパーパズルファイターⅡX (Japan 960531)	超级方块战士Ⅱ X (日版 960531)	超級方塊戰士Ⅱ X (日版 960531)				0xb12c835a	0xe90976ff	0x040000
+spf2ta	Super Puzzle Fighter II Turbo (Asia 960529)	スーパーパズルファイターⅡX (Asia 960529)	超级方块战士Ⅱ 加速版 (亚洲版 960529)	超級方塊戰士Ⅱ 加速版 (亞洲版 960529)				0x9c48e1ab	0xd60f34fb	0x040000
+spf2th	Super Puzzle Fighter II Turbo (Hispanic 960531)	スーパーパズルファイターⅡX (Hispanic 960531)	超级方块战士Ⅱ 加速版 (西班牙版 960531)	超級方塊戰士Ⅱ 加速版 (西班牙版 960531)				0x51ed8cab	0x228f85b6	0x040000
+spf2h	Super Puzzle Fighter II Turbo (boss unlock)GAME_HACK	スーパーパズルファイターⅡX (BOSSUNLOCK)	超级方块战士Ⅱ 加速版 (可直接选隐藏人物)	超級方塊戰士Ⅱ 加速版 (可直接選隱藏人物)				0x706a8750	0x7d0fc185	0x040000
+ssf2	Super Street Fighter II: The New Challengers (World 930911)	スーパーストリートファイターⅡ The New Challengers (World 930911)	超级街头霸王 2 新的挑战者 (世界版 930911)	超級街頭霸王 2 新的挑戰者 (世界版 930911)				0x23456789	0xabcdef01	0x400000
+ssf2u	Super Street Fighter II: The New Challengers (USA 930911)	スーパーストリートファイターⅡ The New Challengers (USA 930911)	超级街头霸王 2 新的挑战者 (美版 930911)	超級街頭霸王 2 新的挑戰者 (美版 930911)				0x12345678	0x9abcdef0	0x400000
+ssf2a	Super Street Fighter II: The New Challengers (Asia 931005)	スーパーストリートファイターⅡ The New Challengers (Asia 931005)	超级街头霸王 2 新的挑战者 (亚洲版 931005)	超級街頭霸王 2 新的挑戰者 (亞洲版 931005)				0x3456789a	0xbcdef012	0x400000
+ssf2ar1	Super Street Fighter II: The New Challengers (Asia 930914)	スーパーストリートファイターⅡ The New Challengers (Asia 930914)	超级街头霸王 2 新的挑战者 (亚洲版 930914)	超級街頭霸王 2 新的挑戰者 (亞洲版 930914)				0x3456789a	0xbcdef012	0x400000
+ssf2j	Super Street Fighter II: The New Challengers (Japan 931005)	スーパーストリートファイターⅡ The New Challengers (Japan 931005)	超级街头霸王 2 新的挑战者 (日版 931005)	超級街頭霸王 2 新的挑戰者 (日版 931005)				0x01234567	0x89abcdef	0x400000
+ssf2jr1	Super Street Fighter II: The New Challengers (Japan 930911)	スーパーストリートファイターⅡ The New Challengers (Japan 930911)	超级街头霸王 2 新的挑战者 (日版 930911)	超級街頭霸王 2 新的挑戰者 (日版 930911)				0x01234567	0x89abcdef	0x400000
+ssf2jr2	Super Street Fighter II: The New Challengers (Japan 930910)	スーパーストリートファイターⅡ The New Challengers (Japan 930910)	超级街头霸王 2 新的挑战者 (日版 930910)	超級街頭霸王 2 新的挑戰者 (日版 930910)				0x01234567	0x89abcdef	0x400000
+ssf2h	Super Street Fighter II: The New Challengers (Hispanic 930911)	スーパーストリートファイターⅡ The New Challengers (Hispanic 930911)	超级街头霸王 2 新的挑战者 (西班牙版 930911)	超級街頭霸王 2 新的挑戰者 (西班牙版 930911)				0x56789abc	0xdef01234	0x400000
+ssf2tb	Super Street Fighter II: The Tournament Battle (World 931119)	スーパーストリートファイターⅡ The Tournament Battle (World 931119)	超级街头霸王 2 联赛 (世界版 931119)	超級街頭霸王 2 聯賽 (世界版 931119)				0x89abcdef	0x01234567	0x400000
+ssf2tbr1	Super Street Fighter II: The Tournament Battle (World 930911)	スーパーストリートファイターⅡ The Tournament Battle (World 930911)	超级街头霸王 2 联赛 (世界版 930911)	超級街頭霸王 2 聯賽 (世界版 930911)				0x89abcdef	0x01234567	0x400000
+ssf2tbj	Super Street Fighter II: The Tournament Battle (Japan 930911)	スーパーストリートファイターⅡ The Tournament Battle (Japan 930911)	超级街头霸王 2 联赛 (日版 930911)	超級街頭霸王 2 聯賽 (日版 930911)				0x6789abcd	0xef012345	0x400000
+ssf2tbh	Super Street Fighter II: The Tournament Battle (Hispanic 931005)	スーパーストリートファイターⅡ The Tournament Battle (Hispanic 931005)	超级街头霸王 2 联赛 (西班牙版 931005)	超級街頭霸王 2 聯賽 (西班牙版 931005)				0xbcdef012	0x3456789a	0x400000
+ssf2t	Super Street Fighter II Turbo (World 940223)	スーパーストリートファイターⅡX (World 940223)	超级街头霸王 2 加速版 (世界版 940223)	超級街頭霸王 2 加速版 (世界版 940223)		cache_independent		0x944e8302	0x56d3143c	0x400000
+ssf2tu	Super Street Fighter II Turbo (USA 940323)	スーパーストリートファイターⅡX (USA 940323)	超级街头霸王 2 加速版 (美版 940323)	超級街頭霸王 2 加速版 (美版 940323)		cache_parent_override	ssf2t	0x94fa8902	0x4c77143f	0x400000
+ssf2tur1	Super Street Fighter II Turbo (USA 940223)	スーパーストリートファイターⅡX (USA 940223)	超级街头霸王 2 加速版 (美版 940223)	超級街頭霸王 2 加速版 (美版 940223)		cache_parent_override	ssf2t	0x94fa8902	0x4c77143f	0x400000
+ssf2ta	Super Street Fighter II Turbo (Asia 940223)	スーパーストリートファイターⅡX (Asia 940223)	超级街头霸王 2 加速版 (亚洲版 940223)	超級街頭霸王 2 加速版 (亞洲版 940223)		cache_parent_override	ssf2t	0x94c4d002	0x664a1471	0x400000
+ssf2xj	Super Street Fighter II X: Grand Master Challenge (Japan 940223)	スーパーストリートファイターⅡX Grand Master Challenge (Japan 940223)	超级街头霸王 2 X 超级大师联赛 (日版 940223)	超級街頭霸王 2 X 超級大師聯賽 (日版 940223)		cache_parent_override	ssf2t	0x942a5702	0x05ac140e	0x400000
+ssf2xjr	Super Street Fighter II X: Grand Master Challenge (Japan 940223 rent version)	スーパーストリートファイターⅡX Grand Master Challenge (Japan 940223 rent version)	超级街头霸王 2 X 超级大师联赛 (日版 940223 rent version)	超級街頭霸王 2 X 超級大師聯賽 (日版 940223 rent version)				0x943c2b02	0x7acd1422	0x400000
+vhunt2	Vampire Hunter 2: Darkstalkers Revenge (Japan 970929)	ヴァンパイアハンター2 Darkstalkers Revenge (Japan 970929)	恶魔战士2 恶魔的复仇 (日版 970929)	惡魔戰士2 惡魔的復仇 (日版 970929)				0x36c1eba3	0x26b10f18	0x100000
+vhunt2r1	Vampire Hunter 2: Darkstalkers Revenge (Japan 970913)	ヴァンパイアハンター2 Darkstalkers Revenge (Japan 970913)	恶魔战士2 恶魔的复仇 (日版 970913)	惡魔戰士2 惡魔的復仇 (日版 970913)				0x36c1eba3	0x26b10f18	0x100000
+vsav	Vampire Savior: The Lord of Vampire (Euro 970519)	ヴァンパイアセイバー The Lord of Vampire (Euro 970519)	恶魔战士 罪恶救世主 (欧洲版 970519)	惡魔戰士 罪惡救世主 (歐洲版 970519)				0xe0cd5881	0x71babb70	0x100000
+vsavu	Vampire Savior: The Lord of Vampire (USA 970519)	ヴァンパイアセイバー The Lord of Vampire (USA 970519)	恶魔战士 罪恶救世主 (美版 970519)	惡魔戰士 罪惡救世主 (美版 970519)				0xa62ea0ee	0x573e03e6	0x100000
+vsavj	Vampire Savior: The Lord of Vampire (Japan 970519)	ヴァンパイアセイバー The Lord of Vampire (Japan 970519)	恶魔战士 罪恶救世主 (日版 970519)	惡魔戰士 罪惡救世主 (日版 970519)				0xfa8f4e33	0xa4b881b9	0x100000
+vsava	Vampire Savior: The Lord of Vampire (Asia 970519)	ヴァンパイアセイバー The Lord of Vampire (Asia 970519)	恶魔战士 罪恶救世主 (亚洲版 970519)	惡魔戰士 罪惡救世主 (亞洲版 970519)				0x47ee9930	0x90b412ac	0x100000
+vsavh	Vampire Savior: The Lord of Vampire (Hispanic 970519)	ヴァンパイアセイバー The Lord of Vampire (Hispanic 970519)	恶魔战士 罪恶救世主 (西班牙版 970519)	惡魔戰士 罪惡救世主 (西班牙版 970519)				0xb2d37c8d	0xd3b7aadd	0x100000
+vsav2	Vampire Savior 2: The Lord of Vampire (Japan 970913)	ヴァンパイアセイバー2 The Lord of Vampire (Japan 970913)	恶魔战士2 罪恶救世主 (日版 970913)	惡魔戰士2 罪惡救世主 (日版 970913)				0xd681e4f4	0x60371edf	0x100000
+xmcota	X-Men: Children of the Atom (Euro 950331)	X-MEN Children of the Atom (Euro 950331)	X战警格斗版 (欧洲版 950331)	X戰警格鬥版 (歐洲版 950331)				0x3bc6eda4	0x97f80251	0x100000
+xmcotar1	X-Men: Children of the Atom (Euro 950105)	X-Men: Children of the Atom (Euro 950105)	X战警格斗版 (欧洲版 950105)	X戰警格鬥版 (歐洲版 950105)				0x3bc6eda4	0x97f80251	0x100000
+xmcotau	X-Men: Children of the Atom (USA 950105)	X-MEN Children of the Atom (USA 950105)	X战警格斗版 (美版 950105)	X戰警格鬥版 (美版 950105)				0x32a57ecd	0x98016f4b	0x100000
+xmcotah	X-Men: Children of the Atom (Hispanic 950331)	X-MEN Children of the Atom (Hispanic 950331)	X战警格斗版 (西班牙版 950331)	X戰警格鬥版 (西班牙版 950331)				0xf5e8dc34	0xa096b217	0x100000
+xmcotahr1	X-Men: Children of the Atom (Hispanic 950105)	X-MEN Children of the Atom (Hispanic 950105)	X战警格斗版 (西班牙版 950105)	X戰警格鬥版 (西班牙版 950105)				0xf5e8dc34	0xa096b217	0x100000
+xmcotaj	X-Men: Children of the Atom (Japan 950105)	X-MEN Children of the Atom (Japan 950105)	X战警格斗版 (日版 950105)	X戰警格鬥版 (日版 950105)				0x46027315	0xaf8bcd9e	0x100000
+xmcotaj1	X-Men: Children of the Atom (Japan 941222)	X-MEN Children of the Atom (Japan 941222)	X战警格斗版 (日版 941222)	X戰警格鬥版 (日版 941222)				0x46027315	0xaf8bcd9e	0x100000
+xmcotaj2	X-Men: Children of the Atom (Japan 941219)	X-MEN Children of the Atom (Japan 941219)	X战警格斗版 (日版 941219)	X戰警格鬥版 (日版 941219)				0x46027315	0xaf8bcd9e	0x100000
+xmcotaj3	X-Men: Children of the Atom (Japan 941217)	X-Men: Children of the Atom (Japan 941217)	X战警格斗版 (日版 941217)	X戰警格鬥版 (日版 941217)				0x46027315	0xaf8bcd9e	0x100000
+xmcotajr	X-Men: Children of the Atom (Japan 941208 rent version)	X-MEN Children of the Atom (Japan 941208 レンタル版)	X战警格斗版 (日版 941208 rent版)	X戰警格鬥版 (日版 941208 rent版)				0x46027315	0xaf8bcd9e	0x100000
+xmcotaa	X-Men: Children of the Atom (Asia 950105)	X-MEN Children of the Atom (Asia 941217)	X战警格斗版 (亚洲版 950105)	X戰警格鬥版 (亞洲版 950105)				0x0795a4e2	0xdb3f861c	0x100000
+xmcotaar1	X-Men: Children of the Atom (Asia 941217)	X-MEN Children of the Atom (Asia 941217)	X战警格斗版 (亚洲版 941217)	X戰警格鬥版 (亞洲版 941217)				0x0795a4e2	0xdb3f861c	0x100000
+xmvsf	X-Men Vs. Street Fighter (Euro 961004)	X-MEN VS.ストリートファイター (Euro 961004)	X战警对街头霸王 (欧洲版 961004)	X戰警對街頭霸王 (歐洲版 961004)				0xbdcf8519	0x3fb2acea	0x100000
+xmvsfr1	X-Men Vs. Street Fighter (Euro 960910)	X-MEN VS.ストリートファイター (Euro 960910)	X战警对街头霸王 (欧洲版 960910)	X戰警對街頭霸王 (歐洲版 960910)				0xbdcf8519	0x3fb2acea	0x100000
+xmvsfu	X-Men Vs. Street Fighter (USA 961023)	X-MEN VS.ストリートファイター (USA 961023)	X战警对街头霸王 (美版 961023)	X戰警對街頭霸王 (美版 961023)				0x4fcb03d2	0xf8653bc1	0x100000
+xmvsfur1	X-Men Vs. Street Fighter (USA 961004)	X-MEN VS.ストリートファイター (USA 961004)	X战警对街头霸王 (美版 961004)	X戰警對街頭霸王 (美版 961004)				0x4fcb03d2	0xf8653bc1	0x100000
+xmvsfj	X-Men Vs. Street Fighter (Japan 961004)	X-MEN VS.ストリートファイター (Japan 961004)	X战警对街头霸王 (日版 961004)	X戰警對街頭霸王 (日版 961004)				0x38df93bc	0x210373ac	0x100000
+xmvsfjr1	X-Men Vs. Street Fighter (Japan 960910)	X-MEN VS.ストリートファイター (Japan 960910)	X战警对街头霸王 (日版 960910)	X戰警對街頭霸王 (日版 960910)				0x38df93bc	0x210373ac	0x100000
+xmvsfjr2	X-Men Vs. Street Fighter (Japan 960909)	X-MEN VS.ストリートファイター (Japan 960909)	X战警对街头霸王 (日版 960909)	X戰警對街頭霸王 (日版 960909)				0x38df93bc	0x210373ac	0x100000
+xmvsfa	X-Men Vs. Street Fighter (Asia 961023)	X-MEN VS.ストリートファイター (Asia 961023)	X战警对街头霸王 (亚洲版 961023)	X戰警對街頭霸王 (亞洲版 961023)				0x7438fc3e	0x19abed90	0x100000
+xmvsfar1	X-Men Vs. Street Fighter (Asia 961004)	X-MEN VS.ストリートファイター (Asia 961004)	X战警对街头霸王 (亚洲版 961004)	X戰警對街頭霸王 (亞洲版 961004)				0x7438fc3e	0x19abed90	0x100000
+xmvsfar2	X-Men Vs. Street Fighter (Asia 960919)	X-MEN VS.ストリートファイター (Asia 960919)	X战警对街头霸王 (亚洲版 960919)	X戰警對街頭霸王 (亞洲版 960919)				0x7438fc3e	0x19abed90	0x100000
+xmvsfar3	X-Men Vs. Street Fighter (Asia 960910)	X-MEN VS.ストリートファイター (Asia 960910)	X战警对街头霸王 (亚洲版 960910)	X戰警對街頭霸王 (亞洲版 960910)				0x7438fc3e	0x19abed90	0x100000
+xmvsfh	X-Men Vs. Street Fighter (Hispanic 961004)	X-MEN VS.ストリートファイター (Hispanic 961004)	X战警对街头霸王 (西班牙版 961004)	X戰警對街頭霸王 (西班牙版 961004)				0x835fb2d0	0x42fa9137	0x100000
+xmvsfb	X-Men Vs. Street Fighter (Brazil 961023)	X-MEN VS.ストリートファイター (Brazil 961023)	X战警对街头霸王 (巴西版 961023)	X戰警對街頭霸王 (巴西版 961023)				0x8ead9e4a	0xb02184f0	0x100000
+1944d	1944: The Loop Master (USA 000620 Phoenix Edition)	1944: The Loop Master (USA 000620 Phoenix Edition)	1944 循环征服者 (美版 000620 Phoenix Edition)	1944 循環征服者 (美版 000620 Phoenix Edition)	bootleg	phoenix
+19xxd	19XX: The War Against Destiny (USA 951207 Phoenix Edition)	19XX: The War Against Destiny (USA 951207 Phoenix Edition)	19XX 命运否决战 (美版 951207 Phoenix Edition)	19XX 命運否決戰 (美版 951207 Phoenix Edition)	bootleg	phoenix
+sfz2ad	Street Fighter Zero 2 (Asia 960227 Phoenix Edition)	ストリートファイターZERO2 (Asia 960227 Phoenix Edition)	街头霸王 Zero 2 (亚洲版 960227 Phoenix Edition)	街頭霸王 Zero 2 (亞洲版 960227 Phoenix Edition)	bootleg	phoenix
+avspd	Alien vs. Predator (Euro 940520 Phoenix Edition)	エイリアン VS. プレデター (Euro 940520 Phoenix Edition)	异形对终极战士 (欧洲版 940520 Phoenix Edition)	異形對終極戰士 (歐洲版 940520 Phoenix Edition)	bootleg	phoenix
+batcird	Battle Circuit (Euro 970319 Phoenix Edition)	バトルサーキット (Euro 970319 Phoenix Edition)	战斗回路 (欧洲版 970319 Phoenix Edition)	戰鬥回路 (歐洲版 970319 Phoenix Edition)	bootleg	phoenix
+ddtodd	Dungeons & Dragons: Tower of Doom (Euro 940412 Phoenix Edition)	ダンジョンズ＆ドラゴンズ Tower of Doom (Euro 940412 Phoenix Edition)	龙与地下城1 毁灭之塔 (欧洲版 940412 Phoenix Edition)	龍與地下城1 毀滅之塔 (歐洲版 940412 Phoenix Edition)	bootleg	phoenix
+ddsomud	Dungeons & Dragons: Shadow over Mystara (USA 960619 Phoenix Edition)	ダンジョンズ＆ドラゴンズ Shadow over Mystara (USA 960619 Phoenix Edition)	龙与地下城2 暗黑秘影 (美版 960619 Phoenix Edition)	龍與地下城2 暗黑秘影 (美版 960619 Phoenix Edition)	bootleg	phoenix
+ecofghtrd	Eco Fighters (World 931203 Phoenix Edition)	アルティメイトエコロジー (World 931203 Phoenix Edition)	Eco 超战机 (世界版 931203 Phoenix Edition)	Eco 超戰機 (世界版 931203 Phoenix Edition)	bootleg	phoenix
+gigawingjd	Giga Wing (Japan 990223 Phoenix Edition)	ギガウイング (Japan 990223 Phoenix Edition)	雷鸟之翼 (日版 990223 Phoenix Edition)	雷鳥之翼 (日版 990223 Phoenix Edition)	bootleg	phoenix
+gigawingd	Giga Wing (USA 990222 Phoenix Edition)	ギガウイング (USA 990222 Phoenix Edition)	雷鸟之翼 (美版 990222 Phoenix Edition)	雷鳥之翼 (美版 990222 Phoenix Edition)	bootleg	phoenix
+hsf2d	Hyper Street Fighter II: The Anniversary Edition (Asia 040202 Phoenix Edition)	ハイパーストリートファイターⅡ The Anniversary Edition (Asia 040202 Phoenix Edition)	超级街头霸王2 纪念版 (亚洲版 040202 Phoenix Edition)	超級街頭霸王2 紀念版 (亞洲版 040202 Phoenix Edition)	bootleg	phoenix
+megamn2d	Mega Man 2: The Power Fighters (USA 960708 Phoenix Edition)	Mega Man 2: The Power Fighters (USA 960708 Phoenix Edition)	洛克人2 力量对决 (美版 960708 Phoenix Edition)	洛克人2 力量對決 (美版 960708 Phoenix Edition)	bootleg	phoenix
+mvscud	Marvel Vs. Capcom: Clash of Super Heroes (USA 980123 Phoenix Edition)	マーヴル VS. カプコン Clash of Super Heroes (USA 980123 Phoenix Edition)	超级漫画英雄对CAPCOM (美版 980123 Phoenix Edition)	超級漫畫英雄對CAPCOM (美版 980123 Phoenix Edition)	bootleg	phoenix
+nwarrud	Night Warriors: Darkstalkers' Revenge (USA 950406 Phoenix Edition)	ヴァンパイアハンター (USA 950406 Phoenix Edition)	恶魔战士 恶魔的复仇 (美版 950406 Phoenix Edition)	惡魔戰士 惡魔的復仇 (美版 950406 Phoenix Edition)	bootleg	phoenix
+ringdstd	Ring of Destruction: Slammasters II (Euro 940902 Phoenix Edition)	スーパーマッスルボマー (Euro 940902 Phoenix Edition)	摔角霸王2 连环爆裂 (欧洲版 940902 Phoenix Edition)	摔角霸王2 連環爆裂 (歐洲版 940902 Phoenix Edition)	bootleg	phoenix
+sfad	Street Fighter Alpha: Warriors' Dreams (Euro 950727 Phoenix Edition)	ストリートファイターZERO (Euro 950727 Phoenix Edition)	街头霸王 Alpha 斗士之梦 (欧洲版 950727 Phoenix Edition)	街頭霸王 Alpha 鬥士之夢 (歐洲版 950727 Phoenix Edition)	bootleg	phoenix
+mshud	Marvel Super Heroes (US 951024 Phoenix Edition)	Marvel Super Heroes (US 951024 Phoenix Edition)	超级漫画英雄 (美版 951024 Phoenix Edition)	超級漫畫英雄 (美版 951024 Phoenix Edition)	bootleg	phoenix
+sfz2ald	Street Fighter Zero 2 Alpha (Asia 960826 Phoenix Edition)	ストリートファイターZERO2 Alpha (Asia 960826 Phoenix Edition)	街头霸王 Zero 2 Alpha (亚洲版 960826 Phoenix Edition)	街頭霸王 Zero 2 Alpha (亞洲版 960826 Phoenix Edition)	bootleg	phoenix
+sfa3ud	Street Fighter Alpha 3 (USA 980904 Phoenix Edition)	ストリートファイターZERO3 (USA 980904 Phoenix Edition)	街头霸王 Alpha 3 (美版 980904 Phoenix Edition)	街頭霸王 Alpha 3 (美版 980904 Phoenix Edition)	bootleg	phoenix
+spf2xjd	Super Puzzle Fighter II X (Japan 960531 Phoenix Edition)	スーパーパズルファイターⅡX (Japan 960531 Phoenix Edition)	超级方块战士Ⅱ X (日版 960531 Phoenix Edition)	超級方塊戰士Ⅱ X (日版 960531 Phoenix Edition)	bootleg	phoenix
+vsavd	Vampire Savior: The Lord of Vampire (Euro 970519 Phoenix Edition)	ヴァンパイアセイバー The Lord of Vampire (Euro 970519 Phoenix Edition)	恶魔战士 罪恶救世主 (欧洲版 970519 Phoenix Edition)	惡魔戰士 罪惡救世主 (歐洲版 970519 Phoenix Edition)	bootleg	phoenix
+xmcotar1d	X-Men: Children of the Atom (Euro 950105 Phoenix Edition)	X-MEN Children of the Atom (Euro 950105 Phoenix Edition)	X战警格斗版 (欧洲版 950105 Phoenix Edition)	X戰警格鬥版 (歐洲版 950105 Phoenix Edition)	bootleg	phoenix
+xmvsfu1d	X-Men Vs. Street Fighter (USA 961004 Phoenix Edition)	X-MEN VS.ストリートファイター (USA 961004 Phoenix Edition)	X战警对街头霸王 (美版 961004 Phoenix Edition)	X戰警對街頭霸王 (美版 961004 Phoenix Edition)	bootleg	phoenix
+dstlku1d	Darkstalkers: The Night Warriors (USA 940705 Phoenix Edition)	ヴァンパイア (USA 940705 Phoenix Edition)	恶魔战士 午夜斗士 (美版 940705 Phoenix Edition)	惡魔戰士 午夜鬥士 (美版 940705 Phoenix Edition)	bootleg	phoenix
+progearud	Progear (USA 010117 Phoenix Edition)	プロギアの嵐 (USA 010117 Phoenix Edition)	逆转之岚 (美版 010117 Phoenix Edition)	逆轉之嵐 (美版 010117 Phoenix Edition)	bootleg	phoenix
+progearjd	Progear (Japan 010117 Phoenix Edition)	プロギアの嵐 (Japan 010117 Phoenix Edition)	逆转之岚 (日版 010117 Phoenix Edition)	逆轉之嵐 (日版 010117 Phoenix Edition)	bootleg	phoenix
+progearjbl	Progear (Japan 010117 (decrypted bootleg)	プロギアの嵐 (Japan 010117 (decrypted bootleg)	逆转之岚 (日版 010117 (解密盗版)	逆轉之嵐 (日版 010117 (解密盜版)	bootleg	phoenix
+ssf2ud	Super Street Fighter II: The New Challengers (USA 930911 Phoenix Edition)	スーパーストリートファイターⅡ The New Challengers (USA 930911 Phoenix Edition)	超级街头霸王 2 新的挑战者 (美版 930911 Phoenix Edition)	超級街頭霸王 2 新的挑戰者 (美版 930911 Phoenix Edition)	bootleg	phoenix
+ssf2tbd	Super Street Fighter II: The Tournament Battle (World 931119 Phoenix Edition)	スーパーストリートファイターⅡ The Tournament Battle (World 931119 Phoenix Edition)	超级街头霸王 2 联赛 (世界版 931119 Phoenix Edition)	超級街頭霸王 2 聯賽 (世界版 931119 Phoenix Edition)	bootleg	phoenix
+ssf2xjd	Super Street Fighter II X: Grand Master Challenge (Japan 940223 Phoenix Edition)	スーパーストリートファイターⅡX Grand Master Challenge (Japan 940223 Phoenix Edition)	超级街头霸王 2 X 超级大师联赛 (日版 940223 Phoenix Edition)	超級街頭霸王 2 X 超級大師聯賽 (日版 940223 Phoenix Edition)	bootleg	phoenix
+sgemfd	Super Gem Fighter Mini Mix (USA 970904 Phoenix Edition)	ポケットファイター (USA 970904 Phoenix Edition)	口袋战士 (美版 970904 Phoenix Edition)	口袋戰士 (美版 970904 Phoenix Edition)	bootleg	phoenix
+armwar1d	Armored Warriors (Euro 941011 Phoenix Edition)	パワードギア (Euro 941011 Phoenix Edition)	装甲勇士 (欧洲版 941011 Phoenix Edition)	裝甲勇士 (歐洲版 941011 Phoenix Edition)	bootleg	phoenix
+dimahoud	Dimahoo (USA 000121 Phoenix Edition)	グレート魔法大作戦 (USA 000121 Phoenix Edition)	超级魔法大作战 (美版 000121 Phoenix Edition)	超級魔法大作戰 (美版 000121 Phoenix Edition)	bootleg	phoenix
+mmatrixd	Mars Matrix: Hyper Solid Shooting (USA 000412 Phoenix Edition)	Mars Matrix: Hyper Solid Shooting (USA 000412 Phoenix Edition)	弹丸地狱 (美版 000412 Phoenix Edition)	彈丸地獄 (美版 000412 Phoenix Edition)	bootleg	phoenix
+vhunt2d	Vampire Hunter 2: Darkstalkers Revenge (Japan 970913 Phoenix Edition)	ヴァンパイアハンター2 Darkstalkers Revenge (Japan 970913 Phoenix Edition)	恶魔战士2 恶魔的复仇 (日版 970913 Phoenix Edition)	惡魔戰士2 惡魔的復仇 (日版 970913 Phoenix Edition)	bootleg	phoenix
+vsav2d	Vampire Savior 2: The Lord of Vampire (Japan 970913 Phoenix Edition)	ヴァンパイアセイバー2 The Lord of Vampire (Japan 970913 Phoenix Edition)	恶魔战士2 罪恶救世主 (日版 970913 Phoenix Edition)	惡魔戰士2 罪惡救世主 (日版 970913 Phoenix Edition)	bootleg	phoenix
+csclub1d	Capcom Sports Club (Euro 970722 Phoenix Edition)	カプコンスポーツクラブ (Euro 970722 Phoenix Edition)	卡普空运动俱乐部 (欧洲版 970722 Phoenix Edition)	卡普空運動俱樂部 (歐洲版 970722 Phoenix Edition)	bootleg	phoenix
+cybotsud	Cyberbots: Fullmetal Madness (USA 950424 Phoenix Edition)	サイバーボッツ Fullmetal Madness (USA 950424 Phoenix Edition)	装甲之战 全金属狂潮 (美版 950424 Phoenix Edition)	裝甲之戰 全金屬狂潮 (美版 950424 Phoenix Edition)	bootleg	phoenix
+cybotsjd	Cyberbots: Fullmetal Madness (Japan 950420 Phoenix Edition)	サイバーボッツ Fullmetal Madness (Japan 950420 Phoenix Edition)	装甲之战 全金属狂潮 (日版 950420 Phoenix Edition)	裝甲之戰 全金屬狂潮 (日版 950420 Phoenix Edition)	bootleg	phoenix
+mshvsfu1d	Marvel Super Heroes Vs. Street Fighter (USA 970625 Phoenix Edition)	Marvel Super Heroes Vs. Street Fighter (USA 970625 Phoenix Edition)	超级漫画英雄对街头霸王 (美版 970625 Phoenix Edition)	超級漫畫英雄對街頭霸王 (美版 970625 Phoenix Edition)	bootleg	phoenix
+spf2td	Super Puzzle Fighter II Turbo (USA 960620 Phoenix Edition)	スーパーパズルファイターⅡX (USA 960620 Phoenix Edition)	超级方块战士Ⅱ 加速版 (美版 960620 Phoenix Edition)	超級方塊戰士Ⅱ 加速版 (美版 960620 Phoenix Edition)	bootleg	phoenix
+sfz3jr2d	Street Fighter Zero 3 (Japan 980629 Phoenix Edition)	ストリートファイターZERO3 (Japan 980629 Phoenix Edition)	街头霸王 Zero 3 (日版 980629 Phoenix Edition)	街頭霸王 Zero 3 (日版 980629 Phoenix Edition)	bootleg	phoenix
+sfz2jd	Street Fighter Zero 2 (Japan 960227 Phoenix Edition)	ストリートファイターZERO2 (Japan 960227 Phoenix Edition)	街头霸王 Zero 2 (日版 960227 Phoenix Edition)	街頭霸王 Zero 2 (日版 960227 Phoenix Edition)	bootleg	phoenix
