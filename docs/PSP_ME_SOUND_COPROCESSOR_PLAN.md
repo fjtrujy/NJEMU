@@ -840,7 +840,62 @@ already hardware validated.
 
 **Gate:** lifecycle is deterministic before any Z80 state moves.
 
-### C3 - timestamped sound-command shadowing
+#### C3 implementation status (2026-10-03) [hardware gameplay oracle pending]
+
+Timestamped command shadowing is now implemented without changing sound
+authority.  The CPU Z80/YM2610 path still performs the real latch/NMI handling
+and produces all audible PCM.  The mirror is emitted from `neogeo_sound_write()`
+**after** the authoritative `sound_code` update and Z80 NMI pulse, at the same
+`SOUNDLATCH_TIMER` semantic transition measured in C0.
+
+The timestamp is an integer 64-bit emulated-time value from the MVS timer
+scheduler (`seconds * 1,000,000 + current scheduler microseconds`).  It does not
+use PSP wall-clock time or floating-point `timer_get_time()`.  Equal timestamps
+are legal; only regression within one lifecycle generation is rejected by the
+ME worker.
+
+Each mirrored event contains:
+
+- lifecycle generation;
+- monotonic protocol token;
+- exact emulated-time timestamp;
+- sound command byte.
+
+The ME worker echoes that tuple without touching Z80 or YM2610 state.  Allegrex
+keeps an ordered expectation FIFO and compares every echo semantically.  The
+normal command path is non-blocking: it performs one ring publication attempt
+and never waits for an ME response.  Echoes are polled asynchronously; lifecycle
+`RESET`, `SYNC` and `SHUTDOWN` waits also drain any older shadow echoes in order
+so control ACKs cannot be confused with data events.  Send failures, tuple/order
+mismatches and pending high-water are explicit counters.
+
+Because C2 lifecycle callbacks can run on the PSP sound thread while MVS
+scheduler events run on the main emulation thread, access to the worker object is
+serialized with a PSP lightweight mutex.  The frame loop does **not** take that
+mutex unconditionally: it only samples the worker when a shadow echo is pending
+or once per 300-frame diagnostic window.  The window/frame hints use explicit
+atomic operations rather than `volatile`.
+
+`psp_me_sound_shadow.log` records 300-frame windows with sent/matched/mismatch
+counts, send failures, pending/high-water occupancy, ME-processed shadow count,
+ring overflow state, fatal status and final emulated time.  This is sufficient to
+measure commands/frame and prove exact order/timestamp equivalence during the
+same controlled `mslug3` workload used for C0.
+
+The standalone C2 hardware harness has also been extended to exercise 256
+timestamped shadow commands per worker cycle (including groups sharing an equal
+timestamp) and checks exact echo statistics in addition to lifecycle state.  The
+updated harness and integrated PSP MVS coprocessor configuration build cleanly
+with `-Werror`.  Desktop MVS remains **24/24 CTests green**, PSP production with
+`PSP_ME_AUDIO=OFF` builds, and the existing ADPCM-A-only ME configuration builds
+unchanged.
+
+The real-PSP C3 oracle still has to be run after PSPLink is available again.
+Until that run shows exact matches, zero send failures/overflows and negligible
+whole-emulator impact, the C3 gate remains open and C4 Z80 shadow execution must
+not begin.
+
+### C3 - timestamped sound-command shadowing [in progress]
 
 - leave CPU Z80/YM2610 authoritative;
 - mirror sound-latch commands through the Allegrex -> ME event ring;

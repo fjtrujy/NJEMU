@@ -6,13 +6,17 @@
 #include <me-core-mapper/hw-registers.h>
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
-#ifdef PSP_ME_SOUND_COPROCESSOR
-#include "psp/psp_me_sound_worker.h"
-#endif
-#ifdef PSP_ME_RING_SELFTEST
+#if defined(PSP_ME_SOUND_COPROCESSOR) || defined(PSP_ME_RING_SELFTEST)
 #include <fcntl.h>
 #include <unistd.h>
 #include "common/runtime_paths.h"
+#endif
+#ifdef PSP_ME_SOUND_COPROCESSOR
+#include <pspthreadman.h>
+#include "mvs/me_sound_shadow.h"
+#include "psp/psp_me_sound_worker.h"
+#endif
+#ifdef PSP_ME_RING_SELFTEST
 #include "psp/psp_me_spsc_ring_mist_test.h"
 #endif
 
@@ -43,7 +47,13 @@ static void *me_workspace;
 static uint32_t me_workspace_size;
 #ifdef PSP_ME_SOUND_COPROCESSOR
 static psp_me_sound_worker_t me_sound_worker;
+static SceLwMutexWorkarea me_sound_worker_mutex;
 static uint32_t me_sound_worker_generation;
+static uint32_t me_sound_shadow_window_frames;
+static psp_me_sound_worker_stats_t me_sound_shadow_window_base;
+static bool me_sound_worker_mutex_ready;
+static bool me_sound_shadow_pending_hint;
+static bool me_sound_shadow_failed;
 #endif
 
 static void psp_audio_producer_waitJob(void);
@@ -131,6 +141,18 @@ static void psp_me_dispatch_wait(void)
 #define PSP_ME_SOUND_WORKER_CAPACITY 8u
 #define PSP_ME_SOUND_WORKER_TIMEOUT_US 2000000ULL
 
+static bool psp_me_sound_worker_lock(void)
+{
+	return me_sound_worker_mutex_ready &&
+		sceKernelLockLwMutex(&me_sound_worker_mutex, 1, NULL) >= 0;
+}
+
+static void psp_me_sound_worker_unlock(void)
+{
+	if (me_sound_worker_mutex_ready)
+		(void)sceKernelUnlockLwMutex(&me_sound_worker_mutex, 1);
+}
+
 static bool psp_me_sound_worker_dispatch_start(void (*task)(void *), void *data,
 	uint32_t size, void *opaque)
 {
@@ -151,6 +173,121 @@ static void psp_me_sound_worker_dispatch_wait(void *opaque)
 	psp_me_dispatch_wait();
 }
 
+static void psp_me_sound_shadow_mark_failed(const char *reason)
+{
+	if (!me_sound_shadow_failed)
+		printf("[PSP_ME_SOUND] command shadow oracle failed: %s; CPU sound remains authoritative\n",
+			reason);
+	me_sound_shadow_failed = true;
+}
+
+static void psp_me_sound_shadow_log_window(const char *reason, bool force)
+{
+	psp_me_sound_worker_stats_t stats;
+	char path[1024];
+	char line[1024];
+	uint32_t frames;
+	uint32_t sent;
+	uint32_t matched;
+	uint32_t processed;
+	uint32_t mismatches;
+	uint32_t send_failures;
+	int length;
+	int fd;
+
+	frames = __atomic_load_n(&me_sound_shadow_window_frames, __ATOMIC_RELAXED);
+	if (frames == 0 && !force)
+		return;
+	psp_me_sound_worker_get_stats(&me_sound_worker, &stats);
+	sent = stats.shadow_sent - me_sound_shadow_window_base.shadow_sent;
+	matched = stats.shadow_matched - me_sound_shadow_window_base.shadow_matched;
+	processed = stats.shadow_commands - me_sound_shadow_window_base.shadow_commands;
+	mismatches = stats.shadow_mismatches - me_sound_shadow_window_base.shadow_mismatches;
+	send_failures = stats.shadow_send_failures -
+		me_sound_shadow_window_base.shadow_send_failures;
+	length = snprintf(line, sizeof(line),
+		"[psp-me-shadow] reason=%s generation=%lu frames=%lu sent=%lu matched=%lu "
+		"mismatches=%lu send_failures=%lu pending=%lu pending_high_water=%lu "
+		"me_processed=%lu command_high_water=%lu command_overflow=%lu "
+		"event_high_water=%lu event_overflow=%lu fatal=%lu emulated_time=%llu\n",
+		reason,
+		(unsigned long)stats.generation,
+		(unsigned long)frames,
+		(unsigned long)sent,
+		(unsigned long)matched,
+		(unsigned long)mismatches,
+		(unsigned long)send_failures,
+		(unsigned long)stats.shadow_pending,
+		(unsigned long)stats.shadow_pending_high_water,
+		(unsigned long)processed,
+		(unsigned long)stats.command_high_water,
+		(unsigned long)stats.command_overflow,
+		(unsigned long)stats.event_high_water,
+		(unsigned long)stats.event_overflow,
+		(unsigned long)stats.fatal_error,
+		(unsigned long long)stats.emulated_time);
+	if (length > 0 && (size_t)length < sizeof(line))
+	{
+		printf("%s", line);
+		snprintf(path, sizeof(path), "%spsp_me_sound_shadow.log", launchDir);
+		fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+		if (fd >= 0)
+		{
+			write(fd, line, (size_t)length);
+			close(fd);
+		}
+	}
+	me_sound_shadow_window_base = stats;
+	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+}
+
+bool mvs_me_sound_shadow_command(uint8_t command, uint64_t emulated_time)
+{
+	bool result = false;
+
+	if (!psp_me_sound_worker_lock())
+		return false;
+	if (me_available && me_sound_worker.running)
+	{
+		result = psp_me_sound_worker_shadow_sound(&me_sound_worker, command,
+			emulated_time);
+		if (result)
+			__atomic_store_n(&me_sound_shadow_pending_hint, true, __ATOMIC_RELEASE);
+		else
+			psp_me_sound_shadow_mark_failed("send/poll");
+	}
+	psp_me_sound_worker_unlock();
+	return result;
+}
+
+void mvs_me_sound_shadow_frame_completed(void)
+{
+	uint32_t frames = __atomic_add_fetch(&me_sound_shadow_window_frames, 1u,
+		__ATOMIC_RELAXED);
+	bool pending = __atomic_load_n(&me_sound_shadow_pending_hint, __ATOMIC_ACQUIRE);
+
+	if (!pending && frames < 300u)
+		return;
+	if (!psp_me_sound_worker_lock())
+	{
+		if (frames >= 300u)
+			__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+		return;
+	}
+	if (me_available && me_sound_worker.running)
+	{
+		if (pending && !psp_me_sound_worker_poll(&me_sound_worker))
+			psp_me_sound_shadow_mark_failed("echo mismatch");
+		__atomic_store_n(&me_sound_shadow_pending_hint,
+			me_sound_worker.shadow_expected_count != 0, __ATOMIC_RELEASE);
+		if (frames >= 300u)
+			psp_me_sound_shadow_log_window("window", false);
+	}
+	else if (frames >= 300u)
+		__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+	psp_me_sound_worker_unlock();
+}
+
 static bool psp_me_sound_worker_bootstrap(void)
 {
 	const psp_me_sound_worker_dispatch_t dispatch = {
@@ -158,10 +295,13 @@ static bool psp_me_sound_worker_bootstrap(void)
 		psp_me_sound_worker_dispatch_wait,
 		NULL,
 	};
+	bool result = false;
 
+	if (!psp_me_sound_worker_lock())
+		return false;
 	if (!psp_me_sound_worker_start(&me_sound_worker, &dispatch,
 		PSP_ME_SOUND_WORKER_CAPACITY, PSP_ME_SOUND_WORKER_TIMEOUT_US))
-		return false;
+		goto done;
 
 	me_sound_worker_generation++;
 	if (me_sound_worker_generation == 0)
@@ -170,18 +310,59 @@ static bool psp_me_sound_worker_bootstrap(void)
 		PSP_ME_SOUND_WORKER_TIMEOUT_US))
 	{
 		psp_me_sound_worker_abort(&me_sound_worker);
-		return false;
+		goto done;
 	}
-	return true;
+	psp_me_sound_worker_get_stats(&me_sound_worker, &me_sound_shadow_window_base);
+	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
+	result = true;
+
+done:
+	psp_me_sound_worker_unlock();
+	return result;
 }
 
 static void psp_me_sound_worker_stop(void)
 {
-	if (!me_sound_worker.running)
+	if (!psp_me_sound_worker_lock())
 		return;
-	if (!psp_me_sound_worker_shutdown(&me_sound_worker,
-		PSP_ME_SOUND_WORKER_TIMEOUT_US))
+	if (me_sound_worker.running)
+	{
+		if (!psp_me_sound_worker_shutdown(&me_sound_worker,
+			PSP_ME_SOUND_WORKER_TIMEOUT_US))
+			psp_me_sound_worker_abort(&me_sound_worker);
+		psp_me_sound_shadow_log_window("stop", true);
+	}
+	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
+	psp_me_sound_worker_unlock();
+}
+
+static bool psp_me_sound_worker_reset_generation(void)
+{
+	bool result = false;
+
+	if (!psp_me_sound_worker_lock())
+		return false;
+	if (!me_sound_worker.running)
+		goto done;
+	psp_me_sound_shadow_log_window("reset", true);
+	me_sound_worker_generation++;
+	if (me_sound_worker_generation == 0)
+		me_sound_worker_generation = 1;
+	result = psp_me_sound_worker_reset(&me_sound_worker,
+		me_sound_worker_generation, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+	if (!result)
 		psp_me_sound_worker_abort(&me_sound_worker);
+	else
+	{
+		psp_me_sound_worker_get_stats(&me_sound_worker, &me_sound_shadow_window_base);
+		__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+		__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
+	}
+
+done:
+	psp_me_sound_worker_unlock();
+	return result;
 }
 
 #endif /* PSP_ME_SOUND_COPROCESSOR */
@@ -308,6 +489,14 @@ static bool psp_me_enable(const char *context)
 
 	if (!psp_me_mode_enabled())
 		return false;
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	if (!me_sound_worker_mutex_ready)
+	{
+		printf("[PSP_ME_AUDIO] %s: sound worker mutex unavailable; using Main CPU\n",
+			context);
+		return false;
+	}
+#endif
 
 	result = psp_me_dispatch_init();
 	if (result < 0)
@@ -360,7 +549,19 @@ static bool psp_audio_producer_init(void)
 	me_workspace_size = 0;
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	memset(&me_sound_worker, 0, sizeof(me_sound_worker));
+	memset(&me_sound_worker_mutex, 0, sizeof(me_sound_worker_mutex));
+	memset(&me_sound_shadow_window_base, 0, sizeof(me_sound_shadow_window_base));
 	me_sound_worker_generation = 0;
+	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
+	me_sound_shadow_failed = false;
+	me_sound_worker_mutex_ready = sceKernelCreateLwMutex(&me_sound_worker_mutex,
+		"NJEMU ME sound worker", 0, 1, NULL) >= 0;
+	{
+		char path[1024];
+		snprintf(path, sizeof(path), "%spsp_me_sound_shadow.log", launchDir);
+		remove(path);
+	}
 #endif
 	if (!audio_producer_cpu.init())
 		return false;
@@ -378,6 +579,11 @@ static void psp_audio_producer_shutdown(void)
 {
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	psp_me_sound_worker_stop();
+	if (me_sound_worker_mutex_ready)
+	{
+		(void)sceKernelDeleteLwMutex(&me_sound_worker_mutex);
+		me_sound_worker_mutex_ready = false;
+	}
 #endif
 	if (me_job_in_flight)
 	{
@@ -401,20 +607,13 @@ static void psp_audio_producer_reset(void)
 	psp_audio_producer_waitJob();
 	if (!psp_me_mode_enabled())
 		me_available = false;
-	#ifdef PSP_ME_SOUND_COPROCESSOR
-	else if (me_available && me_sound_worker.running)
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	else if (me_available)
 	{
-		me_sound_worker_generation++;
-		if (me_sound_worker_generation == 0)
-			me_sound_worker_generation = 1;
-		if (!psp_me_sound_worker_reset(&me_sound_worker,
-			me_sound_worker_generation, PSP_ME_SOUND_WORKER_TIMEOUT_US))
-		{
-			psp_me_sound_worker_abort(&me_sound_worker);
+		if (!psp_me_sound_worker_reset_generation())
 			me_available = false;
-		}
 	}
-	#endif
+#endif
 	else if (!me_available && !me_suspended)
 		psp_me_enable("reset");
 	audio_producer_cpu.reset();

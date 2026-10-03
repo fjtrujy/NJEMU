@@ -9,6 +9,8 @@
 #ifndef TIMER_H
 #define TIMER_H
 
+#include <stdint.h>
+
 #define YM2610_TIMERA			0
 #define YM2610_TIMERB			1
 #define SOUNDLATCH_TIMER		2
@@ -41,6 +43,7 @@ int timer_enable(int which, int enable);
 void timer_adjust(int which, int duration, int param, void (*callback)(int raram));
 void timer_set(int which, int duration, int param, void (*callback)(int param));
 float timer_get_time(void);
+uint64_t timer_get_time_us(void);
 int timer_getscanline(void);
 
 extern void (*timer_update_cpu)(void);

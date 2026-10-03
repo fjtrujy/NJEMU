@@ -8,6 +8,7 @@
 
 #include "mvs.h"
 #include "me_sound_profile.h"
+#include "me_sound_shadow.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -838,6 +839,7 @@ TIMER_CALLBACK( neogeo_sound_write )
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_SOUND_LATCH_APPLY);
 	sound_code = param;
 	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
+	(void)mvs_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 }
 
 

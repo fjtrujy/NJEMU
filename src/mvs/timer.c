@@ -14,6 +14,7 @@
 #include "common/emulator_runtime.h"
 #include "include/cpuintrf.h"
 #include "me_sound_profile.h"
+#include "me_sound_shadow.h"
 
 
 #define CPU_NOTACTIVE	-1
@@ -267,6 +268,12 @@ float timer_get_time(void)
 	return (float)global_offset + (float)time / 1000000.0;
 }
 
+uint64_t timer_get_time_us(void)
+{
+	return (uint64_t)(uint32_t)global_offset * 1000000ULL +
+		(uint64_t)(uint32_t)getabsolutetime();
+}
+
 
 /*------------------------------------------------------
 	Get current scanline
@@ -351,6 +358,7 @@ static void timer_update_cpu_normal(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	mvs_me_sound_shadow_frame_completed();
 	mvs_me_sound_profile_frame_completed();
 }
 
@@ -430,6 +438,7 @@ static void timer_update_cpu_raster(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	mvs_me_sound_shadow_frame_completed();
 	mvs_me_sound_profile_frame_completed();
 }
 

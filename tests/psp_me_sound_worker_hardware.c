@@ -14,6 +14,7 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 
 #define PSP_ME_SOUND_WORKER_HW_SYSCALL_INDEX 13
 #define PSP_ME_SOUND_WORKER_HW_TIMEOUT_US 2000000ULL
+#define PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES 256u
 #define PSP_ME_SOUND_WORKER_HW_LOG_PATH "host0:/njemu_me_sound_worker_hw.log"
 
 typedef struct psp_me_sound_worker_hw_job
@@ -82,6 +83,36 @@ static int hw_init_mist(void)
 	return 0;
 }
 
+static bool run_shadow_sequence(psp_me_sound_worker_t *worker,
+	uint64_t base_time)
+{
+	uint32_t i;
+
+	for (i = 0; i < PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES; i++)
+	{
+		psp_me_sound_worker_stats_t stats;
+		uint64_t start_us;
+		uint64_t emulated_time = base_time + (uint64_t)(i / 4u);
+
+		if (!psp_me_sound_worker_shadow_sound(worker, (uint8_t)(i * 37u + 11u),
+			emulated_time))
+			return false;
+		start_us = sceKernelGetSystemTimeWide();
+		for (;;)
+		{
+			if (!psp_me_sound_worker_poll(worker))
+				return false;
+			psp_me_sound_worker_get_stats(worker, &stats);
+			if (stats.shadow_pending == 0)
+				break;
+			if (sceKernelGetSystemTimeWide() - start_us >=
+				PSP_ME_SOUND_WORKER_HW_TIMEOUT_US)
+				return false;
+		}
+	}
+	return true;
+}
+
 static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	uint32_t generation, uint64_t first_time, uint64_t second_time,
 	psp_me_sound_worker_stats_t *stats)
@@ -96,6 +127,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_sync(&worker, first_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+		!run_shadow_sequence(&worker, first_time + 1u) ||
 		!psp_me_sound_worker_sync(&worker, second_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_shutdown(&worker,
@@ -108,8 +140,13 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-		stats->commands_processed == 4u &&
+		stats->commands_processed == 4u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
+		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+		stats->shadow_matched == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+		stats->shadow_mismatches == 0u && stats->shadow_send_failures == 0u &&
+		stats->shadow_pending == 0u &&
 		stats->fatal_error == PSP_ME_SOUND_WORKER_ERROR_NONE &&
 		stats->emulated_time == second_time &&
 		stats->command_overflow == 0u && stats->event_overflow == 0u;
@@ -126,7 +163,9 @@ static void log_result(int init_result, uint32_t completed_cycles,
 	length = snprintf(line, sizeof(line),
 		"[psp-me-worker-hw] passed=%d init=%d cycles=%lu suspend_resume=%d "
 		"elapsed_us=%llu generation=%lu commands=%lu resets=%lu syncs=%lu "
-		"shutdowns=%lu heartbeat=%lu fatal=%lu emulated_time=%llu "
+		"shutdowns=%lu shadow_commands=%lu shadow_sent=%lu shadow_matched=%lu "
+		"shadow_mismatches=%lu shadow_send_failures=%lu shadow_pending=%lu "
+		"shadow_pending_high_water=%lu heartbeat=%lu fatal=%lu emulated_time=%llu "
 		"cmd_high_water=%lu cmd_overflow=%lu cmd_underflow=%lu "
 		"event_high_water=%lu event_overflow=%lu event_underflow=%lu\n",
 		passed ? 1 : 0,
@@ -139,6 +178,13 @@ static void log_result(int init_result, uint32_t completed_cycles,
 		(unsigned long)last_stats->resets,
 		(unsigned long)last_stats->syncs,
 		(unsigned long)last_stats->shutdowns,
+		(unsigned long)last_stats->shadow_commands,
+		(unsigned long)last_stats->shadow_sent,
+		(unsigned long)last_stats->shadow_matched,
+		(unsigned long)last_stats->shadow_mismatches,
+		(unsigned long)last_stats->shadow_send_failures,
+		(unsigned long)last_stats->shadow_pending,
+		(unsigned long)last_stats->shadow_pending_high_water,
 		(unsigned long)last_stats->heartbeat,
 		(unsigned long)last_stats->fatal_error,
 		(unsigned long long)last_stats->emulated_time,
