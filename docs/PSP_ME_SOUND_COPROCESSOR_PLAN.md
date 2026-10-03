@@ -806,10 +806,22 @@ event_high_water=1 event_overflow=0 event_underflow=2
 
 The `suspend_resume=1` field in that harness means the ownership transition used
 by suspend/resume was exercised as stop-worker -> fresh bootstrap with a new
-generation in the same PSP process.  It is **not** evidence of a physical PSP
-suspend/resume event.  PSPSDK can request suspend, but this unattended test has
-no reliable software wake path; an actual power-callback suspend/resume remains
-the final C2 hardware gate.
+generation in the same PSP process.  It is **not** by itself evidence of a
+physical PSP suspend/resume event.  A later real power-switch test did reach the
+physical `SUSPENDING` callback and produced a clean worker stop at generation 3:
+
+```text
+reason=stop generation=3 frames=206 sent=48 matched=48 mismatches=0
+send_failures=0 pending=0 pending_high_water=1 me_processed=48
+command_high_water=1 command_overflow=0 event_high_water=1 event_overflow=0
+fatal=0 emulated_time=1083037817
+```
+
+The PSP re-enumerated on USB after wake, but the existing PSPLink/usbhostfs
+session did not recover and the console ultimately had to be restarted.  That
+means the physical suspend half is proven, while the post-`RESUME_COMPLETE`
+fresh-worker generation is still unobserved.  This remaining resume check is
+explicitly deferred rather than treated as passing.
 
 The normal PSP producer lifecycle is wired to the same implementation under the
 experimental option:
@@ -825,9 +837,12 @@ experimental option:
 The integrated PSP MVS build passes with `-Werror`.  No Z80/YM2610 state has
 moved and no MVS scheduler path has changed.
 
-**C2 gate remains open only for a physical PSP suspend/resume callback cycle.**
-Normal init/reset/shutdown behavior and repeated bootstrap in one process are
-already hardware validated.
+**C2 gate remains open only for observing the post-wake `RESUME_COMPLETE` worker
+rebootstrap on real hardware.**  Normal init/reset/shutdown behavior, the real
+physical suspend stop, and repeated bootstrap in one process are already
+hardware validated.  C4 is allowed to proceed under an explicit temporary gate
+waiver because it remains shadow-only and cannot become authoritative; the
+deferred resume evidence must still be closed before any ownership milestone.
 
 ### C2 - persistent ME sound worker bootstrap [in progress]
 
@@ -961,8 +976,8 @@ appropriate baseline for measuring command-shadow overhead.
 
 **C3 gate is closed successfully:** the real PSP preserves exact command order
 and emulated timestamps with no queue loss and negligible synchronization cost.
-C4 still must not begin until the independent C2 physical suspend/resume gate is
-closed.
+C4 may now proceed under the temporary C2 resume-evidence waiver documented
+above.  CPU Z80/YM2610 authority must remain unchanged while that waiver exists.
 
 ### C3 - timestamped sound-command shadowing [complete]
 
