@@ -5,8 +5,10 @@
 #include <me-safe-task/me-stask-mist.h>
 #include <me-core-mapper/hw-registers.h>
 #include "common/audio_producer_driver.h"
+#include "common/emulator_options.h"
 
 static bool me_available;
+static bool me_suspended;
 static bool me_job_in_flight;
 static uint32_t me_probe_data[16] __attribute__((aligned(64)));
 
@@ -31,6 +33,25 @@ static void psp_audio_producer_waitJob(void);
 
 #define PSP_ME_PROBE_A 0x13579bdfu
 #define PSP_ME_PROBE_B 0x2468ace0u
+
+static bool psp_me_mode_enabled(void)
+{
+	return option_audio_processor != AUDIO_PROCESSOR_MAIN_CPU;
+}
+
+static const char *psp_me_mode_name(void)
+{
+	switch (option_audio_processor)
+	{
+	case AUDIO_PROCESSOR_MAIN_CPU:
+		return "Main CPU";
+	case AUDIO_PROCESSOR_MEDIA_ENGINE:
+		return "Media Engine";
+	case AUDIO_PROCESSOR_AUTO:
+	default:
+		return "Auto";
+	}
+}
 
 static void psp_me_probe_task(void *param)
 {
@@ -112,11 +133,39 @@ static bool psp_me_probe(void)
 		me_probe_data[3] == (PSP_ME_PROBE_A + PSP_ME_PROBE_B);
 }
 
-static bool psp_audio_producer_init(void)
+static bool psp_me_enable(const char *context)
 {
 	int result;
 
+	if (!psp_me_mode_enabled())
+		return false;
+
+	result = psp_me_dispatch_init();
+	if (result < 0)
+	{
+		printf("[PSP_ME_AUDIO] %s: %s requested, but ME dispatcher is unavailable (%d); using Main CPU\n",
+			context, psp_me_mode_name(), result);
+		me_available = false;
+		return false;
+	}
+	if (!psp_me_probe())
+	{
+		printf("[PSP_ME_AUDIO] %s: %s requested, but ME execution probe failed; using Main CPU\n",
+			context, psp_me_mode_name());
+		me_available = false;
+		return false;
+	}
+
+	me_available = true;
+	printf("[PSP_ME_AUDIO] %s: %s -> Media Engine (MIST); Main CPU retained as fallback\n",
+		context, psp_me_mode_name());
+	return true;
+}
+
+static bool psp_audio_producer_init(void)
+{
 	me_available = false;
+	me_suspended = false;
 	me_job_in_flight = false;
 	me_job_data = NULL;
 	me_job_cache_size = 0;
@@ -124,22 +173,12 @@ static bool psp_audio_producer_init(void)
 	me_workspace_size = 0;
 	if (!audio_producer_cpu.init())
 		return false;
-
-	result = psp_me_dispatch_init();
-	if (result < 0)
+	if (!psp_me_mode_enabled())
 	{
-		printf("[PSP_ME_AUDIO] ME dispatcher unavailable (%d); using CPU producer\n",
-			result);
+		printf("[PSP_ME_AUDIO] Audio processor: Main CPU; ME initialization skipped\n");
 		return true;
 	}
-	if (!psp_me_probe())
-	{
-		printf("[PSP_ME_AUDIO] ME execution probe failed; using CPU producer\n");
-		return true;
-	}
-
-	me_available = true;
-	printf("[PSP_ME_AUDIO] ME execution probe passed (MIST); CPU producer retained as fallback\n");
+	psp_me_enable("startup");
 
 	return true;
 }
@@ -154,6 +193,7 @@ static void psp_audio_producer_shutdown(void)
 		me_job_in_flight = false;
 	}
 	me_available = false;
+	me_suspended = false;
 	me_job_data = NULL;
 	me_job_cache_size = 0;
 	free(me_workspace);
@@ -165,7 +205,28 @@ static void psp_audio_producer_shutdown(void)
 static void psp_audio_producer_reset(void)
 {
 	psp_audio_producer_waitJob();
+	if (!psp_me_mode_enabled())
+		me_available = false;
+	else if (!me_available && !me_suspended)
+		psp_me_enable("reset");
 	audio_producer_cpu.reset();
+}
+
+static void psp_audio_producer_suspend(void)
+{
+	psp_audio_producer_waitJob();
+	me_available = false;
+	me_suspended = true;
+}
+
+static void psp_audio_producer_resume(void)
+{
+	if (!me_suspended)
+		return;
+
+	me_suspended = false;
+	if (psp_me_mode_enabled())
+		psp_me_enable("resume");
 }
 
 static void psp_audio_producer_render(audio_producer_render_fn cpu_render,
@@ -260,6 +321,8 @@ static const audio_producer_driver_t audio_producer_psp = {
 	psp_audio_producer_init,
 	psp_audio_producer_shutdown,
 	psp_audio_producer_reset,
+	psp_audio_producer_suspend,
+	psp_audio_producer_resume,
 	psp_audio_producer_render,
 	psp_audio_producer_isAvailable,
 	psp_audio_producer_canRunJobs,

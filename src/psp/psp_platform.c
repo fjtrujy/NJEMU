@@ -19,6 +19,7 @@
 #include "common/emulator_runtime.h"
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
+#include "common/sound.h"
 
 
 #ifdef KERNEL_MODE
@@ -57,22 +58,21 @@ static int ExitCallback(int arg1, int arg2, void *common)
 
 static SceKernelCallbackFunction PowerCallback(int unknown, int pwrflags, void *arg)
 {
-	int cbid;
 	(void)unknown;
 	(void)arg;
 
-	if (pwrflags & PSP_POWER_CB_POWER_SWITCH)
+	if (pwrflags & (PSP_POWER_CB_POWER_SWITCH | PSP_POWER_CB_SUSPENDING))
 	{
+		if (!Sleep)
+			sound_thread_notify_power_event(1);
 		Sleep = 1;
 	}
-	else if (pwrflags & PSP_POWER_CB_RESUME_COMPLETE)
+	if (pwrflags & PSP_POWER_CB_RESUME_COMPLETE)
 	{
+		if (Sleep)
+			sound_thread_notify_power_event(0);
 		Sleep = 0;
 	}
-
-	cbid = sceKernelCreateCallback("Power Callback", (void *)PowerCallback, NULL);
-
-	scePowerRegisterCallback(0, cbid);
 
 	return 0;
 }

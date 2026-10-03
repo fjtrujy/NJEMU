@@ -28,6 +28,8 @@ static void *sound_thread;
 static int sound_volume;
 static volatile int sound_enable;
 static int16_t ALIGN16_DATA sound_buffer[2][SOUND_BUFFER_SIZE];
+static volatile uint32_t power_suspend_generation;
+static volatile uint32_t power_resume_generation;
 
 static struct sound_t sound_info;
 static void *game_audio;
@@ -52,6 +54,8 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 {
 	int flip = 0;
 	uint64_t last_loop_start = 0;
+	uint32_t handled_suspend_generation = 0;
+	uint32_t handled_resume_generation = 0;
 	(void)args;
 	(void)argp;
 
@@ -59,18 +63,35 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 	{
 		uint64_t loop_start = audio_profile_now_us();
 		uint64_t start;
+		uint32_t suspend_generation = power_suspend_generation;
+		uint32_t resume_generation;
 
 		if (last_loop_start != 0)
 			audio_profile_add(AUDIO_PROFILE_LOOP_PERIOD, loop_start - last_loop_start);
 		last_loop_start = loop_start;
 
+		if (suspend_generation != handled_suspend_generation)
+		{
+			audio_producer_driver->suspend();
+			handled_suspend_generation = suspend_generation;
+		}
+
 		if (Sleep)
 		{
 			do
 			{
-				usleep(5000000);
-			} while (Sleep);
+				usleep(EMULATOR_SLEEP_POLL_US);
+			} while (Sleep && sound_active);
 		}
+
+		resume_generation = power_resume_generation;
+		if (resume_generation != handled_resume_generation)
+		{
+			audio_producer_driver->resume();
+			handled_resume_generation = resume_generation;
+		}
+		if (!sound_active)
+			break;
 
 		if (sound_enable)
 		{
@@ -108,6 +129,8 @@ void sound_thread_init(void)
 	sound_thread = NULL;
 	sound_volume = 0;
 	sound_enable = 0;
+	power_suspend_generation = 0;
+	power_resume_generation = 0;
 }
 
 
@@ -172,6 +195,19 @@ void sound_thread_reset_producer(void)
 
 
 /*--------------------------------------------------------
+	Queue a platform power transition for the sound thread
+--------------------------------------------------------*/
+
+void sound_thread_notify_power_event(int suspended)
+{
+	if (suspended)
+		power_suspend_generation++;
+	else
+		power_resume_generation++;
+}
+
+
+/*--------------------------------------------------------
 	Sound Thread Start
 --------------------------------------------------------*/
 
@@ -193,6 +229,8 @@ int sound_thread_start(void)
 
 	if (!audio_producer_driver->init())
 		return 0;
+	if (Sleep)
+		audio_producer_driver->suspend();
 
 	game_audio = audio_driver->init();
 

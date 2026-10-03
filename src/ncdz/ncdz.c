@@ -256,7 +256,7 @@ static void neogeo_run(void)
 			{
 				do
 				{
-					usleep(5000000);
+					usleep(EMULATOR_SLEEP_POLL_US);
 				} while (Sleep);
 
 				autoframeskip_reset();

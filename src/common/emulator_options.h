@@ -12,6 +12,7 @@ extern int option_display_mode;
 extern int option_video_output_mode;
 extern int option_video_backend;
 extern int option_cache_read_size;
+extern int option_audio_processor;
 
 #define FPS_OVERLAY_OFFSET_MAX 96
 
@@ -30,6 +31,14 @@ enum
 	CACHE_READ_SIZE_32K,
 	CACHE_READ_SIZE_64K,
 	CACHE_READ_SIZE_COUNT
+};
+
+enum
+{
+	AUDIO_PROCESSOR_AUTO = 0,
+	AUDIO_PROCESSOR_MAIN_CPU,
+	AUDIO_PROCESSOR_MEDIA_ENGINE,
+	AUDIO_PROCESSOR_COUNT
 };
 
 enum

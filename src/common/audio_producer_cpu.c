@@ -14,6 +14,14 @@ static void cpu_reset(void)
 {
 }
 
+static void cpu_suspend(void)
+{
+}
+
+static void cpu_resume(void)
+{
+}
+
 static void cpu_render(audio_producer_render_fn cpu_render, int16_t *buffer)
 {
 	cpu_render(buffer);
@@ -52,6 +60,8 @@ const audio_producer_driver_t audio_producer_cpu = {
 	cpu_init,
 	cpu_shutdown,
 	cpu_reset,
+	cpu_suspend,
+	cpu_resume,
 	cpu_render,
 	cpu_isAvailable,
 	cpu_canRunJobs,

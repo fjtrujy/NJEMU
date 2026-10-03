@@ -13,6 +13,8 @@ enum
 	LOOP_EXEC
 };
 
+#define EMULATOR_SLEEP_POLL_US 100000U
+
 extern uint32_t frames_displayed;
 extern int fatal_error;
 

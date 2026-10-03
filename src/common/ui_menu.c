@@ -628,6 +628,71 @@ static int menu_fps_overlay_settings(void)
 	return 0;
 }
 
+#ifdef PSP_ME_AUDIO
+static int menu_audio_processor_settings(void)
+{
+	static const int value_labels[] = {
+		AUDIO_PROCESSOR_AUTO_LABEL,
+		AUDIO_PROCESSOR_MAIN_CPU_LABEL,
+		AUDIO_PROCESSOR_MEDIA_ENGINE_LABEL
+	};
+	int update = 1;
+	int original_processor = option_audio_processor;
+
+	pad_wait_clear();
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+	do
+	{
+		if (update)
+		{
+			const char *value = TEXT(value_labels[option_audio_processor]);
+			int width = uifont_get_string_width(value);
+			int arrowl = option_audio_processor > AUDIO_PROCESSOR_AUTO;
+			int arrowr = option_audio_processor < AUDIO_PROCESSOR_MEDIA_ENGINE;
+
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
+				TEXT(MENU_AUDIO_PROCESSOR_SETTINGS));
+			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(AUDIO_PROCESSOR));
+			if (arrowl)
+				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
+			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
+			if (arrowr)
+				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		}
+		else
+			video_driver->waitVsync(video_data);
+
+		pad_update();
+		update = 0;
+		if (pad_pressed(PLATFORM_PAD_LEFT) && option_audio_processor > AUDIO_PROCESSOR_AUTO)
+		{
+			option_audio_processor--;
+			update = 1;
+		}
+		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
+			option_audio_processor < AUDIO_PROCESSOR_MEDIA_ENGINE)
+		{
+			option_audio_processor++;
+			update = 1;
+		}
+	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
+
+	if (option_audio_processor != original_processor)
+	{
+		save_settings();
+		menu_restart();
+		return 1;
+	}
+	return 0;
+}
+#endif
+
 #ifdef PS2
 static int menu_system_video_settings(void)
 {
@@ -2856,6 +2921,9 @@ static menu2_t mainmenu2[] =
 	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
 	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_SYSTEM, MENUHELP_VIDEO_BACKEND_SETTINGS },
 	{ MENU_FPS_OVERLAY_SETTINGS, menu_fps_overlay_settings, ICON_SYSTEM, MENUHELP_FPS_OVERLAY_SETTINGS },
+#ifdef PSP_ME_AUDIO
+	{ MENU_AUDIO_PROCESSOR_SETTINGS, menu_audio_processor_settings, ICON_SYSTEM, MENUHELP_AUDIO_PROCESSOR_SETTINGS },
+#endif
 #ifdef PS2
 	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
 #endif

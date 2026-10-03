@@ -230,7 +230,7 @@ static void cps2_run(void)
 
 				do
 				{
-					usleep(5000000);
+					usleep(EMULATOR_SLEEP_POLL_US);
 				} while (Sleep);
 
 #if USE_CACHE

@@ -50,6 +50,7 @@ void sound_thread_enable(int enable);
 void sound_thread_pause(int pause);
 void sound_thread_set_volume(void);
 void sound_thread_reset_producer(void);
+void sound_thread_notify_power_event(int suspended);
 int sound_thread_start(void);
 void sound_thread_stop(void);
 

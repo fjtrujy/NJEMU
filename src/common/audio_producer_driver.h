@@ -13,6 +13,8 @@ typedef struct audio_producer_driver
 	bool (*init)(void);
 	void (*shutdown)(void);
 	void (*reset)(void);
+	void (*suspend)(void);
+	void (*resume)(void);
 	void (*render)(audio_producer_render_fn cpu_render, int16_t *buffer);
 	bool (*isAvailable)(void);
 	bool (*canRunJobs)(void);

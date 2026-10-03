@@ -153,6 +153,10 @@ static cfg_type default_options[] =
 	{ CFG_NONE,	"[Performance Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"CacheReadSize",	&option_cache_read_size,	CACHE_READ_SIZE_AUTO,	CACHE_READ_SIZE_COUNT - 1, 0},
 #endif
+#ifdef PSP_ME_AUDIO
+	{ CFG_NONE,	"[Audio Processing]", 0, 0, 0, 0},
+	{ CFG_INT,	"AudioProcessor",	&option_audio_processor,	AUDIO_PROCESSOR_AUTO,	AUDIO_PROCESSOR_COUNT - 1, 0},
+#endif
 #ifdef PS2
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"VideoOutputMode",	&option_video_output_mode,	DEFAULT_VIDEO_OUTPUT_MODE,	VIDEO_OUTPUT_MODE_COUNT - 1, 0},

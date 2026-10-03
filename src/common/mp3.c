@@ -93,7 +93,7 @@ static int MP3SleepCheck(void)
 
 		do
 		{
-			usleep(5000000);
+			usleep(EMULATOR_SLEEP_POLL_US);
 		} while (Sleep);
 
 		mp3_sleep = 0;
