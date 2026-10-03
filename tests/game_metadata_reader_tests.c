@@ -88,6 +88,12 @@ int main(int argc, char **argv)
 	CHECK(strcmp(first.name, found.name) == 0);
 	if (core != GAME_METADATA_CORE_NCDZ)
 		CHECK(game_metadata_title(&first, GAME_METADATA_LANG_ENGLISH) != NULL);
+	else
+	{
+		CHECK(first.data[0] != 0);
+		CHECK(game_metadata_find_ngh(&metadata, (uint16_t)first.data[0], &found));
+		CHECK(strcmp(first.name, found.name) == 0);
+	}
 	game_metadata_unload(&metadata);
 
 	error = game_metadata_load(&metadata, argv[1], wrong_core);

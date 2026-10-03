@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
+#include "common/game_metadata.h"
 #include "common/runtime_paths.h"
 #include "common/path_utils.h"
 #include "ncdz/resource_source.h"
@@ -52,8 +53,6 @@ uint8_t auto_animation_counter;
 uint16_t raster_line;
 uint16_t raster_counter;
 
-const char default_name[16] = "default";
-int game_index;
 int watchdog_counter;
 
 
@@ -128,13 +127,15 @@ int neogeo_check_game(void)
 
 	if (neogeo_boot_bios)
 	{
-		strcpy(game_name, games[99].name);
-		game_index = 99;
+		strcpy(game_name, "neogeocd");
 	}
 	else
 	{
-		strcpy(game_name, default_name);
-		game_index = 0;
+		game_metadata_t metadata = {0};
+		game_metadata_entry_t metadata_entry;
+		game_metadata_error_t metadata_error;
+
+		strcpy(game_name, "default");
 
 		if (!path_format(path, sizeof(path), "%sIPL.TMP", launchDir)) return 0;
 
@@ -218,20 +219,24 @@ int neogeo_check_game(void)
 
 		NGH_number = m68000_read_memory_16(0x108);
 
-		for (i = 0; games[i].ngh_number; i++)
+		if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
+			return -1;
+		metadata_error = game_metadata_load(&metadata, path, GAME_METADATA_CORE_NCDZ);
+		if (metadata_error != GAME_METADATA_OK)
 		{
-			if (games[i].ngh_number == NGH_number)
-			{
-				game_index = i + 1;
-				neogeo_ngh = NGH_number;
-				strcpy(game_name, games[i].name);
-
-				if (NGH_NUMBER(0x0243))	// lastbld2
-					hack_irq = 1;
-
-				break;
-			}
+			printf("game metadata: cannot load %s: %s\n", path,
+				game_metadata_error_string(metadata_error));
+			return -1;
 		}
+		if (game_metadata_find_ngh(&metadata, (uint16_t)NGH_number, &metadata_entry))
+		{
+			neogeo_ngh = (uint16_t)NGH_number;
+			strcpy(game_name, metadata_entry.name);
+
+			if (NGH_NUMBER(0x0243))	// lastbld2
+				hack_irq = 1;
+		}
+		game_metadata_unload(&metadata);
 	}
 
 	neogeo_reset_driver_type();
@@ -1520,116 +1525,3 @@ STATE_LOAD( driver )
 }
 
 #endif /* SAVE_STATE */
-
-
-/****************************************************************************
-	Driver structure
-****************************************************************************/
-
-const GAMES games[100] =
-{
-	{ "nam1975",  NGH_nam1975  },
-	{ "bstars",   NGH_bstars   },
-	{ "tpgolf",   NGH_tpgolf   },
-	{ "mahretsu", NGH_mahretsu },
-	{ "ridhero",  NGH_ridhero  },
-	{ "alpham2",  NGH_alpham2  },
-	{ "cyberlip", NGH_cyberlip },
-	{ "superspy", NGH_superspy },
-	{ "mutnat",   NGH_mutnat   },
-	{ "sengoku",  NGH_sengoku  },
-	{ "burningf", NGH_burningf },
-	{ "lbowling", NGH_lbowling },
-	{ "gpilots",  NGH_gpilots  },
-	{ "joyjoy",   NGH_joyjoy   },
-	{ "lresort",  NGH_lresort  },
-	{ "2020bb",   NGH_2020bb   },
-	{ "socbrawl", NGH_socbrawl },
-	{ "roboarmy", NGH_roboarmy },
-	{ "fatfury1", NGH_fatfury1 },
-	{ "fbfrenzy", NGH_fbfrenzy },
-	{ "kotm2",    NGH_kotm2    },
-	{ "sengoku2", NGH_sengoku2 },
-	{ "bstars2",  NGH_bstars2  },
-	{ "3countb",  NGH_3countb  },
-	{ "aof",      NGH_aof      },
-	{ "samsho",   NGH_samsho   },
-	{ "tophuntr", NGH_tophuntr },
-	{ "fatfury2", NGH_fatfury2 },
-	{ "ssideki",  NGH_ssideki  },
-	{ "kof94",    NGH_kof94    },
-	{ "aof2",     NGH_aof2     },
-	{ "fatfursp", NGH_fatfursp },
-	{ "savagere", NGH_savagere },
-	{ "ssideki2", NGH_ssideki2 },
-	{ "samsho2",  NGH_samsho2  },
-	{ "pspikes2", NGH_pspikes2 },
-	{ "fatfury3", NGH_fatfur3c },
-	{ "sonicwi2", NGH_sonicwi2 },
-	{ "galaxyfg", NGH_galaxyfg },
-	{ "quizkof",  NGH_quizkof  },
-	{ "ssideki3", NGH_ssideki3 },
-	{ "doubledr", NGH_doubledr },
-	{ "pbobblen", NGH_pbobblen },
-	{ "kof95",    NGH_kof95    },
-	{ "ssrpg",    NGH_ssrpg    },
-	{ "samsho3",  NGH_samsho3  },
-	{ "stakwin",  NGH_stakwin  },
-	{ "pulstar",  NGH_pulstar  },
-	{ "kabukikl", NGH_kabukikl },
-	{ "gowcaizr", NGH_gowcaizr },
-	{ "rbff1",    NGH_rbff1    },
-	{ "aof3",     NGH_aof3     },
-	{ "sonicwi3", NGH_sonicwi3 },
-	{ "fromanc2", NGH_fromanc2 },
-	{ "turfmast", NGH_turfmast },
-	{ "mslug",    NGH_mslug    },
-	{ "ngcdsp",   NGH_ngcdsp   },
-	{ "neodrift", NGH_neodrift },
-	{ "kof96",    NGH_kof96    },
-	{ "ragnagrd", NGH_ragnagrd },
-	{ "pgoal",    NGH_pgoal    },
-	{ "ironclad", NGH_ironclad },
-	{ "magdrop2", NGH_magdrop2 },
-	{ "samsho4",  NGH_samsho4  },
-	{ "kof96ngc", NGH_kof96ngc },
-	{ "rbffspec", NGH_rbffspec },
-	{ "breakers", NGH_breakers },
-	{ "kof97",    NGH_kof97    },
-	{ "lastblad", NGH_lastblad },
-	{ "rbff2",    NGH_rbff2    },
-	{ "mslug2",   NGH_mslug2   },
-	{ "kof98",    NGH_kof98    },
-	{ "lastbld2", NGH_lastbld2 },
-	{ "kof99",    NGH_kof99    },
-
-	{ "bjourney", NGH_bjourney },
-	{ "crsword",  NGH_crsword  },
-	{ "rallych",  NGH_trally   },
-	{ "ncommand", NGH_ncommand },
-	{ "wh1",      NGH_wh1      },
-	{ "wh2",      NGH_wh2      },
-	{ "wh2j",     NGH_wh2j     },
-	{ "aodk",     NGH_aodk     },
-	{ "whp",      NGH_whp      },
-	{ "mosyougi", NGH_mosyougi },
-	{ "overtop",  NGH_overtop  },
-	{ "ninjamas", NGH_ninjamas },
-	{ "twinspri", NGH_twinspri },
-	{ "maglord",  NGH_maglord  },
-	{ "ncombat",  NGH_ncombat  },
-	{ "crsword2", NGH_crsword2 },
-	{ "adkworld", NGH_adkworld },
-	{ "zintrick", NGH_zintrick },
-
-	{ "janshin",  NGH_janshin  },
-	{ "viewpoin", NGH_viewpoin },
-
-	{ "wjammers", NGH_wjammers },
-	{ "karnovr",  NGH_karnovr  },
-	{ "strhoop",  NGH_strhoop  },
-
-	{ "default",  0 },
-	{ "default",  0 },
-	{ "neogeocd", 0 }
-};

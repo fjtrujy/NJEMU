@@ -569,6 +569,11 @@ that `000-lo.lo` is optional.
 
 ### NCDZ game data
 
+`game_metadata.ncdz` is mandatory for normal game identification. It maps the
+NGH value read from the disc program header to NJEMU's canonical game name and
+is generated from `metadata/ncdz.tsv`. The BIOS-only boot path does not need an
+NGH lookup.
+
 NCDZ currently opens game content through `src/ncdz/resource_source.c` as
 either:
 
@@ -810,7 +815,7 @@ Legend:
 | Item | CPS1 | CPS2 | MVS | NCDZ |
 | --- | --- | --- | --- | --- |
 | `rominfo.<core>` | M | M | M | -- |
-| `game_metadata.<core>` | C: GUI/command list | M | M | B |
+| `game_metadata.<core>` | C: GUI/command list | M | M | M: normal game boot |
 | arcade ROM ZIPs | M | M | M | -- |
 | `roms/neogeo.zip` | -- | -- | M | -- |
 | `neocd.bin` | -- | -- | -- | M |

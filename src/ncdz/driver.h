@@ -178,17 +178,6 @@ enum
 	RASTER_AOF2
 };
 
-typedef struct game_t
-{
-	const char name[12];
-	const uint16_t  ngh_number;
-} GAMES;
-
-
-extern const GAMES games[100];
-extern int game_index;
-extern const char default_name[16];
-
 extern int neogeo_driver_type;
 extern int neogeo_raster_enable;
 extern uint16_t neogeo_ngh;

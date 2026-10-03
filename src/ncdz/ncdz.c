@@ -131,7 +131,7 @@ static void neogeo_reset(void)
 	neogeo_driver_reset();
 	neogeo_video_reset();
 
-	if (game_index != 99)
+	if (!neogeo_boot_bios)
 	{
 		if (cpu_reset_flag == 0)
 		{

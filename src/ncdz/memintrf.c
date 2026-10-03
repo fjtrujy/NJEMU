@@ -350,6 +350,8 @@ static int load_bios(void)
 
 int memory_init(void)
 {
+	int res;
+
 	video_driver->clearScreen(video_data);
 	msg_screen_init(WP_LOGO, ICON_SYSTEM, TEXT(LOAD_ROM));
 
@@ -383,9 +385,13 @@ int memory_init(void)
 
 	msg_printf(TEXT(CHECKING_GAME_ID));
 
-	if (!neogeo_check_game())
+	res = neogeo_check_game();
+	if (res <= 0)
 	{
-		error_file("IPL.TXT");
+		if (res < 0)
+			msg_printf(TEXT(COULD_NOT_OPEN_GAME_METADATA), "ncdz");
+		else
+			error_file("IPL.TXT");
 		return 0;
 	}
 

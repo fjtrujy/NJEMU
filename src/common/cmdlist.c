@@ -23,7 +23,6 @@
 
 #if (EMU_SYSTEM == NCDZ)
 #include "common/mp3.h"
-#include "ncdz/driver.h"
 #endif
 #include <fcntl.h>
 #include <stdio.h>
@@ -872,11 +871,9 @@ void commandlist(int flag)
 
 int commandlist_size_reduction(void)
 {
-#if (EMU_SYSTEM != NCDZ)
 	game_metadata_t metadata = {0};
 	game_metadata_entry_t metadata_entry;
 	game_metadata_error_t metadata_error;
-#endif
 	int fd_cmd, fd_out;
 	char path[PATH_MAX], path2[PATH_MAX];
 	char *p, linebuf[512], rom_name[512][16];//256
@@ -887,13 +884,6 @@ int commandlist_size_reduction(void)
 	int org_size, new_size;
 	char *textbuf = NULL, **line_ptr = NULL;
 
-#if (EMU_SYSTEM == NCDZ)
-	for (i = 0; i < 97; i++)
-	{
-		strcpy(rom_name[i], games[i].name);
-	}
-	total_roms = 97;
-#else
 	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
 		return 0;
 	metadata_error = game_metadata_load(&metadata, path, game_metadata_current_core());
@@ -913,7 +903,6 @@ int commandlist_size_reduction(void)
 		strcpy(rom_name[i], metadata_entry.name);
 	}
 	game_metadata_unload(&metadata);
-#endif
 
 	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return 0;
 	fd_cmd = open(path, O_RDONLY);

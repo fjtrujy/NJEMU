@@ -460,10 +460,33 @@ streaming-cache builds and a clean `romcnv_mvs` build.
 
 ### M5 — NCDZ executable identity metadata
 
-- [ ] Replace compiled `games[]` lookup with generated NGH identity metadata.
-- [ ] Remove index magic from BIOS and command-list paths.
-- [ ] Preserve all existing NGH-dependent driver behavior.
-- [ ] Measure executable-size delta.
+- [x] Replace compiled `games[]` lookup with generated NGH identity metadata.
+- [x] Remove index magic from BIOS and command-list paths.
+- [x] Preserve all existing NGH-dependent driver behavior.
+- [x] Measure executable-size delta.
+
+Normal NCDZ game identification now reads the NGH value exactly as before and
+resolves it through `game_metadata.ncdz`. The metadata blob is loaded only for
+the lookup and released immediately afterward. Unknown NGH values preserve the
+historical `default` identity; a missing/corrupt metadata file is reported as a
+metadata error instead of being misreported as a missing `IPL.TXT`.
+
+The compiled 100-slot `games[]` table, `GAMES` type, `game_index`, and the
+`game_index == 99` BIOS sentinel are gone. BIOS reset behavior now checks the
+existing `neogeo_boot_bios` state directly. Command-list reduction uses the
+common generated-metadata enumeration path for NCDZ as well, eliminating the
+hard-coded 97-game count.
+
+Generator tests pin representative NGH values (`lastbld2` `0x0243` and
+`fatfury3` `0x069c`) in addition to the exhaustive non-zero/unique NGH
+invariant. The C reader test now exercises `game_metadata_find_ngh()` for NCDZ.
+
+Desktop `driver.c.o` falls from 11,638 B to 10,291 B, a **1,347 B** executable
+reduction. `ncdz.c.o` is unchanged. The generated metadata file is 5,077 B, but
+that file was already part of the generated/distributed metadata set from M1,
+so M5 adds no new packaged metadata relative to the post-M1 baseline. GUI with
+command-list support and no-GUI builds pass, as does the full 22-test NCDZ
+Desktop suite.
 
 ### M6 — remaining data audit
 

@@ -102,6 +102,10 @@ class GameMetadataGeneratorTests(unittest.TestCase):
         ngh = [row.data0 for row in rows]
         self.assertEqual(len(ngh), len(set(ngh)))
 
+        by_name = {row.name: row.data0 for row in rows}
+        self.assertEqual(by_name["lastbld2"], 0x0243)
+        self.assertEqual(by_name["fatfury3"], 0x069C)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -324,7 +324,7 @@ Cache-enabled builds can still read historical MVS processed assets from
 ├── lang/                       # Generated UI translation packs
 ├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
-├── game_metadata.ncdz          # Generated NGH/game metadata
+├── game_metadata.ncdz          # Generated NGH/game metadata (REQUIRED)
 ├── neocd.bin                   # Neo Geo CD BIOS (user supplied, REQUIRED)
 ├── 000-lo.lo                   # Neo Geo low ROM (user supplied, REQUIRED)
 ├── command.dat                 # MAME Plus! command list (optional)
