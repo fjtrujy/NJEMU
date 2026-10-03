@@ -22,12 +22,13 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	uint32_t resets;
 	uint32_t syncs;
 	uint32_t shutdowns;
+	uint32_t shadow_commands;
 	uint32_t heartbeat;
 	uint32_t fatal_error;
 	uint32_t running;
 	uint64_t emulated_time;
 	uint32_t last_token;
-	uint32_t reserved[5];
+	uint32_t reserved[3];
 } psp_me_sound_worker_progress_t;
 
 typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
@@ -266,6 +267,26 @@ static void psp_me_sound_worker_entry(void *param)
 					PSP_ME_SOUND_WORKER_ERROR_RING);
 			return;
 
+		case PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND:
+			if (command.generation != context->progress->generation)
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_GENERATION);
+				return;
+			}
+			if (command.emulated_time < context->progress->emulated_time)
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+				return;
+			}
+			context->progress->emulated_time = command.emulated_time;
+			context->progress->shadow_commands++;
+			event.type = PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO;
+			event.emulated_time = command.emulated_time;
+			event.value = command.value;
+			break;
+
 		default:
 			me_fail(context, context->progress->generation, command.token,
 				PSP_ME_SOUND_WORKER_ERROR_PROTOCOL);
@@ -316,6 +337,7 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.resets = progress->resets;
 	worker->last_stats.syncs = progress->syncs;
 	worker->last_stats.shutdowns = progress->shutdowns;
+	worker->last_stats.shadow_commands = progress->shadow_commands;
 	worker->last_stats.heartbeat = progress->heartbeat;
 	worker->last_stats.fatal_error = progress->fatal_error;
 	worker->last_stats.emulated_time = progress->emulated_time;
@@ -325,6 +347,40 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.event_high_water = worker->events->producer.high_water;
 	worker->last_stats.event_overflow = worker->events->producer.overflow_count;
 	worker->last_stats.event_underflow = worker->events->consumer.underflow_count;
+	worker->last_stats.shadow_sent = worker->shadow_sent;
+	worker->last_stats.shadow_matched = worker->shadow_matched;
+	worker->last_stats.shadow_mismatches = worker->shadow_mismatches;
+	worker->last_stats.shadow_send_failures = worker->shadow_send_failures;
+	worker->last_stats.shadow_pending = worker->shadow_expected_count;
+	worker->last_stats.shadow_pending_high_water = worker->shadow_pending_high_water;
+}
+
+static bool consume_shadow_echo(psp_me_sound_worker_t *worker,
+	const psp_me_sound_worker_message_t *event)
+{
+	psp_me_sound_worker_shadow_expected_t *expected;
+	bool matched;
+
+	if (worker->shadow_expected_count == 0)
+	{
+		worker->shadow_mismatches++;
+		return false;
+	}
+
+	expected = &worker->shadow_expected[worker->shadow_expected_head];
+	matched = event->type == PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO &&
+		event->token == expected->token &&
+		event->generation == expected->generation &&
+		event->emulated_time == expected->emulated_time &&
+		event->value == expected->command;
+	worker->shadow_expected_head = (worker->shadow_expected_head + 1u) &
+		(PSP_ME_SOUND_WORKER_SHADOW_EXPECTED_CAPACITY - 1u);
+	worker->shadow_expected_count--;
+	if (matched)
+		worker->shadow_matched++;
+	else
+		worker->shadow_mismatches++;
+	return matched;
 }
 
 static bool timed_out(uint64_t start_us, uint64_t timeout_us)
@@ -348,6 +404,12 @@ static bool wait_event(psp_me_sound_worker_t *worker, uint32_t expected_type,
 		{
 			if (event.type == PSP_ME_SOUND_WORKER_EVENT_ERROR)
 				return false;
+			if (event.type == PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO)
+			{
+				if (!consume_shadow_echo(worker, &event))
+					return false;
+				continue;
+			}
 			if (event.type != expected_type || event.generation != expected_generation ||
 				event.token != expected_token)
 				return false;
@@ -502,6 +564,75 @@ bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 	return event.emulated_time == emulated_time;
 }
 
+bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
+	uint8_t command_value, uint64_t emulated_time)
+{
+	psp_me_sound_worker_message_t command;
+	psp_me_sound_worker_shadow_expected_t *expected;
+	psp_me_spsc_ring_result_t result;
+	uint32_t tail;
+
+	if (!worker || !worker->running || worker->generation == 0)
+		return false;
+	if (!psp_me_sound_worker_poll(worker))
+		return false;
+	if (worker->shadow_expected_count >= PSP_ME_SOUND_WORKER_SHADOW_EXPECTED_CAPACITY)
+	{
+		worker->shadow_send_failures++;
+		return false;
+	}
+
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND;
+	command.generation = worker->generation;
+	command.token = worker->next_token;
+	command.emulated_time = emulated_time;
+	command.value = command_value;
+	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
+		&command, NULL);
+	if (result != PSP_ME_SPSC_RING_OK)
+	{
+		worker->shadow_send_failures++;
+		return false;
+	}
+
+	worker->next_token++;
+	tail = (worker->shadow_expected_head + worker->shadow_expected_count) &
+		(PSP_ME_SOUND_WORKER_SHADOW_EXPECTED_CAPACITY - 1u);
+	expected = &worker->shadow_expected[tail];
+	expected->token = command.token;
+	expected->generation = command.generation;
+	expected->emulated_time = command.emulated_time;
+	expected->command = command.value;
+	worker->shadow_expected_count++;
+	worker->shadow_sent++;
+	if (worker->shadow_expected_count > worker->shadow_pending_high_water)
+		worker->shadow_pending_high_water = worker->shadow_expected_count;
+	return true;
+}
+
+bool psp_me_sound_worker_poll(psp_me_sound_worker_t *worker)
+{
+	if (!worker || !worker->running)
+		return false;
+
+	while (worker->shadow_expected_count != 0)
+	{
+		psp_me_sound_worker_message_t event;
+		psp_me_spsc_ring_result_t result = psp_me_spsc_ring_try_pop(worker->events,
+			&allegrex_cache_ops, &event, NULL);
+
+		if (result == PSP_ME_SPSC_RING_EMPTY)
+			return true;
+		if (result != PSP_ME_SPSC_RING_OK ||
+			event.type == PSP_ME_SOUND_WORKER_EVENT_ERROR ||
+			event.type != PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO ||
+			!consume_shadow_echo(worker, &event))
+			return false;
+	}
+	return true;
+}
+
 bool psp_me_sound_worker_shutdown(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us)
 {
@@ -525,6 +656,12 @@ bool psp_me_sound_worker_shutdown(psp_me_sound_worker_t *worker,
 
 	worker->dispatch.wait(worker->dispatch.opaque);
 	snapshot_stats(worker);
+	if (worker->shadow_expected_count != 0)
+	{
+		worker->shadow_mismatches += worker->shadow_expected_count;
+		worker->shadow_expected_count = 0;
+		snapshot_stats(worker);
+	}
 	worker->running = false;
 	free_shared_state(worker);
 	return worker->last_stats.fatal_error == PSP_ME_SOUND_WORKER_ERROR_NONE;
@@ -541,6 +678,12 @@ void psp_me_sound_worker_abort(psp_me_sound_worker_t *worker)
 	sceKernelDcacheWritebackInvalidateRange(control, sizeof(*control));
 	worker->dispatch.wait(worker->dispatch.opaque);
 	snapshot_stats(worker);
+	if (worker->shadow_expected_count != 0)
+	{
+		worker->shadow_mismatches += worker->shadow_expected_count;
+		worker->shadow_expected_count = 0;
+		snapshot_stats(worker);
+	}
 	worker->running = false;
 	free_shared_state(worker);
 }

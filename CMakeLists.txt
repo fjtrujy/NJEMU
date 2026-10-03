@@ -767,6 +767,7 @@ if (${TARGET} STREQUAL "MVS")
         mvs/timer.h
         mvs/timer.c
         mvs/me_sound_profile.h
+        mvs/me_sound_shadow.h
         mvs/vidhrdw.h
         mvs/vidhrdw.c
         mvs/sprite_common.h
