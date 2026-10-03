@@ -69,6 +69,7 @@ typedef struct game_database
 	uint32_t core_offset;
 	uint32_t strings_offset;
 	uint32_t strings_size;
+	uint32_t checksum;
 	uint16_t core;
 } game_database_t;
 
@@ -117,6 +118,7 @@ game_database_core_t game_database_current_core(void);
 
 game_database_error_t game_database_open(game_database_t *database,
 	const char *path, game_database_core_t expected_core);
+game_database_error_t game_database_validate(game_database_t *database);
 void game_database_close(game_database_t *database);
 
 uint32_t game_database_count(const game_database_t *database);

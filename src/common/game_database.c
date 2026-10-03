@@ -324,6 +324,7 @@ game_database_error_t game_database_open(game_database_t *database,
 	database->core_offset = core_offset;
 	database->strings_offset = strings_offset;
 	database->strings_size = strings_size;
+	database->checksum = expected_crc;
 	database->core = core;
 
 	error = read_at(database, strings_offset, &first_string, 1);
@@ -332,19 +333,19 @@ game_database_error_t game_database_open(game_database_t *database,
 		game_database_close(database);
 		return error != GAME_DATABASE_OK ? error : GAME_DATABASE_ERROR_FORMAT;
 	}
-	error = validate_checksum(database, expected_crc);
-	if (error != GAME_DATABASE_OK)
-	{
-		game_database_close(database);
-		return error;
-	}
-	error = validate_game_index(database);
-	if (error != GAME_DATABASE_OK)
-	{
-		game_database_close(database);
-		return error;
-	}
 	return GAME_DATABASE_OK;
+}
+
+game_database_error_t game_database_validate(game_database_t *database)
+{
+	game_database_error_t error;
+
+	if (database == NULL || database->file == NULL)
+		return GAME_DATABASE_ERROR_ARGUMENT;
+	error = validate_checksum(database, database->checksum);
+	if (error != GAME_DATABASE_OK)
+		return error;
+	return validate_game_index(database);
 }
 
 uint32_t game_database_count(const game_database_t *database)

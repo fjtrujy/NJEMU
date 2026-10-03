@@ -113,6 +113,7 @@ int main(int argc, char **argv)
 
 	error = game_database_open(&database, argv[1], GAME_DATABASE_CORE_CPS2);
 	CHECK(error == GAME_DATABASE_OK);
+	CHECK(game_database_validate(&database) == GAME_DATABASE_OK);
 	CHECK(game_database_count(&database) == 286);
 	for (i = 0; i < game_database_count(&database); i++)
 	{
@@ -185,7 +186,9 @@ int main(int argc, char **argv)
 	bytes[80] ^= 0x01;
 	CHECK(write_file(temp_path, bytes, size));
 	error = game_database_open(&database, temp_path, GAME_DATABASE_CORE_CPS2);
-	CHECK(error == GAME_DATABASE_ERROR_CHECKSUM);
+	CHECK(error == GAME_DATABASE_OK);
+	CHECK(game_database_validate(&database) == GAME_DATABASE_ERROR_CHECKSUM);
+	game_database_close(&database);
 	bytes[80] ^= 0x01;
 
 	write_u32_le(bytes + 36, read_u32_le(bytes + 36) + 1);
@@ -199,7 +202,10 @@ int main(int argc, char **argv)
 	update_body_crc(bytes, size);
 	CHECK(write_file(temp_path, bytes, size));
 	error = game_database_open(&database, temp_path, GAME_DATABASE_CORE_CPS2);
-	CHECK(error == GAME_DATABASE_ERROR_FORMAT);
+	CHECK(error == GAME_DATABASE_OK);
+	CHECK(game_database_get_game(&database, 0, &game) == GAME_DATABASE_ERROR_FORMAT);
+	CHECK(game_database_validate(&database) == GAME_DATABASE_ERROR_FORMAT);
+	game_database_close(&database);
 
 	CHECK(write_file(temp_path, bytes, 32));
 	error = game_database_open(&database, temp_path, GAME_DATABASE_CORE_CPS2);

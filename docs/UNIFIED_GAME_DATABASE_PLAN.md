@@ -211,12 +211,13 @@ Do not implement the new format by loading the whole generated file into memory;
 that would preserve most of the current peak-RAM problem.
 
 `src/common/game_database.c` now implements this access model for CPS2 V1. It
-keeps only the open file handle plus section/count metadata, validates the header,
-section arithmetic, streamed CRC32 and sorted game index, then performs binary
-search and record/string reads with bounded stack buffers. It does not allocate a
-copy of the database. The largest reader scratch buffer is the 4 KiB CRC chunk used
-only while opening/validating the file; selected-game titles and names live in the
-caller-provided fixed-size game record.
+keeps only the open file handle plus section/count metadata. Normal runtime open
+validates the header, record sizes and section arithmetic, then binary-searches the
+sorted game records and reads only the selected game's strings/regions/ROMs. It
+does not scan or allocate a copy of the database. Exhaustive body CRC32 plus sorted
+index/linkage validation is available through `game_database_validate()` for tests
+and diagnostics; its largest scratch buffer is a 4 KiB CRC chunk on the stack.
+Selected-game titles and names live in the caller-provided fixed-size game record.
 
 The C reader test opens the real generated CPS2 database, walks all 286 games,
 1,387 regions and 5,382 ROM records, checks representative keyed/Phoenix/cache and
@@ -350,8 +351,8 @@ Current bounded-memory impact on these migrated paths:
 - the 344,076-byte whole-`rominfo.cps2` heap allocation is eliminated;
 - the 68,883-byte whole-`game_metadata.cps2` heap allocation is eliminated from
   CPS2 game boot, GUI browsing and command-list reduction;
-- the reader performs no database-sized heap allocation; its largest explicit
-  validation scratch buffer is 4 KiB on the stack while CRC32 is streamed;
+- the runtime open path performs no full-body scan and no database-sized heap
+  allocation; exhaustive optional validation uses only a 4 KiB stack CRC buffer;
 - browser persistence is an open `FILE *` plus compact section/count state rather
   than a resident metadata blob;
 - packaged CPS2 metadata falls from 412,959 B to 215,482 B, a reduction of
