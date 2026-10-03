@@ -109,6 +109,7 @@
 
 #include "2610intf.h"
 #include "ym2610.h"
+#include "common/audio_profile.h"
 #include "common/cache.h"
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
@@ -2400,8 +2401,11 @@ static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
 {
 	int channel;
 	int sample;
+	uint64_t wait_start = audio_profile_now_us();
 
 	audio_producer_driver->waitJob();
+	audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+		audio_profile_now_us() - wait_start);
 	if (adpcma_job->error)
 	{
 		printf("YM2610 ADPCM-A ME job failed source validation\n");

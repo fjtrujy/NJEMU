@@ -456,6 +456,142 @@ The design is successful only if whole-emulator performance improves.  Moving
 more code to ME while increasing synchronization enough to erase the gain is not
 a success.
 
+### C0 audit and instrumentation status (2026-10-03)
+
+The ownership audit is complete enough to define the sound-island boundary and
+the synchronization points that the later shared-ring protocol must preserve.
+No ownership has moved yet.
+
+#### 68000 <-> sound communication surface
+
+The current MVS path crosses the main/sound boundary through the following
+state and events:
+
+- `neogeo_z80_w()` sets `pending_command` and schedules a zero-delay
+  `SOUNDLATCH_TIMER` event carrying the command byte;
+- `neogeo_sound_write()` applies that event by updating `sound_code` and pulsing
+  the Z80 NMI line;
+- Z80 port `0x00` reads `sound_code` and clears `pending_command`;
+- Z80 port `0x0c` writes `result_code`;
+- `neogeo_timer_r()` exposes both `result_code` and the command-pending state to
+  the 68000 side.  This is therefore a genuine future Allegrex -> ME status
+  synchronization boundary when ME becomes authoritative;
+- YM2610 timer/status handling can assert or clear Z80 IRQ line 0 through
+  `neogeo_sound_irq()`;
+- Z80 ports `0x08..0x0b` select the four sound ROM banks.  The implementation
+  currently materializes bank selection by copying ROM windows into
+  `memory_region_cpu2`, so the semantic bank indices must be tracked explicitly
+  by an ME implementation rather than comparing host pointers or copied backing
+  addresses.
+
+The command ordering contract remains:
+
+```text
+68000 sound write
+    -> pending_command
+    -> SOUNDLATCH_TIMER at current emulated time
+    -> sound_code update
+    -> Z80 NMI pulse
+```
+
+The future event-ring timestamp must represent the emulated time of this
+transition, not the PSP wall clock.
+
+#### Mutable state belonging to the sound island
+
+The authoritative semantic state that a complete ME owner must eventually
+contain or reproduce includes at least:
+
+- CZ80 architectural state: primary/alternate registers, PC/SP, I/R, IFF/IM,
+  halt/status and IRQ state;
+- the writable Z80 RAM window at `0xf800..0xffff`;
+- the four semantic Z80 bank selections and the ROM data visible through those
+  windows;
+- `sound_code`, `result_code` and `pending_command`;
+- YM2610 register file, address latch, FM channel/operator/envelope/LFO state,
+  timer/status/mode/IRQ state, SSG counters/envelope/RNG state, all six ADPCM-A
+  decoder channels and ADPCM-B decoder state;
+- synthesis accumulators required to make the next generated sample
+  deterministic (`out_fm`, SSG/ADPCM accumulators and related FM intermediates);
+- PCM ROM/cache view required by ADPCM-A/B decoding.  Cache pointers are not
+  semantic oracle values and must be reconstructed or represented by stable
+  offsets/blocks;
+- sound frontend/resampler progress (`samples_this_update`, fractional sample
+  carry and complete output-buffer sequencing) if final PCM generation moves to
+  ME.  `sceAudio*` output itself remains Allegrex-owned.
+
+The current ADPCM-A MIST job buffer and its `adpcma_control_generation[]`
+counters are accelerator transport/concurrency state, not emulated YM2610
+hardware state.  They remain part of the existing reference implementation
+until the full coprocessor is proven.
+
+#### Timer and synchronization dependencies
+
+YM2610 Timer A/B currently live in the common MVS timer scheduler.  A timer can
+shorten an active CPU slice; when this happens while the Z80 is active the
+existing scheduler can also suspend the 68000 until the corresponding emulated
+time.  Timer overflow updates YM2610 status/IRQ and may therefore alter Z80
+interrupt state.
+
+The audited future barrier classes are consequently:
+
+- 68000 reads through `neogeo_timer_r()` when sound result/pending state must be
+  current;
+- reset, save/load state, game switch, suspend/resume and shutdown;
+- any explicit scheduler barrier needed to preserve a YM2610 timer/status
+  dependency while authority is split during migration.
+
+Ordinary end-of-slice execution is **not** a required barrier.  The eventual ME
+worker should advance independently toward timestamped emulated-time targets.
+
+#### Focused PSP profiling
+
+`PSP_ME_SOUND_PROFILE=ON` is now an opt-in PSP/MVS-only build option.  It leaves
+normal builds unchanged and writes 300-frame windows to
+`psp_me_sound_profile.log`.  It records:
+
+- wall time / uncapped FPS for the window;
+- M68000 execution total/average/max and invocation count;
+- Z80 execution total/average/max and invocation count;
+- non-CPU timer/scheduler work;
+- timer-slice count;
+- sound command, latch, command-read and result-write counts;
+- 68000 sound-status reads, which are candidate synchronous dependencies;
+- YM2610 status/data reads, Timer A/B callbacks, IRQ transitions and timer-driven
+  slice preemptions.
+
+`PSP_AUDIO_PROFILE=ON` remains the sound-thread profiler and supplies the
+complementary YM2610 callback/producer/output measurements.  It now also reports
+`me_wait`, the time spent specifically waiting for the current ADPCM-A MIST job.
+Using the two profilers together keeps the main-scheduler statistics and audio
+thread statistics single-writer rather than introducing profiling races.
+
+Both instrumented PSP MVS configurations build successfully with `-Werror`:
+
+- Main CPU: `PSP_ME_AUDIO=OFF`, `PSP_AUDIO_PROFILE=ON`,
+  `PSP_ME_SOUND_PROFILE=ON`;
+- current ADPCM-A accelerator: `PSP_ME_AUDIO=ON`,
+  `PSP_AUDIO_PROFILE=ON`, `PSP_ME_SOUND_PROFILE=ON`.
+
+#### Baseline status
+
+A fresh controlled `mslug3` C0 hardware baseline is still required before Z80
+ownership may move.  A direct `psplinkusb` `ldstart` of the application PRX was
+tested only as a deployment shortcut and was rejected as measurement evidence:
+it did not execute the emulator with the same lifecycle as the normal EBOOT and
+did not reach the instrumented emulation loop.  No numbers from that attempt are
+treated as a baseline.  The installed PSP runtime configuration used during the
+probe was restored byte-for-byte afterwards.
+
+The historical ADPCM-A measurements near the top of this document therefore
+remain comparison context, not completion of the new C0 baseline.  The fresh
+run must launch the normal PSP application on real hardware, use `mslug3`, keep
+the game/configuration identical between Main CPU and ADPCM-A ME runs, disable
+the FPS limiter, and collect both profiler logs over controlled gameplay windows.
+
+**C0 gate remains closed for Z80 migration** until those measurements quantify
+both Z80 cost and actual cross-domain synchronization frequency.
+
 ## 13. Correctness/oracle strategy
 
 Do not jump directly from the CPU implementation to exclusive ME ownership.
