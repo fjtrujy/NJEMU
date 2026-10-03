@@ -766,8 +766,8 @@ typedef struct ym2610_context
 	int32_t ALIGN16_DATA mix_out_adpcma[4];
 #if (EMU_SYSTEM == MVS)
 	int32_t ALIGN16_DATA mix_out_delta[4];
-	void (*adpcma_calc_chan)(int c, ADPCMA *ch);
-	void (*adpcmb_calc)(ADPCMB *adpcmb);
+	void (*adpcma_calc_chan)(struct ym2610_context *context, int c, ADPCMA *ch);
+	void (*adpcmb_calc)(struct ym2610_context *context, ADPCMB *adpcmb);
 #endif
 	uint32_t lfo_am;
 	int32_t lfo_pm;
@@ -2297,9 +2297,9 @@ static void OPNB_ADPCMA_init_table(void)
 
 /* ADPCM A (Non control type) : calculate one channel output */
 #if (EMU_SYSTEM == MVS)
-static void OPNB_ADPCMA_calc_chan_static(int c, ADPCMA *ch)
+static void OPNB_ADPCMA_calc_chan_static(ym2610_context_t *context, int c, ADPCMA *ch)
 #else
-static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
+static void OPNB_ADPCMA_calc_chan(ym2610_context_t *context, int c, ADPCMA *ch)
 #endif
 {
 	(void)c;
@@ -2322,7 +2322,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 			if ((ch->now_addr & ((1 << 21) - 1)) == ((ch->end << 1) & ((1 << 21) - 1)))
 			{
 				ch->flag = 0;
-				YM2610.adpcm_arrivedEndAddress |= ch->flagMask;
+				CTX_YM2610(context).adpcm_arrivedEndAddress |= ch->flagMask;
 				return;
 			}
 
@@ -2330,7 +2330,7 @@ static void OPNB_ADPCMA_calc_chan(int c, ADPCMA *ch)
 				data = ch->now_data & 0x0f;
 			else
 			{
-				ch->now_data = *(pcmbufA + (ch->now_addr >> 1));
+				ch->now_data = *(CTX_pcmbufA(context) + (ch->now_addr >> 1));
 				data = (ch->now_data >> 4) & 0x0f;
 			}
 
@@ -2510,7 +2510,7 @@ static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
 #endif
 
 #if MVS_PCM_CACHE
-static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
+static void OPNB_ADPCMA_calc_chan_dynamic(ym2610_context_t *context, int c, ADPCMA *ch)
 {
 	(void)c;
 	uint32_t step;
@@ -2530,12 +2530,12 @@ static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 			/* Here we use 1<<21 to compensate for nibble calculations */
 
 			if ((ch->now_addr & ((1 << 21) - 1)) == ((ch->end << 1) & ((1 << 21) - 1)))
-			{
-				ch->flag = 0;
-				ch->block = 0xffff;
-				YM2610.adpcm_arrivedEndAddress |= ch->flagMask;
-				return;
-			}
+				{
+					ch->flag = 0;
+					ch->block = 0xffff;
+					CTX_YM2610(context).adpcm_arrivedEndAddress |= ch->flagMask;
+					return;
+				}
 
 			if (ch->now_addr & 1)
 			{
@@ -2749,7 +2749,7 @@ static const int32_t adpcmb_decode_table2[16] =
 };
 
 
-static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
+static void OPNB_ADPCMB_calc_static(ym2610_context_t *context, ADPCMB *adpcmb)
 {
 	uint32_t step;
 	int data;
@@ -2777,9 +2777,9 @@ static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
 				}
 				else
 				{
-					/* set EOS bit in status register */
-					if (adpcmb->status_change_EOS_bit)
-						YM2610.adpcm_arrivedEndAddress |= adpcmb->status_change_EOS_bit;
+						/* set EOS bit in status register */
+						if (adpcmb->status_change_EOS_bit)
+							CTX_YM2610(context).adpcm_arrivedEndAddress |= adpcmb->status_change_EOS_bit;
 
 					/* clear PCM BUSY bit (reflected in status register) */
 					adpcmb->PCM_BSY = 0;
@@ -2794,11 +2794,11 @@ static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
 			{
 				data = adpcmb->now_data & 0x0f;
 			}
-			else
-			{
-				adpcmb->now_data = *(pcmbufB + (adpcmb->now_addr >> 1));
-				data = adpcmb->now_data >> 4;
-			}
+				else
+				{
+					adpcmb->now_data = *(CTX_pcmbufB(context) + (adpcmb->now_addr >> 1));
+					data = adpcmb->now_data >> 4;
+				}
 
 			adpcmb->now_addr++;
 			/* 12-06-2001 JB: */
@@ -2833,7 +2833,7 @@ static void OPNB_ADPCMB_calc_static(ADPCMB *adpcmb)
 
 
 #if USE_CACHE
-static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
+static void OPNB_ADPCMB_calc_dynamic(ym2610_context_t *context, ADPCMB *adpcmb)
 {
 	uint32_t step;
 	int data;
@@ -2861,9 +2861,9 @@ static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 				}
 				else
 				{
-					/* set EOS bit in status register */
-					if (adpcmb->status_change_EOS_bit)
-						YM2610.adpcm_arrivedEndAddress |= adpcmb->status_change_EOS_bit;
+						/* set EOS bit in status register */
+						if (adpcmb->status_change_EOS_bit)
+							CTX_YM2610(context).adpcm_arrivedEndAddress |= adpcmb->status_change_EOS_bit;
 
 					/* clear PCM BUSY bit (reflected in status register) */
 					adpcmb->PCM_BSY = 0;
@@ -3032,10 +3032,10 @@ static void OPNB_ADPCMB_write(ym2610_context_t *context, ADPCMB *adpcmb, int r, 
 
 /* YM2610(OPNB) */
 
-/* Generate samples for one of the YM2610s */
-static void YM2610Update(int32_t **buffer, int length)
+/* Generate samples for one of the YM2610s. */
+void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length)
 {
-	FM_OPN *OPN = &YM2610.OPN;
+	FM_OPN *OPN = &CTX_YM2610(context).OPN;
 	int i, j, outn;
 	int32_t *bufL, *bufR;
 	FMSAMPLE_MIX lt, rt;
@@ -3047,10 +3047,10 @@ static void YM2610Update(int32_t **buffer, int length)
 	bufL = buffer[0];
 	bufR = buffer[1];
 
-	cch[0] = &YM2610.CH[1];
-	cch[1] = &YM2610.CH[2];
-	cch[2] = &YM2610.CH[4];
-	cch[3] = &YM2610.CH[5];
+	cch[0] = &CTX_YM2610(context).CH[1];
+	cch[1] = &CTX_YM2610(context).CH[2];
+	cch[2] = &CTX_YM2610(context).CH[4];
+	cch[3] = &CTX_YM2610(context).CH[5];
 
 	/* update frequency counter */
 	refresh_fc_eg_chan(cch[0]);
@@ -3072,31 +3072,36 @@ static void YM2610Update(int32_t **buffer, int length)
 	refresh_fc_eg_chan(cch[3]);
 
 	/* calc SSG count */
-	outn = SSG_calc_count(&ym2610_default_context, length);
+	outn = SSG_calc_count(context, length);
 
 #if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-	adpcma_job_submitted = OPNB_ADPCMA_submit_job(length);
+	if (context == &ym2610_default_context)
+		adpcma_job_submitted = OPNB_ADPCMA_submit_job(length);
 #endif
 
 	/* buffering */
 	for (i = 0; i < length; i++)
 	{
-		advance_lfo(&ym2610_default_context, OPN);
+		advance_lfo(context, OPN);
 
 		/* clear output acc. */
-		out_adpcma[OUTD_LEFT] = out_adpcma[OUTD_RIGHT]= out_adpcma[OUTD_CENTER] = 0;
+		CTX_out_adpcma(context)[OUTD_LEFT] =
+			CTX_out_adpcma(context)[OUTD_RIGHT] =
+			CTX_out_adpcma(context)[OUTD_CENTER] = 0;
 #if (EMU_SYSTEM == MVS)
-		out_delta[OUTD_LEFT] = out_delta[OUTD_RIGHT]= out_delta[OUTD_CENTER] = 0;
+		CTX_out_delta(context)[OUTD_LEFT] =
+			CTX_out_delta(context)[OUTD_RIGHT] =
+			CTX_out_delta(context)[OUTD_CENTER] = 0;
 #endif
 
 		/* clear outputs */
-		out_fm[1] = 0;
-		out_fm[2] = 0;
-		out_fm[4] = 0;
-		out_fm[5] = 0;
+		CTX_out_fm(context)[1] = 0;
+		CTX_out_fm(context)[2] = 0;
+		CTX_out_fm(context)[4] = 0;
+		CTX_out_fm(context)[5] = 0;
 
 		/* clear outputs SSG */
-		out_ssg = 0;
+		CTX_out_ssg(context) = 0;
 
 		/* advance envelope generator */
 		OPN->eg_timer += OPN->eg_timer_add;
@@ -3112,18 +3117,18 @@ static void YM2610Update(int32_t **buffer, int length)
 		}
 
 		/* calculate FM */
-		chan_calc(&ym2610_default_context, OPN, cch[0]);	/*remapped to 1*/
-		chan_calc(&ym2610_default_context, OPN, cch[1]);	/*remapped to 2*/
-		chan_calc(&ym2610_default_context, OPN, cch[2]);	/*remapped to 4*/
-		chan_calc(&ym2610_default_context, OPN, cch[3]);	/*remapped to 5*/
+		chan_calc(context, OPN, cch[0]);	/*remapped to 1*/
+		chan_calc(context, OPN, cch[1]);	/*remapped to 2*/
+		chan_calc(context, OPN, cch[2]);	/*remapped to 4*/
+		chan_calc(context, OPN, cch[3]);	/*remapped to 5*/
 
 		/* calculate SSG */
-		outn = SSG_CALC(&ym2610_default_context, outn);
+		outn = SSG_CALC(context, outn);
 
 #if (EMU_SYSTEM == MVS)
 		/* deltaT ADPCM */
-		if (YM2610.adpcmb.portstate & 0x80)
-			OPNB_ADPCMB_calc(&YM2610.adpcmb);
+		if (CTX_YM2610(context).adpcmb.portstate & 0x80)
+			CTX_ADPCMB_calc(context)(context, &CTX_YM2610(context).adpcmb);
 #endif
 
 	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
@@ -3133,8 +3138,14 @@ static void YM2610Update(int32_t **buffer, int length)
 			for (j = 0; j < 6; j++)
 			{
 				/* ADPCM */
-				if (YM2610.adpcma[j].flag)
-					OPNB_ADPCMA_calc_chan(j, &YM2610.adpcma[j]);
+				if (CTX_YM2610(context).adpcma[j].flag)
+#if (EMU_SYSTEM == MVS)
+					CTX_ADPCMA_calc_chan(context)(context, j,
+						&CTX_YM2610(context).adpcma[j]);
+#else
+					OPNB_ADPCMA_calc_chan(context, j,
+						&CTX_YM2610(context).adpcma[j]);
+#endif
 			}
 		}
 
@@ -3148,27 +3159,31 @@ static void YM2610Update(int32_t **buffer, int length)
 		else
 	#endif
 		{
-			lt = out_adpcma[OUTD_LEFT] + out_adpcma[OUTD_CENTER];
-			rt = out_adpcma[OUTD_RIGHT] + out_adpcma[OUTD_CENTER];
+			lt = CTX_out_adpcma(context)[OUTD_LEFT] +
+				CTX_out_adpcma(context)[OUTD_CENTER];
+			rt = CTX_out_adpcma(context)[OUTD_RIGHT] +
+				CTX_out_adpcma(context)[OUTD_CENTER];
 		}
 
 #if (EMU_SYSTEM == MVS)
-		lt += (out_delta[OUTD_LEFT]  + out_delta[OUTD_CENTER]) >> 9;
-		rt += (out_delta[OUTD_RIGHT] + out_delta[OUTD_CENTER]) >> 9;
+		lt += (CTX_out_delta(context)[OUTD_LEFT] +
+			CTX_out_delta(context)[OUTD_CENTER]) >> 9;
+		rt += (CTX_out_delta(context)[OUTD_RIGHT] +
+			CTX_out_delta(context)[OUTD_CENTER]) >> 9;
 #endif
 
-		lt += out_ssg;
-		rt += out_ssg;
+		lt += CTX_out_ssg(context);
+		rt += CTX_out_ssg(context);
 
-		lt += (out_fm[1] >> 1) & OPN->pan[2];	/* the shift right was verified on real chip */
-		rt += (out_fm[1] >> 1) & OPN->pan[3];
-		lt += (out_fm[2] >> 1) & OPN->pan[4];
-		rt += (out_fm[2] >> 1) & OPN->pan[5];
+		lt += (CTX_out_fm(context)[1] >> 1) & OPN->pan[2];	/* the shift right was verified on real chip */
+		rt += (CTX_out_fm(context)[1] >> 1) & OPN->pan[3];
+		lt += (CTX_out_fm(context)[2] >> 1) & OPN->pan[4];
+		rt += (CTX_out_fm(context)[2] >> 1) & OPN->pan[5];
 
-		lt += (out_fm[4] >> 1) & OPN->pan[8];
-		rt += (out_fm[4] >> 1) & OPN->pan[9];
-		lt += (out_fm[5] >> 1) & OPN->pan[10];
-		rt += (out_fm[5] >> 1) & OPN->pan[11];
+		lt += (CTX_out_fm(context)[4] >> 1) & OPN->pan[8];
+		rt += (CTX_out_fm(context)[4] >> 1) & OPN->pan[9];
+		lt += (CTX_out_fm(context)[5] >> 1) & OPN->pan[10];
+		rt += (CTX_out_fm(context)[5] >> 1) & OPN->pan[11];
 
 		*bufL++ = lt;
 		*bufR++ = rt;
@@ -3178,6 +3193,11 @@ static void YM2610Update(int32_t **buffer, int length)
 	if (adpcma_job_submitted)
 		OPNB_ADPCMA_finish_job(buffer[0], buffer[1], length);
 #endif
+}
+
+static void YM2610Update(int32_t **buffer, int length)
+{
+	YM2610ContextUpdate(&ym2610_default_context, buffer, length);
 }
 
 

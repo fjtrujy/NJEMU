@@ -70,6 +70,10 @@ int main(void)
 {
 	static uint8_t pcm_a[0x1000];
 	static uint8_t pcm_b[0x1000];
+	int32_t a_left[128], a_right[128];
+	int32_t b_left[128], b_right[128];
+	int32_t *a_buffer[2] = { a_left, a_right };
+	int32_t *b_buffer[2] = { b_left, b_right };
 	callback_state_t a_state = { 0 };
 	callback_state_t b_state = { 0 };
 	void *a_storage = NULL;
@@ -131,11 +135,43 @@ int main(void)
 		ok = 0;
 	}
 
+	/* Rendering must use only the selected context. Configure identical SSG
+	 * tones, verify bit-exact output, then change A alone and require the next
+	 * render period to diverge. */
+	YM2610ContextReset(a);
+	YM2610ContextReset(b);
+	write_reg(a, 0x00, 0x20);
+	write_reg(b, 0x00, 0x20);
+	write_reg(a, 0x01, 0x00);
+	write_reg(b, 0x01, 0x00);
+	write_reg(a, 0x07, 0x3e);
+	write_reg(b, 0x07, 0x3e);
+	write_reg(a, 0x08, 0x0f);
+	write_reg(b, 0x08, 0x0f);
+	YM2610ContextUpdate(a, a_buffer, 128);
+	YM2610ContextUpdate(b, b_buffer, 128);
+	if (memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+		memcmp(a_right, b_right, sizeof(a_right)) != 0)
+	{
+		fprintf(stderr, "Equal YM2610 contexts rendered different PCM\n");
+		ok = 0;
+	}
+
+	write_reg(a, 0x08, 0x00);
+	YM2610ContextUpdate(a, a_buffer, 128);
+	YM2610ContextUpdate(b, b_buffer, 128);
+	if (memcmp(a_left, b_left, sizeof(a_left)) == 0 &&
+		memcmp(a_right, b_right, sizeof(a_right)) == 0)
+	{
+		fprintf(stderr, "YM2610 render state leaked between contexts\n");
+		ok = 0;
+	}
+
 	free(a_storage);
 	free(b_storage);
 	if (!ok)
 		return 1;
 
-	printf("YM2610 independent context control/timer oracle passed\n");
+	printf("YM2610 independent context control/timer/render oracle passed\n");
 	return 0;
 }
