@@ -16,6 +16,7 @@ void mvs_me_sound_shadow_z80_slice_begin(void);
 void mvs_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time);
+void mvs_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time);
 void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,
 	const uint32_t banks[4], const uint8_t *visible_memory);
@@ -64,6 +65,13 @@ static inline void mvs_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value
 static inline void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time)
 {
 	(void)state;
+	(void)emulated_time;
+}
+
+static inline void mvs_me_sound_shadow_ym_timer(uint32_t channel,
+	uint64_t emulated_time)
+{
+	(void)channel;
 	(void)emulated_time;
 }
 

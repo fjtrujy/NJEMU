@@ -39,6 +39,9 @@ void YM2610ContextInit(ym2610_context_t *context, int baseclock, int samplerate,
 #endif
 	YM2610_CONTEXT_TIMERHANDLER TimerHandler,
 	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque);
+void YM2610ContextSetCallbacks(ym2610_context_t *context,
+	YM2610_CONTEXT_TIMERHANDLER TimerHandler,
+	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque);
 void YM2610ContextReset(ym2610_context_t *context);
 int YM2610ContextWrite(ym2610_context_t *context, int addr, uint8_t value);
 uint8_t YM2610ContextRead(ym2610_context_t *context, int addr);

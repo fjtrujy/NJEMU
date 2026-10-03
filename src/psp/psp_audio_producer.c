@@ -161,7 +161,9 @@ enum
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_INVALID_SLICE,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_SLICE_LOCK,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_SLICE_SEND,
-	PSP_ME_SOUND_Z80_LOCAL_FAILURE_CHECKPOINT_SYNC
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_CHECKPOINT_SYNC,
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_TIMER_LOCK,
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_TIMER_SEND
 };
 
 static bool psp_me_sound_worker_lock(void)
@@ -378,9 +380,11 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 		return false;
 	if (me_available && me_sound_worker.running)
 	{
+		uint32_t ym_sample_rate = 44100u >> (2 - option_samplerate);
 		result = psp_me_sound_worker_z80_snapshot(&me_sound_worker, state,
 			visible_memory, source_rom, source_length, banks, sound_code,
-			pending_command, result_code, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+			pending_command, result_code, ym_sample_rate,
+			PSP_ME_SOUND_WORKER_TIMEOUT_US);
 		if (result)
 			__atomic_store_n(&me_sound_z80_active, true, __ATOMIC_RELEASE);
 		else
@@ -460,6 +464,30 @@ void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time)
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_IRQ_SEND;
 		psp_me_sound_z80_mark_failed("IRQ send");
+	}
+}
+
+void mvs_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time)
+{
+	bool result = true;
+
+	if (!__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+		return;
+	if (!psp_me_sound_worker_lock())
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_TIMER_LOCK;
+		psp_me_sound_z80_mark_failed("YM timer lock");
+		return;
+	}
+	if (me_available && me_sound_worker.running &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+		result = psp_me_sound_worker_ym_timer(&me_sound_worker, channel,
+			emulated_time);
+	psp_me_sound_worker_unlock();
+	if (!result)
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_TIMER_SEND;
+		psp_me_sound_z80_mark_failed("YM timer send");
 	}
 }
 

@@ -33,7 +33,8 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_SNAPSHOT,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_IRQ,
-	PSP_ME_SOUND_WORKER_COMMAND_Z80_SLICE
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_SLICE,
+	PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -104,6 +105,7 @@ typedef struct psp_me_sound_z80_snapshot
 	uint8_t pending_command;
 	uint8_t result_code;
 	uint8_t reserved;
+	uint32_t ym_sample_rate;
 } psp_me_sound_z80_snapshot_t;
 
 typedef struct psp_me_sound_z80_slice
@@ -189,6 +191,7 @@ typedef struct psp_me_sound_worker
 	void *main_control;
 	void *progress;
 	void *z80_progress;
+	void *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
 	uint8_t *z80_memory;
 	size_t ring_size;
@@ -224,9 +227,11 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const cz80_state_t *state, const uint8_t *visible_memory,
 	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
-	uint64_t timeout_us);
+	uint32_t ym_sample_rate, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
 	int32_t state, uint64_t emulated_time);
+bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
+	uint32_t channel, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,

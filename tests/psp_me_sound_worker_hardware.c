@@ -20,7 +20,18 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 static uint8_t z80_reference_memory[0x20000] __attribute__((aligned(64)));
 static psp_me_sound_z80_io_t z80_reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
 static uint32_t z80_reference_io_count;
-static cz80_struc *z80_reference_irq_cpu;
+static uint8_t z80_reference_port_read_value;
+
+float timer_get_time(void)
+{
+	return 0.0f;
+}
+
+uint8_t *pcm_cache_read(uint16_t block)
+{
+	(void)block;
+	return NULL;
+}
 
 static uint8_t z80_reference_read(uint32_t address)
 {
@@ -39,7 +50,7 @@ static uint8_t z80_reference_port_read(uint16_t port)
 	psp_me_sound_z80_io_t *entry = &z80_reference_io[z80_reference_io_count++];
 	entry->port = port;
 	entry->type = PSP_ME_SOUND_Z80_IO_READ;
-	entry->value = 0x5au;
+	entry->value = z80_reference_port_read_value;
 	return entry->value;
 }
 
@@ -49,14 +60,6 @@ static void z80_reference_port_write(uint16_t port, uint8_t value)
 	entry->port = port;
 	entry->type = PSP_ME_SOUND_Z80_IO_WRITE;
 	entry->value = value;
-	if ((uint8_t)port == 0x0c && z80_reference_irq_cpu)
-	{
-		entry = &z80_reference_io[z80_reference_io_count++];
-		entry->port = 0;
-		entry->type = PSP_ME_SOUND_Z80_IO_IRQ;
-		entry->value = ASSERT_LINE;
-		Cz80_Set_IRQ(z80_reference_irq_cpu, 0, ASSERT_LINE);
-	}
 }
 
 static uint32_t z80_reference_ram_hash(void)
@@ -173,25 +176,27 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time)
 {
 	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
-	const uint32_t cycles = 45u;
+	const uint32_t timer_program_cycles = 108u;
+	const uint32_t status_read_cycles = 24u;
+	const uint8_t timer_program[] = {
+		0x3e, 0x24, 0xd3, 0x04,
+		0x3e, 0xff, 0xd3, 0x05,
+		0x3e, 0x25, 0xd3, 0x04,
+		0x3e, 0x03, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04,
+		0x3e, 0x05, 0xd3, 0x05,
+		0xdb, 0x04,
+		0x32, 0x00, 0xf8,
+	};
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	cz80_state_t expected_state;
 
 	memset(z80_reference_memory, 0, sizeof(z80_reference_memory));
+	memcpy(z80_reference_memory, timer_program, sizeof(timer_program));
 	memset(z80_reference_io, 0, sizeof(z80_reference_io));
 	z80_reference_io_count = 0;
-	/* IN A,(04); OUT (0c),A; LD (f800),A; JP 0000. */
-	z80_reference_memory[0x0000] = 0xdb;
-	z80_reference_memory[0x0001] = 0x04;
-	z80_reference_memory[0x0002] = 0xd3;
-	z80_reference_memory[0x0003] = 0x0c;
-	z80_reference_memory[0x0004] = 0x32;
-	z80_reference_memory[0x0005] = 0x00;
-	z80_reference_memory[0x0006] = 0xf8;
-	z80_reference_memory[0x0007] = 0xc3;
-	z80_reference_memory[0x0008] = 0x00;
-	z80_reference_memory[0x0009] = 0x00;
+	z80_reference_port_read_value = 0;
 
 	Cz80_Init(&reference_cpu);
 	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
@@ -203,24 +208,31 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	Cz80_Set_OUTPort(&reference_cpu, z80_reference_port_write);
 	Cz80_Reset(&reference_cpu);
 	Cz80_Get_State(&reference_cpu, &initial_state);
-	z80_reference_irq_cpu = &reference_cpu;
-
 	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
 		z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
-		banks, 0, 0, 0, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
+		banks, 0, 0, 0, 44100u, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 		return false;
 
-	Cz80_Set_IRQ(&reference_cpu, 0, CLEAR_LINE);
-	if (!psp_me_sound_worker_z80_irq(worker, CLEAR_LINE, emulated_time - 1u))
-		return false;
-	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
-	z80_reference_irq_cpu = NULL;
+	(void)Cz80_Exec(&reference_cpu, (int32_t)timer_program_cycles);
 	Cz80_Get_State(&reference_cpu, &expected_state);
-	if (z80_reference_io_count != 3u)
+	if (z80_reference_io_count != 6u ||
+		!psp_me_sound_worker_z80_slice(worker, z80_reference_io,
+			z80_reference_io_count, timer_program_cycles, emulated_time,
+			&expected_state, banks, z80_reference_ram_hash(), true) ||
+		!psp_me_sound_worker_ym_timer(worker, 0u, emulated_time + 1u) ||
+		!psp_me_sound_worker_z80_irq(worker, ASSERT_LINE, emulated_time + 1u))
+		return false;
+
+	Cz80_Set_IRQ(&reference_cpu, 0, ASSERT_LINE);
+	z80_reference_io_count = 0;
+	z80_reference_port_read_value = 0x01u;
+	(void)Cz80_Exec(&reference_cpu, (int32_t)status_read_cycles);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (z80_reference_io_count != 1u || z80_reference_memory[0xf800] != 0x01u)
 		return false;
 	return psp_me_sound_worker_z80_slice(worker, z80_reference_io,
-		z80_reference_io_count, cycles, emulated_time, &expected_state, banks,
-		z80_reference_ram_hash(), true);
+		z80_reference_io_count, status_read_cycles, emulated_time + 2u,
+		&expected_state, banks, z80_reference_ram_hash(), true);
 }
 
 static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
@@ -238,7 +250,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		!psp_me_sound_worker_sync(&worker, first_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!run_shadow_sequence(&worker, first_time + 1u) ||
-		!run_z80_shadow_sequence(&worker, second_time - 1u) ||
+		!run_z80_shadow_sequence(&worker, second_time - 2u) ||
 		!psp_me_sound_worker_sync(&worker, second_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_shutdown(&worker,
@@ -251,15 +263,15 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-		stats->commands_processed == 7u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+			stats->commands_processed == 9u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
 		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_matched == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_mismatches == 0u && stats->shadow_send_failures == 0u &&
 		stats->shadow_pending == 0u &&
-		stats->z80_snapshots == 1u && stats->z80_irqs == 1u &&
-		stats->z80_slices == 1u && stats->z80_io_events == 3u &&
+			stats->z80_snapshots == 1u && stats->z80_irqs == 1u &&
+			stats->z80_slices == 2u && stats->z80_io_events == 7u &&
 		stats->z80_state_mismatches == 0u && stats->z80_ram_mismatches == 0u &&
 		stats->z80_bank_mismatches == 0u && stats->z80_io_mismatches == 0u &&
 		stats->z80_send_failures == 0u &&

@@ -3302,6 +3302,16 @@ size_t YM2610ContextAlignment(void)
 	return 16u;
 }
 
+void YM2610ContextSetCallbacks(ym2610_context_t *context,
+	YM2610_CONTEXT_TIMERHANDLER TimerHandler,
+	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque)
+{
+	FM_ST *state = &CTX_YM2610(context).OPN.ST;
+	state->Timer_Handler = TimerHandler ? TimerHandler : ym2610_context_timer_noop;
+	state->IRQ_Handler = IRQHandler ? IRQHandler : ym2610_context_irq_noop;
+	state->Handler_Opaque = opaque;
+}
+
 void YM2610ContextInit(ym2610_context_t *context, int baseclock, int samplerate,
 	void *pcmroma, int pcmsizea,
 #if (EMU_SYSTEM == MVS)

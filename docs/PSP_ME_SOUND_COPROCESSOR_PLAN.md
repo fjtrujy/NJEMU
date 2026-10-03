@@ -1092,6 +1092,82 @@ transition must revisit that deferred lifecycle evidence first.
 
 ### C5 - ME shadow complete sound island
 
+#### C5 control/timer shadow status (2026-10-03) [complete subphase]
+
+The first C5 subphase now gives the persistent ME worker its own independent
+YM2610 control/timer context while the Allegrex YM2610 remains authoritative.
+The shared YM2610 core was refactored to support explicit contexts rather than a
+single process-wide mutable instance; the legacy API still targets the default
+context, and a host oracle proves that two control/timer contexts keep registers,
+timer state, IRQ state and callback routing independent.
+
+When the C4 Z80 snapshot is installed, Allegrex initializes a separate YM2610
+context with the active sample rate and publishes it to the ME.  The ME then
+binds its own timer/IRQ callbacks and executes the shadow Z80's YM2610 accesses
+locally:
+
+- ports `0x04`/`0x05` read shadow YM status/data and write address/data A;
+- ports `0x06`/`0x07` write address/data B locally;
+- port `0x06` ADPCM end/busy reads deliberately remain an Allegrex oracle until
+  the PCM/ADPCM portion of C5 runs on the ME;
+- Allegrex sends each authoritative YM timer overflow to the worker immediately
+  before executing its own `YM2610TimerOver()`;
+- the shadow `YM2610ContextTimerOver()` generates its own IRQ transition, applies
+  it to the ME CZ80, and the existing C4 IRQ trace validates the exact transition
+  rather than driving it.
+
+This keeps the experiment fail-closed: any status, IRQ ordering or Z80 state
+divergence disables the shadow path while CPU Z80/YM2610 and CPU-produced audio
+continue to own emulation output.
+
+Desktop MVS is **26/26 CTest green**, including the new independent-context and
+worker YM timer/status oracles.  PSP builds also remain green with the sound
+coprocessor enabled, with `PSP_ME_AUDIO=OFF`, and with the earlier ADPCM-A-only
+ME mode.  Desktop NCDZ was rebuilt after the shared YM2610 refactor as an
+additional compatibility check.
+
+The standalone real-PSP C5 worker harness completed four lifecycles.  Its final
+cycle reported:
+
+```text
+passed=1 init=0 cycles=4 suspend_resume=1 elapsed_us=833188
+generation=4 commands=265 resets=1 syncs=2 shutdowns=1
+shadow_commands=256 shadow_sent=256 shadow_matched=256
+z80_snapshots=1 z80_irqs=1 z80_slices=2 z80_io=7
+z80_state_mismatches=0 z80_ram_mismatches=0 z80_bank_mismatches=0
+z80_io_mismatches=0 z80_send_failures=0 z80_last_mismatch=0
+z80_batch_high_water=1 z80_batch_overflow=0 fatal=0
+```
+
+The deterministic integrated `mslug3` real-hardware run then kept the C5 YM
+shadow active through normal shutdown.  Across 19 300-frame checkpoints plus the
+final 130-frame drain window it validated:
+
+- **22,494 Z80 slices**;
+- **503,942 Z80 I/O/IRQ trace entries**;
+- **16,350 validated YM-generated IRQ transitions**;
+- **229 command-shadow sends and 229 matches**;
+- zero Z80 state, RAM, bank or I/O mismatches;
+- zero command/event/batch overflows, send failures, local failures or worker
+  fatal errors;
+- Z80 I/O peak **187/256**, batch-ring high-water **3/8**, and command-ring
+  high-water **9/16**.
+
+The final stop record remained fully active and clean:
+
+```text
+reason=stop generation=2 frames=130 sent=2 matched=2 mismatches=0
+send_failures=0 pending=0 z80_active=1 z80_irqs=366 z80_slices=498
+z80_io=13600 z80_state_mismatches=0 z80_ram_mismatches=0
+z80_bank_mismatches=0 z80_io_mismatches=0 z80_send_failures=0
+z80_io_peak=187 z80_batch_high_water=3 z80_batch_overflow=0 fatal=0
+```
+
+This closes only the **control/timer** portion of C5.  Shadow PCM generation,
+ADPCM end/busy ownership and CPU-vs-ME PCM/state comparison remain required
+before the complete C5 gate can close.  The deferred C2 physical-resume evidence
+also remains mandatory before any C6 authoritative ownership transfer.
+
 - move a shadow copy of YM2610 and its sound-side timers into the ME worker;
 - execute shadow Z80 -> YM2610 port writes locally on ME;
 - generate shadow PCM into the shared PCM ring;
