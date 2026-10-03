@@ -840,7 +840,7 @@ already hardware validated.
 
 **Gate:** lifecycle is deterministic before any Z80 state moves.
 
-#### C3 implementation status (2026-10-03) [hardware gameplay oracle pending]
+#### C3 implementation and hardware status (2026-10-03) [complete]
 
 Timestamped command shadowing is now implemented without changing sound
 authority.  The CPU Z80/YM2610 path still performs the real latch/NMI handling
@@ -910,12 +910,61 @@ This confirms that compiling C3/ME support does not make ME execution mandatory
 under PPSSPP.  This is fallback compatibility evidence only; it is not evidence
 for any ME execution or coherency claim.
 
-The real-PSP C3 oracle still has to be run after PSPLink is available again.
-Until that run shows exact matches, zero send failures/overflows and negligible
-whole-emulator impact, the C3 gate remains open and C4 Z80 shadow execution must
-not begin.
+The real-PSP C3 oracle is now complete.  The standalone hardware harness first
+ran four complete worker lifecycles with **256 timestamped shadow commands per
+cycle**, including groups of commands sharing the same timestamp.  The final
+cycle reported:
 
-### C3 - timestamped sound-command shadowing [in progress]
+```text
+passed=1 init=0 cycles=4 suspend_resume=1 elapsed_us=44179
+generation=4 commands=260 resets=1 syncs=2 shutdowns=1
+shadow_commands=256 shadow_sent=256 shadow_matched=256
+shadow_mismatches=0 shadow_send_failures=0 shadow_pending=0
+shadow_pending_high_water=1 heartbeat=261 fatal=0 emulated_time=19000
+cmd_high_water=1 cmd_overflow=0 event_high_water=1 event_overflow=0
+```
+
+The integrated `mslug3` run exposed one lifecycle bug before the gameplay oracle
+could start.  The PSP lightweight mutex protecting the shared worker object had
+been created with `initialCount = 1`, which means the mutex starts locked.  The
+first worker lock therefore failed before the persistent worker could bootstrap;
+the standalone harness did not use this integration mutex and was unaffected.
+Changing the initial count to zero makes the mutex start unlocked, after which
+the integrated worker bootstrapped normally on the real PSP.
+
+The final controlled gameplay run used the same C0 settings and the same
+frame-indexed `mslug3` input sequence.  It ran through a normal emulator shutdown
+so the worker's final pending queue was drained rather than terminating the PRX
+from PSPLink.  Across the complete run the shadow oracle observed **231 commands
+sent and 231 matched**, with:
+
+- zero tuple/order/timestamp mismatches;
+- zero send failures;
+- zero command-ring and event-ring overflows;
+- maximum pending depth of 1;
+- command/event ring high-water of 1;
+- `fatal=0` in every window;
+- final `reason=stop` with `pending=0`.
+
+The selected 1,200-frame C0 comparison window (300-frame windows 8-11) retained
+the exact same command counts in both same-session runs: `4, 5, 4, 3` commands.
+With the worker compiled but `AudioProcessor = Main CPU`, the current binary ran
+those windows at **84.328 FPS**.  With the C3 shadow worker active it ran them at
+**83.285 FPS** (-1.24%).  The scheduler/profiled control work moved from about
+**50.34 us/frame** to **57.94 us/frame**, an absolute increase of only about
+**7.60 us/frame**.  For additional context, the earlier C0 Main CPU baseline was
+83.216 FPS, effectively identical to this C3 run; the small whole-emulator delta
+is within the run-to-run variation already visible in the controlled hardware
+measurements.  C3 also intentionally keeps YM2610 production on Allegrex and
+reserves MIST for the persistent worker, so the ADPCM-A-only ME result is not the
+appropriate baseline for measuring command-shadow overhead.
+
+**C3 gate is closed successfully:** the real PSP preserves exact command order
+and emulated timestamps with no queue loss and negligible synchronization cost.
+C4 still must not begin until the independent C2 physical suspend/resume gate is
+closed.
+
+### C3 - timestamped sound-command shadowing [complete]
 
 - leave CPU Z80/YM2610 authoritative;
 - mirror sound-latch commands through the Allegrex -> ME event ring;

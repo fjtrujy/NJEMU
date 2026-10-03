@@ -556,7 +556,7 @@ static bool psp_audio_producer_init(void)
 	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
 	me_sound_shadow_failed = false;
 	me_sound_worker_mutex_ready = sceKernelCreateLwMutex(&me_sound_worker_mutex,
-		"NJEMU ME sound worker", 0, 1, NULL) >= 0;
+		"NJEMU ME sound worker", 0, 0, NULL) >= 0;
 	{
 		char path[1024];
 		snprintf(path, sizeof(path), "%spsp_me_sound_shadow.log", launchDir);
