@@ -7,6 +7,8 @@
 #include <me-safe-task/me-stask-mist.h>
 #include <me-core-mapper/me-core-mapper.h>
 #include <me-core-mapper/hw-registers.h>
+#include "common/audio_producer_driver.h"
+#include "common/audio_profile.h"
 #include "psp/psp_me_sound_worker.h"
 
 PSP_MODULE_INFO("NJEMU ME Sound Worker", PSP_MODULE_USER, 1, 0);
@@ -22,6 +24,21 @@ static psp_me_sound_z80_io_t z80_reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
 static uint32_t z80_reference_io_count;
 static uint8_t z80_reference_port_read_value;
 
+int pcm_cache_enable;
+
+static bool hardware_no_jobs(void)
+{
+	return false;
+}
+
+static const audio_producer_driver_t hardware_audio_producer = {
+	.ident = "hardware-test",
+	.canRunJobs = hardware_no_jobs,
+};
+
+const audio_producer_driver_t *const audio_producer_driver =
+	&hardware_audio_producer;
+
 float timer_get_time(void)
 {
 	return 0.0f;
@@ -32,6 +49,24 @@ uint8_t *pcm_cache_read(uint16_t block)
 	(void)block;
 	return NULL;
 }
+
+void ym2610_adpcma_job_run(void *data)
+{
+	(void)data;
+}
+
+#ifdef PSP_AUDIO_PROFILE
+uint64_t audio_profile_now_us(void)
+{
+	return sceKernelGetSystemTimeWide();
+}
+
+void audio_profile_add(audio_profile_metric_t metric, uint64_t elapsed_us)
+{
+	(void)metric;
+	(void)elapsed_us;
+}
+#endif
 
 static uint8_t z80_reference_read(uint32_t address)
 {
@@ -191,6 +226,9 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	cz80_state_t expected_state;
+	ym2610_pcm_window_t window;
+	int32_t expected_left[128];
+	int32_t expected_right[128];
 
 	memset(z80_reference_memory, 0, sizeof(z80_reference_memory));
 	memcpy(z80_reference_memory, timer_program, sizeof(timer_program));
@@ -210,7 +248,8 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	Cz80_Get_State(&reference_cpu, &initial_state);
 	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
 		z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
-		banks, 0, 0, 0, 44100u, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
+		banks, 0, 0, 0, 44100u, 0x1000u, 0x1000u,
+		false, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 		return false;
 
 	(void)Cz80_Exec(&reference_cpu, (int32_t)timer_program_cycles);
@@ -230,9 +269,24 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (z80_reference_io_count != 1u || z80_reference_memory[0xf800] != 0x01u)
 		return false;
-	return psp_me_sound_worker_z80_slice(worker, z80_reference_io,
+	if (!psp_me_sound_worker_z80_slice(worker, z80_reference_io,
 		z80_reference_io_count, status_read_cycles, emulated_time + 2u,
-		&expected_state, banks, z80_reference_ram_hash(), true);
+		&expected_state, banks, z80_reference_ram_hash(), true))
+		return false;
+
+	/* Exercise the shared C5 render job on the physical ME. The timer-only
+	 * sequence above leaves all audio generators silent, so an empty PCM window
+	 * has a deterministic all-zero oracle while still validating job cache
+	 * coherency, context rendering and the render ACK path. */
+	if (!psp_me_sound_worker_ym_render_prepare(worker, 128u,
+			emulated_time + 2u, &window, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
+		return false;
+	memset(expected_left, 0, sizeof(expected_left));
+	memset(expected_right, 0, sizeof(expected_right));
+	return psp_me_sound_worker_ym_render_begin(worker, &window,
+		emulated_time + 2u, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) &&
+		psp_me_sound_worker_ym_render_finish(worker, expected_left, expected_right,
+			128u, 0u, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US);
 }
 
 static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
@@ -263,7 +317,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-			stats->commands_processed == 9u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+			stats->commands_processed == 11u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
 		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&

@@ -11,12 +11,17 @@ bool mvs_me_sound_shadow_command(uint8_t command, uint64_t emulated_time);
 bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	const uint8_t *visible_memory, const uint8_t *source_rom,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
-	uint8_t pending_command, uint8_t result_code);
+	uint8_t pending_command, uint8_t result_code, uint32_t pcm_a_size,
+	uint32_t pcm_b_size);
 void mvs_me_sound_shadow_z80_slice_begin(void);
 void mvs_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time);
 void mvs_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time);
+void mvs_me_sound_shadow_ym_timer_completed(void);
+bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time);
+void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
+	uint8_t status_b);
 void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,
 	const uint32_t banks[4], const uint8_t *visible_memory);
@@ -33,7 +38,8 @@ static inline bool mvs_me_sound_shadow_command(uint8_t command,
 static inline bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	const uint8_t *visible_memory, const uint8_t *source_rom,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
-	uint8_t pending_command, uint8_t result_code)
+	uint8_t pending_command, uint8_t result_code, uint32_t pcm_a_size,
+	uint32_t pcm_b_size)
 {
 	(void)state;
 	(void)visible_memory;
@@ -43,6 +49,8 @@ static inline bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	(void)sound_code;
 	(void)pending_command;
 	(void)result_code;
+	(void)pcm_a_size;
+	(void)pcm_b_size;
 	return true;
 }
 
@@ -73,6 +81,26 @@ static inline void mvs_me_sound_shadow_ym_timer(uint32_t channel,
 {
 	(void)channel;
 	(void)emulated_time;
+}
+
+static inline void mvs_me_sound_shadow_ym_timer_completed(void)
+{
+}
+
+static inline bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples,
+	uint64_t emulated_time)
+{
+	(void)samples;
+	(void)emulated_time;
+	return false;
+}
+
+static inline void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer,
+	uint32_t samples, uint8_t status_b)
+{
+	(void)buffer;
+	(void)samples;
+	(void)status_b;
 }
 
 static inline void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,

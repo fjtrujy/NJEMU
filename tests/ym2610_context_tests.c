@@ -47,6 +47,36 @@ static void write_reg(ym2610_context_t *context, uint8_t reg, uint8_t value)
 	YM2610ContextWrite(context, 1, value);
 }
 
+static void write_reg_b(ym2610_context_t *context, uint8_t reg, uint8_t value)
+{
+	YM2610ContextWrite(context, 2, reg);
+	YM2610ContextWrite(context, 3, value);
+}
+
+static void start_adpcma_channel_zero(ym2610_context_t *context)
+{
+	write_reg_b(context, 0x01, 0x3f); /* ADPCM-A total level: maximum. */
+	write_reg_b(context, 0x08, 0xdf); /* Center pan, channel level maximum. */
+	write_reg_b(context, 0x10, 0x00); /* Start = 0x000000. */
+	write_reg_b(context, 0x18, 0x00);
+	write_reg_b(context, 0x20, 0x00); /* End = 0x0000ff. */
+	write_reg_b(context, 0x28, 0x00);
+	write_reg_b(context, 0x00, 0x01); /* Key on channel 0. */
+}
+
+static void start_adpcmb(ym2610_context_t *context)
+{
+	write_reg(context, 0x11, 0xc0); /* Center pan. */
+	write_reg(context, 0x12, 0x00); /* Start = 0x000000. */
+	write_reg(context, 0x13, 0x00);
+	write_reg(context, 0x14, 0x00); /* End = 0x0000ff. */
+	write_reg(context, 0x15, 0x00);
+	write_reg(context, 0x19, 0xff); /* Maximum playback delta. */
+	write_reg(context, 0x1a, 0xff);
+	write_reg(context, 0x1b, 0xff); /* Maximum volume. */
+	write_reg(context, 0x10, 0x80); /* Start playback. */
+}
+
 static uint8_t read_reg(ym2610_context_t *context, uint8_t reg)
 {
 	YM2610ContextWrite(context, 0, reg);
@@ -81,6 +111,7 @@ int main(void)
 	ym2610_context_t *a = alloc_context(&a_storage);
 	ym2610_context_t *b = alloc_context(&b_storage);
 	int ok = 1;
+	uint32_t i;
 
 	if (!a || !b)
 	{
@@ -89,6 +120,10 @@ int main(void)
 		free(b_storage);
 		return 1;
 	}
+	for (i = 0; i < sizeof(pcm_a); i++)
+		pcm_a[i] = (uint8_t)(i * 37u + 11u);
+	for (i = 0; i < sizeof(pcm_b); i++)
+		pcm_b[i] = (uint8_t)(i * 19u + 7u);
 
 	YM2610ContextInit(a, 8000000, 44100, pcm_a, sizeof(pcm_a),
 		pcm_b, sizeof(pcm_b), test_timer, test_irq, &a_state);
@@ -166,6 +201,135 @@ int main(void)
 		fprintf(stderr, "YM2610 render state leaked between contexts\n");
 		ok = 0;
 	}
+
+#if (EMU_SYSTEM == MVS)
+	{
+		ym2610_pcm_window_t window;
+		bool nonzero = false;
+
+		/* A window-backed context must decode exactly the same ADPCM-A stream
+		 * as a resident-ROM context without receiving decoder state from it. */
+		YM2610ContextInit(a, 8000000, 44100, pcm_a, sizeof(pcm_a),
+			pcm_b, sizeof(pcm_b), test_timer, test_irq, &a_state);
+		YM2610ContextInit(b, 8000000, 44100, NULL, sizeof(pcm_a),
+			NULL, sizeof(pcm_b), test_timer, test_irq, &b_state);
+		YM2610ContextEnablePcmWindowSource(b, sizeof(pcm_a), sizeof(pcm_b));
+		start_adpcma_channel_zero(a);
+		start_adpcma_channel_zero(b);
+		memset(&window, 0, sizeof(window));
+		window.samples = 128;
+		window.adpcma[0].base_byte = 0;
+		window.adpcma[0].size = YM2610_PCM_WINDOW_SEGMENT_BYTES;
+		memcpy(window.adpcma[0].data, pcm_a, YM2610_PCM_WINDOW_SEGMENT_BYTES);
+		YM2610ContextUpdate(a, a_buffer, 128);
+		if (!YM2610ContextUpdatePcmWindow(b, b_buffer, 128, &window) ||
+			memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+			memcmp(a_right, b_right, sizeof(a_right)) != 0)
+		{
+			fprintf(stderr, "Window-backed ADPCM-A render differs from resident PCM\n");
+			ok = 0;
+		}
+		for (i = 0; i < 128; i++)
+		{
+			if (a_left[i] != 0 || a_right[i] != 0)
+			{
+				nonzero = true;
+				break;
+			}
+		}
+		if (!nonzero)
+		{
+			fprintf(stderr, "ADPCM-A window oracle produced only silence\n");
+			ok = 0;
+		}
+
+		/* Missing source bytes must fail closed rather than dereferencing a
+		 * null PCM pointer or silently advancing a different decoder state. */
+		YM2610ContextInit(b, 8000000, 44100, NULL, sizeof(pcm_a),
+			NULL, sizeof(pcm_b), test_timer, test_irq, &b_state);
+		YM2610ContextEnablePcmWindowSource(b, sizeof(pcm_a), sizeof(pcm_b));
+		start_adpcma_channel_zero(b);
+		memset(&window, 0, sizeof(window));
+		window.samples = 128;
+		window.adpcma[0].base_byte = 0;
+		window.adpcma[0].size = 1;
+		window.adpcma[0].data[0] = pcm_a[0];
+		if (YM2610ContextUpdatePcmWindow(b, b_buffer, 128, &window))
+		{
+			fprintf(stderr, "Truncated ADPCM-A window did not fail closed\n");
+			ok = 0;
+		}
+
+		/* Delta-T/ADPCM-B uses the same window contract, including games where
+		 * B aliases SOUND1. */
+		YM2610ContextInit(a, 8000000, 44100, pcm_a, sizeof(pcm_a),
+			pcm_b, sizeof(pcm_b), test_timer, test_irq, &a_state);
+		YM2610ContextInit(b, 8000000, 44100, NULL, sizeof(pcm_a),
+			NULL, sizeof(pcm_b), test_timer, test_irq, &b_state);
+		YM2610ContextEnablePcmWindowSource(b, sizeof(pcm_a), sizeof(pcm_b));
+		start_adpcmb(a);
+		start_adpcmb(b);
+		memset(&window, 0, sizeof(window));
+		window.samples = 128;
+		window.adpcmb_segment_count = 1;
+		window.adpcmb[0].base_byte = 0;
+		window.adpcmb[0].size = YM2610_PCM_WINDOW_SEGMENT_BYTES;
+		memcpy(window.adpcmb[0].data, pcm_b, YM2610_PCM_WINDOW_SEGMENT_BYTES);
+		YM2610ContextUpdate(a, a_buffer, 128);
+		if (!YM2610ContextUpdatePcmWindow(b, b_buffer, 128, &window) ||
+			memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+			memcmp(a_right, b_right, sizeof(a_right)) != 0)
+		{
+			fprintf(stderr, "Window-backed ADPCM-B render differs from resident PCM\n");
+			ok = 0;
+		}
+
+		/* C5 snapshots the live authoritative YM rather than reconstructing a
+		 * fresh reset-equivalent chip. Rebinding must preserve every renderable
+		 * state while replacing context-local/source pointers. Prove that the
+		 * cloned context produces the same next PCM period as its live source. */
+		{
+			uint32_t channel;
+			uint32_t segment;
+
+			if (!YM2610ContextCloneForPcmWindow(b, a))
+			{
+				fprintf(stderr, "YM2610 live-state clone failed\n");
+				ok = 0;
+			}
+			else if (!YM2610ContextPreparePcmWindow(b, 128, &window))
+			{
+				fprintf(stderr, "YM2610 live-state clone window prepare failed\n");
+				ok = 0;
+			}
+			else
+			{
+				for (channel = 0; channel < YM2610_PCM_WINDOW_ADPCMA_CHANNELS;
+					channel++)
+				{
+					ym2610_pcm_window_segment_t *part = &window.adpcma[channel];
+					if (part->size != 0)
+						memcpy(part->data, pcm_a + part->base_byte, part->size);
+				}
+				for (segment = 0; segment < window.adpcmb_segment_count; segment++)
+				{
+					ym2610_pcm_window_segment_t *part = &window.adpcmb[segment];
+					if (part->size != 0)
+						memcpy(part->data, pcm_b + part->base_byte, part->size);
+				}
+				YM2610ContextUpdate(a, a_buffer, 128);
+				if (!YM2610ContextUpdatePcmWindow(b, b_buffer, 128, &window) ||
+					memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+					memcmp(a_right, b_right, sizeof(a_right)) != 0 ||
+					YM2610ContextRead(a, 2) != YM2610ContextRead(b, 2))
+				{
+					fprintf(stderr, "YM2610 live-state clone rendered different PCM/status\n");
+					ok = 0;
+				}
+			}
+		}
+	}
+#endif
 
 	free(a_storage);
 	free(b_storage);

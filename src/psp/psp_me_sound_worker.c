@@ -11,7 +11,7 @@
 #define PSP_ME_SOUND_WORKER_CACHE_SIZE(size) \
 	(((uint32_t)(size) + PSP_ME_SOUND_WORKER_CACHE_LINE - 1u) & \
 		~(PSP_ME_SOUND_WORKER_CACHE_LINE - 1u))
-#define PSP_ME_SOUND_WORKER_SHARED_POINTERS 9u
+#define PSP_ME_SOUND_WORKER_SHARED_POINTERS 10u
 #define PSP_ME_SOUND_YM_IRQ_QUEUE_CAPACITY 8u
 #define PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS \
 	((PSP_ME_SOUND_WORKER_SHARED_SIZE - \
@@ -56,8 +56,25 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	uint32_t last_sequence;
 	uint32_t last_mismatch;
 	uint32_t initialized;
-	uint32_t reserved[5];
+	uint32_t ym_renders;
+	uint32_t ym_render_samples;
+	uint32_t ym_render_errors;
+	uint32_t reserved[2];
 } psp_me_sound_z80_progress_t;
+
+typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
+	psp_me_sound_ym_render_job
+{
+	uint32_t generation;
+	uint32_t token;
+	uint32_t samples;
+	uint32_t error;
+	uint32_t status_b;
+	uint32_t reserved[3];
+	ym2610_pcm_window_t window;
+	int32_t left[PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES];
+	int32_t right[PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES];
+} psp_me_sound_ym_render_job_t;
 
 typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	psp_me_sound_worker_shared_context
@@ -71,6 +88,7 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	ym2610_context_t *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
 	uint8_t *z80_memory;
+	psp_me_sound_ym_render_job_t *ym_render_job;
 	uint32_t reserved[PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS];
 } psp_me_sound_worker_shared_context_t;
 
@@ -371,8 +389,8 @@ static uint8_t me_z80_port_read(uint16_t port)
 			value = YM2610ContextRead(runtime->ym_context, 1);
 		break;
 	case 0x06:
-		/* ADPCM end/busy state remains an Allegrex oracle until the C5 PCM
-		 * layer runs inside the ME as well. */
+		if (runtime->ym_context)
+			value = YM2610ContextRead(runtime->ym_context, 2);
 		break;
 	case 0x08:
 		(void)me_z80_set_bank(runtime, 3u, (uint32_t)(port & 0x7f00u) << 3);
@@ -922,6 +940,90 @@ static void psp_me_sound_worker_entry(void *param)
 				send_response = false;
 				break;
 
+			case PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE:
+				{
+					psp_me_sound_ym_render_job_t *job = context->ym_render_job;
+
+					if (command.generation != context->progress->generation ||
+						!z80_runtime.initialized || !z80_runtime.ym_context || !job)
+					{
+						me_fail(context, context->progress->generation, command.token,
+							PSP_ME_SOUND_WORKER_ERROR_PROTOCOL);
+						return;
+					}
+					meCoreDcacheInvalidateRange(job,
+						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+					if (job->generation != command.generation ||
+						job->token != command.token || job->samples == 0 ||
+						job->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+					{
+						context->z80_progress->ym_render_errors++;
+						job->error = 1;
+					}
+					else
+					{
+						job->error = YM2610ContextPreparePcmWindow(
+							z80_runtime.ym_context, job->samples, &job->window) ? 0u : 3u;
+						if (job->error != 0)
+							context->z80_progress->ym_render_errors++;
+					}
+					meCoreDcacheWritebackRange(job,
+						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+					meCoreDcacheWritebackRange(context->z80_progress,
+						sizeof(*context->z80_progress));
+					event.type = PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK;
+					event.emulated_time = command.emulated_time;
+					event.value = job->error;
+				}
+				break;
+
+			case PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER:
+				{
+					psp_me_sound_ym_render_job_t *job = context->ym_render_job;
+					int32_t *buffers[2];
+
+					if (command.generation != context->progress->generation ||
+						!z80_runtime.initialized || !z80_runtime.ym_context || !job)
+					{
+						me_fail(context, context->progress->generation, command.token,
+							PSP_ME_SOUND_WORKER_ERROR_PROTOCOL);
+						return;
+					}
+					meCoreDcacheInvalidateRange(job,
+						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+					if (job->generation != command.generation ||
+						job->token != command.token || job->samples == 0 ||
+						job->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES ||
+						job->window.samples != job->samples)
+					{
+						context->z80_progress->ym_render_errors++;
+						job->error = 1;
+					}
+					else
+					{
+						buffers[0] = job->left;
+						buffers[1] = job->right;
+						job->error = YM2610ContextUpdatePcmWindow(z80_runtime.ym_context,
+							buffers, (int)job->samples, &job->window) ? 0u : 2u;
+						job->status_b = YM2610ContextRead(z80_runtime.ym_context, 2);
+						if (job->error != 0)
+							context->z80_progress->ym_render_errors++;
+						else
+						{
+							context->z80_progress->ym_renders++;
+							context->z80_progress->ym_render_samples += job->samples;
+						}
+					}
+					meCoreDcacheWritebackRange(job,
+						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+					meCoreDcacheWritebackRange(context->z80_progress,
+						sizeof(*context->z80_progress));
+					event.type = PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_ACK;
+					event.emulated_time = command.emulated_time;
+					event.value = job->error;
+				}
+				break;
+
 		default:
 			me_fail(context, context->progress->generation, command.token,
 				PSP_ME_SOUND_WORKER_ERROR_PROTOCOL);
@@ -950,6 +1052,7 @@ static void free_shared_state(psp_me_sound_worker_t *worker)
 	free(worker->ym_context);
 	free(worker->z80_snapshot);
 	free(worker->z80_memory);
+	free(worker->ym_render_job);
 	worker->commands = NULL;
 	worker->events = NULL;
 	worker->z80_batches = NULL;
@@ -960,6 +1063,7 @@ static void free_shared_state(psp_me_sound_worker_t *worker)
 	worker->ym_context = NULL;
 	worker->z80_snapshot = NULL;
 	worker->z80_memory = NULL;
+	worker->ym_render_job = NULL;
 	worker->ring_size = 0;
 	worker->z80_batch_ring_size = 0;
 	worker->capacity = 0;
@@ -1019,6 +1123,18 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.z80_batch_high_water = worker->z80_batches->producer.high_water;
 	worker->last_stats.z80_batch_overflow = worker->z80_batches->producer.overflow_count;
 	worker->last_stats.z80_batch_underflow = worker->z80_batches->consumer.underflow_count;
+	worker->last_stats.ym_renders = z80_progress->ym_renders;
+	worker->last_stats.ym_render_samples = z80_progress->ym_render_samples;
+	worker->last_stats.ym_render_errors = z80_progress->ym_render_errors;
+	worker->last_stats.ym_pcm_mismatches = worker->ym_pcm_mismatches;
+	worker->last_stats.ym_status_mismatches = worker->ym_status_mismatches;
+	worker->last_stats.ym_send_failures = worker->ym_send_failures;
+	worker->last_stats.ym_first_pcm_mismatch_sample =
+		worker->ym_first_pcm_mismatch_sample;
+	worker->last_stats.ym_first_pcm_mismatch_channel =
+		worker->ym_first_pcm_mismatch_channel;
+	worker->last_stats.ym_first_pcm_expected = worker->ym_first_pcm_expected;
+	worker->last_stats.ym_first_pcm_actual = worker->ym_first_pcm_actual;
 }
 
 static bool consume_shadow_echo(psp_me_sound_worker_t *worker,
@@ -1149,10 +1265,12 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_z80_snapshot_t)));
 	worker->z80_memory = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
 		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
+	worker->ym_render_job = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_ym_render_job_t)));
 	if (!worker->commands || !worker->events || !worker->z80_batches ||
 		!worker->shared_context || !worker->main_control || !worker->progress ||
 		!worker->z80_progress || !worker->ym_context || !worker->z80_snapshot ||
-		!worker->z80_memory)
+		!worker->z80_memory || !worker->ym_render_job)
 	{
 		worker->last_stats.fatal_error = PSP_ME_SOUND_WORKER_ERROR_ALLOCATION;
 		free_shared_state(worker);
@@ -1183,6 +1301,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 	memset(worker->z80_snapshot, 0,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->z80_snapshot)));
 	memset(worker->z80_memory, 0, PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
+	memset(worker->ym_render_job, 0,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_ym_render_job_t)));
 	memset(context, 0, sizeof(*context));
 	context->commands = worker->commands;
 	context->events = worker->events;
@@ -1193,6 +1313,7 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 	context->ym_context = worker->ym_context;
 	context->z80_snapshot = worker->z80_snapshot;
 	context->z80_memory = worker->z80_memory;
+	context->ym_render_job = worker->ym_render_job;
 
 	psp_me_spsc_ring_publish_initial(worker->commands, &allegrex_cache_ops);
 	psp_me_spsc_ring_publish_initial(worker->events, &allegrex_cache_ops);
@@ -1206,6 +1327,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->z80_snapshot)));
 	sceKernelDcacheWritebackInvalidateRange(worker->z80_memory,
 		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
+	sceKernelDcacheWritebackInvalidateRange(worker->ym_render_job,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_ym_render_job_t)));
 	sceKernelDcacheWritebackInvalidateRange(context, sizeof(*context));
 
 	if (!worker->dispatch.start(psp_me_sound_worker_entry, context, sizeof(*context),
@@ -1245,6 +1368,8 @@ bool psp_me_sound_worker_reset(psp_me_sound_worker_t *worker,
 		return false;
 	worker->generation = generation;
 	worker->z80_next_sequence = 0;
+	worker->ym_render_in_flight = false;
+	worker->ym_render_token = 0;
 	return event.emulated_time == 0;
 }
 
@@ -1319,7 +1444,8 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const cz80_state_t *state, const uint8_t *visible_memory,
 	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
-	uint32_t ym_sample_rate, uint64_t timeout_us)
+	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	bool clone_default_ym, uint64_t timeout_us)
 {
 	psp_me_sound_worker_message_t command;
 	psp_me_sound_z80_snapshot_t *snapshot;
@@ -1341,17 +1467,31 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	snapshot->pending_command = pending_command;
 	snapshot->result_code = result_code;
 	snapshot->ym_sample_rate = ym_sample_rate;
+	snapshot->ym_pcm_a_size = ym_pcm_a_size;
+	snapshot->ym_pcm_b_size = ym_pcm_b_size;
 	memcpy(worker->z80_memory, visible_memory, PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
 
-	/* Build an isolated control/timer YM2610 on Allegrex with no-op callbacks.
-	 * The ME binds its own callbacks after acquiring this state. PCM buffers are
-	 * intentionally absent until the later C5 PCM layer is enabled. */
-	YM2610ContextInit((ym2610_context_t *)worker->ym_context, 8000000,
-		(int)ym_sample_rate, NULL, 0,
+	/* Production C5 snapshots the live authoritative YM so render phase,
+	 * envelopes and ADPCM decoder state start at the exact same boundary as
+	 * Allegrex. Synthetic worker tests can still request a fresh isolated YM. */
+	if (clone_default_ym)
+	{
+		if (!YM2610DefaultCloneForPcmWindow((ym2610_context_t *)worker->ym_context))
+			return false;
+	}
+	else
+	{
+		YM2610ContextInit((ym2610_context_t *)worker->ym_context, 8000000,
+			(int)ym_sample_rate, NULL, (int)ym_pcm_a_size,
 #if (EMU_SYSTEM == MVS)
-		NULL, 0,
+			NULL, (int)ym_pcm_b_size,
 #endif
-		NULL, NULL, NULL);
+			NULL, NULL, NULL);
+#if (EMU_SYSTEM == MVS)
+		YM2610ContextEnablePcmWindowSource((ym2610_context_t *)worker->ym_context,
+			ym_pcm_a_size, ym_pcm_b_size);
+#endif
+	}
 
 	/* CZ80's immutable flag tables were initialized by Allegrex. Publish the
 	 * cache once per shadow generation before ME starts executing the core. */
@@ -1401,6 +1541,157 @@ bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
 	}
 	worker->next_token++;
 	return true;
+}
+
+bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
+	uint64_t timeout_us)
+{
+	psp_me_sound_ym_render_job_t *job;
+	psp_me_sound_worker_message_t command;
+	psp_me_sound_worker_message_t event;
+
+	if (!worker || !worker->running || worker->generation == 0 || !window ||
+		!worker->ym_render_job || worker->ym_render_in_flight || samples == 0 ||
+		samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+		return false;
+
+	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
+	memset(job, 0, sizeof(*job));
+	job->generation = worker->generation;
+	job->token = worker->next_token;
+	job->samples = samples;
+	sceKernelDcacheWritebackInvalidateRange(job,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE;
+	command.generation = worker->generation;
+	command.token = worker->next_token++;
+	command.emulated_time = emulated_time;
+	if (!send_command(worker, &command, timeout_us) ||
+		!wait_event(worker, PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK,
+			worker->generation, command.token, timeout_us, &event))
+	{
+		worker->ym_send_failures++;
+		return false;
+	}
+	sceKernelDcacheInvalidateRange(job,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+	if (event.value != 0 || job->error != 0 ||
+		job->generation != worker->generation || job->token != command.token ||
+		job->samples != samples || job->window.samples != samples)
+	{
+		worker->ym_send_failures++;
+		return false;
+	}
+	*window = job->window;
+	return true;
+}
+
+bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
+	const ym2610_pcm_window_t *window, uint64_t emulated_time,
+	uint64_t timeout_us)
+{
+	psp_me_sound_ym_render_job_t *job;
+	psp_me_sound_worker_message_t command;
+
+	if (!worker || !worker->running || worker->generation == 0 || !window ||
+		!worker->ym_render_job || worker->ym_render_in_flight ||
+		window->samples == 0 || window->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+		return false;
+
+	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
+	memset(job, 0, sizeof(*job));
+	job->generation = worker->generation;
+	job->token = worker->next_token;
+	job->samples = window->samples;
+	job->window = *window;
+	sceKernelDcacheWritebackInvalidateRange(job,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER;
+	command.generation = worker->generation;
+	command.token = worker->next_token;
+	command.emulated_time = emulated_time;
+	if (!send_command(worker, &command, timeout_us))
+	{
+		worker->ym_send_failures++;
+		return false;
+	}
+	worker->next_token++;
+	worker->ym_render_token = command.token;
+	worker->ym_render_in_flight = true;
+	return true;
+}
+
+bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
+	const int32_t *expected_left, const int32_t *expected_right,
+	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us)
+{
+	psp_me_sound_ym_render_job_t *job;
+	psp_me_sound_worker_message_t event;
+	bool pcm_matches;
+	bool status_matches;
+
+	if (!worker || !worker->running || !worker->ym_render_in_flight ||
+		!worker->ym_render_job || !expected_left || !expected_right ||
+		samples == 0 || samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+		return false;
+
+	if (!wait_event(worker, PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_ACK,
+		worker->generation, worker->ym_render_token, timeout_us, &event))
+	{
+		worker->ym_send_failures++;
+		worker->ym_render_in_flight = false;
+		return false;
+	}
+	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
+	sceKernelDcacheInvalidateRange(job,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+	worker->ym_render_in_flight = false;
+	if (event.value != 0 || job->error != 0 || job->generation != worker->generation ||
+		job->token != worker->ym_render_token || job->samples != samples)
+	{
+		worker->ym_send_failures++;
+		return false;
+	}
+
+	pcm_matches = memcmp(job->left, expected_left, samples * sizeof(*expected_left)) == 0 &&
+		memcmp(job->right, expected_right, samples * sizeof(*expected_right)) == 0;
+	status_matches = (uint8_t)job->status_b == expected_status_b;
+	if (!pcm_matches)
+	{
+		if (worker->ym_pcm_mismatches == 0)
+		{
+			uint32_t i;
+
+			for (i = 0; i < samples; i++)
+			{
+				if (job->left[i] != expected_left[i])
+				{
+					worker->ym_first_pcm_mismatch_sample = i;
+					worker->ym_first_pcm_mismatch_channel = 0;
+					worker->ym_first_pcm_expected = expected_left[i];
+					worker->ym_first_pcm_actual = job->left[i];
+					break;
+				}
+				if (job->right[i] != expected_right[i])
+				{
+					worker->ym_first_pcm_mismatch_sample = i;
+					worker->ym_first_pcm_mismatch_channel = 1;
+					worker->ym_first_pcm_expected = expected_right[i];
+					worker->ym_first_pcm_actual = job->right[i];
+					break;
+				}
+			}
+		}
+		worker->ym_pcm_mismatches++;
+	}
+	if (!status_matches)
+		worker->ym_status_mismatches++;
+	return pcm_matches && status_matches;
 }
 
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,

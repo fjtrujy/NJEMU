@@ -776,6 +776,9 @@ typedef struct ym2610_context
 #if (EMU_SYSTEM == MVS)
 	uint8_t *pcm_b;
 	uint32_t pcm_b_size;
+	const ym2610_pcm_window_t *active_pcm_window;
+	uint8_t pcm_window_source_enabled;
+	uint8_t pcm_window_error;
 #endif
 #if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
 	ym2610_adpcma_job_t *adpcma_job_state;
@@ -787,6 +790,10 @@ typedef struct ym2610_context
 } ym2610_context_t;
 
 static ym2610_context_t ALIGN16_DATA ym2610_default_context;
+
+static void ym2610_context_timer_noop(void *opaque, int channel, int count,
+	double stepTime);
+static void ym2610_context_irq_noop(void *opaque, int irq);
 
 #define CTX_SSG(ctx)                  ((ctx)->ssg)
 #define CTX_YM2610(ctx)               ((ctx)->chip)
@@ -2279,6 +2286,57 @@ static int step_inc[8] = { -1*16, -1*16, -1*16, -1*16, 2*16, 5*16, 7*16, 9*16 };
 /* speedup purposes only */
 static int jedi_table[ 49*16 ];
 
+#if (EMU_SYSTEM == MVS)
+static bool ym2610_pcm_window_read_segment(const ym2610_pcm_window_segment_t *segment,
+	uint32_t byte_addr, uint8_t *value)
+{
+	uint32_t offset;
+
+	if (!segment || !value || byte_addr < segment->base_byte)
+		return false;
+	offset = byte_addr - segment->base_byte;
+	if (offset >= segment->size)
+		return false;
+	*value = segment->data[offset];
+	return true;
+}
+
+static bool ym2610_pcm_window_read_a(ym2610_context_t *context, int channel,
+	uint32_t byte_addr, uint8_t *value)
+{
+	const ym2610_pcm_window_t *window = context->active_pcm_window;
+
+	if (!window || channel < 0 || channel >= (int)YM2610_PCM_WINDOW_ADPCMA_CHANNELS ||
+		!ym2610_pcm_window_read_segment(&window->adpcma[channel], byte_addr, value))
+	{
+		context->pcm_window_error = 1;
+		return false;
+	}
+	return true;
+}
+
+static bool ym2610_pcm_window_read_b(ym2610_context_t *context,
+	uint32_t byte_addr, uint8_t *value)
+{
+	const ym2610_pcm_window_t *window = context->active_pcm_window;
+	uint32_t segment;
+
+	if (!window)
+	{
+		context->pcm_window_error = 1;
+		return false;
+	}
+	for (segment = 0; segment < window->adpcmb_segment_count &&
+		segment < YM2610_PCM_WINDOW_ADPCMB_SEGMENTS; segment++)
+	{
+		if (ym2610_pcm_window_read_segment(&window->adpcmb[segment], byte_addr, value))
+			return true;
+	}
+	context->pcm_window_error = 1;
+	return false;
+}
+#endif
+
 
 static void OPNB_ADPCMA_init_table(void)
 {
@@ -2330,7 +2388,26 @@ static void OPNB_ADPCMA_calc_chan(ym2610_context_t *context, int c, ADPCMA *ch)
 				data = ch->now_data & 0x0f;
 			else
 			{
-				ch->now_data = *(CTX_pcmbufA(context) + (ch->now_addr >> 1));
+				uint32_t byte_addr = ch->now_addr >> 1;
+#if (EMU_SYSTEM == MVS)
+				if (context->active_pcm_window)
+				{
+					if (!ym2610_pcm_window_read_a(context, c, byte_addr, &ch->now_data))
+					{
+						ch->flag = 0;
+						return;
+					}
+				}
+				else
+#endif
+				{
+					if (!CTX_pcmbufA(context) || byte_addr >= CTX_pcmsizeA(context))
+					{
+						ch->flag = 0;
+						return;
+					}
+					ch->now_data = CTX_pcmbufA(context)[byte_addr];
+				}
 				data = (ch->now_data >> 4) & 0x0f;
 			}
 
@@ -2609,9 +2686,14 @@ static void OPNB_ADPCMA_write(ym2610_context_t *context, int r, int v)
 					adpcma[c].block       = 0xffff;
 
 #if USE_CACHE
-					if ((!CTX_pcm_cache_enabled(context) && CTX_pcmbufA(context) == NULL) || adpcma[c].start >= CTX_pcmsizeA(context))
+					if ((!CTX_pcm_cache_enabled(context) &&
+						!context->pcm_window_source_enabled &&
+						CTX_pcmbufA(context) == NULL) ||
+						adpcma[c].start >= CTX_pcmsizeA(context))
 #else
-					if (CTX_pcmbufA(context) == NULL || adpcma[c].start >= CTX_pcmsizeA(context))
+					if ((!context->pcm_window_source_enabled &&
+						CTX_pcmbufA(context) == NULL) ||
+						adpcma[c].start >= CTX_pcmsizeA(context))
 #endif
 						adpcma[c].flag = 0;
 #else
@@ -2790,13 +2872,33 @@ static void OPNB_ADPCMB_calc_static(ym2610_context_t *context, ADPCMB *adpcmb)
 					return;
 				}
 			}
-			if (adpcmb->now_addr & 1)
-			{
-				data = adpcmb->now_data & 0x0f;
-			}
+				if (adpcmb->now_addr & 1)
+				{
+					data = adpcmb->now_data & 0x0f;
+				}
 				else
 				{
-					adpcmb->now_data = *(CTX_pcmbufB(context) + (adpcmb->now_addr >> 1));
+					uint32_t byte_addr = adpcmb->now_addr >> 1;
+					if (context->active_pcm_window)
+					{
+						if (!ym2610_pcm_window_read_b(context, byte_addr,
+							&adpcmb->now_data))
+						{
+							adpcmb->portstate = 0;
+							adpcmb->PCM_BSY = 0;
+							return;
+						}
+					}
+					else
+					{
+						if (!CTX_pcmbufB(context) || byte_addr >= CTX_pcmsizeB(context))
+						{
+							adpcmb->portstate = 0;
+							adpcmb->PCM_BSY = 0;
+							return;
+						}
+						adpcmb->now_data = CTX_pcmbufB(context)[byte_addr];
+					}
 					data = adpcmb->now_data >> 4;
 				}
 
@@ -2959,9 +3061,10 @@ static void OPNB_ADPCMB_write(ym2610_context_t *context, ADPCMB *adpcmb, int r, 
 		/* if yes, then let's check if ADPCM memory is mapped and big enough.
 		 * CTX_pcm_cache_enabled(context)=0 reduces this to the old !CTX_pcmbufB(context) check. */
 #if USE_CACHE
-		if (!CTX_pcm_cache_enabled(context) && !CTX_pcmbufB(context))
+		if (!CTX_pcm_cache_enabled(context) &&
+			!context->pcm_window_source_enabled && !CTX_pcmbufB(context))
 #else
-		if (!CTX_pcmbufB(context))
+		if (!context->pcm_window_source_enabled && !CTX_pcmbufB(context))
 #endif
 		{
 			adpcmb->portstate = 0x00;
@@ -3031,6 +3134,300 @@ static void OPNB_ADPCMB_write(ym2610_context_t *context, ADPCMB *adpcmb, int r, 
 /*********************************************************************************************/
 
 /* YM2610(OPNB) */
+
+#if (EMU_SYSTEM == MVS)
+static bool ym2610_default_read_pcm_bytes(bool adpcmb, uint32_t byte_addr,
+	uint8_t *destination, uint32_t size)
+{
+	uint32_t source_size = adpcmb ? CTX_pcmsizeB(&ym2610_default_context) :
+		CTX_pcmsizeA(&ym2610_default_context);
+
+	if (size == 0)
+		return true;
+	if (!destination || byte_addr >= source_size || size > source_size - byte_addr)
+		return false;
+
+#if USE_CACHE
+	if (CTX_pcm_cache_enabled(&ym2610_default_context))
+	{
+		while (size != 0)
+		{
+			uint16_t part = (uint16_t)(byte_addr >> PCM_CACHE_SHIFT);
+			uint32_t offset = byte_addr & PCM_CACHE_MASK;
+			uint32_t chunk = (1u << PCM_CACHE_SHIFT) - offset;
+			uint8_t *source;
+
+			if (chunk > size)
+				chunk = size;
+			source = pcm_cache_read(part);
+			if (!source)
+				return false;
+			memcpy(destination, source + offset, chunk);
+			destination += chunk;
+			byte_addr += chunk;
+			size -= chunk;
+		}
+		return true;
+	}
+#endif
+
+	{
+		const uint8_t *source = adpcmb ? CTX_pcmbufB(&ym2610_default_context) :
+			CTX_pcmbufA(&ym2610_default_context);
+		if (!source)
+			return false;
+		memcpy(destination, source + byte_addr, size);
+	}
+	return true;
+}
+
+static bool ym2610_prepare_adpcma_window(const ym2610_context_t *context,
+	const ADPCMA *channel, uint32_t length, ym2610_pcm_window_segment_t *segment)
+{
+	uint64_t total_decodes;
+	uint32_t decode_distance;
+	uint32_t decode_count;
+	uint32_t source_bytes;
+
+	segment->base_byte = channel->now_addr >> 1;
+	segment->size = 0;
+	segment->reserved = 0;
+	if (!channel->flag)
+		return true;
+
+	total_decodes = ((uint64_t)channel->now_step +
+		(uint64_t)channel->step * length) >> ADPCM_SHIFT;
+	decode_distance = (((channel->end << 1) & ((1u << 21) - 1u)) -
+		(channel->now_addr & ((1u << 21) - 1u))) & ((1u << 21) - 1u);
+	decode_count = total_decodes < decode_distance ?
+		(uint32_t)total_decodes : decode_distance;
+	if (decode_count == 0)
+		return true;
+
+	source_bytes = ((channel->now_addr & 1u) + decode_count + 1u) >> 1;
+	if (source_bytes > YM2610_PCM_WINDOW_SEGMENT_BYTES ||
+		segment->base_byte >= CTX_pcmsizeA(context) ||
+		source_bytes > CTX_pcmsizeA(context) - segment->base_byte)
+		return false;
+	segment->size = (uint16_t)source_bytes;
+	return true;
+}
+
+static bool ym2610_adpcmb_window_add_byte(ym2610_pcm_window_t *window,
+	uint32_t byte_addr)
+{
+	uint32_t i;
+
+	for (i = 0; i < window->adpcmb_segment_count; i++)
+	{
+		ym2610_pcm_window_segment_t *segment = &window->adpcmb[i];
+		if (byte_addr >= segment->base_byte &&
+			byte_addr < segment->base_byte + segment->size)
+			return true;
+		if (byte_addr == segment->base_byte + segment->size &&
+			segment->size < YM2610_PCM_WINDOW_SEGMENT_BYTES)
+		{
+			segment->size++;
+			return true;
+		}
+	}
+
+	if (window->adpcmb_segment_count >= YM2610_PCM_WINDOW_ADPCMB_SEGMENTS)
+		return false;
+	window->adpcmb[window->adpcmb_segment_count].base_byte = byte_addr;
+	window->adpcmb[window->adpcmb_segment_count].size = 1;
+	window->adpcmb[window->adpcmb_segment_count].reserved = 0;
+	window->adpcmb_segment_count++;
+	return true;
+}
+
+static bool ym2610_prepare_adpcmb_window(const ym2610_context_t *context,
+	const ADPCMB *channel, uint32_t length, ym2610_pcm_window_t *window)
+{
+	uint64_t total_decodes;
+	uint32_t now_addr;
+	uint64_t decode;
+
+	window->adpcmb_segment_count = 0;
+	if (!(channel->portstate & 0x80))
+		return true;
+
+	total_decodes = ((uint64_t)channel->now_step +
+		(uint64_t)channel->step * length) >> ADPCM_SHIFT;
+	now_addr = channel->now_addr;
+	for (decode = 0; decode < total_decodes; decode++)
+	{
+		if (now_addr == (channel->limit << 1))
+			now_addr = 0;
+		if (now_addr == (channel->end << 1))
+		{
+			if (channel->portstate & 0x10)
+				now_addr = channel->start << 1;
+			else
+				break;
+		}
+		if (!(now_addr & 1u))
+		{
+			uint32_t byte_addr = now_addr >> 1;
+			if (byte_addr >= CTX_pcmsizeB(context) ||
+				!ym2610_adpcmb_window_add_byte(window, byte_addr))
+				return false;
+		}
+		now_addr = (now_addr + 1u) & ((1u << 25) - 1u);
+	}
+	return true;
+}
+
+bool YM2610ContextPreparePcmWindow(ym2610_context_t *context, uint32_t length,
+	ym2610_pcm_window_t *window)
+{
+	uint32_t channel;
+
+	if (!context || !window || length == 0)
+		return false;
+	memset(window, 0, sizeof(*window));
+	window->samples = length;
+	for (channel = 0; channel < YM2610_PCM_WINDOW_ADPCMA_CHANNELS; channel++)
+	{
+		if (!ym2610_prepare_adpcma_window(context,
+			&CTX_YM2610(context).adpcma[channel], length,
+			&window->adpcma[channel]))
+			return false;
+	}
+	return ym2610_prepare_adpcmb_window(context,
+		&CTX_YM2610(context).adpcmb, length, window);
+}
+
+bool YM2610DefaultFillPcmWindow(ym2610_pcm_window_t *window)
+{
+	uint32_t channel;
+	uint32_t segment_index;
+
+	if (!window || window->samples == 0 ||
+		window->adpcmb_segment_count > YM2610_PCM_WINDOW_ADPCMB_SEGMENTS)
+		return false;
+	for (channel = 0; channel < YM2610_PCM_WINDOW_ADPCMA_CHANNELS; channel++)
+	{
+		ym2610_pcm_window_segment_t *segment = &window->adpcma[channel];
+		if (!ym2610_default_read_pcm_bytes(false, segment->base_byte,
+			segment->data, segment->size))
+			return false;
+	}
+	for (segment_index = 0; segment_index < window->adpcmb_segment_count;
+		segment_index++)
+	{
+		ym2610_pcm_window_segment_t *segment = &window->adpcmb[segment_index];
+		if (!ym2610_default_read_pcm_bytes(true, segment->base_byte,
+			segment->data, segment->size))
+			return false;
+	}
+	return true;
+}
+
+bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+	uint32_t channel;
+	uint32_t slot;
+	uint32_t index;
+
+	if (!destination || !source || destination == source)
+		return false;
+	*destination = *source;
+
+	CTX_YM2610(destination).OPN.P_CH = CTX_YM2610(destination).CH;
+	CTX_YM2610(destination).OPN.ST.Timer_Handler = ym2610_context_timer_noop;
+	CTX_YM2610(destination).OPN.ST.IRQ_Handler = ym2610_context_irq_noop;
+	CTX_YM2610(destination).OPN.ST.Handler_Opaque = NULL;
+	for (channel = 0; channel < 6; channel++)
+	{
+		for (slot = 0; slot < 4; slot++)
+		{
+			const int32_t *source_dt = CTX_YM2610(source).CH[channel].SLOT[slot].DT;
+			bool rebound = source_dt == NULL;
+
+			CTX_YM2610(destination).CH[channel].SLOT[slot].DT = NULL;
+			for (index = 0; !rebound && index < 8; index++)
+			{
+				if (source_dt == CTX_YM2610(source).OPN.ST.dt_tab[index])
+				{
+					CTX_YM2610(destination).CH[channel].SLOT[slot].DT =
+						CTX_YM2610(destination).OPN.ST.dt_tab[index];
+					rebound = true;
+				}
+			}
+			if (!rebound)
+				return false;
+		}
+		setup_connection(destination, &CTX_YM2610(destination).CH[channel],
+			(int)channel);
+
+		for (index = 0; index < 4; index++)
+		{
+			if (CTX_YM2610(source).adpcma[channel].pan ==
+				&CTX_out_adpcma(source)[index])
+			{
+				CTX_YM2610(destination).adpcma[channel].pan =
+					&CTX_out_adpcma(destination)[index];
+				break;
+			}
+		}
+		if (index == 4)
+			return false;
+		CTX_YM2610(destination).adpcma[channel].buf = NULL;
+		CTX_YM2610(destination).adpcma[channel].block = 0xffff;
+	}
+
+	for (index = 0; index < 4; index++)
+	{
+		if (CTX_YM2610(source).adpcmb.pan == &CTX_out_delta(source)[index])
+		{
+			CTX_YM2610(destination).adpcmb.pan = &CTX_out_delta(destination)[index];
+			break;
+		}
+	}
+	if (index == 4)
+		return false;
+	CTX_YM2610(destination).adpcmb.buf = NULL;
+	CTX_YM2610(destination).adpcmb.block = 0xffff;
+
+	CTX_ADPCMA_calc_chan(destination) = OPNB_ADPCMA_calc_chan_static;
+	CTX_ADPCMB_calc(destination) = OPNB_ADPCMB_calc_static;
+	CTX_pcmbufA(destination) = NULL;
+	CTX_pcmbufB(destination) = NULL;
+	CTX_pcm_cache_enabled(destination) = 0;
+	destination->active_pcm_window = NULL;
+	destination->pcm_window_source_enabled = 1;
+	destination->pcm_window_error = 0;
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	CTX_adpcma_job(destination) = NULL;
+#endif
+	destination->legacy_timer_handler = NULL;
+	destination->legacy_irq_handler = NULL;
+	return true;
+}
+
+bool YM2610DefaultCloneForPcmWindow(ym2610_context_t *destination)
+{
+	return YM2610ContextCloneForPcmWindow(destination, &ym2610_default_context);
+}
+
+bool YM2610DefaultPreparePcmWindow(uint32_t length, ym2610_pcm_window_t *window)
+{
+	return YM2610ContextPreparePcmWindow(&ym2610_default_context, length, window) &&
+		YM2610DefaultFillPcmWindow(window);
+}
+
+void YM2610ContextEnablePcmWindowSource(ym2610_context_t *context,
+	uint32_t pcmsizea, uint32_t pcmsizeb)
+{
+	if (!context)
+		return;
+	context->pcm_window_source_enabled = 1;
+	CTX_pcmsizeA(context) = pcmsizea;
+	CTX_pcmsizeB(context) = pcmsizeb;
+}
+#endif
 
 /* Generate samples for one of the YM2610s. */
 void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length)
@@ -3128,7 +3525,12 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 #if (EMU_SYSTEM == MVS)
 		/* deltaT ADPCM */
 		if (CTX_YM2610(context).adpcmb.portstate & 0x80)
-			CTX_ADPCMB_calc(context)(context, &CTX_YM2610(context).adpcmb);
+		{
+			if (context->active_pcm_window)
+				OPNB_ADPCMB_calc_static(context, &CTX_YM2610(context).adpcmb);
+			else
+				CTX_ADPCMB_calc(context)(context, &CTX_YM2610(context).adpcmb);
+		}
 #endif
 
 	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
@@ -3140,8 +3542,14 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 				/* ADPCM */
 				if (CTX_YM2610(context).adpcma[j].flag)
 #if (EMU_SYSTEM == MVS)
-					CTX_ADPCMA_calc_chan(context)(context, j,
-						&CTX_YM2610(context).adpcma[j]);
+				{
+					if (context->active_pcm_window)
+						OPNB_ADPCMA_calc_chan_static(context, j,
+							&CTX_YM2610(context).adpcma[j]);
+					else
+						CTX_ADPCMA_calc_chan(context)(context, j,
+							&CTX_YM2610(context).adpcma[j]);
+				}
 #else
 					OPNB_ADPCMA_calc_chan(context, j,
 						&CTX_YM2610(context).adpcma[j]);
@@ -3195,7 +3603,26 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 #endif
 }
 
-static void YM2610Update(int32_t **buffer, int length)
+#if (EMU_SYSTEM == MVS)
+bool YM2610ContextUpdatePcmWindow(ym2610_context_t *context, int32_t **buffer,
+	int length, const ym2610_pcm_window_t *window)
+{
+	bool success;
+
+	if (!context || !buffer || !window || length <= 0 ||
+		window->samples != (uint32_t)length ||
+		window->adpcmb_segment_count > YM2610_PCM_WINDOW_ADPCMB_SEGMENTS)
+		return false;
+	context->active_pcm_window = window;
+	context->pcm_window_error = 0;
+	YM2610ContextUpdate(context, buffer, length);
+	success = context->pcm_window_error == 0;
+	context->active_pcm_window = NULL;
+	return success;
+}
+#endif
+
+void YM2610Update(int32_t **buffer, int length)
 {
 	YM2610ContextUpdate(&ym2610_default_context, buffer, length);
 }

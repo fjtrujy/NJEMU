@@ -7,12 +7,14 @@
 
 #include "cpu/z80/cz80.h"
 #include "psp/psp_me_spsc_ring.h"
+#include "sound/ym2610.h"
 
 #define PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE 0x10000u
 #define PSP_ME_SOUND_Z80_RAM_OFFSET 0xf800u
 #define PSP_ME_SOUND_Z80_RAM_SIZE 0x0800u
 #define PSP_ME_SOUND_Z80_IO_CAPACITY 256u
 #define PSP_ME_SOUND_Z80_BATCH_CAPACITY 8u
+#define PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES 1472u
 
 typedef bool (*psp_me_sound_worker_start_fn)(void (*task)(void *), void *data,
 	uint32_t size, void *opaque);
@@ -34,7 +36,9 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_SNAPSHOT,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_IRQ,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_SLICE,
-	PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER
+	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER,
+	PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER,
+	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -45,7 +49,9 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_SHUTDOWN_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO,
 	PSP_ME_SOUND_WORKER_EVENT_Z80_SNAPSHOT_ACK,
-	PSP_ME_SOUND_WORKER_EVENT_ERROR
+	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_ERROR,
+	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK
 } psp_me_sound_worker_event_type_t;
 
 typedef enum psp_me_sound_worker_error
@@ -106,6 +112,8 @@ typedef struct psp_me_sound_z80_snapshot
 	uint8_t result_code;
 	uint8_t reserved;
 	uint32_t ym_sample_rate;
+	uint32_t ym_pcm_a_size;
+	uint32_t ym_pcm_b_size;
 } psp_me_sound_z80_snapshot_t;
 
 typedef struct psp_me_sound_z80_slice
@@ -163,6 +171,16 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t z80_batch_high_water;
 	uint32_t z80_batch_overflow;
 	uint32_t z80_batch_underflow;
+	uint32_t ym_renders;
+	uint32_t ym_render_samples;
+	uint32_t ym_render_errors;
+	uint32_t ym_pcm_mismatches;
+	uint32_t ym_status_mismatches;
+	uint32_t ym_send_failures;
+	uint32_t ym_first_pcm_mismatch_sample;
+	uint32_t ym_first_pcm_mismatch_channel;
+	int32_t ym_first_pcm_expected;
+	int32_t ym_first_pcm_actual;
 	uint64_t emulated_time;
 	uint64_t fatal_emulated_time;
 } psp_me_sound_worker_stats_t;
@@ -194,6 +212,7 @@ typedef struct psp_me_sound_worker
 	void *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
 	uint8_t *z80_memory;
+	void *ym_render_job;
 	size_t ring_size;
 	size_t z80_batch_ring_size;
 	uint32_t capacity;
@@ -210,6 +229,15 @@ typedef struct psp_me_sound_worker
 	uint32_t shadow_pending_high_water;
 	uint32_t z80_next_sequence;
 	uint32_t z80_send_failures;
+	uint32_t ym_render_token;
+	uint32_t ym_pcm_mismatches;
+	uint32_t ym_status_mismatches;
+	uint32_t ym_send_failures;
+	uint32_t ym_first_pcm_mismatch_sample;
+	uint32_t ym_first_pcm_mismatch_channel;
+	int32_t ym_first_pcm_expected;
+	int32_t ym_first_pcm_actual;
+	bool ym_render_in_flight;
 	bool running;
 	psp_me_sound_worker_stats_t last_stats;
 } psp_me_sound_worker_t;
@@ -227,11 +255,21 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const cz80_state_t *state, const uint8_t *visible_memory,
 	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
-	uint32_t ym_sample_rate, uint64_t timeout_us);
+	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	bool clone_default_ym, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
 	int32_t state, uint64_t emulated_time);
 bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
 	uint32_t channel, uint64_t emulated_time);
+bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
+	uint64_t timeout_us);
+bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
+	const ym2610_pcm_window_t *window, uint64_t emulated_time,
+	uint64_t timeout_us);
+bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
+	const int32_t *expected_left, const int32_t *expected_right,
+	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,

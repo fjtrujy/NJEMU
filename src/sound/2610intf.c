@@ -7,6 +7,7 @@
 ***************************************************************************/
 
 #include "sound/2610intf.h"
+#include "common/sound.h"
 #include "common/neogeo_sound_io.h"
 
 #if (EMU_SYSTEM == MVS)
@@ -25,6 +26,22 @@
  **************************************************************************/
 
 static void TimerHandler(int channel, int count, double stepTime);
+#if (EMU_SYSTEM == MVS)
+static void YM2610_shadow_update(int32_t **buffer, int length);
+#endif
+
+#if (EMU_SYSTEM == MVS)
+static void YM2610_shadow_update(int32_t **buffer, int length)
+{
+	bool shadow_started = mvs_me_sound_shadow_ym_render_begin((uint32_t)length,
+		timer_get_time_us());
+
+	YM2610Update(buffer, length);
+	if (shadow_started)
+		mvs_me_sound_shadow_ym_render_completed(buffer, (uint32_t)length,
+			YM2610Read(2));
+}
+#endif
 
 
 /*------------------------------------------------------
@@ -52,6 +69,7 @@ void YM2610_sh_start(void)
 	}
 
 	YM2610Init(8000000, pcmbufa, pcmsizea, pcmbufb, pcmsizeb, TimerHandler, neogeo_sound_irq);
+	sound->callback = YM2610_shadow_update;
 #else
 	YM2610Init(8000000, memory_region_sound1, memory_length_sound1, TimerHandler, neogeo_sound_irq);
 #endif
@@ -154,6 +172,9 @@ void timer_callback_2610(int param)
 	mvs_me_sound_shadow_ym_timer((uint32_t)param, timer_get_time_us());
 #endif
 	YM2610TimerOver(param);
+#if (EMU_SYSTEM == MVS)
+	mvs_me_sound_shadow_ym_timer_completed();
+#endif
 }
 
 

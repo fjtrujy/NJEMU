@@ -1164,9 +1164,98 @@ z80_io_peak=187 z80_batch_high_water=3 z80_batch_overflow=0 fatal=0
 ```
 
 This closes only the **control/timer** portion of C5.  Shadow PCM generation,
-ADPCM end/busy ownership and CPU-vs-ME PCM/state comparison remain required
-before the complete C5 gate can close.  The deferred C2 physical-resume evidence
-also remains mandatory before any C6 authoritative ownership transfer.
+ADPCM end/busy ownership and CPU-vs-ME PCM/state comparison remained required at
+that checkpoint.  The deferred C2 physical-resume evidence also remains mandatory
+before any C6 authoritative ownership transfer.
+
+#### C5 PCM/render shadow status (2026-10-04) [complete subphase]
+
+The persistent worker now renders the complete shadow YM2610 sound island while
+Allegrex remains authoritative for audible output.  PCM file/cache ownership stays
+on Allegrex: the ME first describes the exact compressed ADPCM-A/ADPCM-B byte
+windows required by its own decoder state, Allegrex fills those bounded immutable
+windows from the existing resident PCM or PCM cache, and the ME then renders into
+a dedicated shared job buffer.  Allegrex compares both output channels bit for bit
+and validates ADPCM-B status before accepting the period as a shadow match.  The ME
+never performs filesystem I/O and never dereferences the mutable Allegrex PCM cache.
+
+Several real-hardware races were intentionally allowed to fail closed during this
+subphase and were fixed at their semantic owner rather than hidden by tolerance:
+
+- preparing a PCM window from Allegrex decoder state was unsafe because cache I/O can
+  yield while the main emulation thread advances; PCM ranges are now prepared from
+  the ME-owned decoder state itself;
+- an audio callback could preempt Allegrex halfway through a Z80 slice after its YM
+  writes had happened but before the complete slice trace reached the ME; a PSP-only
+  YM mutation/render gate now serializes Z80/timer YM mutations against a shadow
+  render period while preserving the CPU path as authority;
+- even with that gate, the first render could start from different phase/envelope/
+  ADPCM state because the CPU audio thread may advance after `YM2610Reset()` and
+  before the C4 Z80 snapshot.  Production snapshots now clone the **live authoritative
+  YM2610 context** at the same gated boundary as the Z80 snapshot, then rebind every
+  context-internal pointer/callback for ME ownership and switch only the PCM source to
+  bounded windows.  Synthetic worker tests keep their independent fresh-context
+  bootstrap.
+
+The clone is semantic rather than a raw portable pointer copy: OPN channel pointers,
+detune-table pointers, FM algorithm connections, ADPCM pan pointers, callbacks and
+cache-only pointers are all rebound to the destination context.  A host oracle checks
+that the cloned render state is equivalent while remaining independently mutable.
+
+The final standalone real-PSP harness built from this code completed all four
+lifecycles:
+
+```text
+passed=1 init=0 cycles=4 suspend_resume=1 elapsed_us=1338949
+generation=4 commands=267 resets=1 syncs=2 shutdowns=1
+shadow_commands=256 shadow_sent=256 shadow_matched=256
+z80_snapshots=1 z80_irqs=1 z80_slices=2 z80_io=7
+z80_state_mismatches=0 z80_ram_mismatches=0 z80_bank_mismatches=0
+z80_io_mismatches=0 z80_send_failures=0 z80_last_mismatch=0
+z80_batch_high_water=1 z80_batch_overflow=0 fatal=0
+cmd_high_water=2 cmd_overflow=0 event_high_water=1 event_overflow=0
+```
+
+The deterministic integrated `mslug3` real-PSP workload then ran to its scripted
+shutdown with the complete C5 shadow active through `reason=stop`.  Across 19
+300-frame shadow windows plus the final 130-frame drain record it validated:
+
+- **2,216 ME YM2610 renders / 1,651,171 stereo sample frames** against the CPU
+  oracle bit for bit;
+- **22,494 Z80 slices** and **502,547 Z80 I/O trace entries**;
+- **16,350 validated YM-generated IRQ transitions**;
+- **229 command-shadow sends and 229 matches**;
+- zero PCM, ADPCM status, Z80 state, RAM, bank or I/O mismatches;
+- zero YM render errors, send failures, local failures, worker fatal errors or
+  command/event/Z80-batch overflows;
+- maximum Z80 I/O payload **187/256**, command-ring high-water **6/16**,
+  Z80-batch high-water **2/8**, event-ring high-water **1** and shadow-command
+  pending high-water **1**.
+
+The final hardware record remained fully active and clean:
+
+```text
+reason=stop generation=2 frames=130 sent=2 matched=2 mismatches=0
+send_failures=0 pending=0 z80_active=1 z80_irqs=366 z80_slices=498
+z80_io=13273 z80_state_mismatches=0 z80_ram_mismatches=0
+z80_bank_mismatches=0 z80_io_mismatches=0 z80_send_failures=0
+z80_io_peak=187 z80_batch_high_water=2 z80_batch_overflow=0
+ym_renders=51 ym_samples=38001 ym_render_errors=0 ym_pcm_mismatches=0
+ym_status_mismatches=0 ym_send_failures=0 fatal=0
+```
+
+Hardware-test bootstrap note: production `MVS.prx` must be launched directly from a
+clean PSPLink state.  `libme-stask` loads its embedded `kcall` module itself.  Manually
+pre-loading the run-directory `kcall.prx` caused `meSafeTaskMistInit()` to return
+`-4` and correctly fall back to CPU; the same known-good older C5 binary reproduced
+that behavior, while direct launch restored MIST immediately.  This is test-environment
+state, not a C5 PCM failure.
+
+The PCM/render subphase is therefore closed for the long `mslug3` hardware oracle.
+The complete C5 milestone remains **in progress** until the same bit-exact/state-
+equivalent shadow is exercised across additional representative MVS games, as required
+by the milestone gate.  C6 remains blocked independently by the deferred physical C2
+post-`RESUME_COMPLETE` evidence.
 
 - move a shadow copy of YM2610 and its sound-side timers into the ME worker;
 - execute shadow Z80 -> YM2610 port writes locally on ME;

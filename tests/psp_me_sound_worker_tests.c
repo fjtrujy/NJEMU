@@ -2,6 +2,7 @@
 #include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -64,6 +65,37 @@ static uint32_t reference_ram_hash(void)
 		hash *= 16777619u;
 	}
 	return hash;
+}
+
+static ym2610_context_t *alloc_ym_context(void **storage_out)
+{
+	size_t size = YM2610ContextSize();
+	size_t alignment = YM2610ContextAlignment();
+	uint8_t *storage = malloc(size + alignment - 1u);
+	uintptr_t aligned;
+
+	if (!storage)
+		return NULL;
+	aligned = ((uintptr_t)storage + alignment - 1u) & ~(uintptr_t)(alignment - 1u);
+	*storage_out = storage;
+	return (ym2610_context_t *)aligned;
+}
+
+static void ym_write_b(ym2610_context_t *context, uint8_t reg, uint8_t value)
+{
+	YM2610ContextWrite(context, 2, reg);
+	YM2610ContextWrite(context, 3, value);
+}
+
+static void configure_adpcma_zero(ym2610_context_t *context)
+{
+	ym_write_b(context, 0x01, 0x3f);
+	ym_write_b(context, 0x08, 0xdf);
+	ym_write_b(context, 0x10, 0x00);
+	ym_write_b(context, 0x18, 0x00);
+	ym_write_b(context, 0x20, 0x00);
+	ym_write_b(context, 0x28, 0x00);
+	ym_write_b(context, 0x00, 0x01);
 }
 
 typedef struct host_dispatch
@@ -346,7 +378,7 @@ static int test_z80_shadow_slice_matches_reference(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "Z80 shadow snapshot setup failed\n");
 		if (worker.running)
@@ -444,7 +476,7 @@ static int test_ym_shadow_timer_irq_and_status(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "YM shadow timer snapshot setup failed\n");
 		if (worker.running)
@@ -507,13 +539,164 @@ static int test_ym_shadow_timer_irq_and_status(void)
 	return 1;
 }
 
+static int test_ym_shadow_pcm_render(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	static uint8_t pcm_a[0x1000];
+	static uint8_t pcm_b[0x1000];
+	ym2610_pcm_window_t window;
+	int32_t left[128], right[128];
+	int32_t *buffers[2] = { left, right };
+	void *ym_storage = NULL;
+	ym2610_context_t *reference_ym = alloc_ym_context(&ym_storage);
+	const uint32_t cycles = 260u;
+	uint32_t i;
+	uint32_t pc = 0;
+	const uint8_t program[] = {
+		0x3e, 0x01, 0xd3, 0x06, 0x3e, 0x3f, 0xd3, 0x07,
+		0x3e, 0x08, 0xd3, 0x06, 0x3e, 0xdf, 0xd3, 0x07,
+		0x3e, 0x10, 0xd3, 0x06, 0x3e, 0x00, 0xd3, 0x07,
+		0x3e, 0x18, 0xd3, 0x06, 0x3e, 0x00, 0xd3, 0x07,
+		0x3e, 0x20, 0xd3, 0x06, 0x3e, 0x00, 0xd3, 0x07,
+		0x3e, 0x28, 0xd3, 0x06, 0x3e, 0x00, 0xd3, 0x07,
+		0x3e, 0x00, 0xd3, 0x06, 0x3e, 0x01, 0xd3, 0x07,
+		0x76,
+	};
+
+	if (!reference_ym)
+	{
+		fprintf(stderr, "YM render reference context allocation failed\n");
+		return 0;
+	}
+	for (i = 0; i < sizeof(pcm_a); i++)
+		pcm_a[i] = (uint8_t)(i * 37u + 11u);
+	for (i = 0; i < sizeof(pcm_b); i++)
+		pcm_b[i] = (uint8_t)(i * 19u + 7u);
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, program, sizeof(program));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	reference_port_read_value = 0;
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	YM2610ContextInit(reference_ym, 8000000, 44100, pcm_a, sizeof(pcm_a),
+		pcm_b, sizeof(pcm_b), NULL, NULL, NULL);
+	configure_adpcma_zero(reference_ym);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, sizeof(pcm_a), sizeof(pcm_b), false, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM shadow snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+
+	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	pc = Cz80_Get_Reg(&reference_cpu, CZ80_PC);
+	if (reference_io_count != 14u ||
+		!psp_me_sound_worker_z80_slice(&worker, reference_io, reference_io_count,
+			cycles, 200u, &expected_state, banks, reference_ram_hash(), true))
+	{
+		fprintf(stderr, "YM PCM setup slice failed: pc=%u io=%u\n", pc,
+			reference_io_count);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 200u, &window,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM render prepare failed\n");
+		psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+	for (i = 0; i < YM2610_PCM_WINDOW_ADPCMA_CHANNELS; i++)
+	{
+		if (window.adpcma[i].size != 0)
+			memcpy(window.adpcma[i].data, pcm_a + window.adpcma[i].base_byte,
+				window.adpcma[i].size);
+	}
+	for (i = 0; i < window.adpcmb_segment_count; i++)
+	{
+		if (window.adpcmb[i].size != 0)
+			memcpy(window.adpcmb[i].data, pcm_b + window.adpcmb[i].base_byte,
+				window.adpcmb[i].size);
+	}
+	if (!psp_me_sound_worker_ym_render_begin(&worker, &window, 200u,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM render submission failed\n");
+		psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+	YM2610ContextUpdate(reference_ym, buffers, 128);
+	if (!psp_me_sound_worker_ym_render_finish(&worker, left, right, 128,
+			YM2610ContextRead(reference_ym, 2), TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM render comparison failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	free(ym_storage);
+	if (stats.ym_renders != 1u || stats.ym_render_samples != 128u ||
+		stats.ym_render_errors != 0u || stats.ym_pcm_mismatches != 0u ||
+		stats.ym_status_mismatches != 0u || stats.ym_send_failures != 0u ||
+		stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		fprintf(stderr,
+			"YM PCM stats mismatch: renders=%u samples=%u errors=%u pcm=%u status=%u send=%u fatal=%u\n",
+			stats.ym_renders, stats.ym_render_samples, stats.ym_render_errors,
+			stats.ym_pcm_mismatches, stats.ym_status_mismatches,
+			stats.ym_send_failures, stats.fatal_error);
+		return 0;
+	}
+	return 1;
+}
+
 int main(void)
 {
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() ||
-		!test_ym_shadow_timer_irq_and_status())
+		!test_ym_shadow_timer_irq_and_status() || !test_ym_shadow_pcm_render())
 		return 1;
 
-	printf("PSP ME sound worker host oracle: C3/C4 plus isolated C5 YM timer/status passed\n");
+	printf("PSP ME sound worker host oracle: C3/C4 plus C5 YM timer/status/PCM passed\n");
 	return 0;
 }

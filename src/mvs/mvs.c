@@ -195,7 +195,8 @@ static void neogeo_reset(void)
 		&result_code);
 	(void)mvs_me_sound_shadow_z80_snapshot(&z80_state, memory_region_cpu2,
 		memory_region_cpu2, memory_length_cpu2, z80_banks, sound_code,
-		pending_command, result_code);
+		pending_command, result_code, memory_length_sound1,
+		memory_length_sound2 ? memory_length_sound2 : memory_length_sound1);
 	blit_clear_all_sprite();
 	autoframeskip_reset();
 
