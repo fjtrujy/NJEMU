@@ -217,6 +217,8 @@ sorted game records and reads only the selected game's strings/regions/ROMs. It
 does not scan or allocate a copy of the database. Exhaustive body CRC32 plus sorted
 index/linkage validation is available through `game_database_validate()` for tests
 and diagnostics; its largest scratch buffer is a 4 KiB CRC chunk on the stack.
+The open handle supplies its own fixed 512-byte stdio buffer, so normal database
+I/O does not depend on an implementation-selected full-file or large stdio buffer.
 Selected-game titles and names live in the caller-provided fixed-size game record.
 
 The C reader test opens the real generated CPS2 database, walks all 286 games,
@@ -352,7 +354,10 @@ Current bounded-memory impact on these migrated paths:
 - the 68,883-byte whole-`game_metadata.cps2` heap allocation is eliminated from
   CPS2 game boot, GUI browsing and command-list reduction;
 - the runtime open path performs no full-body scan and no database-sized heap
-  allocation; exhaustive optional validation uses only a 4 KiB stack CRC buffer;
+  allocation; its explicit persistent I/O buffer is 512 B, while exhaustive
+  optional validation uses only a 4 KiB stack CRC buffer;
+- the fixed selected-game payload is 592 B; region and ROM records materialize as
+  16 B and 52 B respectively, one at a time, rather than as database-sized arrays;
 - browser persistence is an open `FILE *` plus compact section/count state rather
   than a resident metadata blob;
 - packaged CPS2 metadata falls from 412,959 B to 215,482 B, a reduction of

@@ -8,6 +8,7 @@
 #define GAME_DATABASE_ROM_NAME_BYTES 32
 #define GAME_DATABASE_TITLE_BYTES 128
 #define GAME_DATABASE_TITLE_COUNT 4
+#define GAME_DATABASE_IO_BUFFER_BYTES 512
 
 #define GAME_DATABASE_DISPLAY_NOT_WORK 0x01
 #define GAME_DATABASE_DISPLAY_BOOTLEG  0x02
@@ -71,6 +72,7 @@ typedef struct game_database
 	uint32_t strings_size;
 	uint32_t checksum;
 	uint16_t core;
+	uint8_t io_buffer[GAME_DATABASE_IO_BUFFER_BYTES];
 } game_database_t;
 
 typedef struct game_database_game

@@ -233,6 +233,12 @@ game_database_error_t game_database_open(game_database_t *database,
 	file = fopen(path, "rb");
 	if (file == NULL)
 		return GAME_DATABASE_ERROR_OPEN;
+	if (setvbuf(file, (char *)database->io_buffer, _IOFBF,
+			GAME_DATABASE_IO_BUFFER_BYTES) != 0)
+	{
+		fclose(file);
+		return GAME_DATABASE_ERROR_READ;
+	}
 	if (fseek(file, 0, SEEK_END) != 0 || (file_size = ftell(file)) < 0
 		|| fseek(file, 0, SEEK_SET) != 0)
 	{

@@ -107,6 +107,11 @@ int main(int argc, char **argv)
 	char temp_path[1024];
 
 	CHECK(argc == 2);
+	CHECK(GAME_DATABASE_IO_BUFFER_BYTES == 512);
+	CHECK(sizeof(game_database_t) <= 1024);
+	CHECK(sizeof(game_database_game_t) == 592);
+	CHECK(sizeof(game_database_region_t) == 16);
+	CHECK(sizeof(game_database_rom_t) == 52);
 	CHECK(strcmp(game_database_filename(), strrchr(argv[1], '/') != NULL
 		? strrchr(argv[1], '/') + 1 : argv[1]) == 0);
 	CHECK(game_database_current_core() == GAME_DATABASE_CORE_CPS2);
