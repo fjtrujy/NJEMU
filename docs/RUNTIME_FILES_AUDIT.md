@@ -320,9 +320,9 @@ Rules:
 - NCDZ uses the same generated format for NGH identity. The old compiled
   `games[]`/`game_index` lookup has been removed.
 
-The tracked `resources/zipname*` files are legacy reference data. They are no
-longer part of the CMake distribution/install/Vita manifest and are not runtime
-authorities.
+The tracked `resources/zipname*` files were removed after the migration. They
+are no longer part of the source tree, CMake distribution/install/Vita manifest,
+or runtime authority.
 
 ## ROM metadata databases: CPS1, CPS2, and MVS
 
@@ -765,19 +765,20 @@ They are debug/profiling input/output, not distributed runtime requirements.
 
 ### Supported-game lists
 
-Tracked files:
+Generated build/install files:
 
 ~~~text
-resources/cps1/gamelist_cps1.txt
-resources/cps2/gamelist_cps2.txt
-resources/mvs/gamelist_mvs.txt
+gamelist_cps1.txt
+gamelist_cps2.txt
+gamelist_mvs.txt
 ~~~
 
-Classification: documentation-only assets.
+Classification: generated documentation/distribution assets.
 
-No runtime or CMake loader references them. The root README currently points
-to `docs/gamelist_*.txt`, which does not match their actual tracked location
-and should be corrected.
+`tools/game_metadata.py` produces these files from the same canonical
+`metadata/<core>.tsv` records used to build `game_metadata.<core>`. They are not
+runtime inputs and are not tracked under `resources/`, which removes the old
+second manually maintained supported-game catalog.
 
 ### Resource README files and placeholders
 
@@ -943,10 +944,11 @@ particular:
 
 ### 7. Root README supported-game path
 
-The README points to `docs/gamelist_*.txt`, while the tracked lists are under
-`resources/<core>/gamelist_<core>.txt`.
+The README now points to the generated package filenames directly. Supported
+game lists are generated from canonical metadata instead of tracked under
+`resources/`.
 
-Status: **fixed in the root README**.
+Status: **fixed and generated from canonical metadata**.
 
 ## Packaging/install ownership
 
@@ -957,6 +959,8 @@ The desired long-term separation is:
 - executable/package;
 - `rominfo.*` for CPS1/CPS2/MVS;
 - generated `game_metadata.<core>` from the canonical `metadata/*.tsv` source;
+- generated `gamelist_<core>.txt` for CPS1/CPS2/MVS from the same canonical
+  metadata source;
 - generated `dip_metadata.cps1` / `dip_metadata.mvs` from canonical UTF-8 DIP
   menu sources;
 - generated `lang/*.lng`;

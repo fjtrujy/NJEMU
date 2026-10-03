@@ -194,20 +194,20 @@ be changed later without silently interpreting incompatible files.
 
 ## Legacy `resources/zipname*` policy
 
-The tracked `resources/zipname*` files are historical inputs today, but this
-branch must not edit anything under `resources/`.
-
-The migration therefore has two stages:
+The migration originally kept the tracked `resources/zipname*` files untouched
+while the new metadata path was being validated. The migration therefore had two
+stages:
 
 1. seed the new canonical source from the existing catalogs plus the known
    corrections, then validate the new source independently;
 2. switch build/runtime packaging to generated metadata so the old files are no
    longer runtime authorities.
 
-The legacy files may remain in the repository for compatibility/reference in
-this branch, but CMake and tests must no longer depend on their correctness.
-Documentation must make that status explicit. A future repository-cleanup
-change can remove them separately if desired.
+After the generated metadata path passed the full cross-platform CI matrix, the
+legacy `zipname*` catalogs were removed. The hand-maintained
+`resources/<core>/gamelist_<core>.txt` files were removed at the same time and
+are now generated from the canonical TSV metadata, eliminating another stale
+parallel game-name list.
 
 ## Static executable metadata audit
 

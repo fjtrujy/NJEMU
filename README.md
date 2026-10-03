@@ -846,16 +846,17 @@ ROM file names inside the ZIP can be anything, but **CRC values must match** MAM
 
 | System | Supported Games | Notes |
 |--------|-----------------|-------|
-| **CPS1** | 113 games | Street Fighter II, Final Fight, Ghouls'n Ghosts, etc. |
-| **CPS2** | 230+ games | Including Phoenix Edition decrypted sets |
-| **MVS** | 267+ games | Including bootlegs and homebrew |
+| **CPS1** | 137 sets | Street Fighter II, Final Fight, Ghouls'n Ghosts, etc. |
+| **CPS2** | 286 sets | Including Phoenix Edition decrypted sets |
+| **MVS** | 305 sets | Including bootlegs and homebrew |
 | **NCDZ** | All official releases | All officially released Neo-Geo CD games |
 
-Tracked supported-game lists are kept with each target's distributed metadata:
+Supported-game lists are generated from the canonical `metadata/<core>.tsv`
+sources and included in cartridge-core build/install packages as:
 
-- `resources/cps1/gamelist_cps1.txt`
-- `resources/cps2/gamelist_cps2.txt`
-- `resources/mvs/gamelist_mvs.txt`
+- `gamelist_cps1.txt`
+- `gamelist_cps2.txt`
+- `gamelist_mvs.txt`
 
 ### MVS-Specific ROM Notes
 

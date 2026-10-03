@@ -15,9 +15,9 @@ CPS2/
 ├── state/                  # Save states (created at runtime)
 ├── config/                 # Configuration (created at runtime)
 ├── rominfo.cps2            # ROM database
-├── zipname.cps2            # ROM filename mappings
-├── gamelist_cps2.txt       # Supported games list
-└── game_name.ini           # Game display names
+├── game_metadata.cps2      # Generated canonical game metadata
+├── gamelist_cps2.txt       # Generated supported games list
+└── game_name.ini           # No-GUI game selector
 ```
 
 ## Required Files
@@ -54,7 +54,7 @@ Place cheat INI files in the `cheats/` directory. Files must be named after the 
 - Cache folder name must match the ROM name
 
 **"ROM not found"**
-- Verify ROM filename matches entries in `zipname.cps2`
+- Verify the ROM set appears in `gamelist_cps2.txt`
 - Ensure ROMs are in MAME format
 - Check that parent ROMs are present for clones
 

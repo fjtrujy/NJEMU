@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate NJEMU's canonical game metadata and build compact runtime files."""
+"""Validate canonical game metadata and build runtime metadata/gamelists."""
 
 from __future__ import annotations
 
@@ -279,12 +279,35 @@ def build_blob(rows: list[SourceRecord], core: str) -> bytes:
     return header + body
 
 
+def build_gamelist(rows: list[SourceRecord], core: str) -> str:
+    if core == "ncdz":
+        fail("ncdz: generated gamelist is not supported")
+
+    flag_names = tuple(DISPLAY_FLAGS)
+    lines = [
+        "-------------------------------------------------------------------------------",
+        f"  NJEMU {core.upper()} game list",
+        f"  Generated from metadata/{core}.tsv. Do not edit manually.",
+        "-------------------------------------------------------------------------------",
+        "",
+        "ROM set         Game title",
+        "-------------------------------------------------------------------------------",
+    ]
+    for row in sorted(rows, key=lambda item: item.name):
+        flags = [name for name in flag_names if row.display_flags & DISPLAY_FLAGS[name]]
+        suffix = f" [{', '.join(flags)}]" if flags else ""
+        lines.append(f"{row.name:<15} {row.titles[0]}{suffix}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--core", choices=tuple(CORE_IDS), required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--rominfo", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--gamelist-output", type=Path)
     parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
 
@@ -293,8 +316,8 @@ def main() -> int:
         validate(rows, args.core, args.rominfo)
         blob = build_blob(rows, args.core)
         if args.validate_only:
-            if args.output is not None:
-                fail("--validate-only cannot be combined with --output")
+            if args.output is not None or args.gamelist_output is not None:
+                fail("--validate-only cannot be combined with output options")
         else:
             if args.output is None:
                 fail("--output is required unless --validate-only is used")
@@ -304,6 +327,14 @@ def main() -> int:
                 f"generated {args.output}: core={args.core} records={len(rows)} "
                 f"record_size={RECORD.size} bytes={len(blob)}"
             )
+            if args.gamelist_output is not None:
+                gamelist = build_gamelist(rows, args.core)
+                args.gamelist_output.parent.mkdir(parents=True, exist_ok=True)
+                args.gamelist_output.write_text(gamelist, encoding="utf-8")
+                print(
+                    f"generated {args.gamelist_output}: core={args.core} "
+                    f"records={len(rows)} bytes={len(gamelist.encode('utf-8'))}"
+                )
     except (MetadataError, OSError, UnicodeError) as exc:
         print(f"game_metadata: {exc}", file=sys.stderr)
         return 1

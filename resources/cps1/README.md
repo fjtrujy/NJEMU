@@ -15,9 +15,9 @@ CPS1/
 ├── cache/                  # Cache files (created at runtime)
 ├── config/                 # Configuration (created at runtime)
 ├── rominfo.cps1            # ROM database
-├── zipname.cps1            # ROM filename mappings
-├── gamelist_cps1.txt       # Supported games list
-└── game_name.ini           # Game display names
+├── game_metadata.cps1      # Generated canonical game metadata
+├── gamelist_cps1.txt       # Generated supported games list
+└── game_name.ini           # No-GUI game selector
 ```
 
 ## Required Files
@@ -41,7 +41,7 @@ Place cheat INI files in the `cheats/` directory. Files must be named after the 
 ## Troubleshooting
 
 **"ROM not found"**
-- Verify ROM filename matches entries in `zipname.cps1`
+- Verify the ROM set appears in `gamelist_cps1.txt`
 - Ensure ROMs are in MAME format
 - Check that parent ROMs are present for clones
 

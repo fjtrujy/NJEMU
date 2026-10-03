@@ -957,6 +957,7 @@ set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 # build root. The cartridge cores validate their canonical identity set against
 # rominfo so stale browser metadata cannot silently ship.
 set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
+set(GAME_METADATA_GENERATED_OUTPUTS "${GAME_METADATA_OUTPUT}")
 set(GAME_METADATA_GENERATOR_ARGS
     --core "${TARGET_LOWER}"
     --source "${GAME_METADATA_SOURCE}"
@@ -968,11 +969,14 @@ set(GAME_METADATA_GENERATOR_DEPENDS
 )
 if(NOT "${TARGET}" STREQUAL "NCDZ")
     set(GAME_METADATA_ROMINFO "${RESOURCE_DIR}rominfo.${TARGET_LOWER}")
+    set(GAMELIST_OUTPUT "${CMAKE_BINARY_DIR}/gamelist_${TARGET_LOWER}.txt")
     list(APPEND GAME_METADATA_GENERATOR_ARGS --rominfo "${GAME_METADATA_ROMINFO}")
+    list(APPEND GAME_METADATA_GENERATOR_ARGS --gamelist-output "${GAMELIST_OUTPUT}")
     list(APPEND GAME_METADATA_GENERATOR_DEPENDS "${GAME_METADATA_ROMINFO}")
+    list(APPEND GAME_METADATA_GENERATED_OUTPUTS "${GAMELIST_OUTPUT}")
 endif()
 add_custom_command(
-    OUTPUT "${GAME_METADATA_OUTPUT}"
+    OUTPUT ${GAME_METADATA_GENERATED_OUTPUTS}
     COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
         ${GAME_METADATA_GENERATOR_ARGS}
@@ -980,7 +984,7 @@ add_custom_command(
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     VERBATIM
 )
-add_custom_target(game_metadata ALL DEPENDS "${GAME_METADATA_OUTPUT}")
+add_custom_target(game_metadata ALL DEPENDS ${GAME_METADATA_GENERATED_OUTPUTS})
 add_dependencies(${TARGET} game_metadata)
 
 if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
@@ -1010,17 +1014,14 @@ set(NJEMU_DISTRIBUTED_RESOURCE_FILES
 )
 if("${TARGET}" STREQUAL "CPS1")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
-        gamelist_cps1.txt
         rominfo.cps1
     )
 elseif("${TARGET}" STREQUAL "CPS2")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
-        gamelist_cps2.txt
         rominfo.cps2
     )
 elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
-        gamelist_mvs.txt
         rominfo.mvs
     )
 endif()
@@ -1385,6 +1386,10 @@ if(PLATFORM STREQUAL "PSVITA")
         list(APPEND VITA_VPK_FILE_ARGS
             FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
     endforeach()
+    if(DEFINED GAMELIST_OUTPUT)
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${GAMELIST_OUTPUT}" "gamelist_${TARGET_LOWER}.txt")
+    endif()
     list(APPEND VITA_VPK_FILE_ARGS
         FILE "${GAME_METADATA_OUTPUT}" "game_metadata.${TARGET_LOWER}")
     if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
@@ -1765,6 +1770,11 @@ foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
         DESTINATION .
     )
 endforeach()
+if(DEFINED GAMELIST_OUTPUT)
+    install(FILES "${GAMELIST_OUTPUT}"
+        DESTINATION .
+    )
+endif()
 install(FILES "${GAME_METADATA_OUTPUT}"
     DESTINATION .
 )

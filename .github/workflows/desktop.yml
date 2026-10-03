@@ -150,6 +150,10 @@ jobs:
           CPS1|MVS) test -s "build/install/dip_metadata.${target_lower}" ;;
           *) test ! -e "build/install/dip_metadata.${target_lower}" ;;
         esac
+        case "${{ matrix.target }}" in
+          CPS1|CPS2|MVS) test -s "build/install/gamelist_${target_lower}.txt" ;;
+          *) test ! -e "build/install/gamelist_${target_lower}.txt" ;;
+        esac
         test "$(find build/install -maxdepth 1 -type f -name 'zipname*' | wc -l)" -eq 0
 
     - name: Get short SHA

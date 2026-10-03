@@ -42,6 +42,34 @@ class GameMetadataGeneratorTests(unittest.TestCase):
                 self.assertEqual(strings_offset + strings_size, len(first))
                 self.assertEqual(zlib.crc32(first[game_metadata.HEADER.size :]) & 0xFFFFFFFF, crc)
 
+    def test_cartridge_gamelists_are_generated_from_every_canonical_record(self):
+        for core in ("cps1", "cps2", "mvs"):
+            with self.subTest(core=core):
+                rows = self.load(core)
+                first = game_metadata.build_gamelist(rows, core)
+                second = game_metadata.build_gamelist(rows, core)
+                self.assertEqual(first, second)
+                self.assertIn(f"Generated from metadata/{core}.tsv. Do not edit manually.", first)
+
+                listed_names = {
+                    line.split(None, 1)[0]
+                    for line in first.splitlines()
+                    if line and not line.startswith("-") and line.split(None, 1)[0] in {row.name for row in rows}
+                }
+                self.assertEqual(listed_names, {row.name for row in rows})
+
+        cps1 = game_metadata.build_gamelist(self.load("cps1"), "cps1")
+        self.assertIn("sf2m13", cps1)
+        self.assertIn("[bootleg]", cps1)
+
+        mvs = game_metadata.build_gamelist(self.load("mvs"), "mvs")
+        self.assertIn("kof2001d", mvs)
+        self.assertIn("[not_work", mvs)
+
+    def test_ncdz_gamelist_generation_is_rejected(self):
+        with self.assertRaisesRegex(game_metadata.MetadataError, "not supported"):
+            game_metadata.build_gamelist(self.load("ncdz"), "ncdz")
+
     def test_mvs_browser_metadata_covers_previously_missing_supported_sets(self):
         rows = {row.name: row for row in self.load("mvs")}
         for name in ("kof2001d", "kof2k1hd", "kof2kd", "roboarma", "samsho2k2"):
