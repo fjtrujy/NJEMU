@@ -575,22 +575,67 @@ Both instrumented PSP MVS configurations build successfully with `-Werror`:
 
 #### Baseline status
 
-A fresh controlled `mslug3` C0 hardware baseline is still required before Z80
-ownership may move.  A direct `psplinkusb` `ldstart` of the application PRX was
-tested only as a deployment shortcut and was rejected as measurement evidence:
-it did not execute the emulator with the same lifecycle as the normal EBOOT and
-did not reach the instrumented emulation loop.  No numbers from that attempt are
-treated as a baseline.  The installed PSP runtime configuration used during the
-probe was restored byte-for-byte afterwards.
+The fresh controlled C0 baseline is now complete on real PSP hardware.  An
+earlier `ldstart` attempt had been made from a fragmented long-lived PSPLink
+session and was not used as evidence.  Resetting PSPLink through its own
+`LoadExec` path restored the user partition to a clean state; the application
+PRX then entered its normal `main()`/platform/file-browser/emulation lifecycle
+and produced both profiler logs normally.
 
-The historical ADPCM-A measurements near the top of this document therefore
-remain comparison context, not completion of the new C0 baseline.  The fresh
-run must launch the normal PSP application on real hardware, use `mslug3`, keep
-the game/configuration identical between Main CPU and ADPCM-A ME runs, disable
-the FPS limiter, and collect both profiler logs over controlled gameplay windows.
+Both runs used MVS `mslug3`, Release, no GUI, highest performance level, sound
+enabled at 44.1 kHz / 1472 stereo samples, no vsync/autoframeskip, and the 60 FPS
+limit disabled.  A temporary **non-committed** input script indexed by
+`frames_displayed` inserted a credit/start and then repeated movement, fire and
+jump input.  The identical script was used for both binaries.  PSPLink
+framebuffer captures confirmed active gameplay in both runs rather than attract
+mode or the soldier-select transition.
 
-**C0 gate remains closed for Z80 migration** until those measurements quantify
-both Z80 cost and actual cross-domain synchronization frequency.
+The scheduler comparison below uses frame-aligned windows 8-11: four identical
+300-frame ranges (1,200 emulated frames total).  The audio comparison uses
+buffers 2-7, after startup/attract load had transitioned into the scripted
+high-audio workload.
+
+| metric | Main CPU | current ADPCM-A ME | difference |
+| --- | ---: | ---: | ---: |
+| uncapped whole-emulator FPS | 83.216 | 89.809 | +7.92% |
+| YM2610 callback average | 6.900 ms | 4.860 ms | -29.57% |
+| total producer average | 7.050 ms | 4.992 ms | -29.19% |
+| post-process average | 0.144 ms | 0.127 ms | -0.017 ms |
+| ADPCM-A `me_wait` average | 0 | 0.0265 ms | +0.0265 ms |
+| M68000 execution / frame | 6.293 ms | 6.041 ms | measured only; ownership unchanged |
+| Z80 execution / frame | 2.777 ms | 2.443 ms | measured only; ownership unchanged |
+| scheduler-only work / frame | 0.0480 ms | 0.0475 ms | effectively unchanged |
+
+The Main CPU run is the ownership-cost reference for later Z80 migration.  In
+the selected gameplay windows the Z80 executed 3.8325 slices/frame, averaging
+about 0.724 ms per slice and **2.777 ms total per frame**.  The lower measured
+Z80/M68000 wall time in the ADPCM-A run must not be interpreted as either CPU
+having moved to ME; both remain on Allegrex and their wall-clock timing can move
+slightly as the competing audio-thread load changes.
+
+The same 1,200 gameplay frames quantify the synchronization/event surface:
+
+- 68000 sound-status reads: exactly **2.0/frame** (`2,400 / 1,200`); these are
+  the primary candidate synchronous dependency once ME owns `result_code` /
+  `pending_command`;
+- 68000 -> sound commands: **0.0133/frame** (`16 / 1,200`) in these windows;
+  these are asynchronous timestamped ring events, not inherent barriers;
+- YM2610 Timer A callbacks: **2.819/frame**; Timer B was inactive;
+- timer-driven active-slice preemptions: **0** in the selected gameplay windows
+  (one was observed during startup), so end-of-slice synchronization is not
+  justified by the measured gameplay path;
+- Z80-local YM2610 status traffic was much more frequent (about 30.8 status-A
+  reads/frame plus 2.819 status-B reads/frame), reinforcing that these accesses
+  must remain local to the ME sound island rather than crossing a shared ring.
+
+This fresh run also confirms that the existing ADPCM-A implementation remains a
+meaningful performance target for the full coprocessor: the later authoritative
+ME design must beat roughly 89.8 FPS / 4.99 ms producer time in this controlled
+workload, not merely beat the Main CPU reference.
+
+**C0 gate is closed successfully:** Z80 cost and the actual cross-domain
+dependency/event frequency are now measured.  Z80 ownership still must not move
+until the later lifecycle/shadow gates are satisfied.
 
 ## 13. Correctness/oracle strategy
 
@@ -624,7 +669,7 @@ buffer alone is not enough if command timing has drifted.
 
 ## 14. Milestones
 
-### C0 - document and baseline [first task]
+### C0 - document and baseline [complete]
 
 - audit the complete MVS 68000 <-> Z80/YM2610 communication surface;
 - identify every mutable object that belongs to the sound island;
@@ -636,7 +681,7 @@ buffer alone is not enough if command timing has drifted.
 **Gate:** do not migrate the Z80 until its cost and synchronization frequency are
 measured.
 
-### C1 - shared-ring transport prototype
+### C1 - shared-ring transport prototype [complete]
 
 - implement generic PSP-private 64-byte-safe SPSC shared ring primitives;
 - add deterministic host/unit tests for wrap, full, empty and sequence behavior;
@@ -784,7 +829,7 @@ moved and no MVS scheduler path has changed.
 Normal init/reset/shutdown behavior and repeated bootstrap in one process are
 already hardware validated.
 
-### C2 - persistent ME sound worker bootstrap
+### C2 - persistent ME sound worker bootstrap [in progress]
 
 - start one persistent MIST-backed worker for the sound experiment;
 - worker idles on shared-ring state rather than requiring one MIST trigger per
