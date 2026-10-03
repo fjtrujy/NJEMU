@@ -13,6 +13,7 @@
 static uint8_t reference_memory[0x20000];
 static psp_me_sound_z80_io_t reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
 static uint32_t reference_io_count;
+static cz80_struc *reference_irq_cpu;
 
 static uint8_t reference_z80_read(uint32_t address)
 {
@@ -41,6 +42,14 @@ static void reference_z80_port_write(uint16_t port, uint8_t value)
 	entry->port = port;
 	entry->type = PSP_ME_SOUND_Z80_IO_WRITE;
 	entry->value = value;
+	if ((uint8_t)port == 0x0c && reference_irq_cpu)
+	{
+		entry = &reference_io[reference_io_count++];
+		entry->port = 0;
+		entry->type = PSP_ME_SOUND_Z80_IO_IRQ;
+		entry->value = ASSERT_LINE;
+		Cz80_Set_IRQ(reference_irq_cpu, 0, ASSERT_LINE);
+	}
 }
 
 static uint32_t reference_ram_hash(void)
@@ -330,6 +339,7 @@ static int test_z80_shadow_slice_matches_reference(void)
 	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
 	Cz80_Reset(&reference_cpu);
 	Cz80_Get_State(&reference_cpu, &initial_state);
+	reference_irq_cpu = &reference_cpu;
 
 	memset(&worker, 0, sizeof(worker));
 	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
@@ -345,8 +355,9 @@ static int test_z80_shadow_slice_matches_reference(void)
 	}
 
 	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	reference_irq_cpu = NULL;
 	Cz80_Get_State(&reference_cpu, &expected_state);
-	if (reference_io_count != 2u ||
+	if (reference_io_count != 3u ||
 		!psp_me_sound_worker_z80_slice(&worker, reference_io, reference_io_count,
 			cycles, 100u, &expected_state, banks, reference_ram_hash(), true) ||
 		!psp_me_sound_worker_sync(&worker, 100u, TEST_TIMEOUT_US) ||
@@ -366,8 +377,8 @@ static int test_z80_shadow_slice_matches_reference(void)
 	}
 
 	psp_me_sound_worker_get_stats(&worker, &stats);
-	if (stats.z80_snapshots != 1u || stats.z80_slices != 1u ||
-		stats.z80_io_events != 2u || stats.z80_state_mismatches != 0u ||
+		if (stats.z80_snapshots != 1u || stats.z80_slices != 1u ||
+			stats.z80_io_events != 3u || stats.z80_state_mismatches != 0u ||
 		stats.z80_ram_mismatches != 0u || stats.z80_bank_mismatches != 0u ||
 		stats.z80_io_mismatches != 0u || stats.z80_send_failures != 0u ||
 		stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)

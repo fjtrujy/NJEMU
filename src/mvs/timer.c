@@ -352,6 +352,7 @@ int timer_getscanline(void)
 static void timer_update_cpu_normal(void)
 {
 	int i, time;
+	uint64_t frame_end_time;
 	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
 
 	frame_base = 0;
@@ -398,6 +399,7 @@ static void timer_update_cpu_normal(void)
 	}
 
 	neogeo_vblank_interrupt();
+	frame_end_time = timer_get_time_us();
 
 	base_time += TICKS_PER_FRAME;
 	if (base_time >= 1000000)
@@ -415,7 +417,7 @@ static void timer_update_cpu_normal(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed(timer_get_time_us());
+	mvs_me_sound_shadow_frame_completed(frame_end_time);
 	mvs_me_sound_profile_frame_completed();
 }
 
@@ -427,6 +429,7 @@ static void timer_update_cpu_normal(void)
 static void timer_update_cpu_raster(void)
 {
 	int i, time;
+	uint64_t frame_end_time;
 	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
 
 	frame_base = 0;
@@ -478,6 +481,7 @@ static void timer_update_cpu_raster(void)
 
 		neogeo_raster_interrupt(scanline);
 	}
+	frame_end_time = timer_get_time_us();
 
 	base_time += TICKS_PER_FRAME;
 	if (base_time >= 1000000)
@@ -495,7 +499,7 @@ static void timer_update_cpu_raster(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed(timer_get_time_us());
+	mvs_me_sound_shadow_frame_completed(frame_end_time);
 	mvs_me_sound_profile_frame_completed();
 }
 

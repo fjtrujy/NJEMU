@@ -36,7 +36,8 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	uint32_t running;
 	uint64_t emulated_time;
 	uint32_t last_token;
-	uint32_t reserved[3];
+	uint32_t last_command_type;
+	uint64_t fatal_emulated_time;
 } psp_me_sound_worker_progress_t;
 
 typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
@@ -222,6 +223,26 @@ static bool me_z80_consume_io(uint16_t port, uint8_t type, uint8_t *value)
 	return true;
 }
 
+static void me_z80_apply_inline_irqs(psp_me_sound_z80_runtime_t *runtime)
+{
+	while (runtime && runtime->slice && runtime->io_cursor < runtime->slice->io_count)
+	{
+		const psp_me_sound_z80_io_t *event =
+			&runtime->slice->io[runtime->io_cursor];
+
+		if (event->type != PSP_ME_SOUND_Z80_IO_IRQ)
+			break;
+		if (event->port != 0 ||
+			(event->value != CLEAR_LINE && event->value != ASSERT_LINE))
+		{
+			runtime->mismatch = PSP_ME_SOUND_Z80_MISMATCH_IO_VALUE;
+			return;
+		}
+		runtime->io_cursor++;
+		Cz80_Set_IRQ(&runtime->cpu, 0, event->value);
+	}
+}
+
 static bool me_z80_set_bank(psp_me_sound_z80_runtime_t *runtime, uint32_t bank,
 	uint32_t offset)
 {
@@ -298,6 +319,7 @@ static void me_z80_port_write(uint16_t port, uint8_t value)
 		return;
 	if ((uint8_t)port == 0x0c)
 		runtime->result_code = value;
+	me_z80_apply_inline_irqs(runtime);
 }
 
 static bool me_z80_state_equal(cz80_struc *cpu, const cz80_state_t *expected)
@@ -457,6 +479,14 @@ static void me_fail(psp_me_sound_worker_shared_context_t *context,
 	(void)me_send_event(context, &event);
 }
 
+static void me_fail_time_regression(psp_me_sound_worker_shared_context_t *context,
+	const psp_me_sound_worker_message_t *command)
+{
+	context->progress->fatal_emulated_time = command->emulated_time;
+	me_fail(context, context->progress->generation, command->token,
+		PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+}
+
 static void psp_me_sound_worker_entry(void *param)
 {
 	psp_me_sound_worker_shared_context_t *context =
@@ -533,6 +563,7 @@ static void psp_me_sound_worker_entry(void *param)
 		idle_spins = 0;
 		context->progress->commands_processed++;
 		context->progress->last_token = command.token;
+		context->progress->last_command_type = command.type;
 		context->progress->heartbeat++;
 		me_zero(&event, sizeof(event));
 		event.generation = command.generation;
@@ -569,8 +600,7 @@ static void psp_me_sound_worker_entry(void *param)
 			}
 			if (command.emulated_time < context->progress->emulated_time)
 			{
-				me_fail(context, context->progress->generation, command.token,
-					PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+				me_fail_time_regression(context, &command);
 				return;
 			}
 			context->progress->emulated_time = command.emulated_time;
@@ -605,8 +635,7 @@ static void psp_me_sound_worker_entry(void *param)
 			}
 			if (command.emulated_time < context->progress->emulated_time)
 			{
-				me_fail(context, context->progress->generation, command.token,
-					PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+				me_fail_time_regression(context, &command);
 				return;
 			}
 				context->progress->emulated_time = command.emulated_time;
@@ -681,8 +710,7 @@ static void psp_me_sound_worker_entry(void *param)
 				}
 				if (command.emulated_time < context->progress->emulated_time)
 				{
-					me_fail(context, context->progress->generation, command.token,
-						PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+					me_fail_time_regression(context, &command);
 					return;
 				}
 				context->progress->emulated_time = command.emulated_time;
@@ -703,8 +731,7 @@ static void psp_me_sound_worker_entry(void *param)
 				}
 				if (command.emulated_time < context->progress->emulated_time)
 				{
-					me_fail(context, context->progress->generation, command.token,
-						PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION);
+					me_fail_time_regression(context, &command);
 					return;
 				}
 				if (!me_z80_execute_slice(context, &z80_runtime,
@@ -792,7 +819,9 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.shadow_commands = progress->shadow_commands;
 	worker->last_stats.heartbeat = progress->heartbeat;
 	worker->last_stats.fatal_error = progress->fatal_error;
+	worker->last_stats.last_command_type = progress->last_command_type;
 	worker->last_stats.emulated_time = progress->emulated_time;
+	worker->last_stats.fatal_emulated_time = progress->fatal_emulated_time;
 	worker->last_stats.command_high_water = worker->commands->producer.high_water;
 	worker->last_stats.command_overflow = worker->commands->producer.overflow_count;
 	worker->last_stats.command_underflow = worker->commands->consumer.underflow_count;

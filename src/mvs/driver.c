@@ -979,6 +979,8 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 
 void neogeo_z80_port_w(uint16_t port, uint8_t data)
 {
+	mvs_me_sound_shadow_z80_io_write(port, data);
+
 	switch (port & 0xff)
 	{
 	case 0x04:
@@ -1002,8 +1004,6 @@ void neogeo_z80_port_w(uint16_t port, uint8_t data)
 		result_code = data;
 		break;
 	}
-
-	mvs_me_sound_shadow_z80_io_write(port, data);
 }
 
 

@@ -11,8 +11,8 @@
 #define PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE 0x10000u
 #define PSP_ME_SOUND_Z80_RAM_OFFSET 0xf800u
 #define PSP_ME_SOUND_Z80_RAM_SIZE 0x0800u
-#define PSP_ME_SOUND_Z80_IO_CAPACITY 128u
-#define PSP_ME_SOUND_Z80_BATCH_CAPACITY 16u
+#define PSP_ME_SOUND_Z80_IO_CAPACITY 256u
+#define PSP_ME_SOUND_Z80_BATCH_CAPACITY 8u
 
 typedef bool (*psp_me_sound_worker_start_fn)(void (*task)(void *), void *data,
 	uint32_t size, void *opaque);
@@ -79,7 +79,8 @@ _Static_assert(sizeof(psp_me_sound_worker_message_t) == 32,
 typedef enum psp_me_sound_z80_io_type
 {
 	PSP_ME_SOUND_Z80_IO_READ = 1,
-	PSP_ME_SOUND_Z80_IO_WRITE
+	PSP_ME_SOUND_Z80_IO_WRITE,
+	PSP_ME_SOUND_Z80_IO_IRQ
 } psp_me_sound_z80_io_type_t;
 
 typedef struct psp_me_sound_z80_io
@@ -134,6 +135,7 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t shadow_commands;
 	uint32_t heartbeat;
 	uint32_t fatal_error;
+	uint32_t last_command_type;
 	uint32_t command_high_water;
 	uint32_t command_overflow;
 	uint32_t command_underflow;
@@ -160,6 +162,7 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t z80_batch_overflow;
 	uint32_t z80_batch_underflow;
 	uint64_t emulated_time;
+	uint64_t fatal_emulated_time;
 } psp_me_sound_worker_stats_t;
 
 #define PSP_ME_SOUND_WORKER_SHADOW_EXPECTED_CAPACITY 64u

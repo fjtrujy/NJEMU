@@ -20,6 +20,7 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 static uint8_t z80_reference_memory[0x20000] __attribute__((aligned(64)));
 static psp_me_sound_z80_io_t z80_reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
 static uint32_t z80_reference_io_count;
+static cz80_struc *z80_reference_irq_cpu;
 
 static uint8_t z80_reference_read(uint32_t address)
 {
@@ -48,6 +49,14 @@ static void z80_reference_port_write(uint16_t port, uint8_t value)
 	entry->port = port;
 	entry->type = PSP_ME_SOUND_Z80_IO_WRITE;
 	entry->value = value;
+	if ((uint8_t)port == 0x0c && z80_reference_irq_cpu)
+	{
+		entry = &z80_reference_io[z80_reference_io_count++];
+		entry->port = 0;
+		entry->type = PSP_ME_SOUND_Z80_IO_IRQ;
+		entry->value = ASSERT_LINE;
+		Cz80_Set_IRQ(z80_reference_irq_cpu, 0, ASSERT_LINE);
+	}
 }
 
 static uint32_t z80_reference_ram_hash(void)
@@ -194,18 +203,20 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	Cz80_Set_OUTPort(&reference_cpu, z80_reference_port_write);
 	Cz80_Reset(&reference_cpu);
 	Cz80_Get_State(&reference_cpu, &initial_state);
+	z80_reference_irq_cpu = &reference_cpu;
 
 	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
 		z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
 		banks, 0, 0, 0, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 		return false;
 
-	Cz80_Set_IRQ(&reference_cpu, 0, ASSERT_LINE);
-	if (!psp_me_sound_worker_z80_irq(worker, ASSERT_LINE, emulated_time - 1u))
+	Cz80_Set_IRQ(&reference_cpu, 0, CLEAR_LINE);
+	if (!psp_me_sound_worker_z80_irq(worker, CLEAR_LINE, emulated_time - 1u))
 		return false;
 	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	z80_reference_irq_cpu = NULL;
 	Cz80_Get_State(&reference_cpu, &expected_state);
-	if (z80_reference_io_count != 2u)
+	if (z80_reference_io_count != 3u)
 		return false;
 	return psp_me_sound_worker_z80_slice(worker, z80_reference_io,
 		z80_reference_io_count, cycles, emulated_time, &expected_state, banks,
@@ -248,7 +259,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		stats->shadow_mismatches == 0u && stats->shadow_send_failures == 0u &&
 		stats->shadow_pending == 0u &&
 		stats->z80_snapshots == 1u && stats->z80_irqs == 1u &&
-		stats->z80_slices == 1u && stats->z80_io_events == 2u &&
+		stats->z80_slices == 1u && stats->z80_io_events == 3u &&
 		stats->z80_state_mismatches == 0u && stats->z80_ram_mismatches == 0u &&
 		stats->z80_bank_mismatches == 0u && stats->z80_io_mismatches == 0u &&
 		stats->z80_send_failures == 0u &&
