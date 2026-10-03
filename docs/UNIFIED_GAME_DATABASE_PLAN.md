@@ -36,6 +36,36 @@ For CPS2 today:
 The same architectural split exists for CPS1 and MVS, although their core-specific
 metadata differs. NCDZ is already closer to the desired single-database model.
 
+### CPS2 consumer inventory (audited 2026-10-03)
+
+The pre-migration CPS2 runtime and tooling consumers are:
+
+- `src/cps2/memintrf.c`:
+  - `load_rom_info()` loads the complete `rominfo.cps2` text file and extracts
+    parent identity, machine/input/init/rotation selectors, region sizes and ROM
+    descriptors into the fixed target runtime arrays;
+  - `configure_game_metadata()` separately loads `game_metadata.cps2` to resolve
+    CPS2 decryption key/range, Phoenix status and cache-parent policy;
+- `src/common/filer.c`: the GUI browser keeps the complete generated game metadata
+  blob resident while resolving ROM filenames to localized titles/display flags;
+- `src/common/cmdlist.c`: command-list size reduction loads the complete metadata
+  blob and enumerates every canonical set name;
+- `romcnv/src/cps2/romcnv.c`: the converter line-parses `rominfo.cps2` for parent and
+  GFX1 topology, while separately loading `game_metadata.cps2` for cache-parent
+  override/independent policy;
+- top-level `CMakeLists.txt`: generates/packages `game_metadata.cps2`, separately
+  distributes `rominfo.cps2`, and wires the metadata generator/reader tests;
+- `romcnv/CMakeLists.txt`: separately stages/preloads `rominfo.cps2`, generates
+  `game_metadata.cps2`, and compiles the shared metadata reader;
+- `tests/game_metadata_generator_tests.py` and
+  `tests/game_metadata_reader_tests.c`: validate the current metadata format and
+  representative CPS2 policy records;
+- `docs/RUNTIME_FILES_AUDIT.md`, `resources/cps2/README.md`, the top-level README
+  and converter README currently describe the two-file runtime contract.
+
+No CPS2-specific CI workflow contains an independent hardcoded reference to either
+filename; package validation is driven through the CMake install/package outputs.
+
 ## Non-Negotiable Design Requirements
 
 1. **One packaged runtime database per migrated core.**
@@ -121,6 +151,49 @@ Exact field widths must be selected from measured maxima rather than convenience
 Use indices/offsets instead of native pointers and encode all multibyte values with
 an explicit endianness.
 
+### CPS2 V1 measured schema (implementation start: 2026-10-03)
+
+The first implementation audit measured the current CPS2 source as:
+
+- 286 games;
+- 1,387 region records;
+- 5,382 ROM records;
+- at most 5 regions per game and 50 ROM records per game;
+- per-region maxima: CPU1 8, CPU2 3, GFX1 32, SOUND1 8, USER1 0 ROMs;
+- region types: CPU1, CPU2, GFX1, SOUND1 and USER1 only;
+- all current region flags are zero;
+- ROM load types are 0, 1 and 2;
+- ROMX groups are 1 or 2 and skips are 1, 6 or 7;
+- the longest canonical game/parent name is 10 characters;
+- the longest ROM filename is 13 characters;
+- selector maxima are machine 0, input 10, init 1 and rotation 1;
+- largest region size is `0x02000000`, largest ROM offset is `0x01000006`,
+  and largest ROM length is `0x00800000`.
+
+Format V1 therefore uses explicit little-endian fixed records rather than native C
+struct serialization:
+
+- 64-byte header with magic/version/core, record sizes, section counts/offsets,
+  total file size and a CRC32 of the complete body;
+- 40-byte sorted game records with uint32 string offsets, uint16 parent/core
+  indices, uint8 region count/flags, uint16 machine/input/init/rotation selectors,
+  first-region index and four localized title offsets;
+- 16-byte region records with uint16 game index, uint8 type/ROM count, uint32 size
+  and first-ROM index, and uint16 source flags;
+- 20-byte ROM records with uint32 filename/offset/length/CRC plus uint8 load type,
+  group, skip and an explicit ROMX flag;
+- 16-byte CPS2-specific records containing the two key words, range and auxiliary
+  cache-parent string offset;
+- one deduplicated UTF-8 NUL-terminated string pool.
+
+The host parser in `tools/rominfo.py` now normalizes the complete textual CPS2
+topology and rejects malformed records, duplicate sets, unresolved parents and
+parent cycles. `tools/game_database.py` merges that topology with
+`metadata/cps2.tsv`, enforces V1 field-width limits and existing CPS2 metadata
+invariants, and emits deterministic `NJGD` V1 data. The generator parity test
+decodes every generated game/region/ROM record and compares it against both source
+models, including continuation records and ROMX semantics.
+
 ## Runtime Access Model
 
 The runtime API must be designed around bounded IO:
@@ -147,6 +220,23 @@ builds:
 - largest temporary allocation during metadata/ROM-info loading;
 - total transient bytes allocated during the path;
 - time from selected-game launch to completion of ROM-info/metadata parsing.
+
+Initial file/allocation baseline from the validated pre-migration implementation:
+
+- `rominfo.cps2`: **344,076 B**;
+- generated `game_metadata.cps2`: **68,883 B**;
+- combined packaged metadata: **412,959 B**;
+- `load_rom_info()` allocates one buffer equal to the complete 344,076-byte
+  `rominfo.cps2`, reads the file into it, extracts one game and frees it;
+- `configure_game_metadata()` subsequently allocates the complete 68,883-byte
+  metadata file through `game_metadata_load()` before looking up one game;
+- the first generated unified CPS2 V1 database is **215,482 B**, 197,477 B smaller
+  than the two current runtime files combined (about 47.8% smaller) before runtime
+  cutover or further format optimization.
+
+Wall-clock parsing/startup timing and real PSP allocator telemetry still need to be
+captured during the runtime-reader migration; the figures above are structural file
+and allocation measurements only.
 
 Acceptance targets for CPS2:
 

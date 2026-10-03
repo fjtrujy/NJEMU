@@ -1482,6 +1482,12 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     endif()
 
     if("${TARGET}" STREQUAL "CPS2")
+        add_test(NAME rominfo_parser_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/rominfo_parser_tests.py)
+        add_test(NAME game_database_generator_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_database_generator_tests.py)
         add_test(NAME cps2_partial_cache_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/cps2_partial_cache_tests.py
                 ${CMAKE_C_COMPILER})
