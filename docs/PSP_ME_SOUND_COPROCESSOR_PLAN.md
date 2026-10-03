@@ -840,9 +840,10 @@ moved and no MVS scheduler path has changed.
 **C2 gate remains open only for observing the post-wake `RESUME_COMPLETE` worker
 rebootstrap on real hardware.**  Normal init/reset/shutdown behavior, the real
 physical suspend stop, and repeated bootstrap in one process are already
-hardware validated.  C4 is allowed to proceed under an explicit temporary gate
-waiver because it remains shadow-only and cannot become authoritative; the
-deferred resume evidence must still be closed before any ownership milestone.
+hardware validated.  Shadow-only milestones are allowed to proceed under an
+explicit temporary gate waiver because they cannot become authoritative; the
+deferred resume evidence must still be revisited before the authoritative
+ownership transition.
 
 ### C2 - persistent ME sound worker bootstrap [in progress]
 
@@ -989,7 +990,97 @@ above.  CPU Z80/YM2610 authority must remain unchanged while that waiver exists.
 
 **Gate:** exact protocol ordering with no meaningful synchronization cost.
 
-### C4 - ME shadow Z80 execution
+#### C4 implementation and hardware status (2026-10-03) [complete]
+
+C4 now runs an isolated CZ80 instance inside the persistent ME worker while the
+existing Allegrex Z80/YM2610 path remains fully authoritative.  CZ80 gained an
+explicit pointer-free logical state representation plus per-instance read-base
+configuration, removing the old MVS fast-path dependency on the global
+`memory_region_cpu2` array.  Desktop CPS1/CPS2/NCDZ builds and PSP MVS builds
+with both the normal CPU path and the earlier ADPCM-A-only ME mode were rebuilt
+after this change to confirm that the shared core remains compatible outside the
+new experiment.
+
+The C4 snapshot contains the logical CZ80 state, the visible 64 KiB Z80 address
+space, source ROM/bank metadata and the sound latch/result state.  The ME owns a
+private 64 KiB copy and applies bank switches to that copy only.  The snapshot
+storage is cache-line exact across the Allegrex/ME boundary; real hardware found
+that a snapshot spanning a second cache line could otherwise retain a stale
+generation field after a lifecycle restart, so the shared snapshot object is now
+published/acquired as an aligned 128-byte object.
+
+Each authoritative Allegrex Z80 slice records the sound-side I/O it actually
+observed and sends one batched oracle record after the CPU slice completes.  The
+ME then executes the same cycle budget and checks:
+
+- logical CZ80 register/interrupt state;
+- active Z80 ROM banks;
+- periodic Z80 RAM hashes (first slice and every 64 slices);
+- exact I/O operation order, port and value.
+
+YM2610 remains entirely authoritative on Allegrex in C4.  YM reads are replayed
+to the shadow Z80 using the value returned by the real YM2610, while YM writes
+are validated but do not mutate any shadow YM device yet.  A hardware gameplay
+failure also exposed an ordering requirement for YM-generated IRQ transitions:
+an IRQ raised synchronously by a YM write must be recorded inside the current
+slice trace and applied by the ME at that exact I/O point, rather than being sent
+ahead of the batch.  IRQ transitions that occur outside a Z80 slice still use
+the lightweight asynchronous IRQ command.
+
+The host oracle executes the same synthetic program once as a reference CZ80
+and once inside the production worker, including port reads/writes, an IRQ
+transition, RAM writes and full state comparison.  Desktop MVS remains **25/25
+CTest green**.  The final standalone real-PSP worker harness also completed four
+lifecycles successfully; its final cycle reported:
+
+```text
+passed=1 init=0 cycles=4 suspend_resume=1 elapsed_us=716231
+generation=4 commands=263 resets=1 syncs=2 shutdowns=1
+shadow_commands=256 shadow_sent=256 shadow_matched=256
+z80_snapshots=1 z80_irqs=1 z80_slices=1 z80_io=3
+z80_state_mismatches=0 z80_ram_mismatches=0 z80_bank_mismatches=0
+z80_io_mismatches=0 z80_send_failures=0 z80_last_mismatch=0
+z80_batch_high_water=1 z80_batch_overflow=0 fatal=0
+```
+
+The controlled integrated `mslug3` hardware run then used the same C0/C3 BIOS,
+configuration and frame-indexed input script and exited through the normal
+shutdown path.  It produced 19 consecutive 300-frame C4 checkpoints plus the
+final 130-frame drain window.  Across those windows the worker validated:
+
+- **22,494 Z80 slices**;
+- **503,561 Z80 I/O/IRQ trace entries**;
+- **16,350 IRQ transitions**;
+- **229 command-shadow sends and 229 matches**;
+- zero Z80 state, RAM, bank or I/O mismatches;
+- zero command, event or Z80-batch ring overflows;
+- zero Z80 send failures, local failures or worker fatal errors;
+- Z80 I/O peak **187/256** entries in one slice;
+- Z80 batch-ring high-water **4/8**.
+
+The earlier 128-entry I/O trace was intentionally fail-closed and exposed a
+real gameplay slice reaching 135 entries.  The final sizing uses 256 I/O entries
+per batch and reduces the batch ring from 16 to 8 slots, so the observed
+gameplay margin increases without materially increasing the worker's batch-ring
+memory budget.
+
+The final integrated stop record remained fully active and clean:
+
+```text
+reason=stop generation=2 frames=130 sent=2 matched=2 mismatches=0
+send_failures=0 pending=0 z80_active=1 z80_irqs=366 z80_slices=498
+z80_io=13543 z80_state_mismatches=0 z80_ram_mismatches=0
+z80_bank_mismatches=0 z80_io_mismatches=0 z80_send_failures=0
+z80_io_peak=187 z80_batch_high_water=4 z80_batch_overflow=0 fatal=0
+```
+
+**C4 gate is closed successfully:** repeated real-PSP gameplay checkpoints match
+the authoritative CPU Z80 with no state or transport divergence.  CPU Z80 and
+YM2610 still own all emulation/audio output.  C5 may proceed while remaining
+shadow-only under the deferred C2 resume-evidence waiver; the authoritative C6
+transition must revisit that deferred lifecycle evidence first.
+
+### C4 - ME shadow Z80 execution [complete]
 
 - snapshot the initial Z80 sound state into ME-owned storage;
 - replay timestamped events and execute a shadow Z80 on ME;
