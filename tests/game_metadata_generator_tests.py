@@ -54,6 +54,23 @@ class GameMetadataGeneratorTests(unittest.TestCase):
             has_key = row.data0 != 0 or row.data1 != 0 or row.data2 != 0
             self.assertNotEqual(has_key, bool(row.core_flags & phoenix), row.name)
 
+    def test_cps2_representative_runtime_metadata(self):
+        rows = {row.name: row for row in self.load("cps2")}
+        phoenix = game_metadata.CORE_FLAGS["cps2"]["phoenix"]
+        override = game_metadata.CORE_FLAGS["cps2"]["cache_parent_override"]
+        independent = game_metadata.CORE_FLAGS["cps2"]["cache_independent"]
+
+        self.assertEqual(
+            (rows["ssf2"].data0, rows["ssf2"].data1, rows["ssf2"].data2),
+            (0x23456789, 0xABCDEF01, 0x400000),
+        )
+        self.assertEqual(rows["jyangoku"].data2, 0)
+        self.assertTrue(rows["ddtodd"].core_flags & phoenix)
+        self.assertEqual(rows["ddtodd"].data0, 0)
+        self.assertTrue(rows["ssf2ta"].core_flags & override)
+        self.assertEqual(rows["ssf2ta"].aux_name, "ssf2t")
+        self.assertTrue(rows["mpangj"].core_flags & independent)
+
     def test_stale_legacy_aliases_are_not_canonical_records(self):
         cps2 = {row.name for row in self.load("cps2")}
         mvs = {row.name for row in self.load("mvs")}

@@ -380,7 +380,8 @@ WRITE16_HANDLER( cps2_eeprom_port_w )
 
 int cps2_driver_init(void)
 {
-	cps2_init_68k();
+	if (!cps2_init_68k())
+		return 0;
 
 	z80_init();
 	z80_bank = -1;

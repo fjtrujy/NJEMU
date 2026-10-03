@@ -380,7 +380,7 @@ inside a local CPS1 ROM directory is unrelated local data, not a CPS1 asset.
 | --- | --- | --- | --- |
 | `rominfo.cps2` | Runtime metadata | Any game boot | `src/cps2/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Resident regions and full-resident GFX | `src/common/loadrom.c` |
-| `game_metadata.cps2` | Generated runtime metadata | GUI browser and per-game metadata | `src/common/game_metadata.c`, `src/common/filer.c` |
+| `game_metadata.cps2` | Generated runtime metadata | Any game boot; GUI browser | `src/common/game_metadata.c`, `src/cps2/memintrf.c`, `src/common/filer.c` |
 | `lang/en.lng` | Generated UI asset | Any normal runtime | common text catalog |
 | `font/gbk_s14.bin` | Generated UI asset | Current UI renderer initialization | common UI draw |
 
@@ -810,7 +810,7 @@ Legend:
 | Item | CPS1 | CPS2 | MVS | NCDZ |
 | --- | --- | --- | --- | --- |
 | `rominfo.<core>` | M | M | M | -- |
-| `game_metadata.<core>` | C: GUI/command list | C: GUI/command list | C: GUI/command list | B |
+| `game_metadata.<core>` | C: GUI/command list | M | C: GUI/command list | B |
 | arcade ROM ZIPs | M | M | M | -- |
 | `roms/neogeo.zip` | -- | -- | M | -- |
 | `neocd.bin` | -- | -- | -- | M |

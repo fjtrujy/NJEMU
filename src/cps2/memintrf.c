@@ -24,6 +24,7 @@
 #include "common/memory_sizes.h"
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
+#include "common/game_metadata.h"
 #include "common/input_driver.h"
 #include "common/loadrom.h"
 #include "common/power_driver.h"
@@ -123,6 +124,68 @@ static uint8_t *static_ram6;
 #if !RELEASE
 static int phoenix_edition;
 #endif
+
+static int configure_game_metadata(void)
+{
+	char path[PATH_MAX];
+	game_metadata_t metadata = {0};
+	game_metadata_entry_t entry;
+	game_metadata_error_t error;
+
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
+		return 0;
+	error = game_metadata_load(&metadata, path, GAME_METADATA_CORE_CPS2);
+	if (error != GAME_METADATA_OK)
+	{
+		printf("game metadata: cannot load %s: %s\n", path,
+			game_metadata_error_string(error));
+		return 0;
+	}
+	if (!game_metadata_find(&metadata, game_name, &entry))
+	{
+		printf("game metadata: CPS2 set %s is missing\n", game_name);
+		game_metadata_unload(&metadata);
+		return 0;
+	}
+
+	if (entry.core_flags & GAME_METADATA_CPS2_CACHE_PARENT_OVERRIDE)
+	{
+		if (entry.aux_name == NULL || strlen(entry.aux_name) >= sizeof(cache_parent_name))
+		{
+			game_metadata_unload(&metadata);
+			return 0;
+		}
+		strcpy(cache_parent_name, entry.aux_name);
+	}
+	else if (entry.core_flags & GAME_METADATA_CPS2_CACHE_INDEPENDENT)
+	{
+		cache_parent_name[0] = '\0';
+	}
+	else
+	{
+		strcpy(cache_parent_name, parent_name);
+	}
+
+#if !RELEASE
+	phoenix_edition = (entry.core_flags & GAME_METADATA_CPS2_PHOENIX) != 0;
+#endif
+	if (entry.core_flags & GAME_METADATA_CPS2_PHOENIX)
+	{
+		cps2_clear_decryption_key();
+	}
+	else
+	{
+		if (entry.data[0] == 0 && entry.data[1] == 0)
+		{
+			game_metadata_unload(&metadata);
+			return 0;
+		}
+		cps2_set_decryption_key(entry.data[0], entry.data[1], entry.data[2]);
+	}
+
+	game_metadata_unload(&metadata);
+	return 1;
+}
 
 
 /******************************************************************************
@@ -721,6 +784,12 @@ int memory_init(void)
 {
 	int i, res;
 
+	cps2_clear_decryption_key();
+#if !RELEASE
+	phoenix_edition = 0;
+#endif
+	cache_parent_name[0] = '\0';
+
 	memory_region_cpu1   = NULL;
 	memory_region_cpu2   = NULL;
 	memory_region_gfx1   = NULL;
@@ -763,26 +832,13 @@ int memory_init(void)
 		return 0;
 	}
 
-	if (!strcmp(game_name, "ssf2ta")
-	||	!strcmp(game_name, "ssf2tu")
-	||	!strcmp(game_name, "ssf2tur1")
-	||	!strcmp(game_name, "ssf2xj"))
+	if (!configure_game_metadata())
 	{
-		strcpy(cache_parent_name, "ssf2t");
-	}
-	else if (!strcmp(game_name, "ssf2t"))
-	{
-		cache_parent_name[0] = '\0';
-	}
-	else if (!strcmp(game_name, "mpangj"))
-	{
-		// Japanese version is probably a BAD DUMP (some sprites are missing).
-		// Keep its streaming cache independent from the parent cache.
-		cache_parent_name[0] = '\0';
-	}
-	else
-	{
-		strcpy(cache_parent_name, parent_name);
+		msg_printf(TEXT(COULD_NOT_OPEN_GAME_METADATA), "cps2");
+		msg_printf(TEXT(PRESS_ANY_BUTTON2));
+		pad_wait_press(PAD_WAIT_INFINITY);
+		Loop = LOOP_BROWSER;
+		return 0;
 	}
 
 	i = 0;
@@ -804,56 +860,6 @@ int memory_init(void)
 		Loop = LOOP_BROWSER;
 		return 0;
 	}
-
-#if !RELEASE
-	if (!strcmp(game_name, "ddtodd")
-	||	!strcmp(game_name, "ecofghtrd")
-	||	!strcmp(game_name, "ssf2ud")
-	||	!strcmp(game_name, "ssf2tbd")
-	||	!strcmp(game_name, "armwar1d")
-	||	!strcmp(game_name, "avspd")
-	||	!strcmp(game_name, "dstlku1d")
-	||	!strcmp(game_name, "ringdstd")
-	||	!strcmp(game_name, "ssf2xjd")
-	||	!strcmp(game_name, "xmcotar1d")
-	||	!strcmp(game_name, "mshud")
-	||	!strcmp(game_name, "cybotsud")
-	||	!strcmp(game_name, "cybotsjd")
-	||	!strcmp(game_name, "nwarrud")
-	||	!strcmp(game_name, "sfad")
-	||	!strcmp(game_name, "19xxd")
-	||	!strcmp(game_name, "ddsomud")
-	||	!strcmp(game_name, "gigaman2")
-	||	!strcmp(game_name, "megamn2d")
-	||	!strcmp(game_name, "sfz2ad")
-	||	!strcmp(game_name, "sfz2jd")
-	||	!strcmp(game_name, "spf2td")
-	||	!strcmp(game_name, "spf2xjd")
-	||	!strcmp(game_name, "sfz2ald")
-	||	!strcmp(game_name, "xmvsfu1d")
-	||	!strcmp(game_name, "batcird")
-	||	!strcmp(game_name, "csclub1d")
-	||	!strcmp(game_name, "mshvsfu1d")
-	||	!strcmp(game_name, "sgemfd")
-	||	!strcmp(game_name, "vsavd")
-	||	!strcmp(game_name, "vhunt2d")
-	||	!strcmp(game_name, "vsav2d")
-	||	!strcmp(game_name, "mvscud")
-	||	!strcmp(game_name, "sfa3ud")
-	||	!strcmp(game_name, "sfz3jr2d")
-	||	!strcmp(game_name, "gigawingd")
-	||	!strcmp(game_name, "gigawingjd")
-	||	!strcmp(game_name, "1944d")
-	||	!strcmp(game_name, "dimahoud")
-	||	!strcmp(game_name, "mmatrixd")
-	||	!strcmp(game_name, "progearud")
-	||	!strcmp(game_name, "progearjd")
-	||	!strcmp(game_name, "progearjbl") // not an actual phoenix set, but works as one
-	||	!strcmp(game_name, "hsf2d"))
-		phoenix_edition = 1;
-	else
-		phoenix_edition = 0;
-#endif
 
 	if (parent_name[0])
 		msg_printf(TEXT(ROMSET_x_PARENT_x), game_name, parent_name);

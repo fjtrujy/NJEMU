@@ -101,6 +101,8 @@ STATE_SAVE( driver );
 STATE_LOAD( driver );
 #endif
 
-void cps2_init_68k(void);
+int cps2_init_68k(void);
+void cps2_set_decryption_key(uint32_t key0, uint32_t key1, uint32_t upper_limit);
+void cps2_clear_decryption_key(void);
 
 #endif /* CPS2_DRIVER_H */

@@ -379,11 +379,44 @@ the Latin-1 renderer has U+00B7.
 
 ### M3 — CPS2 executable metadata
 
-- [ ] Move `keys_table[]` data into canonical/generated CPS2 metadata.
-- [ ] Replace the Phoenix/decrypted name chain with a metadata flag.
-- [ ] Replace cache-parent exception lists with explicit metadata.
-- [ ] Validate encrypted/Phoenix coverage against supported CPS2 sets.
-- [ ] Measure executable-size delta and startup I/O cost.
+- [x] Move `keys_table[]` data into canonical/generated CPS2 metadata.
+- [x] Replace the Phoenix/decrypted name chain with a metadata flag.
+- [x] Replace cache-parent exception lists with explicit metadata.
+- [x] Validate encrypted/Phoenix coverage against supported CPS2 sets.
+- [x] Measure executable-size delta and startup I/O cost.
+
+`memory_init()` now validates and looks up the selected CPS2 record once after
+`rominfo` has established the normal parent. It copies only the selected
+decryption key/range, Phoenix bit, and cache-parent policy, then immediately
+unloads the 68,883-byte metadata file. The metadata allocation is therefore
+transient and is gone before the large emulation-region allocations. Both GUI
+and no-GUI startup use the same path.
+
+`cps2_init_68k()` no longer scans a compiled game-name/key table. Encrypted
+sets consume the selected key copied during `memory_init()`; Phoenix/decrypted
+sets clear the key state. Driver initialization now fails rather than silently
+starting an encrypted CPU region when no key was configured.
+
+Representative metadata tests pin the historical `ssf2` key, `jyangoku`'s
+zero/default upper range, a Phoenix set, the `ssf2ta -> ssf2t` streaming-cache
+override, and `mpangj`'s independent-cache rule. The exhaustive generator
+invariant additionally requires every supported CPS2 set to be exactly one of
+keyed or Phoenix/decrypted.
+
+Desktop object-size measurements against the pre-migration baseline:
+
+| Object | Baseline | M3 | Delta |
+| --- | ---: | ---: | ---: |
+| `cps2crpt.c.o` | 18,231 B | 10,608 B | **-7,623 B** |
+| `memintrf.c.o` | 14,855 B | 13,261 B | **-1,594 B** |
+| Combined | 33,086 B | 23,869 B | **-9,217 B** |
+
+Within `cps2crpt.c.o`, `__DATA` falls from 5,880 B to 16 B because the compiled
+key table is gone. Whole Mach-O segment totals are unchanged at their coarse
+page-rounded granularity, so the object delta is the useful Desktop size
+measurement. Debug GUI, release GUI with streaming cache, and no-GUI with
+streaming cache builds all succeed, and the metadata generator/reader tests
+pass in the migrated build.
 
 ### M4 — MVS executable metadata
 
