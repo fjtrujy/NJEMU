@@ -10,6 +10,7 @@
 #include "common/neogeo_sound_io.h"
 
 #if (EMU_SYSTEM == MVS)
+#include "mvs/me_sound_profile.h"
 #include "mvs/memintrf.h"
 #include "mvs/timer.h"
 #elif (EMU_SYSTEM == NCDZ)
@@ -146,6 +147,10 @@ WRITE8_HANDLER( YM2610_data_port_B_w )
 
 void timer_callback_2610(int param)
 {
+#if (EMU_SYSTEM == MVS)
+	mvs_me_sound_profile_event(param == 0 ? MVS_ME_SOUND_PROFILE_YM_TIMER_A :
+		MVS_ME_SOUND_PROFILE_YM_TIMER_B);
+#endif
 	YM2610TimerOver(param);
 }
 

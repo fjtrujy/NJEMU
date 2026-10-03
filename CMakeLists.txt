@@ -89,6 +89,7 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
 option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
+option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
 if((USE_ASAN OR USE_UBSAN OR USE_PG) AND NOT PLATFORM STREQUAL "DESKTOP")
     message(FATAL_ERROR "USE_ASAN, USE_UBSAN, and USE_PG are desktop-only diagnostic capabilities")
 endif()
@@ -97,6 +98,9 @@ if(PSP_ME_AUDIO AND NOT PLATFORM STREQUAL "PSP")
 endif()
 if(PSP_AUDIO_PROFILE AND NOT PLATFORM STREQUAL "PSP")
     message(FATAL_ERROR "PSP_AUDIO_PROFILE requires PLATFORM=PSP")
+endif()
+if(PSP_ME_SOUND_PROFILE AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS"))
+    message(FATAL_ERROR "PSP_ME_SOUND_PROFILE requires PLATFORM=PSP and TARGET=MVS")
 endif()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
@@ -429,6 +433,11 @@ if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)
     add_definitions(-DPSP_AUDIO_PROFILE=1)
 endif()
 
+if(PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_SOUND_PROFILE)
+    list(APPEND COMMON_SRC psp/psp_me_sound_profile.c)
+    add_definitions(-DPSP_ME_SOUND_PROFILE=1)
+endif()
+
 find_package(miniz 3.1.2 CONFIG QUIET)
 if (TARGET miniz::miniz)
     set(NJEMU_MINIZ_TARGET miniz::miniz)
@@ -630,6 +639,7 @@ if (${TARGET} STREQUAL "MVS")
         mvs/dipsw.c
         mvs/timer.h
         mvs/timer.c
+        mvs/me_sound_profile.h
         mvs/vidhrdw.h
         mvs/vidhrdw.c
         mvs/sprite_common.h

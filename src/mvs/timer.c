@@ -13,6 +13,7 @@
 #include "mvs.h"
 #include "common/emulator_runtime.h"
 #include "include/cpuintrf.h"
+#include "me_sound_profile.h"
 
 
 #define CPU_NOTACTIVE	-1
@@ -90,10 +91,15 @@ static void cpu_execute(int cpunum)
 {
 	if (!cpu[cpunum].suspended)
 	{
+		uint64_t start = mvs_me_sound_profile_now_us();
+
 		active_cpu = cpunum;
 		cpu[cpunum].cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
 		cpu[cpunum].execute(cpu[cpunum].cycles);
 		active_cpu = CPU_NOTACTIVE;
+		mvs_me_sound_profile_add_time(
+			cpunum == CPU_M68000 ? MVS_ME_SOUND_PROFILE_M68000 : MVS_ME_SOUND_PROFILE_Z80,
+			mvs_me_sound_profile_now_us() - start);
 	}
 }
 
@@ -133,6 +139,7 @@ static int getabsolutetime(void)
 
 void timer_reset(void)
 {
+	mvs_me_sound_profile_reset();
 	global_offset = 0;
 	base_time     = 0;
 	frame_base    = 0;
@@ -213,12 +220,16 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 
 		if (duration < timer_left)
 		{
+			if (which == YM2610_TIMERA || which == YM2610_TIMERB)
+				mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_TIMER_PREEMPT);
 			timer_ticks -= time_left;
 			cpu[active_cpu].cycles -= cycles_left;
 			*cpu[active_cpu].icount = 0;
 
 			if (active_cpu == CPU_Z80)
 			{
+				if (which == YM2610_TIMERA || which == YM2610_TIMERB)
+					mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_Z80_TIMER_PREEMPT_MAIN);
 				// If CPU2, stop CPU1 and adjust CPU1's remaining cycles
 				if (!timer[CPUSPIN_TIMER].enable)
 				{
@@ -277,12 +288,14 @@ int timer_getscanline(void)
 static void timer_update_cpu_normal(void)
 {
 	int i, time;
+	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
 
 	frame_base = 0;
 	timer_left = TICKS_PER_FRAME;
 
 	while (timer_left > 0)
 	{
+		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
 
@@ -303,10 +316,18 @@ static void timer_update_cpu_normal(void)
 			}
 		}
 
-		if (Loop != LOOP_EXEC) return;
+		if (Loop != LOOP_EXEC)
+		{
+			mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+				mvs_me_sound_profile_now_us() - scheduler_start);
+			return;
+		}
 
+		mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+			mvs_me_sound_profile_now_us() - scheduler_start);
 		cpu_execute(CPU_M68000);
 		cpu_execute(CPU_Z80);
+		scheduler_start = mvs_me_sound_profile_now_us();
 
 		frame_base += timer_ticks;
 		timer_left -= timer_ticks;
@@ -327,7 +348,10 @@ static void timer_update_cpu_normal(void)
 		}
 	}
 
+	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	mvs_me_sound_profile_frame_completed();
 }
 
 
@@ -338,6 +362,7 @@ static void timer_update_cpu_normal(void)
 static void timer_update_cpu_raster(void)
 {
 	int i, time;
+	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
 
 	frame_base = 0;
 	timer_left = 0;
@@ -348,6 +373,7 @@ static void timer_update_cpu_raster(void)
 
 		while (timer_left > 0)
 		{
+			mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
 			timer_ticks = timer_left;
 			time = base_time + frame_base;
 
@@ -368,10 +394,18 @@ static void timer_update_cpu_raster(void)
 				}
 			}
 
-			if (Loop != LOOP_EXEC) return;
+			if (Loop != LOOP_EXEC)
+			{
+				mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+					mvs_me_sound_profile_now_us() - scheduler_start);
+				return;
+			}
 
+			mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+				mvs_me_sound_profile_now_us() - scheduler_start);
 			cpu_execute(CPU_M68000);
 			cpu_execute(CPU_Z80);
+			scheduler_start = mvs_me_sound_profile_now_us();
 
 			frame_base += timer_ticks;
 			timer_left -= timer_ticks;
@@ -393,7 +427,10 @@ static void timer_update_cpu_raster(void)
 		}
 	}
 
+	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
+		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	mvs_me_sound_profile_frame_completed();
 }
 
 
