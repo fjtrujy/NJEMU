@@ -179,6 +179,16 @@ jobs:
         make -j $(getconf _NPROCESSORS_ONLN)
         cmake --install .
 
+    - name: Validate generated metadata package
+      run: |
+        target_lower=$(printf '%s' "${{ matrix.target }}" | tr '[:upper:]' '[:lower:]')
+        test -s "build/install/game_metadata.${target_lower}"
+        case "${{ matrix.target }}" in
+          CPS1|MVS) test -s "build/install/dip_metadata.${target_lower}" ;;
+          *) test ! -e "build/install/dip_metadata.${target_lower}" ;;
+        esac
+        test "$(find build/install -maxdepth 1 -type f -name 'zipname*' | wc -l)" -eq 0
+
     - name: Get short SHA
       id: slug
       run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
