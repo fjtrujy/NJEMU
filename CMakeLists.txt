@@ -1784,6 +1784,16 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         target_include_directories(psp_me_spsc_ring_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
         add_test(NAME psp_me_spsc_ring_tests COMMAND psp_me_spsc_ring_tests)
+        find_package(Threads REQUIRED)
+        add_executable(psp_me_sound_worker_tests
+            tests/psp_me_sound_worker_tests.c
+            src/psp/psp_me_spsc_ring.c
+            src/psp/psp_me_sound_worker.c)
+        target_include_directories(psp_me_sound_worker_tests BEFORE PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/psp_me_host_stubs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_link_libraries(psp_me_sound_worker_tests PRIVATE Threads::Threads)
+        add_test(NAME psp_me_sound_worker_tests COMMAND psp_me_sound_worker_tests)
         foreach(UPLOAD_MODE IN ITEMS dirty legacy)
             add_executable(mvs_sprite_upload_${UPLOAD_MODE}_tests
                 tests/mvs_sprite_upload_tests.c

@@ -6,6 +6,10 @@
 
 #define PSP_ME_SOUND_WORKER_CACHE_LINE 64u
 #define PSP_ME_SOUND_WORKER_HEARTBEAT_SPINS 4096u
+#define PSP_ME_SOUND_WORKER_SHARED_POINTERS 4u
+#define PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS \
+	((PSP_ME_SOUND_WORKER_CACHE_LINE - \
+		PSP_ME_SOUND_WORKER_SHARED_POINTERS * sizeof(void *)) / sizeof(uint32_t))
 
 typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	psp_me_sound_worker_main_control
@@ -38,7 +42,7 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	psp_me_spsc_ring_t *events;
 	psp_me_sound_worker_main_control_t *main_control;
 	psp_me_sound_worker_progress_t *progress;
-	uint32_t reserved[12];
+	uint32_t reserved[PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS];
 } psp_me_sound_worker_shared_context_t;
 
 _Static_assert(sizeof(psp_me_sound_worker_main_control_t) == PSP_ME_SOUND_WORKER_CACHE_LINE,

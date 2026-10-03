@@ -886,9 +886,29 @@ The standalone C2 hardware harness has also been extended to exercise 256
 timestamped shadow commands per worker cycle (including groups sharing an equal
 timestamp) and checks exact echo statistics in addition to lifecycle state.  The
 updated harness and integrated PSP MVS coprocessor configuration build cleanly
-with `-Werror`.  Desktop MVS remains **24/24 CTests green**, PSP production with
+with `-Werror`.  A Desktop host oracle now also compiles the **same production
+`psp_me_sound_worker.c`** behind no-op cache stubs and a POSIX-thread dispatch.
+It validates 10,048 exact ordered shadow commands, equal timestamps, pending
+shadow echoes interleaved with `RESET`, subsequent `SYNC`/shutdown, and fatal
+rejection of an emulated-time regression.  To keep the shared worker context
+cache-line exact on both ABIs, its padding is derived from pointer width; the
+64-byte static assertion passes on both Desktop 64-bit and PSP 32-bit builds.
+Desktop MVS is now **25/25 CTests green**.  PSP production with
 `PSP_ME_AUDIO=OFF` builds, and the existing ADPCM-A-only ME configuration builds
 unchanged.
+
+PPSSPP fallback was revalidated with this same coprocessor-enabled PSP binary,
+installed temporarily as normal homebrew so its `MEMSIZE=1` attribute was
+preserved.  With `AudioProcessor = Main CPU`, `mslug3` loaded and ran for the
+15-second compatibility window and NJEMU logged:
+
+```text
+[PSP_ME_AUDIO] Audio processor: Main CPU; ME initialization skipped
+```
+
+This confirms that compiling C3/ME support does not make ME execution mandatory
+under PPSSPP.  This is fallback compatibility evidence only; it is not evidence
+for any ME execution or coherency claim.
 
 The real-PSP C3 oracle still has to be run after PSPLink is available again.
 Until that run shows exact matches, zero send failures/overflows and negligible
