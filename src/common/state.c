@@ -114,6 +114,9 @@ int  state_reload_bios;
 #ifdef ADHOC
 static uint8_t state_buffer_base[STATE_BUFFER_SIZE];
 #endif
+static uint16_t *state_thumbnail_capture;
+static int state_thumbnail_capture_width;
+static int state_thumbnail_capture_height;
 
 #if (EMU_SYSTEM == CPS1)
 static const char *current_version_str = "CPS1SV23";
@@ -150,6 +153,77 @@ static uint16_t *state_thumbnail_addr(int x)
 	return base ? base + x : NULL;
 }
 
+static int capture_thumbnail_cpu(int frame_index, const RECT *src_rect, int dst_width, int dst_height, int rotate)
+{
+	uint16_t *source;
+	int src_width;
+	int src_height;
+	int x, y;
+
+	if (video_driver->readFrame == NULL)
+		return 0;
+
+	src_width = src_rect->right - src_rect->left;
+	src_height = src_rect->bottom - src_rect->top;
+	if (src_width <= 0 || src_height <= 0)
+		return 0;
+
+	source = (uint16_t *)malloc((size_t)src_width * src_height * sizeof(uint16_t));
+	if (!source)
+		return 0;
+	state_thumbnail_capture = (uint16_t *)malloc((size_t)dst_width * dst_height * sizeof(uint16_t));
+	if (!state_thumbnail_capture)
+	{
+		free(source);
+		return 0;
+	}
+
+	if (!video_driver->readFrame(video_data, frame_index,
+		src_rect->left, src_rect->top, src_width, src_height, source, src_width))
+	{
+		free(source);
+		free(state_thumbnail_capture);
+		state_thumbnail_capture = NULL;
+		return 0;
+	}
+
+	for (y = 0; y < dst_height; y++)
+	{
+		for (x = 0; x < dst_width; x++)
+		{
+			int sx;
+			int sy;
+
+			if (rotate)
+			{
+				sx = src_width - 1 - (y * src_width) / dst_height;
+				sy = (x * src_height) / dst_width;
+			}
+			else
+			{
+				sx = (x * src_width) / dst_width;
+				sy = (y * src_height) / dst_height;
+			}
+
+			state_thumbnail_capture[(size_t)y * dst_width + x] =
+				source[(size_t)sy * src_width + sx];
+		}
+	}
+
+	free(source);
+	state_thumbnail_capture_width = dst_width;
+	state_thumbnail_capture_height = dst_height;
+	return 1;
+}
+
+void state_release_thumbnail(void)
+{
+	free(state_thumbnail_capture);
+	state_thumbnail_capture = NULL;
+	state_thumbnail_capture_width = 0;
+	state_thumbnail_capture_height = 0;
+}
+
 static void save_thumbnail(void)
 {
 	int x, y, w, h;
@@ -170,7 +244,13 @@ static void save_thumbnail(void)
 		h = 112;
 	}
 
-	if (video_driver->readFrame != NULL)
+	if (state_thumbnail_capture != NULL &&
+		state_thumbnail_capture_width == w && state_thumbnail_capture_height == h)
+	{
+		src = state_thumbnail_capture;
+		src_pitch = w;
+	}
+	else if (video_driver->readFrame != NULL)
 	{
 		/* Backends with non-CPU-addressable thumbnail surfaces can provide
 		 * explicit readback without leaking their storage model here. */
@@ -211,12 +291,30 @@ static void save_thumbnail(void)
 	Load Thumbnail from File to Work Area
 ------------------------------------------------------*/
 
-static void load_thumbnail(int fd)
+static int read_state_bytes(int fd, void *buffer, size_t size)
 {
-	int x, y, w, h;
+	uint8_t *dst = (uint8_t *)buffer;
+
+	while (size != 0)
+	{
+		ssize_t count = read(fd, dst, size);
+		if (count <= 0)
+			return 0;
+		dst += count;
+		size -= (size_t)count;
+	}
+
+	return 1;
+}
+
+static int load_thumbnail(int fd)
+{
+	int y, w, h;
 	uint16_t *dst = state_thumbnail_addr(0);
+	uint16_t *thumbnail;
+	size_t thumbnail_size;
 	if (!dst)
-		return;
+		return 0;
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	if (machine_screen_type)
@@ -231,14 +329,25 @@ static void load_thumbnail(int fd)
 		h = 112;
 	}
 
+	thumbnail_size = (size_t)w * h * sizeof(uint16_t);
+	thumbnail = (uint16_t *)malloc(thumbnail_size);
+	if (!thumbnail)
+		return 0;
+
+	if (!read_state_bytes(fd, thumbnail, thumbnail_size))
+	{
+		free(thumbnail);
+		return 0;
+	}
+
 	for (y = 0; y < h; y++)
 	{
-		for (x = 0; x < w; x++)
-		{
-			{ ssize_t io_result = read(fd, &dst[x], 2); (void)io_result; }
-		}
+		memcpy(dst, thumbnail + (size_t)y * w, (size_t)w * sizeof(uint16_t));
 		dst += BUF_WIDTH;
 	}
+
+	free(thumbnail);
+	return 1;
 }
 
 
@@ -248,7 +357,7 @@ static void load_thumbnail(int fd)
 
 static void clear_thumbnail(void)
 {
-	int x, y, w, h;
+	int y, w, h;
 	uint16_t *dst = state_thumbnail_addr(0);
 	if (!dst)
 		return;
@@ -268,10 +377,7 @@ static void clear_thumbnail(void)
 
 	for (y = 0; y < h; y++)
 	{
-		for (x = 0; x < w; x++)
-		{
-			dst[x] = 0;
-		}
+		memset(dst, 0, (size_t)w * sizeof(uint16_t));
 		dst += BUF_WIDTH;
 	}
 }
@@ -740,10 +846,27 @@ error:
 
 void state_make_thumbnail(void)
 {
-	{
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-		RECT clip1 = { 64, 16, 64 + 384, 16 + 224 };
+	int captured;
 
+	state_release_thumbnail();
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	RECT clip1 = { 64, 16, 64 + 384, 16 + 224 };
+
+	captured = capture_thumbnail_cpu(COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &clip1,
+		machine_screen_type ? 112 : 152,
+		machine_screen_type ? 152 : 112,
+		machine_screen_type != 0);
+#elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
+	RECT clip1 = { 24, 16, 336, 240 };
+
+	captured = capture_thumbnail_cpu(COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &clip1,
+		152, 112, 0);
+#endif
+
+	if (!captured)
+	{
+		video_driver->beginFrame(video_data);
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 		if (machine_screen_type)
 		{
 			RECT clip2 = { 152, 0, 152 + 112, 152 };
@@ -755,11 +878,12 @@ void state_make_thumbnail(void)
 			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
 		}
 #elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
-		RECT clip1 = { 24, 16, 336, 240 };
-		RECT clip2 = { 152, 0, 152 + 152, 112 };
-
-		video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
+		{
+			RECT clip2 = { 152, 0, 152 + 152, 112 };
+			video_driver->copyRect(video_data, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER, &clip1, &clip2);
+		}
 #endif
+		video_driver->endFrame(video_data);
 	}
 }
 
@@ -784,9 +908,14 @@ int state_load_thumbnail(int slot)
 
 		memset(stver_str, 0, 16);
 
-		{ ssize_t io_result = read(fd, stver_str, 8); (void)io_result; }
-		{ ssize_t io_result = read(fd, &t, 16); (void)io_result; }
-		load_thumbnail(fd);
+		if (!read_state_bytes(fd, stver_str, 8) ||
+			!read_state_bytes(fd, &t, 16) ||
+			!load_thumbnail(fd))
+		{
+			close(fd);
+			state_clear_thumbnail();
+			return 0;
+		}
 		close(fd);
 
 		current_state_version = current_version_str[7] - '0';

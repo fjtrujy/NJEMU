@@ -319,6 +319,44 @@ static void *psp_frameAddr(void *data, int frameIndex, int x, int y)
 	return (void *)((uintptr_t)frame + ((x + (y << 9)) << 1));
 }
 
+static int psp_readEdramRegion(psp_video_t *psp, void *src, int srcPitch,
+	int x, int y, int width, int height, uint16_t *dst, int dstPitch)
+{
+	uint16_t *transfer;
+	size_t transferSize;
+	int row;
+
+	/* sceGuCopyImage is the portable PSP way to make a buffered GE render
+	 * target visible to the CPU.  In particular, PPSSPP can keep EDRAM-backed
+	 * render targets in a host FBO until an explicit image transfer requests
+	 * their contents, so directly dereferencing EDRAM here returns stale data. */
+	if (psp->frame_active || srcPitch <= 0 || x < 0 || y < 0 ||
+		width <= 0 || height <= 0 || x + width > srcPitch || dstPitch < width)
+		return 0;
+
+	transferSize = (size_t)BUF_WIDTH * height * sizeof(uint16_t);
+	transfer = (uint16_t *)memalign(64, transferSize);
+	if (!transfer)
+		return 0;
+
+	sceKernelDcacheWritebackInvalidateRange(transfer, transferSize);
+	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
+	sceGuStart(GU_DIRECT, gulist);
+	sceGuCopyImage(pixel_format, x, y, width, height, srcPitch, src,
+		0, 0, BUF_WIDTH, transfer);
+	sceGuFinish();
+	sceGuSync(0, GU_SYNC_FINISH);
+	sceKernelDcacheInvalidateRange(transfer, transferSize);
+
+	for (row = 0; row < height; row++)
+		memcpy(dst + (size_t)row * dstPitch,
+			transfer + (size_t)row * BUF_WIDTH,
+			(size_t)width * sizeof(uint16_t));
+
+	free(transfer);
+	return 1;
+}
+
 static int psp_readFrame(void *data, int frameIndex, int x, int y,
 	int width, int height, uint16_t *dst, int dstPitch)
 {
@@ -326,17 +364,56 @@ static int psp_readFrame(void *data, int frameIndex, int x, int y,
 	uint16_t *src;
 	int row;
 
-	if (!psp || frameIndex != COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER ||
-		!dst || x < 0 || y < 0 || width <= 0 || height <= 0 ||
-		x + width > BUF_WIDTH || y + height > PSP_VIDEO_UI_SCRATCH_HEIGHT || dstPitch < width)
+	if (!psp || !dst || x < 0 || y < 0 || width <= 0 || height <= 0 ||
+		x + width > BUF_WIDTH || dstPitch < width)
 		return 0;
 
-	/* The GE writes the CT16 scratch in main RAM. Invalidate CPU cache lines
-	 * before serializing a thumbnail so stale cache contents cannot leak into
-	 * the save-state image. state_make_thumbnail() has completed its GU list
-	 * before the save menu can request this readback. */
-	sceKernelDcacheInvalidateRange(psp->ui_scratch, BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
-	src = psp->ui_scratch + (size_t)y * BUF_WIDTH + x;
+	if (frameIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+	{
+		if (y + height > PSP_VIDEO_UI_SCRATCH_HEIGHT)
+			return 0;
+		/* The GE can write this CT16 scratch in main RAM. Invalidate CPU cache
+		 * lines before consuming GPU-authored contents. */
+		sceKernelDcacheInvalidateRange(psp->ui_scratch,
+			BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
+		src = psp->ui_scratch + (size_t)y * BUF_WIDTH + x;
+	}
+	else if (frameIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP)
+	{
+		if (y + height > SCR_HEIGHT)
+			return 0;
+		return psp_readEdramRegion(psp,
+			(void *)(0x04000000u + psp->scrbitmap), BUF_WIDTH,
+			x, y, width, height, dst, dstPitch);
+	}
+	else if (frameIndex == COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER)
+	{
+		void *display_frame = NULL;
+		int display_pitch = 0;
+		int display_format = 0;
+		uintptr_t display_addr;
+
+		if (y + height > SCR_HEIGHT)
+			return 0;
+		if (sceDisplayGetFrameBuf(&display_frame, &display_pitch, &display_format,
+			PSP_DISPLAY_SETBUF_IMMEDIATE) < 0 ||
+			display_frame == NULL || display_pitch < x + width ||
+			display_format != PSP_DISPLAY_PIXEL_FORMAT_5551)
+			return 0;
+
+		/* Query the framebuffer actually latched by the display controller rather
+		 * than relying on the renderer's next/previous swap bookkeeping. */
+		display_addr = (uintptr_t)display_frame;
+		if (display_addr < sceGeEdramGetSize())
+			display_addr += 0x04000000u;
+		return psp_readEdramRegion(psp, (void *)display_addr, display_pitch,
+			x, y, width, height, dst, dstPitch);
+	}
+	else
+	{
+		return 0;
+	}
+
 	for (row = 0; row < height; row++)
 		memcpy(dst + (size_t)row * dstPitch, src + (size_t)row * BUF_WIDTH,
 			(size_t)width * sizeof(uint16_t));
@@ -682,6 +759,9 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 	void *dst = psp_resolveFrame(psp, dstIndex);
 	int j, sw, dw, sh, dh;
 	video_sprite_vertex_t *vertices;
+	if (srcIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+		sceKernelDcacheWritebackRange(psp->ui_scratch,
+			BUF_WIDTH * PSP_VIDEO_UI_SCRATCH_HEIGHT * sizeof(uint16_t));
 
 	sw = src_rect->right - src_rect->left;
 	dw = dst_rect->right - dst_rect->left;

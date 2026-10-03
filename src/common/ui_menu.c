@@ -2508,8 +2508,6 @@ static void state_refresh_screen(int reload_thumbnail)
 
 	if (reload_thumbnail)
 	{
-		find_state_file(slot);
-
 		if (!slot[state_sel])
 		{
 			state_clear_thumbnail();
@@ -2665,6 +2663,7 @@ static int state_save_slot(void)
 
 		if (res)
 		{
+			slot[state_sel] = 1;
 			video_driver->beginFrame(video_data);
 			state_refresh_screen(1);
 			draw_battery_status(1);
@@ -2869,9 +2868,6 @@ static int menu_state(void)
 
 		if (prev_sel != state_sel || prev_func != state_func)
 			update = 1;
-
-		if (prev_sel != state_sel)
-			find_state_file(slot);
 
 		if (Loop == LOOP_EXIT) break;
 
@@ -3147,6 +3143,10 @@ void showmenu(void)
 
 	autoframeskip_reset();
 	blit_clear_all_sprite();
+
+#ifdef SAVE_STATE
+	state_release_thumbnail();
+#endif
 
 	pad_wait_clear();
 	ui_popup_reset();

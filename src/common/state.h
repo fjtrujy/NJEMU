@@ -68,6 +68,7 @@ int state_save(int slot);
 int state_load(int slot);
 
 void state_make_thumbnail(void);
+void state_release_thumbnail(void);
 int state_load_thumbnail(int slot);
 void state_clear_thumbnail(void);
 
