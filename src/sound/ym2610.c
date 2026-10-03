@@ -596,9 +596,11 @@ typedef struct
 	int32_t TBC;			/* timer b counter      */
 	/* local time tables */
 	int32_t dt_tab[8][32];	/* DeTune table       */
-	/* Extention Timer and IRQ handler */
-	FM_TIMERHANDLER Timer_Handler;
-	FM_IRQHANDLER   IRQ_Handler;
+	/* Extension timer and IRQ handlers. The opaque form lets independent chip
+	 * contexts run concurrently without a process-global "current chip". */
+	YM2610_CONTEXT_TIMERHANDLER Timer_Handler;
+	YM2610_CONTEXT_IRQHANDLER   IRQ_Handler;
+	void *Handler_Opaque;
 } FM_ST;
 
 
@@ -757,57 +759,88 @@ typedef struct ym2610_context
 {
 	SSG_t ssg;
 	ym2610_chip_t chip;
-	int32_t m2, c1, c2;
-	int32_t mem;
-	int32_t ALIGN16_DATA out_fm[8];
-	int32_t out_ssg;
-	int32_t ALIGN16_DATA out_adpcma[4];
+	int32_t mix_m2, mix_c1, mix_c2;
+	int32_t mix_mem;
+	int32_t ALIGN16_DATA mix_out_fm[8];
+	int32_t mix_out_ssg;
+	int32_t ALIGN16_DATA mix_out_adpcma[4];
 #if (EMU_SYSTEM == MVS)
-	int32_t ALIGN16_DATA out_delta[4];
+	int32_t ALIGN16_DATA mix_out_delta[4];
 	void (*adpcma_calc_chan)(int c, ADPCMA *ch);
 	void (*adpcmb_calc)(ADPCMB *adpcmb);
 #endif
-	uint32_t LFO_AM;
-	int32_t LFO_PM;
-	uint8_t *pcmbufA;
-	uint32_t pcmsizeA;
+	uint32_t lfo_am;
+	int32_t lfo_pm;
+	uint8_t *pcm_a;
+	uint32_t pcm_a_size;
 #if (EMU_SYSTEM == MVS)
-	uint8_t *pcmbufB;
-	uint32_t pcmsizeB;
+	uint8_t *pcm_b;
+	uint32_t pcm_b_size;
 #endif
 #if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-	ym2610_adpcma_job_t *adpcma_job;
-	volatile uint32_t adpcma_control_generation[YM2610_ADPCMA_JOB_CHANNELS];
+	ym2610_adpcma_job_t *adpcma_job_state;
+	volatile uint32_t adpcma_generation[YM2610_ADPCMA_JOB_CHANNELS];
 #endif
+	uint8_t pcm_cache_enabled;
+	FM_TIMERHANDLER legacy_timer_handler;
+	FM_IRQHANDLER legacy_irq_handler;
 } ym2610_context_t;
 
 static ym2610_context_t ALIGN16_DATA ym2610_default_context;
 
+#define CTX_SSG(ctx)                  ((ctx)->ssg)
+#define CTX_YM2610(ctx)               ((ctx)->chip)
+#define CTX_m2(ctx)                   ((ctx)->mix_m2)
+#define CTX_c1(ctx)                   ((ctx)->mix_c1)
+#define CTX_c2(ctx)                   ((ctx)->mix_c2)
+#define CTX_mem(ctx)                  ((ctx)->mix_mem)
+#define CTX_out_fm(ctx)               ((ctx)->mix_out_fm)
+#define CTX_out_ssg(ctx)              ((ctx)->mix_out_ssg)
+#define CTX_out_adpcma(ctx)           ((ctx)->mix_out_adpcma)
+#if (EMU_SYSTEM == MVS)
+#define CTX_out_delta(ctx)            ((ctx)->mix_out_delta)
+#define CTX_ADPCMA_calc_chan(ctx)     ((ctx)->adpcma_calc_chan)
+#define CTX_ADPCMB_calc(ctx)          ((ctx)->adpcmb_calc)
+#endif
+#define CTX_LFO_AM(ctx)               ((ctx)->lfo_am)
+#define CTX_LFO_PM(ctx)               ((ctx)->lfo_pm)
+#define CTX_pcmbufA(ctx)              ((ctx)->pcm_a)
+#define CTX_pcmsizeA(ctx)             ((ctx)->pcm_a_size)
+#if (EMU_SYSTEM == MVS)
+#define CTX_pcmbufB(ctx)              ((ctx)->pcm_b)
+#define CTX_pcmsizeB(ctx)             ((ctx)->pcm_b_size)
+#endif
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#define CTX_adpcma_job(ctx)           ((ctx)->adpcma_job_state)
+#define CTX_adpcma_generation(ctx)    ((ctx)->adpcma_generation)
+#endif
+#define CTX_pcm_cache_enabled(ctx)    ((ctx)->pcm_cache_enabled)
+
 #define SSG                         (ym2610_default_context.ssg)
 #define YM2610                      (ym2610_default_context.chip)
-#define m2                          (ym2610_default_context.m2)
-#define c1                          (ym2610_default_context.c1)
-#define c2                          (ym2610_default_context.c2)
-#define mem                         (ym2610_default_context.mem)
-#define out_fm                      (ym2610_default_context.out_fm)
-#define out_ssg                     (ym2610_default_context.out_ssg)
-#define out_adpcma                  (ym2610_default_context.out_adpcma)
+#define m2                          (ym2610_default_context.mix_m2)
+#define c1                          (ym2610_default_context.mix_c1)
+#define c2                          (ym2610_default_context.mix_c2)
+#define mem                         (ym2610_default_context.mix_mem)
+#define out_fm                      (ym2610_default_context.mix_out_fm)
+#define out_ssg                     (ym2610_default_context.mix_out_ssg)
+#define out_adpcma                  (ym2610_default_context.mix_out_adpcma)
 #if (EMU_SYSTEM == MVS)
-#define out_delta                   (ym2610_default_context.out_delta)
+#define out_delta                   (ym2610_default_context.mix_out_delta)
 #define OPNB_ADPCMA_calc_chan       (ym2610_default_context.adpcma_calc_chan)
 #define OPNB_ADPCMB_calc            (ym2610_default_context.adpcmb_calc)
 #endif
-#define LFO_AM                      (ym2610_default_context.LFO_AM)
-#define LFO_PM                      (ym2610_default_context.LFO_PM)
-#define pcmbufA                     (ym2610_default_context.pcmbufA)
-#define pcmsizeA                    (ym2610_default_context.pcmsizeA)
+#define LFO_AM                      (ym2610_default_context.lfo_am)
+#define LFO_PM                      (ym2610_default_context.lfo_pm)
+#define pcmbufA                     (ym2610_default_context.pcm_a)
+#define pcmsizeA                    (ym2610_default_context.pcm_a_size)
 #if (EMU_SYSTEM == MVS)
-#define pcmbufB                     (ym2610_default_context.pcmbufB)
-#define pcmsizeB                    (ym2610_default_context.pcmsizeB)
+#define pcmbufB                     (ym2610_default_context.pcm_b)
+#define pcmsizeB                    (ym2610_default_context.pcm_b_size)
 #endif
 #if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-#define adpcma_job                  (ym2610_default_context.adpcma_job)
-#define adpcma_control_generation   (ym2610_default_context.adpcma_control_generation)
+#define adpcma_job                  (ym2610_default_context.adpcma_job_state)
+#define adpcma_control_generation   (ym2610_default_context.adpcma_generation)
 #endif
 
 
@@ -830,7 +863,7 @@ static inline void FM_STATUS_SET(FM_ST *ST,int flag)
 	{
 		ST->irq = 1;
 		/* callback user interrupt handler (IRQ is OFF to ON) */
-		(ST->IRQ_Handler)(1);
+		(ST->IRQ_Handler)(ST->Handler_Opaque, 1);
 	}
 }
 
@@ -843,7 +876,7 @@ static inline void FM_STATUS_RESET(FM_ST *ST,int flag)
 	{
 		ST->irq = 0;
 		/* callback user interrupt handler (IRQ is ON to OFF) */
-		(ST->IRQ_Handler)(0);
+		(ST->IRQ_Handler)(ST->Handler_Opaque, 0);
 	}
 }
 
@@ -882,7 +915,7 @@ static inline void set_timers( FM_ST *ST, int v )
 		{
 			ST->TBC = ( 256-ST->TB)<<4;
 			/* External timer handler */
-			(ST->Timer_Handler)(1,ST->TBC,ST->TimerBase);
+			(ST->Timer_Handler)(ST->Handler_Opaque, 1, ST->TBC, ST->TimerBase);
 		}
 	}
 	else
@@ -890,7 +923,7 @@ static inline void set_timers( FM_ST *ST, int v )
 		if( ST->TBC != 0 )
 		{
 			ST->TBC = 0;
-			(ST->Timer_Handler)(1,0,ST->TimerBase);
+			(ST->Timer_Handler)(ST->Handler_Opaque, 1, 0, ST->TimerBase);
 		}
 	}
 	/* load a */
@@ -900,7 +933,7 @@ static inline void set_timers( FM_ST *ST, int v )
 		{
 			ST->TAC = (1024-ST->TA);
 			/* External timer handler */
-			(ST->Timer_Handler)(0,ST->TAC,ST->TimerBase);
+			(ST->Timer_Handler)(ST->Handler_Opaque, 0, ST->TAC, ST->TimerBase);
 		}
 	}
 	else
@@ -908,7 +941,7 @@ static inline void set_timers( FM_ST *ST, int v )
 		if( ST->TAC != 0 )
 		{
 			ST->TAC = 0;
-			(ST->Timer_Handler)(0,0,ST->TimerBase);
+			(ST->Timer_Handler)(ST->Handler_Opaque, 0, 0, ST->TimerBase);
 		}
 	}
 }
@@ -921,7 +954,7 @@ static inline void TimerAOver(FM_ST *ST)
 	if(ST->mode & 0x04) FM_STATUS_SET(ST,0x01);
 	/* clear or reload the counter */
 	ST->TAC = (1024-ST->TA);
-	(ST->Timer_Handler)(0,ST->TAC,ST->TimerBase);
+	(ST->Timer_Handler)(ST->Handler_Opaque, 0, ST->TAC, ST->TimerBase);
 }
 /* Timer B Overflow */
 static inline void TimerBOver(FM_ST *ST)
@@ -930,7 +963,7 @@ static inline void TimerBOver(FM_ST *ST)
 	if(ST->mode & 0x08) FM_STATUS_SET(ST,0x02);
 	/* clear or reload the counter */
 	ST->TBC = ( 256-ST->TB)<<4;
-	(ST->Timer_Handler)(1,ST->TBC,ST->TimerBase);
+	(ST->Timer_Handler)(ST->Handler_Opaque, 1, ST->TBC, ST->TimerBase);
 }
 
 
@@ -980,9 +1013,9 @@ static inline void FM_KEYOFF(FM_CH *CH , int s )
 }
 
 /* set algorithm connection */
-static void setup_connection( FM_CH *CH, int ch )
+static void setup_connection(ym2610_context_t *context, FM_CH *CH, int ch)
 {
-	int32_t *carrier = &out_fm[ch];
+	int32_t *carrier = &CTX_out_fm(context)[ch];
 
 	int32_t **om1 = &CH->connect1;
 	int32_t **om2 = &CH->connect3;
@@ -993,43 +1026,43 @@ static void setup_connection( FM_CH *CH, int ch )
 	switch( CH->ALGO ){
 	case 0:
 		/* M1---C1---MEM---M2---C2---OUT */
-		*om1 = &c1;
-		*oc1 = &mem;
-		*om2 = &c2;
-		*memc= &m2;
+			*om1 = &CTX_c1(context);
+			*oc1 = &CTX_mem(context);
+			*om2 = &CTX_c2(context);
+			*memc= &CTX_m2(context);
 		break;
 	case 1:
 		/* M1------+-MEM---M2---C2---OUT */
 		/*      C1-+                     */
-		*om1 = &mem;
-		*oc1 = &mem;
-		*om2 = &c2;
-		*memc= &m2;
+			*om1 = &CTX_mem(context);
+			*oc1 = &CTX_mem(context);
+			*om2 = &CTX_c2(context);
+			*memc= &CTX_m2(context);
 		break;
 	case 2:
 		/* M1-----------------+-C2---OUT */
 		/*      C1---MEM---M2-+          */
-		*om1 = &c2;
-		*oc1 = &mem;
-		*om2 = &c2;
-		*memc= &m2;
+			*om1 = &CTX_c2(context);
+			*oc1 = &CTX_mem(context);
+			*om2 = &CTX_c2(context);
+			*memc= &CTX_m2(context);
 		break;
 	case 3:
 		/* M1---C1---MEM------+-C2---OUT */
 		/*                 M2-+          */
-		*om1 = &c1;
-		*oc1 = &mem;
-		*om2 = &c2;
-		*memc= &c2;
+			*om1 = &CTX_c1(context);
+			*oc1 = &CTX_mem(context);
+			*om2 = &CTX_c2(context);
+			*memc= &CTX_c2(context);
 		break;
 	case 4:
 		/* M1---C1-+-OUT */
 		/* M2---C2-+     */
 		/* MEM: not used */
-		*om1 = &c1;
-		*oc1 = carrier;
-		*om2 = &c2;
-		*memc= &mem;	/* store it anywhere where it will not be used */
+			*om1 = &CTX_c1(context);
+			*oc1 = carrier;
+			*om2 = &CTX_c2(context);
+			*memc= &CTX_mem(context);	/* store it anywhere where it will not be used */
 		break;
 	case 5:
 		/*    +----C1----+     */
@@ -1038,17 +1071,17 @@ static void setup_connection( FM_CH *CH, int ch )
 		*om1 = 0;	/* special mark */
 		*oc1 = carrier;
 		*om2 = carrier;
-		*memc= &m2;
+			*memc= &CTX_m2(context);
 		break;
 	case 6:
 		/* M1---C1-+     */
 		/*      M2-+-OUT */
 		/*      C2-+     */
 		/* MEM: not used */
-		*om1 = &c1;
-		*oc1 = carrier;
-		*om2 = carrier;
-		*memc= &mem;	/* store it anywhere where it will not be used */
+			*om1 = &CTX_c1(context);
+			*oc1 = carrier;
+			*om2 = carrier;
+			*memc= &CTX_mem(context);	/* store it anywhere where it will not be used */
 		break;
 	case 7:
 		/* M1-+     */
@@ -1059,7 +1092,7 @@ static void setup_connection( FM_CH *CH, int ch )
 		*om1 = carrier;
 		*oc1 = carrier;
 		*om2 = carrier;
-		*memc= &mem;	/* store it anywhere where it will not be used */
+			*memc= &CTX_mem(context);	/* store it anywhere where it will not be used */
 		break;
 	}
 
@@ -1141,7 +1174,7 @@ static inline void set_sl_rr(FM_SLOT *SLOT,int v)
 
 
 /* advance LFO to next sample */
-static inline void advance_lfo(FM_OPN *OPN)
+static inline void advance_lfo(ym2610_context_t *context, FM_OPN *OPN)
 {
 	uint8_t pos;
 
@@ -1161,9 +1194,9 @@ static inline void advance_lfo(FM_OPN *OPN)
 			/* triangle */
 			/* AM: 0 to 126 step +2, 126 to 0 step -2 */
 			if (pos < 64)
-				LFO_AM = (pos & 63) * 2;
-			else
-				LFO_AM = 126 - ((pos & 63) * 2);
+					CTX_LFO_AM(context) = (pos & 63) * 2;
+				else
+					CTX_LFO_AM(context) = 126 - ((pos & 63) * 2);
 		}
 
 		/* PM works with 4 times slower clock */
@@ -1171,13 +1204,13 @@ static inline void advance_lfo(FM_OPN *OPN)
 		/* update PM when LFO output changes */
 		/*if (prev_pos != pos)*/ /* can't use global lfo_pm for this optimization, must be chip->lfo_pm instead*/
 		{
-			LFO_PM = pos;
+				CTX_LFO_PM(context) = pos;
 		}
 	}
 	else
 	{
-		LFO_AM = 0;
-		LFO_PM = 0;
+			CTX_LFO_AM(context) = 0;
+			CTX_LFO_PM(context) = 0;
 	}
 }
 
@@ -1318,18 +1351,18 @@ static inline int32_t op_calc(uint32_t phase, uint32_t env, int32_t pm)
 	return ((env < TL_TAB_LEN) ? tl_tab[env] : 0);
 }
 
-static inline void chan_calc(FM_OPN *OPN, FM_CH *CH)
+static inline void chan_calc(ym2610_context_t *context, FM_OPN *OPN, FM_CH *CH)
 {
-	uint32_t AM = LFO_AM >> CH->ams;
+	uint32_t AM = CTX_LFO_AM(context) >> CH->ams;
 	uint32_t env;
 
-	m2 = c1 = c2 = mem = 0;
+	CTX_m2(context) = CTX_c1(context) = CTX_c2(context) = CTX_mem(context) = 0;
 
 	*CH->mem_connect = CH->mem_value;	/* restore delayed sample (MEM) value to m2 or c2 */
 
 	if (!CH->connect1)
 		/* algorithm 5  */
-		mem = c1 = c2 = CH->op1_out[0];
+			CTX_mem(context) = CTX_c1(context) = CTX_c2(context) = CH->op1_out[0];
 	else
 		/* other algorithms */
 		*CH->connect1 += CH->op1_out[0];
@@ -1351,23 +1384,23 @@ static inline void chan_calc(FM_OPN *OPN, FM_CH *CH)
 	env = volume_calc(&CH->SLOT[SLOT3]);	/* SLOT 3 */
 	if (env < ENV_QUIET)
 	{
-		*CH->connect3 += op_calc(CH->SLOT[SLOT3].phase, env, m2 << 15);
+		*CH->connect3 += op_calc(CH->SLOT[SLOT3].phase, env, CTX_m2(context) << 15);
 	}
 
 	env = volume_calc(&CH->SLOT[SLOT2]);	/* SLOT 2 */
 	if (env < ENV_QUIET)
 	{
-		*CH->connect2 += op_calc(CH->SLOT[SLOT2].phase, env, c1 << 15);
+		*CH->connect2 += op_calc(CH->SLOT[SLOT2].phase, env, CTX_c1(context) << 15);
 	}
 
 	env = volume_calc(&CH->SLOT[SLOT4]);	/* SLOT 4 */
 	if (env < ENV_QUIET)
 	{
-		*CH->connect4 += op_calc(CH->SLOT[SLOT4].phase, env, c2 << 15);
+		*CH->connect4 += op_calc(CH->SLOT[SLOT4].phase, env, CTX_c2(context) << 15);
 	}
 
 	/* store current MEM */
-	CH->mem_value = mem;
+	CH->mem_value = CTX_mem(context);
 
 	/* update phase counters AFTER output calculations */
 	if (CH->pms)
@@ -1376,7 +1409,8 @@ static inline void chan_calc(FM_OPN *OPN, FM_CH *CH)
 		uint32_t block_fnum = CH->block_fnum;
 
 		uint32_t fnum_lfo = ((block_fnum & 0x7f0) >> 4) * 32 * 8;
-		int32_t lfo_fn_table_index_offset = lfo_pm_table[fnum_lfo + CH->pms + LFO_PM];
+		int32_t lfo_fn_table_index_offset =
+			lfo_pm_table[fnum_lfo + CH->pms + CTX_LFO_PM(context)];
 
 		if (lfo_fn_table_index_offset)	/* LFO phase modulation active */
 		{
@@ -1642,7 +1676,8 @@ static inline void CSMKeyControll(FM_CH *CH)
 
 
 /* prescaler set (and make time tables) */
-static void OPNSetPres(FM_OPN *OPN , int pres , int TimerPres, int SSGpres)
+static void OPNSetPres(ym2610_context_t *context, FM_OPN *OPN,
+	int pres, int TimerPres, int SSGpres)
 {
 	int i;
 
@@ -1662,7 +1697,9 @@ static void OPNSetPres(FM_OPN *OPN , int pres , int TimerPres, int SSGpres)
 	OPN->ST.TimerBase = 1.0/((float)OPN->ST.clock / (float)TimerPres);
 
 	/* SSG part  prescaler set */
-	if (SSGpres) SSG.step = ((float)SSG_STEP * OPN->ST.rate * 8) / (OPN->ST.clock * 2 / SSGpres);
+	if (SSGpres)
+		CTX_SSG(context).step = ((float)SSG_STEP * OPN->ST.rate * 8) /
+			(OPN->ST.clock * 2 / SSGpres);
 
 	/* make time tables */
 	init_timetables( &OPN->ST, dt_tab );
@@ -1742,7 +1779,7 @@ static void OPNWriteMode(FM_OPN *OPN, int r, int v)
 }
 
 /* write a OPN register (0x30-0xff) */
-static void OPNWriteReg(FM_OPN *OPN, int r, int v)
+static void OPNWriteReg(ym2610_context_t *context, FM_OPN *OPN, int r, int v)
 {
 	FM_CH *CH;
 	FM_SLOT *SLOT;
@@ -1913,7 +1950,7 @@ static void OPNWriteReg(FM_OPN *OPN, int r, int v)
 				int feedback = (v>>3)&7;
 				CH->ALGO = v&7;
 				CH->FB   = feedback ? feedback+6 : 0;
-				setup_connection( CH, c );
+				setup_connection(context, CH, c);
 			}
 			break;
 		case 1:		/* 0xb4-0xb6 : L , R , AMS , PMS (YM2612/YM2610B/YM2610/YM2608) */
@@ -1941,11 +1978,11 @@ static void OPNWriteReg(FM_OPN *OPN, int r, int v)
 
 /* SSG */
 
-static void SSG_write(int r, int v)
+static void SSG_write(ym2610_context_t *context, int r, int v)
 {
 	int old;
 
-	YM2610.regs[r] = v;
+	CTX_YM2610(context).regs[r] = v;
 
 	switch (r)
 	{
@@ -1955,68 +1992,68 @@ static void SSG_write(int r, int v)
 			int ch = r >> 1;
 
 			r &= ~1;
-			YM2610.regs[r + 1] &= 0x0f;
-			old = SSG.period[ch];
-			SSG.period[ch] = (YM2610.regs[r] + 256 * YM2610.regs[r + 1]) * SSG.step;
-			if (SSG.period[ch] == 0) SSG.period[ch] = SSG.step;
-			SSG.count[ch] += SSG.period[ch] - old;
-			if (SSG.count[ch] <= 0) SSG.count[ch] = 1;
+			CTX_YM2610(context).regs[r + 1] &= 0x0f;
+			old = CTX_SSG(context).period[ch];
+			CTX_SSG(context).period[ch] = (CTX_YM2610(context).regs[r] + 256 * CTX_YM2610(context).regs[r + 1]) * CTX_SSG(context).step;
+			if (CTX_SSG(context).period[ch] == 0) CTX_SSG(context).period[ch] = CTX_SSG(context).step;
+			CTX_SSG(context).count[ch] += CTX_SSG(context).period[ch] - old;
+			if (CTX_SSG(context).count[ch] <= 0) CTX_SSG(context).count[ch] = 1;
 		}
 		break;
 
 	case 0x06:	/* Noise percent */
-		YM2610.regs[SSG_NOISEPER] &= 0x1f;
-		old = SSG.PeriodN;
-		SSG.PeriodN = YM2610.regs[SSG_NOISEPER] * SSG.step;
-		if (SSG.PeriodN == 0) SSG.PeriodN = SSG.step;
-		SSG.CountN += SSG.PeriodN - old;
-		if (SSG.CountN <= 0) SSG.CountN = 1;
+		CTX_YM2610(context).regs[SSG_NOISEPER] &= 0x1f;
+		old = CTX_SSG(context).PeriodN;
+		CTX_SSG(context).PeriodN = CTX_YM2610(context).regs[SSG_NOISEPER] * CTX_SSG(context).step;
+		if (CTX_SSG(context).PeriodN == 0) CTX_SSG(context).PeriodN = CTX_SSG(context).step;
+		CTX_SSG(context).CountN += CTX_SSG(context).PeriodN - old;
+		if (CTX_SSG(context).CountN <= 0) CTX_SSG(context).CountN = 1;
 		break;
 
 	case 0x07:	/* Enable */
-		SSG.lastEnable = YM2610.regs[SSG_ENABLE];
+		CTX_SSG(context).lastEnable = CTX_YM2610(context).regs[SSG_ENABLE];
 		break;
 
 	case 0x08: case 0x09: case 0x0a: /* Channel A/B/C Volume */
 		{
 			int ch = r & 3;
 
-			YM2610.regs[r] &= 0x1f;
-			SSG.envelope[ch] = YM2610.regs[r] & 0x10;
-			SSG.vol[ch] = SSG.envelope[ch] ? SSG.VolE : SSG.vol_table[YM2610.regs[r] ? YM2610.regs[r] * 2 + 1 : 0];
+			CTX_YM2610(context).regs[r] &= 0x1f;
+			CTX_SSG(context).envelope[ch] = CTX_YM2610(context).regs[r] & 0x10;
+			CTX_SSG(context).vol[ch] = CTX_SSG(context).envelope[ch] ? CTX_SSG(context).VolE : CTX_SSG(context).vol_table[CTX_YM2610(context).regs[r] ? CTX_YM2610(context).regs[r] * 2 + 1 : 0];
 		}
 		break;
 
 	case SSG_EFINE:		// Envelope Fine
 	case SSG_ECOARSE:	// Envelope Coarse
-		old = SSG.PeriodE;
-		SSG.PeriodE = (YM2610.regs[SSG_EFINE] + 256 * YM2610.regs[SSG_ECOARSE]) * SSG.step;
-		if (SSG.PeriodE == 0) SSG.PeriodE = SSG.step / 2;
-		SSG.CountE += SSG.PeriodE - old;
-		if (SSG.CountE <= 0) SSG.CountE = 1;
+		old = CTX_SSG(context).PeriodE;
+		CTX_SSG(context).PeriodE = (CTX_YM2610(context).regs[SSG_EFINE] + 256 * CTX_YM2610(context).regs[SSG_ECOARSE]) * CTX_SSG(context).step;
+		if (CTX_SSG(context).PeriodE == 0) CTX_SSG(context).PeriodE = CTX_SSG(context).step / 2;
+		CTX_SSG(context).CountE += CTX_SSG(context).PeriodE - old;
+		if (CTX_SSG(context).CountE <= 0) CTX_SSG(context).CountE = 1;
 		break;
 
 	case SSG_ESHAPE:	// Envelope Shapes
-		YM2610.regs[SSG_ESHAPE] &= 0x0f;
-		SSG.attack = (YM2610.regs[SSG_ESHAPE] & 0x04) ? 0x1f : 0x00;
-		if ((YM2610.regs[SSG_ESHAPE] & 0x08) == 0)
+		CTX_YM2610(context).regs[SSG_ESHAPE] &= 0x0f;
+		CTX_SSG(context).attack = (CTX_YM2610(context).regs[SSG_ESHAPE] & 0x04) ? 0x1f : 0x00;
+		if ((CTX_YM2610(context).regs[SSG_ESHAPE] & 0x08) == 0)
 		{
 			/* if Continue = 0, map the shape to the equivalent one which has Continue = 1 */
-			SSG.hold = 1;
-			SSG.alternate = SSG.attack;
+			CTX_SSG(context).hold = 1;
+			CTX_SSG(context).alternate = CTX_SSG(context).attack;
 		}
 		else
 		{
-			SSG.hold = YM2610.regs[SSG_ESHAPE] & 0x01;
-			SSG.alternate = YM2610.regs[SSG_ESHAPE] & 0x02;
+			CTX_SSG(context).hold = CTX_YM2610(context).regs[SSG_ESHAPE] & 0x01;
+			CTX_SSG(context).alternate = CTX_YM2610(context).regs[SSG_ESHAPE] & 0x02;
 		}
-		SSG.CountE = SSG.PeriodE;
-		SSG.count_env = 0x1f;
-		SSG.holding = 0;
-		SSG.VolE = SSG.vol_table[SSG.count_env ^ SSG.attack];
-		if (SSG.envelope[0]) SSG.vol[0] = SSG.VolE;
-		if (SSG.envelope[1]) SSG.vol[1] = SSG.VolE;
-		if (SSG.envelope[2]) SSG.vol[2] = SSG.VolE;
+		CTX_SSG(context).CountE = CTX_SSG(context).PeriodE;
+		CTX_SSG(context).count_env = 0x1f;
+		CTX_SSG(context).holding = 0;
+		CTX_SSG(context).VolE = CTX_SSG(context).vol_table[CTX_SSG(context).count_env ^ CTX_SSG(context).attack];
+		if (CTX_SSG(context).envelope[0]) CTX_SSG(context).vol[0] = CTX_SSG(context).VolE;
+		if (CTX_SSG(context).envelope[1]) CTX_SSG(context).vol[1] = CTX_SSG(context).VolE;
+		if (CTX_SSG(context).envelope[2]) CTX_SSG(context).vol[2] = CTX_SSG(context).VolE;
 		break;
 
 	case SSG_PORTA:	// Port A
@@ -2025,38 +2062,38 @@ static void SSG_write(int r, int v)
 	}
 }
 
-static int SSG_calc_count(int length)
+static int SSG_calc_count(ym2610_context_t *context, int length)
 {
 	int i;
 
 	/* calc SSG count */
 	for (i = 0; i < 3; i++)
 	{
-		if (YM2610.regs[SSG_ENABLE] & (0x01 << i))
+		if (CTX_YM2610(context).regs[SSG_ENABLE] & (0x01 << i))
 		{
-			if (SSG.count[i] <= length * SSG_STEP)
-				SSG.count[i] += length * SSG_STEP;
-			SSG.output[i] = 1;
+			if (CTX_SSG(context).count[i] <= length * SSG_STEP)
+				CTX_SSG(context).count[i] += length * SSG_STEP;
+			CTX_SSG(context).output[i] = 1;
 		}
-		else if (YM2610.regs[0x08 + i] == 0)
+		else if (CTX_YM2610(context).regs[0x08 + i] == 0)
 		{
-			if (SSG.count[i] <= length * SSG_STEP)
-				SSG.count[i] += length * SSG_STEP;
+			if (CTX_SSG(context).count[i] <= length * SSG_STEP)
+				CTX_SSG(context).count[i] += length * SSG_STEP;
 		}
 	}
 
 	/* for the noise channel we must not touch OutputN - it's also not necessary */
 	/* since we use outn. */
-	if ((YM2610.regs[SSG_ENABLE] & 0x38) == 0x38)	/* all off */
+	if ((CTX_YM2610(context).regs[SSG_ENABLE] & 0x38) == 0x38)	/* all off */
 	{
-		if (SSG.CountN <= length * SSG_STEP)
-			SSG.CountN += length * SSG_STEP;
+		if (CTX_SSG(context).CountN <= length * SSG_STEP)
+			CTX_SSG(context).CountN += length * SSG_STEP;
 	}
 
-	return (SSG.OutputN | YM2610.regs[SSG_ENABLE]);
+	return (CTX_SSG(context).OutputN | CTX_YM2610(context).regs[SSG_ENABLE]);
 }
 
-static int SSG_CALC(int outn)
+static int SSG_CALC(ym2610_context_t *context, int outn)
 {
 	int ch;
 	int vol[3];
@@ -2072,111 +2109,111 @@ static int SSG_CALC(int outn)
 	{
 		int nextevent;
 
-		nextevent = (SSG.CountN < left) ? SSG.CountN : left;
+		nextevent = (CTX_SSG(context).CountN < left) ? CTX_SSG(context).CountN : left;
 
 		for (ch = 0; ch < 3; ch++)
 		{
 			if (outn & (0x08 << ch))
 			{
-				if (SSG.output[ch]) vol[ch] += SSG.count[ch];
-				SSG.count[ch] -= nextevent;
+				if (CTX_SSG(context).output[ch]) vol[ch] += CTX_SSG(context).count[ch];
+				CTX_SSG(context).count[ch] -= nextevent;
 
-				while (SSG.count[ch] <= 0)
+				while (CTX_SSG(context).count[ch] <= 0)
 				{
-					SSG.count[ch] += SSG.period[ch];
-					if (SSG.count[ch] > 0)
+					CTX_SSG(context).count[ch] += CTX_SSG(context).period[ch];
+					if (CTX_SSG(context).count[ch] > 0)
 					{
-						SSG.output[ch] ^= 1;
-						if (SSG.output[ch]) vol[ch] += SSG.period[ch];
+						CTX_SSG(context).output[ch] ^= 1;
+						if (CTX_SSG(context).output[ch]) vol[ch] += CTX_SSG(context).period[ch];
 						break;
 					}
-					SSG.count[ch] += SSG.period[ch];
-					vol[ch] += SSG.period[ch];
+					CTX_SSG(context).count[ch] += CTX_SSG(context).period[ch];
+					vol[ch] += CTX_SSG(context).period[ch];
 				}
-				if (SSG.output[ch]) vol[ch] -= SSG.count[ch];
+				if (CTX_SSG(context).output[ch]) vol[ch] -= CTX_SSG(context).count[ch];
 			}
 			else
 			{
-				SSG.count[ch] -= nextevent;
-				while (SSG.count[ch] <= 0)
+				CTX_SSG(context).count[ch] -= nextevent;
+				while (CTX_SSG(context).count[ch] <= 0)
 				{
-					SSG.count[ch] += SSG.period[ch];
-					if (SSG.count[ch] > 0)
+					CTX_SSG(context).count[ch] += CTX_SSG(context).period[ch];
+					if (CTX_SSG(context).count[ch] > 0)
 					{
-						SSG.output[ch] ^= 1;
+						CTX_SSG(context).output[ch] ^= 1;
 						break;
 					}
-					SSG.count[ch] += SSG.period[ch];
+					CTX_SSG(context).count[ch] += CTX_SSG(context).period[ch];
 				}
 			}
 		}
 
-		SSG.CountN -= nextevent;
-		if (SSG.CountN <= 0)
+		CTX_SSG(context).CountN -= nextevent;
+		if (CTX_SSG(context).CountN <= 0)
 		{
 			/* Is noise output going to change? */
-			if ((SSG.RNG + 1) & 2)	/* (bit0^bit1)? */
+			if ((CTX_SSG(context).RNG + 1) & 2)	/* (bit0^bit1)? */
 			{
-				SSG.OutputN = ~SSG.OutputN;
-				outn = (SSG.OutputN | YM2610.regs[SSG_ENABLE]);
+				CTX_SSG(context).OutputN = ~CTX_SSG(context).OutputN;
+				outn = (CTX_SSG(context).OutputN | CTX_YM2610(context).regs[SSG_ENABLE]);
 			}
 
-			if (SSG.RNG & 1) SSG.RNG ^= 0x24000;
-			SSG.RNG >>= 1;
-			SSG.CountN += SSG.PeriodN;
+			if (CTX_SSG(context).RNG & 1) CTX_SSG(context).RNG ^= 0x24000;
+			CTX_SSG(context).RNG >>= 1;
+			CTX_SSG(context).CountN += CTX_SSG(context).PeriodN;
 		}
 
 		left -= nextevent;
 	} while (left > 0);
 
 	/* update envelope */
-	if (SSG.holding == 0)
+	if (CTX_SSG(context).holding == 0)
 	{
-		SSG.CountE -= SSG_STEP;
-		if (SSG.CountE <= 0)
+		CTX_SSG(context).CountE -= SSG_STEP;
+		if (CTX_SSG(context).CountE <= 0)
 		{
 			do
 			{
-				SSG.count_env--;
-				SSG.CountE += SSG.PeriodE;
-			} while (SSG.CountE <= 0);
+				CTX_SSG(context).count_env--;
+				CTX_SSG(context).CountE += CTX_SSG(context).PeriodE;
+			} while (CTX_SSG(context).CountE <= 0);
 
 			/* check envelope current position */
-			if (SSG.count_env < 0)
+			if (CTX_SSG(context).count_env < 0)
 			{
-				if (SSG.hold)
+				if (CTX_SSG(context).hold)
 				{
-					if (SSG.alternate)
-						SSG.attack ^= 0x1f;
-					SSG.holding = 1;
-					SSG.count_env = 0;
+					if (CTX_SSG(context).alternate)
+						CTX_SSG(context).attack ^= 0x1f;
+					CTX_SSG(context).holding = 1;
+					CTX_SSG(context).count_env = 0;
 				}
 				else
 				{
 					/* if count_env has looped an odd number of times (usually 1), */
 					/* invert the output. */
-					if (SSG.alternate && (SSG.count_env & 0x20))
-						SSG.attack ^= 0x1f;
+					if (CTX_SSG(context).alternate && (CTX_SSG(context).count_env & 0x20))
+						CTX_SSG(context).attack ^= 0x1f;
 
-					SSG.count_env &= 0x1f;
+					CTX_SSG(context).count_env &= 0x1f;
 				}
 			}
 
-			SSG.VolE = SSG.vol_table[SSG.count_env ^ SSG.attack];
+			CTX_SSG(context).VolE = CTX_SSG(context).vol_table[CTX_SSG(context).count_env ^ CTX_SSG(context).attack];
 			/* reload volume */
-			if (SSG.envelope[0]) SSG.vol[0] = SSG.VolE;
-			if (SSG.envelope[1]) SSG.vol[1] = SSG.VolE;
-			if (SSG.envelope[2]) SSG.vol[2] = SSG.VolE;
+			if (CTX_SSG(context).envelope[0]) CTX_SSG(context).vol[0] = CTX_SSG(context).VolE;
+			if (CTX_SSG(context).envelope[1]) CTX_SSG(context).vol[1] = CTX_SSG(context).VolE;
+			if (CTX_SSG(context).envelope[2]) CTX_SSG(context).vol[2] = CTX_SSG(context).VolE;
 		}
 	}
 
-	out_ssg = (((vol[0] * SSG.vol[0]) + (vol[1] * SSG.vol[1]) + (vol[2] * SSG.vol[2])) / SSG_STEP) / 3;
+	CTX_out_ssg(context) = (((vol[0] * CTX_SSG(context).vol[0]) + (vol[1] * CTX_SSG(context).vol[1]) + (vol[2] * CTX_SSG(context).vol[2])) / SSG_STEP) / 3;
 
 	return outn;
 }
 
 
-static void SSG_init_table(void)
+static void SSG_init_table(ym2610_context_t *context)
 {
 	int i;
 	float out;
@@ -2188,28 +2225,28 @@ static void SSG_init_table(void)
 	out = SSG_MAX_OUTPUT;
 	for (i = 31; i > 0; i--)
 	{
-		SSG.vol_table[i] = out + 0.5;	/* round to nearest */
+		CTX_SSG(context).vol_table[i] = out + 0.5;	/* round to nearest */
 
 		out /= 1.188502227;	/* = 10 ^ (1.5/20) = 1.5dB */
 	}
-	SSG.vol_table[0] = 0;
+	CTX_SSG(context).vol_table[0] = 0;
 }
 
 
-static void SSG_reset(void)
+static void SSG_reset(ym2610_context_t *context)
 {
 	int i;
 
-	SSG.RNG = 1;
-	SSG.output[0] = 0;
-	SSG.output[1] = 0;
-	SSG.output[2] = 0;
-	SSG.OutputN = 0xff;
-	SSG.lastEnable = -1;
+	CTX_SSG(context).RNG = 1;
+	CTX_SSG(context).output[0] = 0;
+	CTX_SSG(context).output[1] = 0;
+	CTX_SSG(context).output[2] = 0;
+	CTX_SSG(context).OutputN = 0xff;
+	CTX_SSG(context).lastEnable = -1;
 	for (i = 0; i < SSG_PORTA; i++)
 	{
-		YM2610.regs[i] = 0x00;
-		SSG_write(i, 0x00);
+		CTX_YM2610(context).regs[i] = 0x00;
+		SSG_write(context, i, 0x00);
 	}
 }
 
@@ -2543,12 +2580,12 @@ static void OPNB_ADPCMA_calc_chan_dynamic(int c, ADPCMA *ch)
 #endif
 
 /* ADPCM type A Write */
-static void OPNB_ADPCMA_write(int r, int v)
+static void OPNB_ADPCMA_write(ym2610_context_t *context, int r, int v)
 {
-	ADPCMA *adpcma = YM2610.adpcma;
+	ADPCMA *adpcma = CTX_YM2610(context).adpcma;
 	uint8_t c = r & 0x07;
 
-	YM2610.regs[r] = v & 0xff; /* stock data */
+	CTX_YM2610(context).regs[r] = v & 0xff; /* stock data */
 
 	switch (r)
 	{
@@ -2561,7 +2598,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 				if ((v >> c) & 1)
 				{
 					/**** start adpcm ****/
-					adpcma[c].step        = (uint32_t)((float)(1 << ADPCM_SHIFT) * ((float)YM2610.OPN.ST.freqbase) / 3.0);
+					adpcma[c].step        = (uint32_t)((float)(1 << ADPCM_SHIFT) * ((float)CTX_YM2610(context).OPN.ST.freqbase) / 3.0);
 					adpcma[c].now_addr    = adpcma[c].start << 1;
 					adpcma[c].now_step    = 0;
 					adpcma[c].adpcma_acc  = 0;
@@ -2572,17 +2609,17 @@ static void OPNB_ADPCMA_write(int r, int v)
 					adpcma[c].block       = 0xffff;
 
 #if USE_CACHE
-					if ((!pcm_cache_enable && pcmbufA == NULL) || adpcma[c].start >= pcmsizeA)
+					if ((!CTX_pcm_cache_enabled(context) && CTX_pcmbufA(context) == NULL) || adpcma[c].start >= CTX_pcmsizeA(context))
 #else
-					if (pcmbufA == NULL || adpcma[c].start >= pcmsizeA)
+					if (CTX_pcmbufA(context) == NULL || adpcma[c].start >= CTX_pcmsizeA(context))
 #endif
 						adpcma[c].flag = 0;
 #else
-					if (pcmbufA == NULL || adpcma[c].start >= pcmsizeA)
+					if (CTX_pcmbufA(context) == NULL || adpcma[c].start >= CTX_pcmsizeA(context))
 						adpcma[c].flag = 0;
 					#endif
 	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-					adpcma_control_generation[c]++;
+					CTX_adpcma_generation(context)[c]++;
 	#endif
 				}
 			}
@@ -2595,17 +2632,17 @@ static void OPNB_ADPCMA_write(int r, int v)
 				{
 					adpcma[c].flag = 0;
 	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-					adpcma_control_generation[c]++;
+					CTX_adpcma_generation(context)[c]++;
 	#endif
 				}
 		}
 		break;
 
 	case 0x101:	/* B0-5 = TL */
-		YM2610.adpcmaTL = (v & 0x3f) ^ 0x3f;
+		CTX_YM2610(context).adpcmaTL = (v & 0x3f) ^ 0x3f;
 		for (c = 0; c < 6; c++)
 		{
-			int volume = YM2610.adpcmaTL + adpcma[c].IL;
+			int volume = CTX_YM2610(context).adpcmaTL + adpcma[c].IL;
 
 			if (volume >= 63)	/* This is correct, 63 = quiet */
 			{
@@ -2634,7 +2671,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 
 				adpcma[c].IL = (v & 0x1f) ^ 0x1f;
 
-				volume = YM2610.adpcmaTL + adpcma[c].IL;
+				volume = CTX_YM2610(context).adpcmaTL + adpcma[c].IL;
 
 				if (volume >= 63)	/* This is correct, 63 = quiet */
 				{
@@ -2647,7 +2684,7 @@ static void OPNB_ADPCMA_write(int r, int v)
 					adpcma[c].vol_shift =  1 + (volume >> 3);	/* Yamaha engineers used the approximation: each -6 dB is close to divide by two (shift right) */
 				}
 
-				adpcma[c].pan = &out_adpcma[(v >> 6) & 0x03];
+				adpcma[c].pan = &CTX_out_adpcma(context)[(v >> 6) & 0x03];
 
 				/* calc pcm * volume data */
 				adpcma[c].adpcma_out = ((adpcma[c].adpcma_acc * adpcma[c].vol_mul) >> adpcma[c].vol_shift) & ~3;	/* multiply, shift and mask out low 2 bits */
@@ -2656,10 +2693,10 @@ static void OPNB_ADPCMA_write(int r, int v)
 
 		case 0x110:
 		case 0x118:
-			adpcma[c].start = ((YM2610.regs[0x118 + c] << 8) | YM2610.regs[0x110 + c]) << ADPCMA_ADDRESS_SHIFT;
-			if ( pcmsizeA > 0x1000000 )	// Support expanded VROM
+			adpcma[c].start = ((CTX_YM2610(context).regs[0x118 + c] << 8) | CTX_YM2610(context).regs[0x110 + c]) << ADPCMA_ADDRESS_SHIFT;
+			if ( CTX_pcmsizeA(context) > 0x1000000 )	// Support expanded VROM
 			{
-				if ( YM2610.regs[0x108 + c] >= 0xf0 )
+				if ( CTX_YM2610(context).regs[0x108 + c] >= 0xf0 )
 				{
 					adpcma[c].start += 0x1000000;
 				}
@@ -2668,11 +2705,11 @@ static void OPNB_ADPCMA_write(int r, int v)
 
 		case 0x120:
 		case 0x128:
-			adpcma[c].end  = ((YM2610.regs[0x128 + c] << 8) | YM2610.regs[0x120 + c]) << ADPCMA_ADDRESS_SHIFT;
+			adpcma[c].end  = ((CTX_YM2610(context).regs[0x128 + c] << 8) | CTX_YM2610(context).regs[0x120 + c]) << ADPCMA_ADDRESS_SHIFT;
 			adpcma[c].end += (1 << ADPCMA_ADDRESS_SHIFT) - 1;
-			if ( pcmsizeA > 0x1000000 )	// Support expanded VROM
+			if ( CTX_pcmsizeA(context) > 0x1000000 )	// Support expanded VROM
 			{
-				if ( YM2610.regs[0x108 + c] >= 0xf0 )
+				if ( CTX_YM2610(context).regs[0x108 + c] >= 0xf0 )
 				{
 					adpcma[c].end += 0x1000000;
 				}
@@ -2891,11 +2928,11 @@ static void OPNB_ADPCMB_calc_dynamic(ADPCMB *adpcmb)
 /* DELTA-T-ADPCM write register */
 #endif
 
-static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
+static void OPNB_ADPCMB_write(ym2610_context_t *context, ADPCMB *adpcmb, int r, int v)
 {
 //	if (r >= 0x20) return;
 
-	YM2610.regs[r] = v; /* stock data */
+	CTX_YM2610(context).regs[r] = v; /* stock data */
 
 	switch (r)
 	{
@@ -2920,11 +2957,11 @@ static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 		adpcmb->now_addr = adpcmb->start << 1;
 
 		/* if yes, then let's check if ADPCM memory is mapped and big enough.
-		 * pcm_cache_enable=0 reduces this to the old !pcmbufB check. */
+		 * CTX_pcm_cache_enabled(context)=0 reduces this to the old !CTX_pcmbufB(context) check. */
 #if USE_CACHE
-		if (!pcm_cache_enable && !pcmbufB)
+		if (!CTX_pcm_cache_enabled(context) && !CTX_pcmbufB(context))
 #else
-		if (!pcmbufB)
+		if (!CTX_pcmbufB(context))
 #endif
 		{
 			adpcmb->portstate = 0x00;
@@ -2932,11 +2969,11 @@ static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 		}
 		else
 		{
-			if (adpcmb->end >= pcmsizeB)	/* Check End in Range */
+			if (adpcmb->end >= CTX_pcmsizeB(context))	/* Check End in Range */
 			{
-				adpcmb->end = pcmsizeB - 1;
+				adpcmb->end = CTX_pcmsizeB(context) - 1;
 			}
-			if (adpcmb->start >= pcmsizeB)	/* Check Start in Range */
+			if (adpcmb->start >= CTX_pcmsizeB(context))	/* Check Start in Range */
 			{
 				adpcmb->portstate = 0x00;
 				adpcmb->PCM_BSY = 0;
@@ -2952,28 +2989,28 @@ static void OPNB_ADPCMB_write(ADPCMB *adpcmb, int r, int v)
 
 			/* set BRDY flag */
 			if (adpcmb->status_change_BRDY_bit)
-				YM2610.adpcm_arrivedEndAddress |= adpcmb->status_change_BRDY_bit;
+				CTX_YM2610(context).adpcm_arrivedEndAddress |= adpcmb->status_change_BRDY_bit;
 		}
 		break;
 
 	case 0x11:	/* L,R */
-		adpcmb->pan = &out_delta[(v >> 6) & 0x03];
+		adpcmb->pan = &CTX_out_delta(context)[(v >> 6) & 0x03];
 		break;
 
 	case 0x12:	/* Start Address L */
 	case 0x13:	/* Start Address H */
-		adpcmb->start = ((YM2610.regs[0x13] << 8) | YM2610.regs[0x12]) << 8;
+		adpcmb->start = ((CTX_YM2610(context).regs[0x13] << 8) | CTX_YM2610(context).regs[0x12]) << 8;
 		break;
 
 	case 0x14:	/* Stop Address L */
 	case 0x15:	/* Stop Address H */
-		adpcmb->end   = ((YM2610.regs[0x15] << 8) | YM2610.regs[0x14]) << 8;
+		adpcmb->end   = ((CTX_YM2610(context).regs[0x15] << 8) | CTX_YM2610(context).regs[0x14]) << 8;
 		adpcmb->end  += (1 << 8) - 1;
 		break;
 
 	case 0x19:	/* DELTA-N L (ADPCM Playback Prescaler) */
 	case 0x1a:	/* DELTA-N H */
-		adpcmb->delta = (YM2610.regs[0x1a] << 8) | YM2610.regs[0x19];
+		adpcmb->delta = (CTX_YM2610(context).regs[0x1a] << 8) | CTX_YM2610(context).regs[0x19];
 		adpcmb->step  = (uint32_t)((float)adpcmb->delta * adpcmb->freqbase);
 		break;
 
@@ -3035,7 +3072,7 @@ static void YM2610Update(int32_t **buffer, int length)
 	refresh_fc_eg_chan(cch[3]);
 
 	/* calc SSG count */
-	outn = SSG_calc_count(length);
+	outn = SSG_calc_count(&ym2610_default_context, length);
 
 #if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
 	adpcma_job_submitted = OPNB_ADPCMA_submit_job(length);
@@ -3044,7 +3081,7 @@ static void YM2610Update(int32_t **buffer, int length)
 	/* buffering */
 	for (i = 0; i < length; i++)
 	{
-		advance_lfo(OPN);
+		advance_lfo(&ym2610_default_context, OPN);
 
 		/* clear output acc. */
 		out_adpcma[OUTD_LEFT] = out_adpcma[OUTD_RIGHT]= out_adpcma[OUTD_CENTER] = 0;
@@ -3075,13 +3112,13 @@ static void YM2610Update(int32_t **buffer, int length)
 		}
 
 		/* calculate FM */
-		chan_calc(OPN, cch[0]);	/*remapped to 1*/
-		chan_calc(OPN, cch[1]);	/*remapped to 2*/
-		chan_calc(OPN, cch[2]);	/*remapped to 4*/
-		chan_calc(OPN, cch[3]);	/*remapped to 5*/
+		chan_calc(&ym2610_default_context, OPN, cch[0]);	/*remapped to 1*/
+		chan_calc(&ym2610_default_context, OPN, cch[1]);	/*remapped to 2*/
+		chan_calc(&ym2610_default_context, OPN, cch[2]);	/*remapped to 4*/
+		chan_calc(&ym2610_default_context, OPN, cch[3]);	/*remapped to 5*/
 
 		/* calculate SSG */
-		outn = SSG_CALC(outn);
+		outn = SSG_CALC(&ym2610_default_context, outn);
 
 #if (EMU_SYSTEM == MVS)
 		/* deltaT ADPCM */
@@ -3144,95 +3181,179 @@ static void YM2610Update(int32_t **buffer, int length)
 }
 
 
+static void ym2610_context_timer_noop(void *opaque, int channel, int count,
+	double stepTime)
+{
+	(void)opaque;
+	(void)channel;
+	(void)count;
+	(void)stepTime;
+}
+
+static void ym2610_context_irq_noop(void *opaque, int irq)
+{
+	(void)opaque;
+	(void)irq;
+}
+
+static void ym2610_legacy_timer_adapter(void *opaque, int channel, int count,
+	double stepTime)
+{
+	ym2610_context_t *context = (ym2610_context_t *)opaque;
+	if (context->legacy_timer_handler)
+		context->legacy_timer_handler(channel, count, stepTime);
+}
+
+static void ym2610_legacy_irq_adapter(void *opaque, int irq)
+{
+	ym2610_context_t *context = (ym2610_context_t *)opaque;
+	if (context->legacy_irq_handler)
+		context->legacy_irq_handler(irq);
+}
+
+static void YM2610ContextInitInternal(ym2610_context_t *context, int clock,
+	int samplerate, void *pcmroma, int pcmsizea,
+#if (EMU_SYSTEM == MVS)
+	void *pcmromb, int pcmsizeb,
+#endif
+	uint8_t cache_enabled, YM2610_CONTEXT_TIMERHANDLER TimerHandler,
+	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque,
+	FM_TIMERHANDLER legacy_timer, FM_IRQHANDLER legacy_irq)
+{
+	ym2610_chip_t *chip;
+
+	/* clear */
+	memset(context, 0, sizeof(*context));
+	context->pcm_cache_enabled = cache_enabled;
+	context->legacy_timer_handler = legacy_timer;
+	context->legacy_irq_handler = legacy_irq;
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	CTX_adpcma_job(context) = NULL;
+	memset((void *)CTX_adpcma_generation(context), 0,
+		sizeof(context->adpcma_generation));
+#endif
+
+	OPNInitTable();
+	SSG_init_table(context);
+	OPNB_ADPCMA_init_table();
+
+	/* FM */
+	chip = &CTX_YM2610(context);
+	chip->OPN.P_CH = chip->CH;
+	chip->OPN.ST.clock = clock;
+	chip->OPN.ST.rate = samplerate;
+	/* Extend handler */
+	chip->OPN.ST.Timer_Handler = TimerHandler ? TimerHandler : ym2610_context_timer_noop;
+	chip->OPN.ST.IRQ_Handler   = IRQHandler ? IRQHandler : ym2610_context_irq_noop;
+	chip->OPN.ST.Handler_Opaque = opaque;
+	/* SSG */
+//	CTX_SSG(context).step = ((float)SSG_STEP * chip->OPN.ST.rate * 8) / clock;
+#if (EMU_SYSTEM == MVS)
+#if USE_CACHE
+	if (cache_enabled)
+	{
+		CTX_ADPCMA_calc_chan(context) = OPNB_ADPCMA_calc_chan_dynamic;
+		CTX_ADPCMB_calc(context) = OPNB_ADPCMB_calc_dynamic;
+
+		/* ADPCM-A */
+		CTX_pcmbufA(context)  = NULL;
+		CTX_pcmsizeA(context) = pcmsizea;
+		/* ADPCM-B */
+		CTX_pcmbufB(context)  = NULL;
+		CTX_pcmsizeB(context) = pcmsizeb;
+	}
+	else
+	{
+		CTX_ADPCMA_calc_chan(context) = OPNB_ADPCMA_calc_chan_static;
+		CTX_ADPCMB_calc(context) = OPNB_ADPCMB_calc_static;
+
+		/* ADPCM-A */
+		CTX_pcmbufA(context) = (uint8_t *)pcmroma;
+		CTX_pcmsizeA(context) = pcmsizea;
+		/* ADPCM-B */
+		CTX_pcmbufB(context) = (uint8_t *)pcmromb;
+		CTX_pcmsizeB(context) = pcmsizeb;
+	}
+#else
+	CTX_ADPCMA_calc_chan(context) = OPNB_ADPCMA_calc_chan_static;
+	CTX_ADPCMB_calc(context) = OPNB_ADPCMB_calc_static;
+	CTX_pcmbufA(context) = (uint8_t *)pcmroma;
+	CTX_pcmsizeA(context) = pcmsizea;
+	CTX_pcmbufB(context) = (uint8_t *)pcmromb;
+	CTX_pcmsizeB(context) = pcmsizeb;
+#endif
+	chip->adpcmb.status_change_EOS_bit = 0x80;	/* status flag: set bit7 on End Of Sample */
+#else
+	/* ADPCM-A */
+	CTX_pcmbufA(context) = (uint8_t *)pcmroma;
+	CTX_pcmsizeA(context) = pcmsizea;
+#endif
+
+	YM2610ContextReset(context);
+}
+
+size_t YM2610ContextSize(void)
+{
+	return sizeof(ym2610_context_t);
+}
+
+size_t YM2610ContextAlignment(void)
+{
+	return 16u;
+}
+
+void YM2610ContextInit(ym2610_context_t *context, int baseclock, int samplerate,
+	void *pcmroma, int pcmsizea,
+#if (EMU_SYSTEM == MVS)
+	void *pcmromb, int pcmsizeb,
+#endif
+	YM2610_CONTEXT_TIMERHANDLER TimerHandler,
+	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque)
+{
+	YM2610ContextInitInternal(context, baseclock, samplerate, pcmroma, pcmsizea,
+#if (EMU_SYSTEM == MVS)
+		pcmromb, pcmsizeb,
+#endif
+		0, TimerHandler, IRQHandler, opaque, NULL, NULL);
+}
+
 void YM2610Init(int clock, void *pcmroma, int pcmsizea,
 #if (EMU_SYSTEM == MVS)
-				void *pcmromb, int pcmsizeb,
+	void *pcmromb, int pcmsizeb,
 #endif
-				FM_TIMERHANDLER TimerHandler, FM_IRQHANDLER IRQHandler)
+	FM_TIMERHANDLER TimerHandler, FM_IRQHANDLER IRQHandler)
 {
+	uint8_t cache_enabled = 0;
+
 	sound->stack     = 0x10000;
 	sound->channels  = 2;
 	sound->frequency = 44100;
 	sound->samples   = SOUND_SAMPLES_44100;
 	sound->callback  = YM2610Update;
 
-	/* clear */
-	memset(&YM2610, 0, sizeof(YM2610));
-	memset(&SSG, 0, sizeof(SSG));
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
-	adpcma_job = NULL;
-	memset((void *)adpcma_control_generation, 0, sizeof(adpcma_control_generation));
+#if USE_CACHE
+	cache_enabled = (uint8_t)pcm_cache_enable;
 #endif
 
-	OPNInitTable();
-	SSG_init_table();
-	OPNB_ADPCMA_init_table();
-
-	/* FM */
-	YM2610.OPN.P_CH = YM2610.CH;
-	YM2610.OPN.ST.clock = clock;
-	YM2610.OPN.ST.rate = sound->frequency >> (2 - option_samplerate);
-	/* Extend handler */
-	YM2610.OPN.ST.Timer_Handler = TimerHandler;
-	YM2610.OPN.ST.IRQ_Handler   = IRQHandler;
-	/* SSG */
-//	SSG.step = ((float)SSG_STEP * YM2610.OPN.ST.rate * 8) / clock;
+	YM2610ContextInitInternal(&ym2610_default_context, clock,
+		sound->frequency >> (2 - option_samplerate), pcmroma, pcmsizea,
 #if (EMU_SYSTEM == MVS)
-#if USE_CACHE
-#if USE_CACHE
-	if (pcm_cache_enable)
-	{
-		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_dynamic;
-		OPNB_ADPCMB_calc = OPNB_ADPCMB_calc_dynamic;
-
-		/* ADPCM-A */
-		pcmbufA  = NULL;
-		pcmsizeA = pcmsizea;
-		/* ADPCM-B */
-		pcmbufB  = NULL;
-		pcmsizeB = pcmsizeb;
-	}
+		pcmromb, pcmsizeb,
 #endif
-	else
-	{
-		OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_static;
-		OPNB_ADPCMB_calc = OPNB_ADPCMB_calc_static;
-
-		/* ADPCM-A */
-		pcmbufA = (uint8_t *)pcmroma;
-		pcmsizeA = pcmsizea;
-		/* ADPCM-B */
-		pcmbufB = (uint8_t *)pcmromb;
-		pcmsizeB = pcmsizeb;
-	}
-#else
-	OPNB_ADPCMA_calc_chan = OPNB_ADPCMA_calc_chan_static;
-	OPNB_ADPCMB_calc = OPNB_ADPCMB_calc_static;
-	pcmbufA = (uint8_t *)pcmroma;
-	pcmsizeA = pcmsizea;
-	pcmbufB = (uint8_t *)pcmromb;
-	pcmsizeB = pcmsizeb;
-#endif
-	YM2610.adpcmb.status_change_EOS_bit = 0x80;	/* status flag: set bit7 on End Of Sample */
-#else
-	/* ADPCM-A */
-	pcmbufA = (uint8_t *)pcmroma;
-	pcmsizeA = pcmsizea;
-#endif
-
-	YM2610Reset();
+		cache_enabled, ym2610_legacy_timer_adapter,
+		ym2610_legacy_irq_adapter, &ym2610_default_context, TimerHandler, IRQHandler);
 }
 
 /* reset one of chip */
-void YM2610Reset(void)
+void YM2610ContextReset(ym2610_context_t *context)
 {
 	int i;
-	FM_OPN *OPN = &YM2610.OPN;
+	FM_OPN *OPN = &CTX_YM2610(context).OPN;
 
 	/* Reset Prescaler */
-	OPNSetPres(OPN, 6*24, 6*24, 4*2); /* OPN 1/6, SSG 1/4 */
+	OPNSetPres(context, OPN, 6*24, 6*24, 4*2); /* OPN 1/6, SSG 1/4 */
 	/* reset SSG section */
-	SSG_reset();
+	SSG_reset(context);
 	/* status clear */
 	FM_IRQMASK_SET(&OPN->ST, 0x03);
 	FM_BUSY_CLEAR(&OPN->ST);
@@ -3243,72 +3364,72 @@ void YM2610Reset(void)
 
 	FM_STATUS_RESET(&OPN->ST, 0xff);
 
-	reset_channels(&OPN->ST, YM2610.CH, 6);
+	reset_channels(&OPN->ST, CTX_YM2610(context).CH, 6);
 	/* reset OPerator paramater */
 	for (i = 0xb6; i >= 0xb4; i--)
 	{
-		OPNWriteReg(OPN, i      , 0xc0);
-		OPNWriteReg(OPN, i|0x100, 0xc0);
+		OPNWriteReg(context, OPN, i      , 0xc0);
+		OPNWriteReg(context, OPN, i|0x100, 0xc0);
 	}
 	for (i = 0xb2; i >= 0x30; i--)
 	{
-		OPNWriteReg(OPN, i      , 0x00);
-		OPNWriteReg(OPN, i|0x100, 0x00);
+		OPNWriteReg(context, OPN, i      , 0x00);
+		OPNWriteReg(context, OPN, i|0x100, 0x00);
 	}
 	for (i = 0x26; i >= 0x20; i--)
 	{
-		OPNWriteReg(OPN, i, 0x00);
+		OPNWriteReg(context, OPN, i, 0x00);
 	}
 	/**** ADPCM work initial ****/
 	for (i = 0; i < 6; i++)
 	{
-		YM2610.adpcma[i].step        = (uint32_t)((float)(1 << ADPCM_SHIFT) * ((float)YM2610.OPN.ST.freqbase) / 3.0);
-		YM2610.adpcma[i].now_addr    = 0;
-		YM2610.adpcma[i].now_step    = 0;
-		YM2610.adpcma[i].start       = 0;
-		YM2610.adpcma[i].end         = 0;
-		YM2610.adpcma[i].vol_mul     = 0;
-		YM2610.adpcma[i].pan         = &out_adpcma[OUTD_CENTER]; /* default center */
-		YM2610.adpcma[i].flagMask    = 1 << i;
-		YM2610.adpcma[i].flag        = 0;
-		YM2610.adpcma[i].adpcma_acc  = 0;
-		YM2610.adpcma[i].adpcma_step = 0;
-		YM2610.adpcma[i].adpcma_out  = 0;
+		CTX_YM2610(context).adpcma[i].step        = (uint32_t)((float)(1 << ADPCM_SHIFT) * ((float)CTX_YM2610(context).OPN.ST.freqbase) / 3.0);
+		CTX_YM2610(context).adpcma[i].now_addr    = 0;
+		CTX_YM2610(context).adpcma[i].now_step    = 0;
+		CTX_YM2610(context).adpcma[i].start       = 0;
+		CTX_YM2610(context).adpcma[i].end         = 0;
+		CTX_YM2610(context).adpcma[i].vol_mul     = 0;
+		CTX_YM2610(context).adpcma[i].pan         = &CTX_out_adpcma(context)[OUTD_CENTER]; /* default center */
+		CTX_YM2610(context).adpcma[i].flagMask    = 1 << i;
+		CTX_YM2610(context).adpcma[i].flag        = 0;
+		CTX_YM2610(context).adpcma[i].adpcma_acc  = 0;
+		CTX_YM2610(context).adpcma[i].adpcma_step = 0;
+		CTX_YM2610(context).adpcma[i].adpcma_out  = 0;
 #if MVS_PCM_CACHE
-		if (pcm_cache_enable)
+		if (CTX_pcm_cache_enabled(context))
 		{
-			YM2610.adpcma[i].buf   = NULL;
-			YM2610.adpcma[i].block = 0xffff;
+			CTX_YM2610(context).adpcma[i].buf   = NULL;
+			CTX_YM2610(context).adpcma[i].block = 0xffff;
 		}
 #endif
 	}
-	YM2610.adpcmaTL = 0x3f;
+	CTX_YM2610(context).adpcmaTL = 0x3f;
 
-	YM2610.adpcm_arrivedEndAddress = 0;
+	CTX_YM2610(context).adpcm_arrivedEndAddress = 0;
 
 #if (EMU_SYSTEM == MVS)
 	/* ADPCM-B unit */
-	YM2610.adpcmb.freqbase     = OPN->ST.freqbase;
-	YM2610.adpcmb.output_range = 1 << 23;
+	CTX_YM2610(context).adpcmb.freqbase     = OPN->ST.freqbase;
+	CTX_YM2610(context).adpcmb.output_range = 1 << 23;
 
-	YM2610.adpcmb.now_addr     = 0;
-	YM2610.adpcmb.now_step     = 0;
-	YM2610.adpcmb.step         = 0;
-	YM2610.adpcmb.start        = 0;
-	YM2610.adpcmb.end          = 0;
-	YM2610.adpcmb.limit        = (1 << 24) - 1; /* this way YM2610 and Y8950 (both of which don't have limit address reg) will still work */
-	YM2610.adpcmb.volume       = 0;
-	YM2610.adpcmb.pan          = &out_delta[OUTD_CENTER];
-	YM2610.adpcmb.acc          = 0;
-	YM2610.adpcmb.prev_acc     = 0;
-	YM2610.adpcmb.adpcmd       = 127;
-	YM2610.adpcmb.adpcml       = 0;
-	YM2610.adpcmb.portstate    = 0x20;
+	CTX_YM2610(context).adpcmb.now_addr     = 0;
+	CTX_YM2610(context).adpcmb.now_step     = 0;
+	CTX_YM2610(context).adpcmb.step         = 0;
+	CTX_YM2610(context).adpcmb.start        = 0;
+	CTX_YM2610(context).adpcmb.end          = 0;
+	CTX_YM2610(context).adpcmb.limit        = (1 << 24) - 1; /* this way YM2610 and Y8950 (both of which don't have limit address reg) will still work */
+	CTX_YM2610(context).adpcmb.volume       = 0;
+	CTX_YM2610(context).adpcmb.pan          = &CTX_out_delta(context)[OUTD_CENTER];
+	CTX_YM2610(context).adpcmb.acc          = 0;
+	CTX_YM2610(context).adpcmb.prev_acc     = 0;
+	CTX_YM2610(context).adpcmb.adpcmd       = 127;
+	CTX_YM2610(context).adpcmb.adpcml       = 0;
+	CTX_YM2610(context).adpcmb.portstate    = 0x20;
 #if USE_CACHE
-	if (pcm_cache_enable)
+	if (CTX_pcm_cache_enabled(context))
 	{
-		YM2610.adpcmb.buf   = NULL;
-		YM2610.adpcmb.block = 0xffff;
+		CTX_YM2610(context).adpcmb.buf   = NULL;
+		CTX_YM2610(context).adpcmb.block = 0xffff;
 	}
 #endif
 
@@ -3316,9 +3437,14 @@ void YM2610Reset(void)
     ** as soon as the mask is enabled the flag needs to be set. */
 
 	/* set BRDY bit in status register */
-	if (YM2610.adpcmb.status_change_BRDY_bit)
-		YM2610.adpcm_arrivedEndAddress |= YM2610.adpcmb.status_change_BRDY_bit;
+	if (CTX_YM2610(context).adpcmb.status_change_BRDY_bit)
+		CTX_YM2610(context).adpcm_arrivedEndAddress |= CTX_YM2610(context).adpcmb.status_change_BRDY_bit;
 #endif
+}
+
+void YM2610Reset(void)
+{
+	YM2610ContextReset(&ym2610_default_context);
 }
 
 void YM2610_set_samplerate(void)
@@ -3327,7 +3453,8 @@ void YM2610_set_samplerate(void)
 
 	YM2610.OPN.ST.rate = sound->frequency >> (2 - option_samplerate);
 
-	OPNSetPres(&YM2610.OPN, 6*24, 6*24, 4*2); /* OPN 1/6, SSG 1/4 */
+	OPNSetPres(&ym2610_default_context, &YM2610.OPN,
+		6*24, 6*24, 4*2); /* OPN 1/6, SSG 1/4 */
 
 	for (i = 0; i < 6; i++)
 	{
@@ -3344,9 +3471,9 @@ void YM2610_set_samplerate(void)
 /* YM2610 write */
 /* a = address */
 /* v = value   */
-int YM2610Write(int a, uint8_t v)
+int YM2610ContextWrite(ym2610_context_t *context, int a, uint8_t v)
 {
-	FM_OPN *OPN = &YM2610.OPN;
+	FM_OPN *OPN = &CTX_YM2610(context).OPN;
 	int addr;
 	int ch;
 
@@ -3356,21 +3483,21 @@ int YM2610Write(int a, uint8_t v)
 	{
 	case 0:	/* address port 0 */
 		OPN->ST.address = v;
-		YM2610.addr_A1 = 0;
+		CTX_YM2610(context).addr_A1 = 0;
 		break;
 
 	case 1:	/* data port 0    */
-		if (YM2610.addr_A1 != 0)
+		if (CTX_YM2610(context).addr_A1 != 0)
 			break;	/* verified on real YM2608 */
 
 		YM2610UpdateRequest();
 		addr = OPN->ST.address;
-		YM2610.regs[addr] = v;
+		CTX_YM2610(context).regs[addr] = v;
 		switch (addr & 0xf0)
 		{
 		case 0x00:	/* SSG section */
 			/* Write data to SSG emulator */
-			SSG_write(addr, v);
+			SSG_write(context, addr, v);
 			break;
 
 		case 0x10: /* DeltaT ADPCM */
@@ -3387,7 +3514,7 @@ int YM2610Write(int a, uint8_t v)
 			case 0x19:	/* delta-n L */
 			case 0x1a:	/* delta-n H */
 			case 0x1b:	/* volume */
-				OPNB_ADPCMB_write(&YM2610.adpcmb, addr, v);
+				OPNB_ADPCMB_write(context, &CTX_YM2610(context).adpcmb, addr, v);
 				break;
 #endif
 
@@ -3396,14 +3523,14 @@ int YM2610Write(int a, uint8_t v)
 					uint8_t statusmask = ~v;
 					/* set arrived flag mask */
 					for (ch = 0; ch < 6; ch++)
-						YM2610.adpcma[ch].flagMask = statusmask & (1 << ch);
+						CTX_YM2610(context).adpcma[ch].flagMask = statusmask & (1 << ch);
 
 #if (EMU_SYSTEM == MVS)
-					YM2610.adpcmb.status_change_EOS_bit = statusmask & 0x80;	/* status flag: set bit7 on End Of Sample */
+					CTX_YM2610(context).adpcmb.status_change_EOS_bit = statusmask & 0x80;	/* status flag: set bit7 on End Of Sample */
 #endif
 
 					/* clear arrived flag */
-					YM2610.adpcm_arrivedEndAddress &= statusmask;
+					CTX_YM2610(context).adpcm_arrivedEndAddress &= statusmask;
 				}
 				break;
 			}
@@ -3415,46 +3542,51 @@ int YM2610Write(int a, uint8_t v)
 
 		default:	/* OPN section */
 			/* write register */
-			OPNWriteReg(OPN, addr, v);
+			OPNWriteReg(context, OPN, addr, v);
 			break;
 		}
 		break;
 
 	case 2:	/* address port 1 */
 		OPN->ST.address = v;
-		YM2610.addr_A1 = 1;
+		CTX_YM2610(context).addr_A1 = 1;
 		break;
 
 	case 3:	/* data port 1    */
-		if (YM2610.addr_A1 != 1)
+		if (CTX_YM2610(context).addr_A1 != 1)
 			break;	/* verified on real YM2608 */
 
 		YM2610UpdateRequest();
-		addr = YM2610.OPN.ST.address | 0x100;
-		YM2610.regs[addr] = v;
+		addr = CTX_YM2610(context).OPN.ST.address | 0x100;
+		CTX_YM2610(context).regs[addr] = v;
 		if (addr < 0x130)
 			/* 100-12f : ADPCM A section */
-			OPNB_ADPCMA_write(addr, v);
+			OPNB_ADPCMA_write(context, addr, v);
 		else
-			OPNWriteReg(OPN, addr, v);
+			OPNWriteReg(context, OPN, addr, v);
 		break;
 	}
 
 	return OPN->ST.irq;
 }
 
-
-uint8_t YM2610Read(int a)
+int YM2610Write(int a, uint8_t v)
 {
-	int addr = YM2610.OPN.ST.address;
+	return YM2610ContextWrite(&ym2610_default_context, a, v);
+}
+
+
+uint8_t YM2610ContextRead(ym2610_context_t *context, int a)
+{
+	int addr = CTX_YM2610(context).OPN.ST.address;
 
 	switch (a & 3)
 	{
 	case 0:	/* status 0 : YM2203 compatible */
-		return FM_STATUS_FLAG(&YM2610.OPN.ST) & 0x83;
+		return FM_STATUS_FLAG(&CTX_YM2610(context).OPN.ST) & 0x83;
 
 	case 1:	/* data 0 */
-		if (addr < SSG_PORTA) return YM2610.regs[addr];
+		if (addr < SSG_PORTA) return CTX_YM2610(context).regs[addr];
 		if (addr == 0xff) return 0x01;
 		break;
 
@@ -3463,15 +3595,20 @@ uint8_t YM2610Read(int a)
 		/* B, --, A5, A4, A3, A2, A1, A0 */
 		/* B     = ADPCM-B(DELTA-T) arrived end address */
 		/* A0-A5 = ADPCM-A          arrived end address */
-		return YM2610.adpcm_arrivedEndAddress;
+		return CTX_YM2610(context).adpcm_arrivedEndAddress;
 	}
 	return 0;
 }
 
-
-int YM2610TimerOver(int ch)
+uint8_t YM2610Read(int a)
 {
-	FM_ST *ST = &YM2610.OPN.ST;
+	return YM2610ContextRead(&ym2610_default_context, a);
+}
+
+
+int YM2610ContextTimerOver(ym2610_context_t *context, int ch)
+{
+	FM_ST *ST = &CTX_YM2610(context).OPN.ST;
 
 	if (ch)
 	{
@@ -3491,11 +3628,16 @@ int YM2610TimerOver(int ch)
 		if (ST->mode & 0x80)
 		{
 			/* CSM mode total level latch and auto key on */
-			CSMKeyControll(&YM2610.CH[2]);
+			CSMKeyControll(&CTX_YM2610(context).CH[2]);
 		}
 	}
 
 	return ST->irq;
+}
+
+int YM2610TimerOver(int ch)
+{
+	return YM2610ContextTimerOver(&ym2610_default_context, ch);
 }
 
 
@@ -3628,16 +3770,18 @@ STATE_LOAD( ym2610 )
 
 	for (r = 0; r < 16; r++)
 	{
-		SSG_write(0, r);
-		SSG_write(1, YM2610.regs[r]);
+		SSG_write(&ym2610_default_context, 0, r);
+		SSG_write(&ym2610_default_context, 1, YM2610.regs[r]);
 	}
 
 	for (r = 0x30; r <0x9e; r++)
 	{
 		if ((r & 3) != 3)
 		{
-			OPNWriteReg(&YM2610.OPN, r, YM2610.regs[r]);
-			OPNWriteReg(&YM2610.OPN, r | 0x100, YM2610.regs[r | 0x100]);
+			OPNWriteReg(&ym2610_default_context, &YM2610.OPN,
+				r, YM2610.regs[r]);
+			OPNWriteReg(&ym2610_default_context, &YM2610.OPN,
+				r | 0x100, YM2610.regs[r | 0x100]);
 		}
 	}
 
@@ -3645,26 +3789,34 @@ STATE_LOAD( ym2610 )
 	{
 		if ((r & 3) != 3)
 		{
-			OPNWriteReg(&YM2610.OPN, r, YM2610.regs[r]);
-			OPNWriteReg(&YM2610.OPN, r | 0x100, YM2610.regs[r | 0x100]);
+			OPNWriteReg(&ym2610_default_context, &YM2610.OPN,
+				r, YM2610.regs[r]);
+			OPNWriteReg(&ym2610_default_context, &YM2610.OPN,
+				r | 0x100, YM2610.regs[r | 0x100]);
 		}
 	}
 
-	OPNB_ADPCMA_write(0x101, YM2610.regs[0x101]);
+	OPNB_ADPCMA_write(&ym2610_default_context, 0x101, YM2610.regs[0x101]);
 	for (r = 0; r < 6; r++)
 	{
-		OPNB_ADPCMA_write(r + 0x108, YM2610.regs[r + 0x108]);
-		OPNB_ADPCMA_write(r + 0x110, YM2610.regs[r + 0x110]);
-		OPNB_ADPCMA_write(r + 0x118, YM2610.regs[r + 0x118]);
-		OPNB_ADPCMA_write(r + 0x120, YM2610.regs[r + 0x120]);
-		OPNB_ADPCMA_write(r + 0x128, YM2610.regs[r + 0x128]);
+		OPNB_ADPCMA_write(&ym2610_default_context,
+			r + 0x108, YM2610.regs[r + 0x108]);
+		OPNB_ADPCMA_write(&ym2610_default_context,
+			r + 0x110, YM2610.regs[r + 0x110]);
+		OPNB_ADPCMA_write(&ym2610_default_context,
+			r + 0x118, YM2610.regs[r + 0x118]);
+		OPNB_ADPCMA_write(&ym2610_default_context,
+			r + 0x120, YM2610.regs[r + 0x120]);
+		OPNB_ADPCMA_write(&ym2610_default_context,
+			r + 0x128, YM2610.regs[r + 0x128]);
 	}
 
 #if (EMU_SYSTEM == MVS)
 	YM2610.adpcmb.volume = 0;
 
 	for (r = 1; r < 16; r++)
-		OPNB_ADPCMB_write(&YM2610.adpcmb, r + 0x10, YM2610.regs[r + 0x10]);
+		OPNB_ADPCMB_write(&ym2610_default_context, &YM2610.adpcmb,
+			r + 0x10, YM2610.regs[r + 0x10]);
 
 	for (ch = 0; ch < 6; ch++)
 	{

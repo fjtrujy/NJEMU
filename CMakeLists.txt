@@ -1786,6 +1786,13 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         target_include_directories(ym2610_adpcma_job_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
         add_test(NAME ym2610_adpcma_job_tests COMMAND ym2610_adpcma_job_tests)
+        add_executable(ym2610_context_tests
+            tests/ym2610_context_tests.c
+            src/sound/ym2610.c)
+        target_include_directories(ym2610_context_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_link_libraries(ym2610_context_tests PRIVATE m)
+        add_test(NAME ym2610_context_tests COMMAND ym2610_context_tests)
         add_executable(psp_me_spsc_ring_tests
             tests/psp_me_spsc_ring_tests.c
             src/psp/psp_me_spsc_ring.c)
