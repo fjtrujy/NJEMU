@@ -14,12 +14,14 @@ never required by the normal PSP build.
 - `PSP_ME_AUDIO=ON` keeps the CPU producer compiled as the runtime fallback.
 - ME initialization or proof-of-execution failure must leave audio on the CPU.
 - `src/psp/psp_audio.c` continues to own `sceAudio*` channel/output operations.
-- No GUI/runtime selector is added during the experiment.  The producer seam is
-  intentionally shaped so Auto/Main CPU/Media Engine can be added later without
-  moving sound-chip code again.
+- `PSP_ME_AUDIO=ON` exposes one global runtime selector: Auto / Main CPU /
+  Media Engine.  Auto is the default, Main CPU does not initialize MIST, and the
+  other two modes retain the same safe CPU fallback if ME startup/probing fails.
 
 PPSSPP does not implement the ME execution path required by this experiment.
-Its role is to validate the OFF/reference build, not ME execution.
+The OFF build remains its reference configuration, but the final ON binary is
+also usable there: Main CPU skips ME initialization entirely, while Auto and
+Media Engine observe the unsupported MIST initialization and fall back to CPU.
 
 ## Current architecture
 
@@ -44,10 +46,11 @@ sound chip callback / mixing / conversion
              sceAudio*
 ```
 
-The common producer contract currently exposes only the lifecycle actually
-needed by this work: `init`, `shutdown`, `reset`, `render`, and availability.
-The PSP ME producer owns ME synchronization/fallback.  Generic sound-chip code
-does not contain `PSP_ME_AUDIO` conditionals.
+The common producer contract exposes the lifecycle needed by this work:
+`init`, `shutdown`, `reset`, `suspend`, `resume`, `render`, availability, and
+bounded job-buffer/dispatch/wait operations.  The PSP ME producer owns ME
+synchronization/fallback.  Generic sound-chip code does not contain
+`PSP_ME_AUDIO` conditionals.
 
 The CPU producer implementation itself is compiled in both OFF and ON builds.
 OFF binds it directly; ON binds the PSP ME wrapper, which delegates lifecycle
@@ -255,10 +258,9 @@ partition memory after that point is not used as producer-lifetime evidence.
 
 A separate hardware harness exercised the actual NJEMU producer twice inside one
 process: `init -> MIST job -> wait -> shutdown`, immediately followed by a second
-identical cycle without a reset.  Both cycles produced the expected data.  This
-validates MIST re-initialization and workspace teardown at the boundary needed by
-an in-process ROM change.  Full GUI ROM-selection flow and physical sleep/wake
-remain separate end-to-end validation items.
+identical cycle without a reset.  Both cycles produced the expected data.  The
+final runtime-selector work later extended this to the full emulator and GUI ROM
+browser; see M6.
 
 ### M3 - deterministic shared-memory proof [hardware validated]
 
@@ -355,22 +357,89 @@ claimed because the temporary wall-clock autoplay run did not stay in a valid,
 comparable gameplay state; the transport microbenchmark is the accepted A/B for
 this migration.
 
-### M6 - expansion and runtime selector
+### M6 - runtime selector and lifecycle hardening [complete]
 
-Expand to additional workloads only after M4/M5 demonstrate a real win.  Runtime
-Auto/Main CPU/Media Engine selection comes later; it is not part of the initial
-experiment.
+No second audio workload was migrated: the original profile shows ADPCM-B at only
+about 2.4% sampled CPU time and no other remaining sound task with the same
+coarse, bounded payoff as ADPCM-A.  Expansion therefore stops on evidence rather
+than moving more sound code merely for ME coverage.
+
+The ME-enabled PSP build now exposes a global `AudioProcessor` setting in
+`njemu.ini` and in the system UI:
+
+- `Auto` (default): try MIST, otherwise use the Main CPU;
+- `Main CPU`: keep the CPU path and skip ME/MIST initialization completely;
+- `Media Engine`: explicitly request MIST, with CPU fallback retained if the
+  dispatcher or execution probe is unavailable.
+
+The UI is compiled only when `PSP_ME_AUDIO=ON`.  Changing the setting persists it
+and requests the emulator's normal restart flow so sound, memory and the producer
+are torn down before the new processor choice takes effect.  Older `njemu.ini`
+files have no migration requirement: the missing key leaves the initialized
+default at Auto, and OFF builds ignore the extra key if they read a file written
+by an ON build.
+
+PPSSPP was used only for **fallback compatibility**, never as ME execution
+evidence.  With the final ME-enabled producer, Main CPU completed startup without
+invoking MIST.  Auto and Media Engine both received the expected unsupported
+dispatcher result (`-4`) and continued successfully with `available=0`,
+`canRunJobs=0` and CPU audio semantics.  All successful MIST/job claims below are
+from real PSP hardware.
+
+Real-PSP validation covered both the producer seam and full NJEMU:
+
+- the producer harness passed Auto and Media Engine with a real MIST job,
+  `suspend -> unavailable -> resume/reinitialize`, then a second correct MIST
+  job; Main CPU stayed ME-free throughout;
+- the same MVS PRX loaded `AudioProcessor=0/1/2` from `njemu.ini`; `mslug3`
+  reached an active sound thread in all three modes, with `me_available=1/0/1`
+  respectively;
+- one running `mslug3` process was switched `Media Engine -> Main CPU -> Media
+  Engine` through the emulator's real `LOOP_RESTART` lifecycle.  Each transition
+  destroyed/recreated the sound thread and produced the expected `1 -> 0 -> 1`
+  ME availability state;
+- returning through `LOOP_BROWSER` left `me_available=0`, no job in flight,
+  null/zero shared workspace state and no sound thread;
+- a temporary browser-only hardware test then exercised the actual GUI
+  `file_browser -> emu_main -> file_browser -> emu_main` sequence, switching from
+  `mslug3` to `mslug` without unloading the MVS module.  The second ROM created a
+  new sound thread and re-enabled MIST successfully.  The test hook was removed
+  after validation.
+
+Power handling is also lifecycle-aware now.  The PSP callback records suspend
+and resume generations only; it no longer performs ME work in callback context
+and no longer creates/registers another power callback on every notification.
+The sound thread consumes those events, waits for outstanding producer work,
+marks ME unavailable during suspend, and reinitializes/reinjects/probes MIST on
+resume before allowing new ME jobs.  The sound thread and the CPS1/CPS2/MVS/NCDZ
+emulation loops now share a 100 ms suspend poll interval rather than the previous
+five-second waits; the NCDZ MP3 suspend loop uses the same value.  This avoids a
+multi-second delay between `RESUME_COMPLETE` and resumed emulation/audio.
+
+The producer-level suspend/resume sequence is hardware validated as described
+above.  The full MVS sound-thread consumer was also exercised on real hardware by
+injecting the exact `Sleep`/generation state transitions produced by the power
+callback: while suspended, frames stopped, `me_available` became 0,
+`me_suspended` became 1 and no job remained in flight; after the resume
+generation was delivered, the same sound thread reinitialized MIST,
+`me_available` returned to 1 and emulation resumed within the one-second
+observation window.  This validates the in-process consumer path without claiming
+that PSPLINK simulated a physical power event.
+
+A literal PSP power-switch suspend/resume remains a manual validation operation
+because PSPSDK exposes `scePowerRequestSuspend()` but no user-mode API to wake the
+console again; triggering it remotely would intentionally sever the USB/PSPLINK
+session.  This is a hardware-test limitation, not an unfinished producer
+lifecycle path.
 
 ## Remaining risks
 
 - Safe-task/custom-core firmware mapping support is still evolving upstream.
 - Model-specific ME firmware behavior may still vary on PSP models other than the
   hardware tested here; PPSSPP cannot validate it.
-- Producer-level in-process re-initialization is hardware validated for two
-  consecutive MIST cycles, but the complete GUI ROM-selection flow has not yet
-  been exercised as an end-to-end hardware test.
-- Sleep/wake must be tested while no job is in flight and while the audio thread
-  is active.
+- A physical power-switch suspend/resume with the final full emulator remains a
+  manual hardware check; producer suspend/resume and post-resume MIST
+  reinitialization have passed on real hardware.
 - The first ADPCM-A workload is beneficial but only modestly at whole-system
   level; additional migrations should be attempted only when profiling shows a
   similarly coarse, state-bounded workload.
@@ -385,8 +454,18 @@ Final local validation after the shared CPU fallback refactor:
 - PSP MVS, `PSP_ME_AUDIO=OFF`, `PSP_AUDIO_PROFILE=OFF`: builds and packages;
 - PSP MVS, MIST-backed `PSP_ME_AUDIO=ON`, `PSP_AUDIO_PROFILE=OFF`: builds and
   packages;
+- the ME-enabled MVS build compiles both GUI and no-GUI variants so CI covers the
+  runtime selector UI as well as the headless integration;
 - PSP CPS1/CPS2/NCDZ, `PSP_ME_AUDIO=OFF`: all build and package;
 - Desktop MVS builds and passes 23/23 CTests;
+- PPSSPP fallback-only checks pass for all three runtime modes: Main CPU skips
+  MIST, while Auto/Media Engine receive unsupported init and continue on CPU;
+- real PSP producer tests pass Auto/Main CPU/Media Engine, including a real MIST
+  job before and after producer suspend/resume;
+- real PSP full-MVS tests pass config loading for `AudioProcessor=0/1/2`,
+  `Media Engine -> Main CPU -> Media Engine` `LOOP_RESTART`, GUI
+  `mslug3 -> browser -> mslug` switching, browser cleanup, and synthetic delivery
+  of the power callback's suspend/resume generations to the live sound thread;
 - the final MVS OFF ELF contains no `meSafe`, `meCore`, or ME-processing symbols;
 - the final MVS ON ELF contains safe-task MIST and the NJEMU ME probe, with no
   `pspaudiocodec` link dependency;
@@ -404,5 +483,7 @@ Classic transport and final MIST transport, and the original ME workload reduced
 the representative YM2610 callback by about 16.7% with an indicative ~2.8%
 whole-emulator gain.  MIST itself measured ~32% lower isolated dispatch/wait
 overhead than Classic and passed two consecutive producer init/job/shutdown
-cycles in one PSP process.  Runtime backend selection and expansion to additional
-workloads remain intentionally deferred.
+cycles in one PSP process.  Runtime Auto/Main CPU/Media Engine selection,
+in-process mode restart, GUI ROM switching and producer suspend/resume recovery
+are now implemented and hardware validated as described in M6.  No additional
+audio workload currently meets the profiling threshold for further ME migration.

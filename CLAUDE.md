@@ -41,7 +41,8 @@ Useful options include:
 - `SAVE_STATE=ON/OFF`;
 - `COMMAND_LIST=ON/OFF`;
 - `ADHOC=ON/OFF` (PSP where supported);
-- `PSP_ME_AUDIO=ON/OFF` (experimental PSP-only Media Engine producer; default OFF);
+- `PSP_ME_AUDIO=ON/OFF` (optional PSP Media Engine audio producer; default OFF;
+  ON exposes persistent Auto/Main CPU/Media Engine runtime selection);
 - `PSP_AUDIO_PROFILE=ON/OFF` (PSP-only audio timing log; default OFF);
 - `USE_ASAN=ON` (Desktop development).
 

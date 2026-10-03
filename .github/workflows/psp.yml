@@ -162,9 +162,9 @@ jobs:
         cmake --build /tmp/psp-media-engine-safe-task-build --parallel $(getconf _NPROCESSORS_ONLN)
         cmake --install /tmp/psp-media-engine-safe-task-build
 
-    - name: Compile ME-enabled MVS build
+    - name: Compile ME-enabled MVS builds
       run: |
-        cmake -S . -B build-me \
+        cmake -S . -B build-me-nogui \
           -DPLATFORM=PSP \
           -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
           -DTARGET=MVS \
@@ -174,4 +174,16 @@ jobs:
           -DADHOC=OFF \
           -DPSP_AUDIO_PROFILE=OFF \
           -DPSP_ME_AUDIO=ON
-        cmake --build build-me --parallel $(getconf _NPROCESSORS_ONLN)
+        cmake --build build-me-nogui --parallel $(getconf _NPROCESSORS_ONLN)
+
+        cmake -S . -B build-me-gui \
+          -DPLATFORM=PSP \
+          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
+          -DTARGET=MVS \
+          -DGUI=ON \
+          -DSAVE_STATE=OFF \
+          -DCOMMAND_LIST=OFF \
+          -DADHOC=OFF \
+          -DPSP_AUDIO_PROFILE=OFF \
+          -DPSP_ME_AUDIO=ON
+        cmake --build build-me-gui --parallel $(getconf _NPROCESSORS_ONLN)
