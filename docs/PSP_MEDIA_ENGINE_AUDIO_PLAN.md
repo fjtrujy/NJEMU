@@ -3,6 +3,13 @@
 This document is the authoritative plan and status for the optional PSP Media
 Engine (ME) audio experiment.
 
+The validated implementation in this document uses ME as a bounded DSP
+accelerator and currently offloads only MVS YM2610 ADPCM-A decode/mix.  The
+separate follow-up experiment that investigates making ME the persistent owner
+of the complete MVS sound island (Z80 + YM2610 + PCM generation), using
+shared-memory SPSC rings for cross-processor communication, is specified in
+`docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`.
+
 ## Goals and compatibility contract
 
 The existing Allegrex audio path remains the reference implementation.  ME
