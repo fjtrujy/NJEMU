@@ -94,6 +94,54 @@ int main(int argc, char **argv)
 		CHECK(game_metadata_find_ngh(&metadata, (uint16_t)first.data[0], &found));
 		CHECK(strcmp(first.name, found.name) == 0);
 	}
+
+	if (core == GAME_METADATA_CORE_CPS1)
+	{
+		CHECK(game_metadata_find(&metadata, "ghouls", &found));
+		CHECK(game_metadata_title(&found, GAME_METADATA_LANG_ENGLISH) != NULL);
+		CHECK(game_metadata_find(&metadata, "ghoulsu", &found));
+		CHECK(game_metadata_title(&found, GAME_METADATA_LANG_ENGLISH) != NULL);
+	}
+	else if (core == GAME_METADATA_CORE_CPS2)
+	{
+		CHECK(game_metadata_find(&metadata, "ssf2", &found));
+		CHECK(found.data[0] == 0x23456789u);
+		CHECK(found.data[1] == 0xabcdef01u);
+		CHECK(found.data[2] == 0x00400000u);
+
+		CHECK(game_metadata_find(&metadata, "ddtodd", &found));
+		CHECK((found.core_flags & GAME_METADATA_CPS2_PHOENIX) != 0);
+		CHECK(found.data[0] == 0 && found.data[1] == 0 && found.data[2] == 0);
+
+		CHECK(game_metadata_find(&metadata, "ssf2ta", &found));
+		CHECK((found.core_flags & GAME_METADATA_CPS2_CACHE_PARENT_OVERRIDE) != 0);
+		CHECK(found.aux_name != NULL && strcmp(found.aux_name, "ssf2t") == 0);
+
+		CHECK(game_metadata_find(&metadata, "mpangj", &found));
+		CHECK((found.core_flags & GAME_METADATA_CPS2_CACHE_INDEPENDENT) != 0);
+	}
+	else if (core == GAME_METADATA_CORE_MVS)
+	{
+		CHECK(game_metadata_find(&metadata, "kof96ae", &found));
+		CHECK(found.core_flags == (GAME_METADATA_MVS_OWNS_CROM
+			| GAME_METADATA_MVS_OWNS_SROM | GAME_METADATA_MVS_OWNS_VROM));
+
+		CHECK(game_metadata_find(&metadata, "kof97ps", &found));
+		CHECK(found.core_flags == GAME_METADATA_MVS_OWNS_CROM);
+
+		CHECK(game_metadata_find(&metadata, "matrimbl", &found));
+		CHECK(found.core_flags == GAME_METADATA_MVS_OWNS_VROM);
+
+		CHECK(game_metadata_find(&metadata, "mslug", &found));
+		CHECK(found.core_flags == 0);
+	}
+	else if (core == GAME_METADATA_CORE_NCDZ)
+	{
+		CHECK(game_metadata_find_ngh(&metadata, 0x0243, &found));
+		CHECK(strcmp(found.name, "lastbld2") == 0);
+		CHECK(game_metadata_find_ngh(&metadata, 0x069c, &found));
+		CHECK(strcmp(found.name, "fatfury3") == 0);
+	}
 	game_metadata_unload(&metadata);
 
 	error = game_metadata_load(&metadata, argv[1], wrong_core);
