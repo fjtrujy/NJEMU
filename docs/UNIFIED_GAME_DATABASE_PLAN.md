@@ -254,6 +254,22 @@ Wall-clock parsing/startup timing and real PSP allocator telemetry still need to
 captured during the runtime-reader migration; the figures above are structural file
 and allocation measurements only.
 
+Same-configuration Desktop no-GUI size comparison against validated `380b6a4`
+(CPS2, GUI OFF, SAVE_STATE ON, COMMAND_LIST OFF) after the runtime cutover:
+
+- executable file: 493,864 B -> 493,944 B (**+80 B**); Apple's Mach-O `size`
+  reports identical aggregate segment sizes for both binaries;
+- old `memintrf.c.o` + `game_metadata.c.o`: 17,160 decoded object bytes,
+  including 12,912 B of text;
+- new `memintrf.c.o` + `game_database.c.o`: 16,485 decoded object bytes,
+  including 12,173 B of text;
+- the migrated topology/metadata path therefore reduces those directly related
+  object totals by **675 B** overall and **739 B** of text, while the linked file
+  size remains effectively neutral.
+
+This confirms the migration does not trade the runtime-file/RAM savings for a
+meaningful executable-size increase.
+
 Acceptance targets for CPS2:
 
 - eliminate the current whole-`rominfo.cps2` allocation (currently hundreds of
