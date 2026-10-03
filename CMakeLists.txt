@@ -22,6 +22,7 @@ list(FIND TARGET_VALUES ${TARGET} TARGET_INDEX)
 if (TARGET_INDEX EQUAL -1)
     message(FATAL_ERROR "Invalid TARGET. Please choose from the allowed values: ${TARGET_VALUES}")
 endif()
+string(TOLOWER ${TARGET} TARGET_LOWER)
 
 # Add target to compiler definitions
 add_definitions(-DBUILD_${TARGET})
@@ -356,6 +357,8 @@ set(COMMON_SRC
     common/cache.h
     common/cache.c
     common/cache_storage_driver.h
+    common/game_metadata.h
+    common/game_metadata.c
     common/filer.h
     common/filer.c
     common/loadrom.h
@@ -853,6 +856,7 @@ set_source_files_properties(
 )
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}.tsv")
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
 set(UI_UNICODE_GLYPH_SOURCE "${CMAKE_BINARY_DIR}/generated/ui_unicode_glyph.c")
 set(TRANSLATION_PACKS
@@ -871,8 +875,10 @@ add_custom_command(
         --build
         --output-dir "${TRANSLATION_PACK_DIR}"
         --unicode-map-output "${UI_UNICODE_GLYPH_SOURCE}"
+        --unicode-source "${GAME_METADATA_SOURCE}"
     DEPENDS
         "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+        "${GAME_METADATA_SOURCE}"
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         "${CMAKE_SOURCE_DIR}/translations/messages.def"
         "${CMAKE_SOURCE_DIR}/translations/en.lang"
@@ -929,11 +935,40 @@ endif()
 
 
 # Define the source directory (resources folder)
-string(TOLOWER ${TARGET} TARGET_LOWER)
 set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
+
+# Game metadata is source-controlled outside resources/ and generated into the
+# build root. The cartridge cores validate their canonical identity set against
+# rominfo so stale browser metadata cannot silently ship.
+set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
+set(GAME_METADATA_GENERATOR_ARGS
+    --core "${TARGET_LOWER}"
+    --source "${GAME_METADATA_SOURCE}"
+    --output "${GAME_METADATA_OUTPUT}"
+)
+set(GAME_METADATA_GENERATOR_DEPENDS
+    "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+    "${GAME_METADATA_SOURCE}"
+)
+if(NOT "${TARGET}" STREQUAL "NCDZ")
+    set(GAME_METADATA_ROMINFO "${RESOURCE_DIR}rominfo.${TARGET_LOWER}")
+    list(APPEND GAME_METADATA_GENERATOR_ARGS --rominfo "${GAME_METADATA_ROMINFO}")
+    list(APPEND GAME_METADATA_GENERATOR_DEPENDS "${GAME_METADATA_ROMINFO}")
+endif()
+add_custom_command(
+    OUTPUT "${GAME_METADATA_OUTPUT}"
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+        ${GAME_METADATA_GENERATOR_ARGS}
+    DEPENDS ${GAME_METADATA_GENERATOR_DEPENDS}
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    VERBATIM
+)
+add_custom_target(game_metadata ALL DEPENDS "${GAME_METADATA_OUTPUT}")
+add_dependencies(${TARGET} game_metadata)
 
 # Keep release/install contents independent from whatever local validation data
 # happens to exist under resources/<target>. The source resource tree is also
@@ -946,28 +981,16 @@ if("${TARGET}" STREQUAL "CPS1")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         gamelist_cps1.txt
         rominfo.cps1
-        zipname.cps1
-        zipnamej.cps1
-        zipnamech1.cps1
-        zipnamech2.cps1
     )
 elseif("${TARGET}" STREQUAL "CPS2")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         gamelist_cps2.txt
         rominfo.cps2
-        zipname.cps2
-        zipnamej.cps2
-        zipnamech1.cps2
-        zipnamech2.cps2
     )
 elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         gamelist_mvs.txt
         rominfo.mvs
-        zipname.mvs
-        zipnamej.mvs
-        zipnamech1.mvs
-        zipnamech2.mvs
     )
 endif()
 
@@ -1332,6 +1355,8 @@ if(PLATFORM STREQUAL "PSVITA")
             FILE "${RESOURCE_DIR}${VITA_RESOURCE_FILE}" "${VITA_RESOURCE_FILE}")
     endforeach()
     list(APPEND VITA_VPK_FILE_ARGS
+        FILE "${GAME_METADATA_OUTPUT}" "game_metadata.${TARGET_LOWER}")
+    list(APPEND VITA_VPK_FILE_ARGS
         FILE "${NJEMU_DEFAULT_GAME_SELECTOR}" "game_name.ini")
 
     foreach(VITA_RUNTIME_PLACEHOLDER IN LISTS NJEMU_RUNTIME_PLACEHOLDER_FILES)
@@ -1376,6 +1401,15 @@ endif()
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME game_metadata_generator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
+    add_executable(game_metadata_reader_tests
+        tests/game_metadata_reader_tests.c
+        src/common/game_metadata.c)
+    target_include_directories(game_metadata_reader_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_compile_options(game_metadata_reader_tests PRIVATE ${WARNING_OPTIONS})
+    add_dependencies(game_metadata_reader_tests game_metadata)
+    add_test(NAME game_metadata_reader_tests
+        COMMAND game_metadata_reader_tests "${GAME_METADATA_OUTPUT}")
 
     if("${TARGET}" STREQUAL "CPS2")
         add_test(NAME cps2_partial_cache_tests
@@ -1666,6 +1700,9 @@ foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
         DESTINATION .
     )
 endforeach()
+install(FILES "${GAME_METADATA_OUTPUT}"
+    DESTINATION .
+)
 install(FILES "${NJEMU_DEFAULT_GAME_SELECTOR}"
     DESTINATION .
 )

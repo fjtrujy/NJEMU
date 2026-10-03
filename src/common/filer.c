@@ -18,6 +18,7 @@
 #include "emucfg.h"
 #include "common/emulator_runtime.h"
 #include "common/filer.h"
+#include "common/game_metadata.h"
 #include "common/input_driver.h"
 #include "common/platform_driver.h"
 #include "common/power_driver.h"
@@ -232,14 +233,8 @@ static char zipped_rom[PATH_MAX];
 
 #else
 
-static struct zipname_t
-{
-	char zipname[16];
-	char title[128];
-	int flag;
-} *zipname;
-
-static int zipname_num;
+static game_metadata_t zip_metadata;
+static game_metadata_language_t zip_metadata_language;
 
 #endif
 
@@ -431,7 +426,7 @@ static void check_neocd_bios(void)
 ******************************************************************************/
 
 /*--------------------------------------------------------
-	Load ZIP Filename Database from zipname.dat
+	Load generated game metadata used by the ROM browser
 --------------------------------------------------------*/
 
 #if (EMU_SYSTEM == CPS1)
@@ -442,96 +437,38 @@ static void check_neocd_bios(void)
 #define EXT		"mvs"
 #endif
 
-static int load_zipname(void)
+static game_metadata_language_t browser_metadata_language(void)
 {
-	int fd;
-	char path[PATH_MAX], buf[256];
-	int found = 0;
+	switch (ui_text_driver->getLanguage(ui_text_data))
+	{
+	case UI_LANG_JAPANESE:
+		return GAME_METADATA_LANG_JAPANESE;
+	case UI_LANG_CHINESE_SIMPLIFIED:
+		return GAME_METADATA_LANG_CHINESE_SIMPLIFIED;
+	case UI_LANG_CHINESE_TRADITIONAL:
+		return GAME_METADATA_LANG_CHINESE_TRADITIONAL;
+	case UI_LANG_ENGLISH:
+	case UI_LANG_SPANISH:
+	default:
+		return GAME_METADATA_LANG_ENGLISH;
+	}
+}
 
-	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_JAPANESE)
-	{
-		if (!path_format(path, sizeof(path), "%szipnamej." EXT, launchDir)) return 0;
-		fd = open(path, O_RDONLY);
-		if (fd >= 0) { close(fd); found = 1; }
-	}
-	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_SIMPLIFIED)
-	{
-		if (!path_format(path, sizeof(path), "%szipnamech1." EXT, launchDir)) return 0;
-		fd = open(path, O_RDONLY);
-		if (fd >= 0) { close(fd); found = 1; }
-	}
-	if (ui_text_driver->getLanguage(ui_text_data) == UI_LANG_CHINESE_TRADITIONAL)
-	{
-		if (!path_format(path, sizeof(path), "%szipnamech2." EXT, launchDir)) return 0;
-		fd = open(path, O_RDONLY);
-		if (fd >= 0) { close(fd); found = 1; }
-	}
-	if (!found)
-	{
-		if (!path_format(path, sizeof(path), "%szipname." EXT, launchDir)) return 0;
-	}
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
+static int load_game_metadata(void)
+{
+	char path[PATH_MAX];
+	game_metadata_error_t error;
+
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
 		return 0;
-
-	if (zipname == NULL)
+	zip_metadata_language = browser_metadata_language();
+	error = game_metadata_load(&zip_metadata, path, game_metadata_current_core());
+	if (error != GAME_METADATA_OK)
 	{
-		zipname = (struct zipname_t *)malloc(sizeof(*zipname) * MAX_GAMES);
-		if (zipname == NULL)
-		{
-			close(fd);
-			return 0;
-		}
+		printf("game metadata: cannot load %s: %s\n", path,
+			game_metadata_error_string(error));
+		return 0;
 	}
-
-	zipname_num = 0;
-	while (zipname_num < MAX_GAMES)
-	{
-		char *linebuf;
-		char *name;
-		char *title;
-		char *flag;
-		char c;
-		int n = 0;
-
-		memset(buf, 0, 256);
-
-		/* read one line */
-		while (n < 255) {
-			if (read(fd, &c, 1) <= 0) break;
-			buf[n++] = c;
-			if (c == '\n') break;
-		}
-		if (n == 0) break;
-		buf[n] = '\0';
-
-		linebuf = strtok(buf, "\r\n");
-		if (linebuf == NULL) continue;
-
-		zipname[zipname_num].flag = 0;
-
-		name  = strtok(linebuf, ",\r\n");
-		title = strtok(NULL, ",\r\n");
-		flag  = strtok(NULL, ",\r\n");
-
-		if (name == NULL || title == NULL) continue;
-
-		strcpy(zipname[zipname_num].zipname, name);
-		strcpy(zipname[zipname_num].title, title);
-		if (flag)
-		{
-			if (strstr(flag, "GAME_BOOTLEG"))
-				zipname[zipname_num].flag |= GAME_BOOTLEG;
-			if (strstr(flag, "GAME_HACK"))
-				zipname[zipname_num].flag |= GAME_HACK;
-			if (strstr(flag, "GAME_NOT_WORK"))
-				zipname[zipname_num].flag |= GAME_NOT_WORK;
-		}
-		zipname_num++;
-	}
-
-	close(fd);
-
 	return 1;
 }
 
@@ -540,11 +477,9 @@ static int load_zipname(void)
 	Free ZIP Filename Database
 --------------------------------------------------------*/
 
-static void free_zipname(void)
+static void free_game_metadata(void)
 {
-	free(zipname);
-	zipname = NULL;
-	zipname_num = 0;
+	game_metadata_unload(&zip_metadata);
 }
 
 
@@ -552,28 +487,38 @@ static void free_zipname(void)
 	Get Game Title from ZIP Filename
 --------------------------------------------------------*/
 
-static char *get_zipname(const char *name, int *flag)
+static const char *get_game_title(const char *name, int *flag)
 {
 	int i, length;
 	char fname[PATH_MAX];
+	char *extension;
+	game_metadata_entry_t entry;
+	const char *title;
 
+	if (strlen(name) >= sizeof(fname))
+		return NULL;
 	strcpy(fname, name);
-	*strrchr(fname, '.') = '\0';
+	extension = strrchr(fname, '.');
+	if (extension == NULL)
+		return NULL;
+	*extension = '\0';
 
-	length = strlen(fname);
-	if (length > 16) return NULL;//ZIP NAME length
+	length = (int)strlen(fname);
+	if (length >= GAME_METADATA_NAME_BYTES)
+		return NULL;
 
 	for (i = 0; i < length; i++)
-		fname[i] = tolower(fname[i]);
+		fname[i] = (char)tolower((unsigned char)fname[i]);
 
-	for (i = 0; i < zipname_num; i++)
-	{
-		if (strcasecmp(fname, zipname[i].zipname) == 0)
-		{
-			*flag = zipname[i].flag;
-			return zipname[i].title;
-		}
-	}
+	if (!game_metadata_find(&zip_metadata, fname, &entry))
+		goto not_found;
+	title = game_metadata_title(&entry, zip_metadata_language);
+	if (title == NULL)
+		goto not_found;
+	*flag = entry.display_flags;
+	return title;
+
+not_found:
 	*flag = 0;
 	return NULL;
 }
@@ -730,9 +675,9 @@ static int set_file_flags(const char *path, int number)
 #else
 	if (files[number]->type == FTYPE_ZIP)
 	{
-		char *title;
+		const char *title;
 
-		if ((title = get_zipname(files[number]->name, &files[number]->flag)) == NULL)
+		if ((title = get_game_title(files[number]->name, &files[number]->flag)) == NULL)
 		{
 			files[number]->flag = GAME_BADROM;
 			strcpy(files[number]->title, files[number]->name);
@@ -1012,7 +957,7 @@ void file_browser(void)
 		files[i] = (struct file_entry *)malloc(sizeof(struct file_entry));
 
 	#if (EMU_SYSTEM != NCDZ)
-	free_zipname();
+	free_game_metadata();
 	#endif
 
 	strcpy(curr_dir, launchDir);
@@ -1067,9 +1012,9 @@ void file_browser(void)
 	video_driver->flipScreen(video_data, 1);
 
 #if (EMU_SYSTEM != NCDZ)
-	if (!load_zipname())
+	if (!load_game_metadata())
 	{
-		fatalerror(TEXT(COULD_NOT_OPEN_ZIPNAME_DAT), EXT);
+		fatalerror(TEXT(COULD_NOT_OPEN_GAME_METADATA), EXT);
 		show_fatal_error();
 		show_exit_screen();
 		goto error;
@@ -1133,7 +1078,7 @@ void file_browser(void)
 				game_name[i] = tolower(game_name[i]);
 				i++;
 			}
-			free_zipname();
+			free_game_metadata();
 #endif
 
 			for (i = 0; i < MAX_ENTRY; i++)
@@ -1165,7 +1110,7 @@ void file_browser(void)
 				title_counter = 60;
 				title_image = -1;
 #else
-				load_zipname();
+				load_game_metadata();
 #endif
 				load_background(WP_FILER);
 				getDir(curr_dir);
@@ -1585,7 +1530,7 @@ error:
 	{
 		if (files[i]) free(files[i]);
 	}
-	free_zipname();
+	free_game_metadata();
 #endif
 }
 

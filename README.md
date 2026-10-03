@@ -279,8 +279,7 @@ For the complete per-core/per-platform classification and lookup order, see
 ├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
-├── zipname.cps1                # English game names (REQUIRED)
-├── zipnamej.cps1               # Japanese game names (optional)
+├── game_metadata.cps1          # Generated names/game metadata (REQUIRED)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 ├── cache/                      # CPS2 streaming cache, only when needed
@@ -302,8 +301,7 @@ to streaming.
 ├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
-├── zipname.mvs                 # English game names (REQUIRED)
-├── zipnamej.mvs                # Japanese game names (optional)
+├── game_metadata.mvs           # Generated names/game metadata (REQUIRED)
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 │   └── neogeo.zip              # BIOS file (REQUIRED)
@@ -326,6 +324,7 @@ Cache-enabled builds can still read historical MVS processed assets from
 ├── lang/                       # Generated UI translation packs
 ├── font/gbk_s14.bin            # Generated external UI font
 ├── njemu.ini                    # Settings (auto-created)
+├── game_metadata.ncdz          # Generated NGH/game metadata
 ├── neocd.bin                   # Neo Geo CD BIOS (user supplied, REQUIRED)
 ├── 000-lo.lo                   # Neo Geo low ROM (user supplied, REQUIRED)
 ├── command.dat                 # MAME Plus! command list (optional)
@@ -361,7 +360,9 @@ does not mount ISO/BIN/CUE disc images directly. PSP screenshots are written to
 
 The UI language is selected through the platform driver. PSP and PS2 map their system language to Japanese, Spanish, Simplified Chinese, Traditional Chinese, or English; Desktop currently uses English. If a requested catalog is unavailable, NJEMU falls back to English.
 
-The `zipnamej.*` files (Japanese game name lists) are optional and can be deleted if not needed.
+Game display names are generated into `game_metadata.<core>` from the tracked
+UTF-8 sources under `metadata/`. Localized names fall back to English when a
+core-specific translation is absent.
 
 The build generates `lang/*.lng` and `font/gbk_s14.bin` from the tracked
 translation/font sources. Both GUI and no-GUI binaries initialize the common UI
@@ -626,8 +627,9 @@ After a successful build, you'll find the following in the build directory:
 - `{TARGET}` - The main executable for PS2
 - Resource entries are staged directly in the build root from an explicit
   per-target set. Read-only entries such as applicable `roms/`, `data/`,
-  `cache/`, `processed/`, `rominfo.*`, and `zipname.*` are **linked**
-  from `resources/{target}/`; writable entries such as `config/`, `nvram/`,
+  `cache/`, `processed/`, and `rominfo.*` are **linked** from
+  `resources/{target}/`; `game_metadata.<core>` is generated in the build root;
+  writable entries such as `config/`, `nvram/`,
   `memcard/`, `state/`, and `game_name.ini` are private build copies. This
   matches the runtime `launchDir` layout and PCSX2's `host:` root without
   letting runtime writes modify `resources/`. `-DCOPY_RESOURCES=ON` copies

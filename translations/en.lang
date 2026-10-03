@@ -6,7 +6,7 @@
 EOM=
 LF=\n
 PLEASE_WAIT=Please wait...
-COULD_NOT_OPEN_ZIPNAME_DAT=Could not open zipname.%s
+COULD_NOT_OPEN_GAME_METADATA=Could not open game metadata for %s
 PLEASE_TURN_ON_THE_WLAN_SWITCH=Please turn on the WLAN switch.
 FAILED_TO_LOAD_ADHOC_MODULES=Failed to load AdHoc modules.
 COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND=Could not reserve audio channel for sound.

@@ -229,9 +229,11 @@ Runtime owner:
 It is only relevant when `COMMAND_LIST` is compiled. Missing data disables the
 command-list content rather than preventing emulation.
 
-The command-list size-reduction UI also uses the core's base
-`zipname.<core>` file (with `zipnamej.<core>` as a legacy fallback for that
-operation).
+For CPS1, CPS2, and MVS, the command-list size-reduction UI enumerates canonical
+set names from `game_metadata.<core>`. It therefore uses the same validated
+identity set as the GUI browser instead of maintaining a second dependency on
+the legacy `zipname*` catalogs. NCDZ still enumerates its compiled NGH table at
+this stage; that table is migrated separately by the game-metadata plan.
 
 ### Cheats
 
@@ -287,30 +289,41 @@ directory, with `launchDir/roms/` as the common fallback.
 ROM members are identified primarily by CRC. Their member filenames are not
 the source of truth.
 
-## GUI game-name databases: CPS1, CPS2, and MVS
+## Generated game metadata: CPS1, CPS2, MVS, and NCDZ
 
-Canonical files:
+Canonical runtime files:
 
 ~~~text
-zipname.<core>
-zipnamej.<core>
-zipnamech1.<core>
-zipnamech2.<core>
+game_metadata.cps1
+game_metadata.cps2
+game_metadata.mvs
+game_metadata.ncdz
 ~~~
 
-where `<core>` is `cps1`, `cps2`, or `mvs`.
+Classification: generated distributed runtime metadata.
 
-Classification: distributed runtime metadata.
-
-Runtime owner: `src/common/filer.c:load_zipname()`.
+Source authority: `metadata/<core>.tsv` plus `rominfo.<core>` identity
+validation for CPS1/CPS2/MVS. Generator: `tools/game_metadata.py`. Runtime
+reader: `src/common/game_metadata.c`.
 
 Rules:
 
-- `zipname.<core>` is the mandatory fallback for GUI file browsing;
-- Japanese, Simplified Chinese, and Traditional Chinese variants are optional
-  localized alternatives;
-- if the requested localized file is absent, the base file is used;
-- these files are not required for the normal no-GUI game selector.
+- CPS1/CPS2/MVS metadata contains one canonical record for every set in the
+  corresponding `rominfo` database; generation fails if the sets diverge;
+- browser titles are UTF-8 and include English plus optional Japanese,
+  Simplified Chinese, and Traditional Chinese strings in one versioned file;
+- a missing localized title falls back to English deterministically;
+- browser status flags and compact per-game metadata share the same record, so
+  executable tables can move to this file without adding another game list;
+- the normal no-GUI selector still reads `game_name.ini`; generated metadata
+  is packaged for all builds because core initialization also consumes it as
+  executable metadata is externalized;
+- NCDZ currently packages the same format with NGH identity records; its
+  compiled lookup is migrated in a later milestone.
+
+The tracked `resources/zipname*` files are legacy reference data. They are no
+longer part of the CMake distribution/install/Vita manifest and are not runtime
+authorities.
 
 ## ROM metadata databases: CPS1, CPS2, and MVS
 
@@ -339,7 +352,7 @@ building derived assets.
 | --- | --- | --- | --- |
 | `rominfo.cps1` | Runtime metadata | Any game boot | `src/cps1/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Any game boot | `src/common/loadrom.c` |
-| `zipname.cps1` | Runtime metadata | GUI browser | `src/common/filer.c` |
+| `game_metadata.cps1` | Generated runtime metadata | GUI browser | `src/common/game_metadata.c`, `src/common/filer.c` |
 | `lang/en.lng` | Generated UI asset | Any normal runtime | common text catalog |
 | `font/gbk_s14.bin` | Generated UI asset | Current UI renderer initialization | common UI draw |
 
@@ -355,7 +368,6 @@ CPS1 resource tree is not a CPS1 runtime requirement.
 - `state/<game>.svN` when save states are enabled
 - `cheats/<game>.ini`
 - `command.dat` when command lists are enabled
-- localized `zipname*.cps1` variants
 
 There is no CPS1 BIOS requirement analogous to MVS. A `neogeo.zip` present
 inside a local CPS1 ROM directory is unrelated local data, not a CPS1 asset.
@@ -368,7 +380,7 @@ inside a local CPS1 ROM directory is unrelated local data, not a CPS1 asset.
 | --- | --- | --- | --- |
 | `rominfo.cps2` | Runtime metadata | Any game boot | `src/cps2/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Resident regions and full-resident GFX | `src/common/loadrom.c` |
-| `zipname.cps2` | Runtime metadata | GUI browser | `src/common/filer.c` |
+| `game_metadata.cps2` | Generated runtime metadata | GUI browser and per-game metadata | `src/common/game_metadata.c`, `src/common/filer.c` |
 | `lang/en.lng` | Generated UI asset | Any normal runtime | common text catalog |
 | `font/gbk_s14.bin` | Generated UI asset | Current UI renderer initialization | common UI draw |
 
@@ -422,7 +434,6 @@ Desktop and PS Vita.
 - `state/cache.tmp` during save-state operations on a streaming-cache build
 - `cheats/<game>.ini`
 - `command.dat`
-- localized `zipname*.cps2` variants
 
 ## MVS
 
@@ -433,7 +444,7 @@ Desktop and PS Vita.
 | `rominfo.mvs` | Runtime metadata | Any game boot | `src/mvs/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Game boot | `src/common/loadrom.c` |
 | `neogeo.zip` | BIOS ROM archive | MVS game boot | `src/mvs/biosmenu.c`, MVS memory loader |
-| `zipname.mvs` | Runtime metadata | GUI browser | `src/common/filer.c` |
+| `game_metadata.mvs` | Generated runtime metadata | GUI browser and per-game metadata | `src/common/game_metadata.c`, `src/common/filer.c` |
 
 The MVS BIOS archive must provide compatible BIOS content plus the system FIX
 ROM and low ROM by CRC. In particular, the loader expects:
@@ -525,7 +536,6 @@ Therefore:
 - `state/cache.tmp` for streaming-cache save-state handling
 - `cheats/<game>.ini`
 - `command.dat`
-- localized `zipname*.mvs` variants
 
 ## NCDZ
 
@@ -800,8 +810,7 @@ Legend:
 | Item | CPS1 | CPS2 | MVS | NCDZ |
 | --- | --- | --- | --- | --- |
 | `rominfo.<core>` | M | M | M | -- |
-| `zipname.<core>` | C: GUI | C: GUI | C: GUI | -- |
-| localized `zipname*` | O | O | O | -- |
+| `game_metadata.<core>` | C: GUI/command list | C: GUI/command list | C: GUI/command list | B |
 | arcade ROM ZIPs | M | M | M | -- |
 | `roms/neogeo.zip` | -- | -- | M | -- |
 | `neocd.bin` | -- | -- | -- | M |
@@ -919,7 +928,7 @@ The desired long-term separation is:
 
 - executable/package;
 - `rominfo.*` for CPS1/CPS2/MVS;
-- `zipname*` metadata for CPS1/CPS2/MVS;
+- generated `game_metadata.<core>` from the canonical `metadata/*.tsv` source;
 - generated `lang/*.lng`;
 - generated `font/gbk_s14.bin`;
 - documentation;
@@ -955,7 +964,8 @@ The desired long-term separation is:
 - [x] Trace the common `launchDir` model.
 - [x] Trace ROM ZIP lookup and parent/BIOS fallback.
 - [x] Trace CPS1/CPS2/MVS ROM metadata.
-- [x] Trace GUI `zipname*` metadata and language fallback.
+- [x] Trace and replace GUI `zipname*` metadata with validated generated game
+  metadata and language fallback.
 - [x] Trace CPS2 cache layouts and runtime selection.
 - [x] Trace MVS canonical processed assets and legacy fallback.
 - [x] Trace NCDZ BIOS and directory/ZIP game resource loading.
@@ -1009,7 +1019,7 @@ For every packaging/runtime lookup cleanup:
 2. run focused tests and `ctest` where available;
 3. run `git diff --check`;
 4. verify no-GUI lookup through `game_name.ini`;
-5. verify GUI `zipname*` lookup when that path is affected;
+5. verify generated game-metadata lookup when that path is affected;
 6. for CPS2, verify both full-resident and streaming-cache behavior when
    relevant;
 7. for MVS, verify full-resident processed assets and streaming processed

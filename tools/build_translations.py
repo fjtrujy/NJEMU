@@ -39,6 +39,7 @@ LANGUAGE_IDS = {
 # let us remove PSP-specific names from editable translations without invalidating
 # existing V2 packs that use the same numeric schema.
 SCHEMA_COMPAT_NAMES = {
+    "COULD_NOT_OPEN_GAME_METADATA": "COULD_NOT_OPEN_ZIPNAME_DAT",
     "UNSUPPORTED_DEVICE_CONFIGURATION": "THIS_PROGRAM_REQUIRES_PSP2000",
     "CPU_CLOCK": "PSP_CLOCK",
     "DISPLAY_MODE": "STRETCH_SCREEN",
@@ -284,6 +285,7 @@ def load_gbk_unicode_glyph_map(path: Path = GBK_TABLE_SOURCE) -> dict[int, int]:
 
 def required_unicode_glyphs(
     catalogs: dict[str, dict[str, bytes | None]],
+    extra_unicode_sources: tuple[Path, ...] = (),
 ) -> list[tuple[int, int]]:
     required: set[int] = set()
     graphic_codepoints = set(GRAPHIC_TOKENS.values())
@@ -302,6 +304,21 @@ def required_unicode_glyphs(
                 and not (0x00A0 <= ord(char) <= 0x00FF)
                 and ord(char) not in graphic_codepoints
             )
+
+    for path in extra_unicode_sources:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError as exc:
+            raise TranslationError(f"missing Unicode source: {path}") from exc
+        except UnicodeDecodeError as exc:
+            raise TranslationError(f"{path}: Unicode source must be valid UTF-8") from exc
+        required.update(
+            ord(char)
+            for char in text
+            if ord(char) >= 0x80
+            and not (0x00A0 <= ord(char) <= 0x00FF)
+            and ord(char) not in graphic_codepoints
+        )
 
     if not required:
         return []
@@ -357,8 +374,9 @@ int ui_unicode_glyph_lookup(uint32_t codepoint, uint16_t *glyph)
 def write_unicode_glyph_source(
     output: Path,
     catalogs: dict[str, dict[str, bytes | None]],
+    extra_unicode_sources: tuple[Path, ...] = (),
 ) -> int:
-    entries = required_unicode_glyphs(catalogs)
+    entries = required_unicode_glyphs(catalogs, extra_unicode_sources)
     data = render_unicode_glyph_source(entries)
     output.parent.mkdir(parents=True, exist_ok=True)
     if not output.exists() or output.read_text(encoding="utf-8") != data:
@@ -537,13 +555,22 @@ def main() -> int:
         type=Path,
         help="emit the compact generated Unicode-to-glyph C lookup",
     )
+    parser.add_argument(
+        "--unicode-source",
+        type=Path,
+        action="append",
+        default=[],
+        help="additional UTF-8 text whose non-ASCII glyphs must be renderable",
+    )
     args = parser.parse_args()
 
     try:
         names, catalogs = load_and_validate_sources(args.translations_dir)
         pack_sizes = write_packs(args.output_dir, names, catalogs) if args.build else None
         glyph_count = (
-            write_unicode_glyph_source(args.unicode_map_output, catalogs)
+            write_unicode_glyph_source(
+                args.unicode_map_output, catalogs, tuple(args.unicode_source)
+            )
             if args.unicode_map_output is not None
             else None
         )

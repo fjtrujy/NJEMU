@@ -4,7 +4,7 @@
 UI_TEXT_ID(EOM,                                                          0)
 UI_TEXT_ID(LF,                                                           1)
 UI_TEXT_ID(PLEASE_WAIT,                                                  2)
-UI_TEXT_ID(COULD_NOT_OPEN_ZIPNAME_DAT,                                   3)
+UI_TEXT_ID(COULD_NOT_OPEN_GAME_METADATA,                                3)
 UI_TEXT_ID(PLEASE_TURN_ON_THE_WLAN_SWITCH,                               4)
 UI_TEXT_ID(FAILED_TO_LOAD_ADHOC_MODULES,                                 5)
 UI_TEXT_ID(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND,                    6)

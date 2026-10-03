@@ -15,6 +15,7 @@ from pathlib import Path
 MAGIC = b"NJGM"
 VERSION = 1
 NAME_BYTES = 16
+TITLE_BYTES = 128
 LANGUAGES = ("title_en", "title_ja", "title_zh_hans", "title_zh_hant")
 HEADER = struct.Struct("<4sHHIIIIII")
 RECORD = struct.Struct("<16s8IBBH")
@@ -123,6 +124,11 @@ def read_source(path: Path, core: str) -> list[SourceRecord]:
             for title in titles:
                 if "\t" in title or "\n" in title or "\r" in title:
                     fail(f"{path}:{line_number}: title contains a control separator")
+                if len(title.encode("utf-8")) >= TITLE_BYTES:
+                    fail(
+                        f"{path}:{line_number}: {name} title does not fit "
+                        f"the {TITLE_BYTES}-byte browser title buffer"
+                    )
 
             aux_name = (row["aux_name"] or "").strip()
             if aux_name:

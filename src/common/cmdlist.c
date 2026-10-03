@@ -11,6 +11,7 @@
 #include "emucfg.h"
 #include "common/cmdlist.h"
 #include "common/emulator_runtime.h"
+#include "common/game_metadata.h"
 #include "common/input_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
@@ -869,18 +870,12 @@ void commandlist(int flag)
 #define CMD_SEEK	1
 #define END_SEEK	2
 
-#if (EMU_SYSTEM == CPS1)
-#define EXT		"cps1"
-#elif (EMU_SYSTEM == CPS2)
-#define EXT		"cps2"
-#elif (EMU_SYSTEM == MVS)
-#define EXT		"mvs"
-#endif
-
 int commandlist_size_reduction(void)
 {
 #if (EMU_SYSTEM != NCDZ)
-	int fd_zip;
+	game_metadata_t metadata = {0};
+	game_metadata_entry_t metadata_entry;
+	game_metadata_error_t metadata_error;
 #endif
 	int fd_cmd, fd_out;
 	char path[PATH_MAX], path2[PATH_MAX];
@@ -899,24 +894,25 @@ int commandlist_size_reduction(void)
 	}
 	total_roms = 97;
 #else
-	if (!path_format(path, sizeof(path), "%szipname." EXT, launchDir)) return 0;
-	fd_zip = open(path, O_RDONLY);
-	if (fd_zip < 0)
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
+		return 0;
+	metadata_error = game_metadata_load(&metadata, path, game_metadata_current_core());
+	if (metadata_error != GAME_METADATA_OK || game_metadata_count(&metadata) > 512)
 	{
-		if (!path_format(path, sizeof(path), "%szipnamej." EXT, launchDir)) return 0;
-		fd_zip = open(path, O_RDONLY);
-		if (fd_zip < 0)
+		game_metadata_unload(&metadata);
+		return 0;
+	}
+	total_roms = (int)game_metadata_count(&metadata);
+	for (i = 0; i < total_roms; i++)
+	{
+		if (!game_metadata_get(&metadata, (uint32_t)i, &metadata_entry))
 		{
+			game_metadata_unload(&metadata);
 			return 0;
 		}
+		strcpy(rom_name[i], metadata_entry.name);
 	}
-
-	while (fd_readline(fd_zip, linebuf, 512) > 0)
-	{
-		char *name = strtok(linebuf, ",");
-		strcpy(rom_name[total_roms++], name);
-	}
-	close(fd_zip);
+	game_metadata_unload(&metadata);
 #endif
 
 	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return 0;

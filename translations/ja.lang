@@ -6,7 +6,7 @@
 EOM=
 LF=\n
 PLEASE_WAIT=しばらくお待ちください。
-COULD_NOT_OPEN_ZIPNAME_DAT=zipname.%sをオープンできません。
+COULD_NOT_OPEN_GAME_METADATA=%sのゲームメタデータをオープンできません。
 PLEASE_TURN_ON_THE_WLAN_SWITCH=WLANスイッチをONにしてください。
 FAILED_TO_LOAD_ADHOC_MODULES=AdHocモジュールをロード出来ませんでした。
 COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND=オーディオチャネルを確保できません。

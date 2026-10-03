@@ -355,15 +355,27 @@ checked-in generated artifact.
 
 ### M2 — replace GUI `zipname*` runtime dependency
 
-- [ ] Add the bounded common C metadata reader.
-- [ ] Switch CPS1/CPS2/MVS browser title/flag lookup to generated metadata.
-- [ ] Preserve language fallback and release bootleg filtering.
-- [ ] Ensure every supported set receives a friendly title.
-- [ ] Switch command-list reduction enumeration away from `zipname*`.
-- [ ] Make CMake build staging/install/Vita package the generated file.
-- [ ] Remove `zipname*` from the distributed runtime manifest without touching
+- [x] Add the bounded common C metadata reader.
+- [x] Switch CPS1/CPS2/MVS browser title/flag lookup to generated metadata.
+- [x] Preserve language fallback and release bootleg filtering.
+- [x] Ensure every supported set receives a friendly title.
+- [x] Switch command-list reduction enumeration away from `zipname*`.
+- [x] Make CMake build staging/install/Vita package the generated file.
+- [x] Remove `zipname*` from the distributed runtime manifest without touching
   the legacy files under `resources/`.
-- [ ] Update README/runtime-file documentation.
+- [x] Update README/runtime-file documentation.
+
+The runtime reader validates magic/version/core, exact file bounds, sorted
+unique records, string-pool offsets and NUL termination, reserved fields, and a
+CRC32 over the generated body before exposing any record. Desktop tests cover
+valid loads, wrong-core rejection, checksum corruption, and truncation.
+
+The browser title path is now UTF-8 end-to-end. CMake includes the selected
+core's canonical metadata source when generating the Unicode-to-font-glyph
+lookup, so localized game names are covered by the same renderer as translated
+UI text. CPS1's legacy Japanese middle-dot U+30FB is normalized to the visually
+equivalent U+00B7 because the bundled GBK-derived font has no U+30FB glyph while
+the Latin-1 renderer has U+00B7.
 
 ### M3 — CPS2 executable metadata
 
