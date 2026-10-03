@@ -6,6 +6,9 @@
 #include <me-core-mapper/hw-registers.h>
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
+#ifdef PSP_ME_SOUND_COPROCESSOR
+#include "psp/psp_me_sound_worker.h"
+#endif
 #ifdef PSP_ME_RING_SELFTEST
 #include <fcntl.h>
 #include <unistd.h>
@@ -38,6 +41,10 @@ static void *me_job_data;
 static uint32_t me_job_cache_size;
 static void *me_workspace;
 static uint32_t me_workspace_size;
+#ifdef PSP_ME_SOUND_COPROCESSOR
+static psp_me_sound_worker_t me_sound_worker;
+static uint32_t me_sound_worker_generation;
+#endif
 
 static void psp_audio_producer_waitJob(void);
 
@@ -119,7 +126,67 @@ static void psp_me_dispatch_wait(void)
 	meSafeTaskMistWait();
 }
 
-#ifdef PSP_ME_RING_SELFTEST
+#ifdef PSP_ME_SOUND_COPROCESSOR
+
+#define PSP_ME_SOUND_WORKER_CAPACITY 8u
+#define PSP_ME_SOUND_WORKER_TIMEOUT_US 2000000ULL
+
+static bool psp_me_sound_worker_dispatch_start(void (*task)(void *), void *data,
+	uint32_t size, void *opaque)
+{
+	(void)opaque;
+	if (!task || !data || size == 0 || me_job_in_flight)
+		return false;
+
+	me_job.job = task;
+	me_job.data = data;
+	me_job.size = size;
+	sceKernelDcacheWritebackInvalidateRange(&me_job, sizeof(me_job));
+	return psp_me_dispatch_job() >= 0;
+}
+
+static void psp_me_sound_worker_dispatch_wait(void *opaque)
+{
+	(void)opaque;
+	psp_me_dispatch_wait();
+}
+
+static bool psp_me_sound_worker_bootstrap(void)
+{
+	const psp_me_sound_worker_dispatch_t dispatch = {
+		psp_me_sound_worker_dispatch_start,
+		psp_me_sound_worker_dispatch_wait,
+		NULL,
+	};
+
+	if (!psp_me_sound_worker_start(&me_sound_worker, &dispatch,
+		PSP_ME_SOUND_WORKER_CAPACITY, PSP_ME_SOUND_WORKER_TIMEOUT_US))
+		return false;
+
+	me_sound_worker_generation++;
+	if (me_sound_worker_generation == 0)
+		me_sound_worker_generation = 1;
+	if (!psp_me_sound_worker_reset(&me_sound_worker, me_sound_worker_generation,
+		PSP_ME_SOUND_WORKER_TIMEOUT_US))
+	{
+		psp_me_sound_worker_abort(&me_sound_worker);
+		return false;
+	}
+	return true;
+}
+
+static void psp_me_sound_worker_stop(void)
+{
+	if (!me_sound_worker.running)
+		return;
+	if (!psp_me_sound_worker_shutdown(&me_sound_worker,
+		PSP_ME_SOUND_WORKER_TIMEOUT_US))
+		psp_me_sound_worker_abort(&me_sound_worker);
+}
+
+#endif /* PSP_ME_SOUND_COPROCESSOR */
+
+	#ifdef PSP_ME_RING_SELFTEST
 
 static bool psp_me_ring_selftest_dispatch_start(void (*task)(void *), void *data,
 	uint32_t size, void *opaque)
@@ -265,7 +332,16 @@ static bool psp_me_enable(const char *context)
 		me_available = false;
 		return false;
 	}
-#endif
+	#endif
+	#ifdef PSP_ME_SOUND_COPROCESSOR
+	if (!psp_me_sound_worker_bootstrap())
+	{
+		printf("[PSP_ME_AUDIO] %s: persistent sound worker bootstrap failed; using Main CPU\n",
+			context);
+		me_available = false;
+		return false;
+	}
+	#endif
 
 	me_available = true;
 	printf("[PSP_ME_AUDIO] %s: %s -> Media Engine (MIST); Main CPU retained as fallback\n",
@@ -282,6 +358,10 @@ static bool psp_audio_producer_init(void)
 	me_job_cache_size = 0;
 	me_workspace = NULL;
 	me_workspace_size = 0;
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	memset(&me_sound_worker, 0, sizeof(me_sound_worker));
+	me_sound_worker_generation = 0;
+#endif
 	if (!audio_producer_cpu.init())
 		return false;
 	if (!psp_me_mode_enabled())
@@ -296,6 +376,9 @@ static bool psp_audio_producer_init(void)
 
 static void psp_audio_producer_shutdown(void)
 {
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	psp_me_sound_worker_stop();
+#endif
 	if (me_job_in_flight)
 	{
 		psp_me_dispatch_wait();
@@ -318,6 +401,20 @@ static void psp_audio_producer_reset(void)
 	psp_audio_producer_waitJob();
 	if (!psp_me_mode_enabled())
 		me_available = false;
+	#ifdef PSP_ME_SOUND_COPROCESSOR
+	else if (me_available && me_sound_worker.running)
+	{
+		me_sound_worker_generation++;
+		if (me_sound_worker_generation == 0)
+			me_sound_worker_generation = 1;
+		if (!psp_me_sound_worker_reset(&me_sound_worker,
+			me_sound_worker_generation, PSP_ME_SOUND_WORKER_TIMEOUT_US))
+		{
+			psp_me_sound_worker_abort(&me_sound_worker);
+			me_available = false;
+		}
+	}
+	#endif
 	else if (!me_available && !me_suspended)
 		psp_me_enable("reset");
 	audio_producer_cpu.reset();
@@ -326,6 +423,9 @@ static void psp_audio_producer_reset(void)
 static void psp_audio_producer_suspend(void)
 {
 	psp_audio_producer_waitJob();
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	psp_me_sound_worker_stop();
+#endif
 	me_available = false;
 	me_suspended = true;
 }
@@ -353,11 +453,22 @@ static bool psp_audio_producer_isAvailable(void)
 
 static bool psp_audio_producer_canRunJobs(void)
 {
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	/* C2 reserves MIST for the persistent worker.  Until that worker owns the
+	 * complete sound island, YM2610 production intentionally stays on Allegrex. */
+	return false;
+#else
 	return me_available;
+#endif
 }
 
 static void *psp_audio_producer_acquireJobBuffer(uint32_t size, uint32_t alignment)
 {
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	(void)size;
+	(void)alignment;
+	return NULL;
+#else
 	void *workspace;
 	uint32_t allocation_size;
 
@@ -378,11 +489,18 @@ static void *psp_audio_producer_acquireJobBuffer(uint32_t size, uint32_t alignme
 	me_workspace = workspace;
 	me_workspace_size = allocation_size;
 	return me_workspace;
+#endif
 }
 
 static bool psp_audio_producer_submitJob(audio_producer_job_fn job, void *data,
 	uint32_t size)
 {
+#ifdef PSP_ME_SOUND_COPROCESSOR
+	(void)job;
+	(void)data;
+	(void)size;
+	return false;
+#else
 	uint32_t cache_size;
 	int result;
 
@@ -413,6 +531,7 @@ static bool psp_audio_producer_submitJob(audio_producer_job_fn job, void *data,
 
 	me_job_in_flight = true;
 	return true;
+#endif
 }
 
 static void psp_audio_producer_waitJob(void)

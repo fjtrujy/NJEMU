@@ -720,6 +720,70 @@ host validation and the real-PSP MIST cache/coherency oracle with zero semantic
 mismatches.  C2 may proceed.  The independent C0 baseline gate still prevents
 making the Z80 authoritative on ME.
 
+#### C2 implementation and hardware status (2026-10-03)
+
+`PSP_ME_SOUND_COPROCESSOR=ON` now builds an experimental persistent worker on
+top of the C1 rings.  It is deliberately isolated from Z80/YM2610 ownership:
+the CPU sound path remains authoritative, and the PSP producer reports generic
+ME audio jobs unavailable while this option is active so the validated ADPCM-A
+one-shot MIST job cannot race the persistent worker.
+
+The worker protocol currently contains only lifecycle/control messages:
+
+- `READY` after the single MIST trigger has entered the worker loop;
+- `RESET(generation)` / `RESET_ACK`;
+- `SYNC(generation, emulated_time)` / `SYNC_ACK`;
+- `SHUTDOWN(generation)` / `SHUTDOWN_ACK`;
+- explicit ring/protocol/generation/time-regression failure reporting.
+
+Generation, command counts, reset/sync/shutdown counts, heartbeat, fatal error,
+last token and current emulated time live in a dedicated ME-produced cache line.
+The abort request lives in a separate Allegrex-produced cache line.  Command and
+event rings retain the C1 single-writer cursor ownership and cache protocol.
+
+A standalone real-PSP harness using this exact worker implementation completed
+four complete worker cycles in one process.  Every cycle used one MIST trigger
+and executed:
+
+```text
+READY -> RESET -> SYNC -> SYNC -> SHUTDOWN
+```
+
+The final-cycle hardware result was:
+
+```text
+passed=1 init=0 cycles=4 suspend_resume=1 elapsed_us=13864
+generation=4 commands=4 resets=1 syncs=2 shutdowns=1 heartbeat=5
+fatal=0 emulated_time=19000
+cmd_high_water=1 cmd_overflow=0 cmd_underflow=52
+event_high_water=1 event_overflow=0 event_underflow=2
+```
+
+The `suspend_resume=1` field in that harness means the ownership transition used
+by suspend/resume was exercised as stop-worker -> fresh bootstrap with a new
+generation in the same PSP process.  It is **not** evidence of a physical PSP
+suspend/resume event.  PSPSDK can request suspend, but this unattended test has
+no reliable software wake path; an actual power-callback suspend/resume remains
+the final C2 hardware gate.
+
+The normal PSP producer lifecycle is wired to the same implementation under the
+experimental option:
+
+- startup probes MIST, then bootstraps and resets the worker;
+- emulator reset advances the lifecycle generation and sends `RESET`;
+- suspend and shutdown stop the worker before ME ownership is dropped;
+- resume follows the existing MIST reinitialization path and bootstraps a fresh
+  worker generation;
+- bootstrap/reset failure disables the experimental ME path while CPU sound
+  remains available.
+
+The integrated PSP MVS build passes with `-Werror`.  No Z80/YM2610 state has
+moved and no MVS scheduler path has changed.
+
+**C2 gate remains open only for a physical PSP suspend/resume callback cycle.**
+Normal init/reset/shutdown behavior and repeated bootstrap in one process are
+already hardware validated.
+
 ### C2 - persistent ME sound worker bootstrap
 
 - start one persistent MIST-backed worker for the sound experiment;
