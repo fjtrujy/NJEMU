@@ -210,6 +210,19 @@ The runtime API must be designed around bounded IO:
 Do not implement the new format by loading the whole generated file into memory;
 that would preserve most of the current peak-RAM problem.
 
+`src/common/game_database.c` now implements this access model for CPS2 V1. It
+keeps only the open file handle plus section/count metadata, validates the header,
+section arithmetic, streamed CRC32 and sorted game index, then performs binary
+search and record/string reads with bounded stack buffers. It does not allocate a
+copy of the database. The largest reader scratch buffer is the 4 KiB CRC chunk used
+only while opening/validating the file; selected-game titles and names live in the
+caller-provided fixed-size game record.
+
+The C reader test opens the real generated CPS2 database, walks all 286 games,
+1,387 regions and 5,382 ROM records, checks representative keyed/Phoenix/cache and
+ROMX/continuation cases, and verifies rejection of wrong-core, checksum-corrupt,
+truncated, invalid-section and invalid-record-range files.
+
 ## Memory and Performance Targets
 
 Before implementation, measure the current CPS2 baseline on Desktop and PSP-style

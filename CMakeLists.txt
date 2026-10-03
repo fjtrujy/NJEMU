@@ -408,6 +408,13 @@ set(COMMON_SRC
 	    common/audio_producer_cpu.c
 )
 
+if("${TARGET}" STREQUAL "CPS2")
+    list(APPEND COMMON_SRC
+        common/game_database.h
+        common/game_database.c
+    )
+endif()
+
 if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     list(APPEND COMMON_SRC psp/psp_audio_producer.c)
     add_definitions(-DPSP_ME_AUDIO=1 -DAUDIO_PRODUCER_JOBS=1)
@@ -987,6 +994,29 @@ add_custom_command(
 add_custom_target(game_metadata ALL DEPENDS ${GAME_METADATA_GENERATED_OUTPUTS})
 add_dependencies(${TARGET} game_metadata)
 
+if("${TARGET}" STREQUAL "CPS2")
+    set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
+    add_custom_command(
+        OUTPUT "${GAME_DATABASE_OUTPUT}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/game_database.py"
+            --core cps2
+            --metadata "${GAME_METADATA_SOURCE}"
+            --rominfo "${GAME_METADATA_ROMINFO}"
+            --output "${GAME_DATABASE_OUTPUT}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/tools/game_database.py"
+            "${CMAKE_SOURCE_DIR}/tools/rominfo.py"
+            "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+            "${GAME_METADATA_SOURCE}"
+            "${GAME_METADATA_ROMINFO}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        VERBATIM
+    )
+    add_custom_target(game_database ALL DEPENDS "${GAME_DATABASE_OUTPUT}")
+    add_dependencies(${TARGET} game_database)
+endif()
+
 if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
     set(DIP_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/dip_metadata.${TARGET_LOWER}")
     add_custom_command(
@@ -1488,6 +1518,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_test(NAME game_database_generator_tests
             COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_database_generator_tests.py)
+        add_executable(game_database_reader_tests
+            tests/game_database_reader_tests.c
+            src/common/game_database.c)
+        target_include_directories(game_database_reader_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_options(game_database_reader_tests PRIVATE ${WARNING_OPTIONS})
+        add_dependencies(game_database_reader_tests game_database)
+        add_test(NAME game_database_reader_tests
+            COMMAND game_database_reader_tests "${GAME_DATABASE_OUTPUT}")
         add_test(NAME cps2_partial_cache_tests
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/cps2_partial_cache_tests.py
                 ${CMAKE_C_COMPILER})
