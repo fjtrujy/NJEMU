@@ -357,8 +357,6 @@ set(COMMON_SRC
     common/cache.h
     common/cache.c
     common/cache_storage_driver.h
-    common/game_metadata.h
-    common/game_metadata.c
     common/filer.h
     common/filer.c
     common/loadrom.h
@@ -412,6 +410,11 @@ if("${TARGET}" STREQUAL "CPS2")
     list(APPEND COMMON_SRC
         common/game_database.h
         common/game_database.c
+    )
+else()
+    list(APPEND COMMON_SRC
+        common/game_metadata.h
+        common/game_metadata.c
     )
 endif()
 
@@ -960,50 +963,22 @@ set(RESOURCE_DIR "${CMAKE_SOURCE_DIR}/resources/${TARGET_LOWER}/")
 # Set the destination directory to the build directory (CMAKE_BINARY_DIR)
 set(DESTINATION_DIR "${CMAKE_BINARY_DIR}")
 
-# Game metadata is source-controlled outside resources/ and generated into the
-# build root. The cartridge cores validate their canonical identity set against
-# rominfo so stale browser metadata cannot silently ship.
-set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
-set(GAME_METADATA_GENERATED_OUTPUTS "${GAME_METADATA_OUTPUT}")
-set(GAME_METADATA_GENERATOR_ARGS
-    --core "${TARGET_LOWER}"
-    --source "${GAME_METADATA_SOURCE}"
-    --output "${GAME_METADATA_OUTPUT}"
-)
-set(GAME_METADATA_GENERATOR_DEPENDS
-    "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
-    "${GAME_METADATA_SOURCE}"
-)
 if(NOT "${TARGET}" STREQUAL "NCDZ")
     set(GAME_METADATA_ROMINFO "${RESOURCE_DIR}rominfo.${TARGET_LOWER}")
     set(GAMELIST_OUTPUT "${CMAKE_BINARY_DIR}/gamelist_${TARGET_LOWER}.txt")
-    list(APPEND GAME_METADATA_GENERATOR_ARGS --rominfo "${GAME_METADATA_ROMINFO}")
-    list(APPEND GAME_METADATA_GENERATOR_ARGS --gamelist-output "${GAMELIST_OUTPUT}")
-    list(APPEND GAME_METADATA_GENERATOR_DEPENDS "${GAME_METADATA_ROMINFO}")
-    list(APPEND GAME_METADATA_GENERATED_OUTPUTS "${GAMELIST_OUTPUT}")
 endif()
-add_custom_command(
-    OUTPUT ${GAME_METADATA_GENERATED_OUTPUTS}
-    COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
-        ${GAME_METADATA_GENERATOR_ARGS}
-    DEPENDS ${GAME_METADATA_GENERATOR_DEPENDS}
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    VERBATIM
-)
-add_custom_target(game_metadata ALL DEPENDS ${GAME_METADATA_GENERATED_OUTPUTS})
-add_dependencies(${TARGET} game_metadata)
 
 if("${TARGET}" STREQUAL "CPS2")
     set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
     add_custom_command(
-        OUTPUT "${GAME_DATABASE_OUTPUT}"
+        OUTPUT "${GAME_DATABASE_OUTPUT}" "${GAMELIST_OUTPUT}"
         COMMAND ${Python3_EXECUTABLE}
             "${CMAKE_SOURCE_DIR}/tools/game_database.py"
             --core cps2
             --metadata "${GAME_METADATA_SOURCE}"
             --rominfo "${GAME_METADATA_ROMINFO}"
             --output "${GAME_DATABASE_OUTPUT}"
+            --gamelist-output "${GAMELIST_OUTPUT}"
         DEPENDS
             "${CMAKE_SOURCE_DIR}/tools/game_database.py"
             "${CMAKE_SOURCE_DIR}/tools/rominfo.py"
@@ -1013,8 +988,39 @@ if("${TARGET}" STREQUAL "CPS2")
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         VERBATIM
     )
-    add_custom_target(game_database ALL DEPENDS "${GAME_DATABASE_OUTPUT}")
+    add_custom_target(game_database ALL DEPENDS
+        "${GAME_DATABASE_OUTPUT}" "${GAMELIST_OUTPUT}")
     add_dependencies(${TARGET} game_database)
+else()
+    # Non-CPS2 cores still use the standalone runtime metadata database.
+    set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
+    set(GAME_METADATA_GENERATED_OUTPUTS "${GAME_METADATA_OUTPUT}")
+    set(GAME_METADATA_GENERATOR_ARGS
+        --core "${TARGET_LOWER}"
+        --source "${GAME_METADATA_SOURCE}"
+        --output "${GAME_METADATA_OUTPUT}"
+    )
+    set(GAME_METADATA_GENERATOR_DEPENDS
+        "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+        "${GAME_METADATA_SOURCE}"
+    )
+    if(NOT "${TARGET}" STREQUAL "NCDZ")
+        list(APPEND GAME_METADATA_GENERATOR_ARGS --rominfo "${GAME_METADATA_ROMINFO}")
+        list(APPEND GAME_METADATA_GENERATOR_ARGS --gamelist-output "${GAMELIST_OUTPUT}")
+        list(APPEND GAME_METADATA_GENERATOR_DEPENDS "${GAME_METADATA_ROMINFO}")
+        list(APPEND GAME_METADATA_GENERATED_OUTPUTS "${GAMELIST_OUTPUT}")
+    endif()
+    add_custom_command(
+        OUTPUT ${GAME_METADATA_GENERATED_OUTPUTS}
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+            ${GAME_METADATA_GENERATOR_ARGS}
+        DEPENDS ${GAME_METADATA_GENERATOR_DEPENDS}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        VERBATIM
+    )
+    add_custom_target(game_metadata ALL DEPENDS ${GAME_METADATA_GENERATED_OUTPUTS})
+    add_dependencies(${TARGET} game_metadata)
 endif()
 
 if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
@@ -1047,9 +1053,6 @@ if("${TARGET}" STREQUAL "CPS1")
         rominfo.cps1
     )
 elseif("${TARGET}" STREQUAL "CPS2")
-    list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
-        rominfo.cps2
-    )
 elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         rominfo.mvs
@@ -1420,8 +1423,13 @@ if(PLATFORM STREQUAL "PSVITA")
         list(APPEND VITA_VPK_FILE_ARGS
             FILE "${GAMELIST_OUTPUT}" "gamelist_${TARGET_LOWER}.txt")
     endif()
-    list(APPEND VITA_VPK_FILE_ARGS
-        FILE "${GAME_METADATA_OUTPUT}" "game_metadata.${TARGET_LOWER}")
+    if("${TARGET}" STREQUAL "CPS2")
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${GAME_DATABASE_OUTPUT}" "game_database.cps2")
+    else()
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${GAME_METADATA_OUTPUT}" "game_metadata.${TARGET_LOWER}")
+    endif()
     if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
         list(APPEND VITA_VPK_FILE_ARGS
             FILE "${DIP_METADATA_OUTPUT}" "dip_metadata.${TARGET_LOWER}")
@@ -1471,15 +1479,17 @@ endif()
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME game_metadata_generator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
-    add_executable(game_metadata_reader_tests
-        tests/game_metadata_reader_tests.c
-        src/common/game_metadata.c)
-    target_include_directories(game_metadata_reader_tests PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_compile_options(game_metadata_reader_tests PRIVATE ${WARNING_OPTIONS})
-    add_dependencies(game_metadata_reader_tests game_metadata)
-    add_test(NAME game_metadata_reader_tests
-        COMMAND game_metadata_reader_tests "${GAME_METADATA_OUTPUT}")
+    if(NOT "${TARGET}" STREQUAL "CPS2")
+        add_executable(game_metadata_reader_tests
+            tests/game_metadata_reader_tests.c
+            src/common/game_metadata.c)
+        target_include_directories(game_metadata_reader_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_options(game_metadata_reader_tests PRIVATE ${WARNING_OPTIONS})
+        add_dependencies(game_metadata_reader_tests game_metadata)
+        add_test(NAME game_metadata_reader_tests
+            COMMAND game_metadata_reader_tests "${GAME_METADATA_OUTPUT}")
+    endif()
 
     if("${TARGET}" STREQUAL "CPS1")
         add_test(NAME cps1_dip_metadata_generator_tests
@@ -1820,9 +1830,15 @@ if(DEFINED GAMELIST_OUTPUT)
         DESTINATION .
     )
 endif()
-install(FILES "${GAME_METADATA_OUTPUT}"
-    DESTINATION .
-)
+if("${TARGET}" STREQUAL "CPS2")
+    install(FILES "${GAME_DATABASE_OUTPUT}"
+        DESTINATION .
+    )
+else()
+    install(FILES "${GAME_METADATA_OUTPUT}"
+        DESTINATION .
+    )
+endif()
 if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
     install(FILES "${DIP_METADATA_OUTPUT}"
         DESTINATION .

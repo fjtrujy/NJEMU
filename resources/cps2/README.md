@@ -14,8 +14,7 @@ CPS2/
 ├── memcard/                # Memory card saves (created at runtime)
 ├── state/                  # Save states (created at runtime)
 ├── config/                 # Configuration (created at runtime)
-├── rominfo.cps2            # ROM database
-├── game_metadata.cps2      # Generated canonical game metadata
+├── game_database.cps2      # Generated unified game/ROM database
 ├── gamelist_cps2.txt       # Generated supported games list
 └── game_name.ini           # No-GUI game selector
 ```

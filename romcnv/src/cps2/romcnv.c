@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "common/game_metadata.h"
+#include "common/game_database.h"
 #include "romcnv.h"
 #include "zip_writer.h"
 
@@ -55,7 +55,7 @@ static struct rom_t gfx1rom[MAX_GFX1ROM];
 static int num_gfx1rom;
 
 static uint8_t block_empty[0x200];
-static game_metadata_t cps2_game_metadata;
+static game_database_t cps2_game_database;
 
 static void change_directory(const char *path)
 {
@@ -63,22 +63,15 @@ static void change_directory(const char *path)
 		perror(path);
 }
 
-static int set_cache_parent_policy(const char *game_name)
+static int set_cache_parent_policy(const game_database_game_t *game)
 {
-	game_metadata_entry_t entry;
-
-	if (!game_metadata_find(&cps2_game_metadata, game_name, &entry))
+	if (game->core_flags & GAME_DATABASE_CPS2_CACHE_PARENT_OVERRIDE)
 	{
-		printf("ERROR: game metadata for %s is missing.\n", game_name);
-		return 0;
-	}
-	if (entry.core_flags & GAME_METADATA_CPS2_CACHE_PARENT_OVERRIDE)
-	{
-		if (entry.aux_name == NULL || strlen(entry.aux_name) >= sizeof(cache_name))
+		if (game->aux_name[0] == '\0' || strlen(game->aux_name) >= sizeof(cache_name))
 			return 0;
-		strcpy(cache_name, entry.aux_name);
+		strcpy(cache_name, game->aux_name);
 	}
-	else if (entry.core_flags & GAME_METADATA_CPS2_CACHE_INDEPENDENT)
+	else if (game->core_flags & GAME_DATABASE_CPS2_CACHE_INDEPENDENT)
 	{
 		cache_name[0] = '\0';
 	}
@@ -765,154 +758,65 @@ static int load_rom_gfx1(void)
 }
 
 
-static ssize_t fd_readline(int fd, char *buf, size_t size)
-{
-	size_t i = 0;
-	char c;
-	while (i < size - 1) {
-		if (read(fd, &c, 1) <= 0) break;
-		buf[i++] = c;
-		if (c == '\n') break;
-	}
-	buf[i] = '\0';
-	return (ssize_t)i;
-}
-
 static int load_rom_info(const char *game_name)
 {
-	int fp;
-	char path[PATH_MAX];
-	char buf[256];
-	int rom_start = 0;
-	int region = 0;
+	game_database_game_t game;
+	game_database_error_t error;
+	uint32_t i;
 
 	num_gfx1rom = 0;
+	memory_length_gfx1 = 0;
 
-	sprintf(path, "%srominfo.cps2", launchDir);
-
-	fp = open(path, O_RDONLY);
-	if (fp >= 0)
-	{
-		while (fd_readline(fp, buf, 255) > 0)
-		{
-			if (buf[0] == '/' && buf[1] == '/')
-				continue;
-
-			if (buf[0] != '\t')
-			{
-				if (buf[0] == '\r' || buf[0] == '\n')
-				{
-					continue;
-				}
-				else if (str_cmp(buf, "FILENAME(") == 0)
-				{
-					char *name, *parent;
-
-					strtok(buf, " ");
-					name    = strtok(NULL, " ,");
-					parent  = strtok(NULL, " ,");
-
-					if (strcasecmp(name, game_name) == 0)
-					{
-						if (str_cmp(parent, "cps2") == 0)
-							parent_name[0] = '\0';
-						else
-							strcpy(parent_name, parent);
-
-						rom_start = 1;
-					}
-				}
-				else if (rom_start && str_cmp(buf, "END") == 0)
-				{
-					close(fp);
-					return 0;
-				}
-			}
-			else if (rom_start)
-			{
-				if (str_cmp(&buf[1], "REGION(") == 0)
-				{
-					char *size, *type;
-
-					strtok(&buf[1], " ");
-					size = strtok(NULL, " ,");
-					type = strtok(NULL, " ,");
-
-					if (strcmp(type, "GFX1") == 0)
-					{
-						sscanf(size, "%x", &memory_length_gfx1);
-						region = REGION_GFX1;
-					}
-					else
-					{
-						region = REGION_SKIP;
-					}
-				}
-				else if (str_cmp(&buf[1], "ROM(") == 0)
-				{
-					char *type, *name, *offset, *length, *crc;
-
-					strtok(&buf[1], " ");
-					type   = strtok(NULL, " ,");
-					if (type[0] != '1')
-						name = strtok(NULL, " ,");
-					else
-						name = NULL;
-					offset = strtok(NULL, " ,");
-					length = strtok(NULL, " ,");
-					crc    = strtok(NULL, " ");
-
-					switch (region)
-					{
-					case REGION_GFX1:
-						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
-						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
-						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
-						sscanf(crc, "%x", &gfx1rom[num_gfx1rom].crc);
-						if (name) strcpy(gfx1rom[num_gfx1rom].name, name);
-						gfx1rom[num_gfx1rom].group = 0;
-						gfx1rom[num_gfx1rom].skip = 0;
-						num_gfx1rom++;
-						break;
-					}
-				}
-				else if (str_cmp(&buf[1], "ROMX(") == 0)
-				{
-					char *type, *name, *offset, *length, *crc;
-					char *group, *skip;
-
-					strtok(&buf[1], " ");
-					type   = strtok(NULL, " ,");
-					if (type[0] != '1')
-						name = strtok(NULL, " ,");
-					else
-						name = NULL;
-					offset = strtok(NULL, " ,");
-					length = strtok(NULL, " ,");
-					crc    = strtok(NULL, " ,");
-					group  = strtok(NULL, " ,");
-					skip   = strtok(NULL, " ");
-
-					switch (region)
-					{
-					case REGION_GFX1:
-						sscanf(type, "%x", &gfx1rom[num_gfx1rom].type);
-						sscanf(offset, "%x", &gfx1rom[num_gfx1rom].offset);
-						sscanf(length, "%x", &gfx1rom[num_gfx1rom].length);
-						sscanf(crc, "%x", &gfx1rom[num_gfx1rom].crc);
-						sscanf(group, "%x", &gfx1rom[num_gfx1rom].group);
-						sscanf(skip, "%x", &gfx1rom[num_gfx1rom].skip);
-						if (name) strcpy(gfx1rom[num_gfx1rom].name, name);
-						num_gfx1rom++;
-						break;
-					}
-				}
-			}
-		}
-		close(fp);
+	error = game_database_find_game(&cps2_game_database, game_name, &game);
+	if (error == GAME_DATABASE_ERROR_NOT_FOUND)
 		return 2;
+	if (error != GAME_DATABASE_OK)
+	{
+		printf("ERROR: Could not read game database record for %s: %s\n",
+			game_name, game_database_error_string(error));
+		return 3;
 	}
-	return 3;
+
+	if (strlen(game.parent_name) >= sizeof(parent_name))
+		return 3;
+	strcpy(parent_name, game.parent_name);
+
+	for (i = 0; i < game.region_count; i++)
+	{
+		game_database_region_t region;
+		uint32_t j;
+
+		error = game_database_get_region(&cps2_game_database, &game, i, &region);
+		if (error != GAME_DATABASE_OK)
+			return 3;
+		if (region.type != GAME_DATABASE_REGION_GFX1)
+			continue;
+		if (region.rom_count > MAX_GFX1ROM)
+			return 3;
+
+		memory_length_gfx1 = region.size;
+		for (j = 0; j < region.rom_count; j++)
+		{
+			game_database_rom_t source;
+			struct rom_t *dest = &gfx1rom[j];
+
+			error = game_database_get_rom(&cps2_game_database, &region, j, &source);
+			if (error != GAME_DATABASE_OK || strlen(source.name) >= sizeof(dest->name))
+				return 3;
+			dest->type = source.type;
+			dest->offset = source.offset;
+			dest->length = source.length;
+			dest->crc = source.crc;
+			dest->group = source.group;
+			dest->skip = source.skip;
+			strcpy(dest->name, source.name);
+		}
+		num_gfx1rom = region.rom_count;
+	}
+
+	if (memory_length_gfx1 == 0 || !set_cache_parent_policy(&game))
+		return 3;
+	return 0;
 }
 
 
@@ -948,18 +852,15 @@ static int convert_rom(char *game_name)
 #ifdef CHINESE
 		case 1: printf("错误: 此游戏暂时不支持.\n"); break;
 		case 2: printf("错误: 没有找到ROM. (zip文件名不正确)\n"); break;
-		case 3: printf("错误: 没有找到rominfo.cps2.\n"); break;
+		case 3: printf("错误: 没有找到game_database.cps2.\n"); break;
 #else
 		case 1: printf("ERROR: This game is not supported.\n"); break;
 		case 2: printf("ERROR: ROM not found. (zip file name incorrect)\n"); break;
-		case 3: printf("ERROR: rominfo.cps2 not found.\n"); break;
+		case 3: printf("ERROR: game_database.cps2 not found.\n"); break;
 #endif
 		}
 		return 0;
 	}
-
-	if (!set_cache_parent_policy(game_name))
-		return 0;
 
 	if (strlen(parent_name))
 #ifdef CHINESE
@@ -1353,14 +1254,14 @@ int main(int argc, char *argv[])
 	getcwd(launchDir, PATH_MAX);
 	strcat(launchDir, "/");
 
-	snprintf(path, sizeof(path), "%sgame_metadata.cps2", launchDir);
+	snprintf(path, sizeof(path), "%sgame_database.cps2", launchDir);
 	{
-		game_metadata_error_t metadata_error = game_metadata_load(
-			&cps2_game_metadata, path, GAME_METADATA_CORE_CPS2);
-		if (metadata_error != GAME_METADATA_OK)
+		game_database_error_t database_error = game_database_open(
+			&cps2_game_database, path, GAME_DATABASE_CORE_CPS2);
+		if (database_error != GAME_DATABASE_OK)
 		{
-			printf("ERROR: Could not load game_metadata.cps2: %s\n",
-				game_metadata_error_string(metadata_error));
+			printf("ERROR: Could not load game_database.cps2: %s\n",
+				game_database_error_string(database_error));
 			res = 0;
 			goto error;
 		}
@@ -1501,6 +1402,6 @@ int main(int argc, char *argv[])
 	}
 
 error:
-	game_metadata_unload(&cps2_game_metadata);
+	game_database_close(&cps2_game_database);
 	return res;
 }

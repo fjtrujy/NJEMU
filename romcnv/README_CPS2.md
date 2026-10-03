@@ -172,7 +172,8 @@ emmake make
 ## Notes
 
 - Parent ROM sets must be in the same directory as the game ROM
-- The converter requires `rominfo.cps2` file to be present in the same directory as the executable
+- The build generates `game_database.cps2`; keep that file in the same directory as the converter executable
+- `rominfo.cps2` remains a build-time source for the generator but is no longer a converter runtime dependency
 - Cache files are version-specific - regenerate if you update the emulator
 - Some games fully fit in memory and don't require cache conversion
 
@@ -220,7 +221,7 @@ The emulator supports reading caches in **raw file**, **zip**, and **folder** fo
 ## Troubleshooting
 
 **"ROM not found" error:**
-- Ensure the ROM filename matches entries in `rominfo.cps2`
+- Ensure the ROM filename matches a set in `game_database.cps2` / `gamelist_cps2.txt`
 - Check that parent ROMs are available for clone sets
 
 **Game runs without conversion:**

@@ -18,7 +18,11 @@
 #include "emucfg.h"
 #include "common/emulator_runtime.h"
 #include "common/filer.h"
+#if (EMU_SYSTEM == CPS2)
+#include "common/game_database.h"
+#else
 #include "common/game_metadata.h"
+#endif
 #include "common/input_driver.h"
 #include "common/platform_driver.h"
 #include "common/power_driver.h"
@@ -233,8 +237,13 @@ static char zipped_rom[PATH_MAX];
 
 #else
 
+#if (EMU_SYSTEM == CPS2)
+static game_database_t zip_database;
+static game_database_language_t zip_metadata_language;
+#else
 static game_metadata_t zip_metadata;
 static game_metadata_language_t zip_metadata_language;
+#endif
 
 #endif
 
@@ -437,6 +446,24 @@ static void check_neocd_bios(void)
 #define EXT		"mvs"
 #endif
 
+#if (EMU_SYSTEM == CPS2)
+static game_database_language_t browser_metadata_language(void)
+{
+	switch (ui_text_driver->getLanguage(ui_text_data))
+	{
+	case UI_LANG_JAPANESE:
+		return GAME_DATABASE_LANG_JAPANESE;
+	case UI_LANG_CHINESE_SIMPLIFIED:
+		return GAME_DATABASE_LANG_CHINESE_SIMPLIFIED;
+	case UI_LANG_CHINESE_TRADITIONAL:
+		return GAME_DATABASE_LANG_CHINESE_TRADITIONAL;
+	case UI_LANG_ENGLISH:
+	case UI_LANG_SPANISH:
+	default:
+		return GAME_DATABASE_LANG_ENGLISH;
+	}
+}
+#else
 static game_metadata_language_t browser_metadata_language(void)
 {
 	switch (ui_text_driver->getLanguage(ui_text_data))
@@ -453,10 +480,25 @@ static game_metadata_language_t browser_metadata_language(void)
 		return GAME_METADATA_LANG_ENGLISH;
 	}
 }
+#endif
 
 static int load_game_metadata(void)
 {
 	char path[PATH_MAX];
+#if (EMU_SYSTEM == CPS2)
+	game_database_error_t error;
+
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_database_filename()))
+		return 0;
+	zip_metadata_language = browser_metadata_language();
+	error = game_database_open(&zip_database, path, GAME_DATABASE_CORE_CPS2);
+	if (error != GAME_DATABASE_OK)
+	{
+		printf("game database: cannot open %s: %s\n", path,
+			game_database_error_string(error));
+		return 0;
+	}
+#else
 	game_metadata_error_t error;
 
 	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
@@ -469,6 +511,7 @@ static int load_game_metadata(void)
 			game_metadata_error_string(error));
 		return 0;
 	}
+#endif
 	return 1;
 }
 
@@ -479,7 +522,11 @@ static int load_game_metadata(void)
 
 static void free_game_metadata(void)
 {
+#if (EMU_SYSTEM == CPS2)
+	game_database_close(&zip_database);
+#else
 	game_metadata_unload(&zip_metadata);
+#endif
 }
 
 
@@ -492,7 +539,12 @@ static const char *get_game_title(const char *name, int *flag)
 	int i, length;
 	char fname[PATH_MAX];
 	char *extension;
+#if (EMU_SYSTEM == CPS2)
+	game_database_game_t entry;
+	static char title_buffer[GAME_DATABASE_TITLE_BYTES];
+#else
 	game_metadata_entry_t entry;
+#endif
 	const char *title;
 
 	if (strlen(name) >= sizeof(fname))
@@ -504,15 +556,29 @@ static const char *get_game_title(const char *name, int *flag)
 	*extension = '\0';
 
 	length = (int)strlen(fname);
+#if (EMU_SYSTEM == CPS2)
+	if (length >= GAME_DATABASE_NAME_BYTES)
+#else
 	if (length >= GAME_METADATA_NAME_BYTES)
+#endif
 		return NULL;
 
 	for (i = 0; i < length; i++)
 		fname[i] = (char)tolower((unsigned char)fname[i]);
 
+#if (EMU_SYSTEM == CPS2)
+	if (game_database_find_game(&zip_database, fname, &entry) != GAME_DATABASE_OK)
+		goto not_found;
+	title = game_database_title(&entry, zip_metadata_language);
+	if (title == NULL || strlen(title) >= sizeof(title_buffer))
+		goto not_found;
+	strcpy(title_buffer, title);
+	title = title_buffer;
+#else
 	if (!game_metadata_find(&zip_metadata, fname, &entry))
 		goto not_found;
 	title = game_metadata_title(&entry, zip_metadata_language);
+#endif
 	if (title == NULL)
 		goto not_found;
 	*flag = entry.display_flags;

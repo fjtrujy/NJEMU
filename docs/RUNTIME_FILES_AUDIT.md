@@ -288,13 +288,12 @@ directory, with `launchDir/roms/` as the common fallback.
 ROM members are identified primarily by CRC. Their member filenames are not
 the source of truth.
 
-## Generated game metadata: CPS1, CPS2, MVS, and NCDZ
+## Generated game metadata: CPS1, MVS, and NCDZ
 
 Canonical runtime files:
 
 ~~~text
 game_metadata.cps1
-game_metadata.cps2
 game_metadata.mvs
 game_metadata.ncdz
 ~~~
@@ -302,12 +301,12 @@ game_metadata.ncdz
 Classification: generated distributed runtime metadata.
 
 Source authority: `metadata/<core>.tsv` plus `rominfo.<core>` identity
-validation for CPS1/CPS2/MVS. Generator: `tools/game_metadata.py`. Runtime
+validation for CPS1/MVS. Generator: `tools/game_metadata.py`. Runtime
 reader: `src/common/game_metadata.c`.
 
 Rules:
 
-- CPS1/CPS2/MVS metadata contains one canonical record for every set in the
+- CPS1/MVS metadata contains one canonical record for every set in the
   corresponding `rominfo` database; generation fails if the sets diverge;
 - browser titles are UTF-8 and include English plus optional Japanese,
   Simplified Chinese, and Traditional Chinese strings in one versioned file;
@@ -315,8 +314,7 @@ Rules:
 - browser status flags and compact per-game metadata share the same record, so
   executable tables can move to this file without adding another game list;
 - the normal no-GUI selector still reads `game_name.ini`; generated metadata
-  is packaged for all builds because CPS2/MVS core initialization and NCDZ NGH
-  identification consume it in addition to GUI/command-list users;
+  remains packaged for the cores that consume it at runtime;
 - NCDZ uses the same generated format for NGH identity. The old compiled
   `games[]`/`game_index` lookup has been removed.
 
@@ -324,13 +322,34 @@ The tracked `resources/zipname*` files were removed after the migration. They
 are no longer part of the source tree, CMake distribution/install/Vita manifest,
 or runtime authority.
 
-## ROM metadata databases: CPS1, CPS2, and MVS
+## Unified CPS2 game database
+
+Canonical runtime file:
+
+~~~text
+game_database.cps2
+~~~
+
+Classification: generated distributed runtime metadata.
+
+Build-time authorities are `metadata/cps2.tsv` for titles/display flags/CPS2
+policy and tracked `resources/cps2/rominfo.cps2` for ROM topology. The latter is
+now a source/generator input only; it is not distributed. Generator:
+`tools/game_database.py`. Bounded runtime reader: `src/common/game_database.c`.
+
+The generated database owns canonical set identity, localized titles, display
+flags, parent relationships, machine/input/init/rotation selectors, all region
+and ROM descriptors, CPS2 key/range or Phoenix state, and cache-parent policy.
+The emulator GUI, command-list reduction, CPS2 game startup, and `romcnv_cps2`
+all consume this same file. Neither `rominfo.cps2` nor `game_metadata.cps2` is a
+CPS2 runtime/package dependency anymore.
+
+## ROM metadata databases: CPS1 and MVS
 
 Canonical files:
 
 ~~~text
 rominfo.cps1
-rominfo.cps2
 rominfo.mvs
 ~~~
 
@@ -340,8 +359,8 @@ Runtime owners are the respective core `memintrf.c:load_rom_info()`
 implementations. They define supported sets, parent relationships, region
 sizes, CRCs, machine/input/init information, and ROM layout.
 
-The matching `romcnv` tools also consume the CPS2/MVS databases while
-building derived assets.
+The matching MVS converter also consumes `rominfo.mvs` while building derived
+assets. CPS2 conversion uses `game_database.cps2` instead.
 
 ## Generated DIP menu metadata: CPS1 and MVS
 
@@ -399,9 +418,8 @@ inside a local CPS1 ROM directory is unrelated local data, not a CPS1 asset.
 
 | Path/family | Class | Required when | Owner |
 | --- | --- | --- | --- |
-| `rominfo.cps2` | Runtime metadata | Any game boot | `src/cps2/memintrf.c` |
+| `game_database.cps2` | Generated unified runtime metadata | Browser/command-list use, any game boot, CPS2 conversion | `src/common/game_database.c`, `src/cps2/memintrf.c`, `src/common/filer.c`, `src/common/cmdlist.c`, `romcnv_cps2` |
 | selected/parent `*.zip` | Game ROM | Resident regions and full-resident GFX | `src/common/loadrom.c` |
-| `game_metadata.cps2` | Generated runtime metadata | Any game boot; GUI browser | `src/common/game_metadata.c`, `src/cps2/memintrf.c`, `src/common/filer.c` |
 | `lang/en.lng` | Generated UI asset | Any normal runtime | common text catalog |
 | `font/gbk_s14.bin` | Generated UI asset | Current UI renderer initialization | common UI draw |
 

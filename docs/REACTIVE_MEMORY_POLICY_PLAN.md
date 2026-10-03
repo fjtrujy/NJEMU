@@ -1052,8 +1052,9 @@ Validate MVS cache correctness and existing cache-I/O profiling.
 
 Implemented:
 
-- CPS2 now always parses the full GFX ROM description; the choice between
-  direct full residency and streaming no longer changes `rominfo.cps2` parsing;
+- CPS2 now always reconstructs the full GFX ROM description from the bounded
+  unified `game_database.cps2` reader; the choice between direct full residency
+  and streaming no longer changes topology lookup;
 - `memory_plan_t` is the single runtime selector: direct loading is used only
   when the planner marks GFX fully resident and the target exactly matches the
   complete GFX region;

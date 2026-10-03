@@ -178,9 +178,10 @@ if (USE_ASAN)
     )
 endif()
 
-# Copy rominfo file from resources folder to the build directory (not needed for Emscripten - uses preload)
+# Source rominfo remains a build-time generator input for CPS2. MVS still consumes
+# its textual database at runtime until its own unified-database migration.
 set(ROMINFO_SOURCE "${CMAKE_SOURCE_DIR}/../resources/${TARGET_LOWER}/rominfo.${TARGET_LOWER}")
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ${TARGET} STREQUAL "CPS2")
     add_custom_command(
         TARGET ${BINARY_TARGET} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
@@ -189,7 +190,7 @@ if(NOT EMSCRIPTEN)
     )
 endif()
 
-if(${TARGET} STREQUAL "MVS" OR ${TARGET} STREQUAL "CPS2")
+if(${TARGET} STREQUAL "MVS")
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/${TARGET_LOWER}.tsv")
     set(GAME_METADATA_TOOL "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py")
@@ -216,6 +217,34 @@ if(${TARGET} STREQUAL "MVS" OR ${TARGET} STREQUAL "CPS2")
     target_include_directories(${BINARY_TARGET} PRIVATE
         "${CMAKE_SOURCE_DIR}/../src"
     )
+elseif(${TARGET} STREQUAL "CPS2")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(GAME_DATABASE_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/cps2.tsv")
+    set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
+    add_custom_command(
+        OUTPUT "${GAME_DATABASE_OUTPUT}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/../tools/game_database.py"
+            --core cps2
+            --metadata "${GAME_DATABASE_SOURCE}"
+            --rominfo "${ROMINFO_SOURCE}"
+            --output "${GAME_DATABASE_OUTPUT}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/../tools/game_database.py"
+            "${CMAKE_SOURCE_DIR}/../tools/rominfo.py"
+            "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py"
+            "${GAME_DATABASE_SOURCE}"
+            "${ROMINFO_SOURCE}"
+        VERBATIM
+    )
+    add_custom_target(game_database_cps2 ALL DEPENDS "${GAME_DATABASE_OUTPUT}")
+    add_dependencies(${BINARY_TARGET} game_database_cps2)
+    target_sources(${BINARY_TARGET} PRIVATE
+        "${CMAKE_SOURCE_DIR}/../src/common/game_database.c"
+    )
+    target_include_directories(${BINARY_TARGET} PRIVATE
+        "${CMAKE_SOURCE_DIR}/../src"
+    )
 endif()
 
 target_compile_options(${BINARY_TARGET} PUBLIC ${WARNING_OPTIONS} ${ASAN_OPTIONS})
@@ -235,11 +264,15 @@ if(EMSCRIPTEN)
         "SHELL:-s ENVIRONMENT='web'"
         "SHELL:-s NO_EXIT_RUNTIME=1"
         "SHELL:-s INVOKE_RUN=0"
-        "SHELL:--preload-file ${ROMINFO_SOURCE}@/rominfo.${TARGET_LOWER}"
     )
-    if(${TARGET} STREQUAL "MVS" OR ${TARGET} STREQUAL "CPS2")
+    if(${TARGET} STREQUAL "MVS")
         target_link_options(${BINARY_TARGET} PUBLIC
+            "SHELL:--preload-file ${ROMINFO_SOURCE}@/rominfo.${TARGET_LOWER}"
             "SHELL:--preload-file ${GAME_METADATA_OUTPUT}@/game_metadata.${TARGET_LOWER}"
+        )
+    elseif(${TARGET} STREQUAL "CPS2")
+        target_link_options(${BINARY_TARGET} PUBLIC
+            "SHELL:--preload-file ${GAME_DATABASE_OUTPUT}@/game_database.cps2"
         )
     endif()
 else()

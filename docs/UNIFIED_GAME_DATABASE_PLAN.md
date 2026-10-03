@@ -335,6 +335,52 @@ the complete selected-game semantic model for every CPS2 set, not just a sample.
 - update READMEs, runtime-file audit and CI package guards;
 - keep source `rominfo.cps2` only if it remains a generator input.
 
+**Implemented for CPS2 on 2026-10-03.** The emulator startup path, GUI browser,
+command-list reduction, and `romcnv_cps2` now consume `game_database.cps2` through
+the bounded reader. The converter no longer contains its textual CPS2 ROM-info
+parser or standalone metadata dependency. Top-level and converter CMake generate
+the unified database directly from `metadata/cps2.tsv` + tracked
+`resources/cps2/rominfo.cps2`; CPS2 install/package manifests no longer distribute
+either `rominfo.cps2` or `game_metadata.cps2`. Desktop install validation produced
+only `game_database.cps2` for CPS2 metadata, and the Desktop/PSP/PS2/Vita CI
+package guards now explicitly enforce that contract.
+
+Current bounded-memory impact on these migrated paths:
+
+- the 344,076-byte whole-`rominfo.cps2` heap allocation is eliminated;
+- the 68,883-byte whole-`game_metadata.cps2` heap allocation is eliminated from
+  CPS2 game boot, GUI browsing and command-list reduction;
+- the reader performs no database-sized heap allocation; its largest explicit
+  validation scratch buffer is 4 KiB on the stack while CRC32 is streamed;
+- browser persistence is an open `FILE *` plus compact section/count state rather
+  than a resident metadata blob;
+- packaged CPS2 metadata falls from 412,959 B to 215,482 B, a reduction of
+  197,477 B (47.8%).
+
+Still outstanding before U8 can be declared complete: real PSP allocator/startup
+telemetry, PSP/PPSSPP smoke coverage, PS2/PCSX2 build/runtime smoke coverage, and
+Vita build/package validation.
+
+Desktop runtime/converter validation completed after that cutover:
+
+- a clean GUI/command-list CPS2 build passes all 24 configured Desktop tests;
+- a separate no-GUI install containing `game_database.cps2` and no legacy CPS2
+  metadata files booted the local `ssf2` ROM through ROM loading, full GFX decode,
+  keyed decryption to 100%, and entry into the emulation loop;
+- the migrated converter regenerated the local `ssf2.cache` as exactly
+  12,058,624 B with SHA-256
+  `47e12d3de06ad7d84b7ac7f3730276c559ea04eb0d08f1a531df1caf9ec03b39`,
+  byte-for-byte identical to the existing validated cache;
+- clone/parent coverage with local `ssf2tu.zip` + `ssf2t.zip` regenerated
+  `ssf2tu.cache` with SHA-256
+  `690e614190de7e7e939eb7afc9abaf110247daab3c83f8b5a748f359a47b1055`, also
+  byte-for-byte identical to the existing validated cache.
+
+The current local shell does not expose PSPDEV/PS2SDK toolchains, so PSP and PS2
+compile/install/runtime validation remains for CI or an SDK-enabled environment;
+the package guards for those matrices have nevertheless been updated to require
+the new CPS2 database and reject both legacy runtime files.
+
 ### U8 - Cross-platform CPS2 validation
 
 - Desktop: full tests plus real ROM boot coverage;

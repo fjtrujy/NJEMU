@@ -11,7 +11,11 @@
 #include "emucfg.h"
 #include "common/cmdlist.h"
 #include "common/emulator_runtime.h"
+#if (EMU_SYSTEM == CPS2)
+#include "common/game_database.h"
+#else
 #include "common/game_metadata.h"
+#endif
 #include "common/input_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
@@ -871,9 +875,15 @@ void commandlist(int flag)
 
 int commandlist_size_reduction(void)
 {
+#if (EMU_SYSTEM == CPS2)
+	game_database_t database = {0};
+	game_database_game_t database_game;
+	game_database_error_t database_error;
+#else
 	game_metadata_t metadata = {0};
 	game_metadata_entry_t metadata_entry;
 	game_metadata_error_t metadata_error;
+#endif
 	int fd_cmd, fd_out;
 	char path[PATH_MAX], path2[PATH_MAX];
 	char *p, linebuf[512], rom_name[512][16];//256
@@ -884,6 +894,27 @@ int commandlist_size_reduction(void)
 	int org_size, new_size;
 	char *textbuf = NULL, **line_ptr = NULL;
 
+#if (EMU_SYSTEM == CPS2)
+	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_database_filename()))
+		return 0;
+	database_error = game_database_open(&database, path, GAME_DATABASE_CORE_CPS2);
+	if (database_error != GAME_DATABASE_OK || game_database_count(&database) > 512)
+	{
+		game_database_close(&database);
+		return 0;
+	}
+	total_roms = (int)game_database_count(&database);
+	for (i = 0; i < total_roms; i++)
+	{
+		if (game_database_get_game(&database, (uint32_t)i, &database_game) != GAME_DATABASE_OK)
+		{
+			game_database_close(&database);
+			return 0;
+		}
+		strcpy(rom_name[i], database_game.name);
+	}
+	game_database_close(&database);
+#else
 	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
 		return 0;
 	metadata_error = game_metadata_load(&metadata, path, game_metadata_current_core());
@@ -903,6 +934,7 @@ int commandlist_size_reduction(void)
 		strcpy(rom_name[i], metadata_entry.name);
 	}
 	game_metadata_unload(&metadata);
+#endif
 
 	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return 0;
 	fd_cmd = open(path, O_RDONLY);

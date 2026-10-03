@@ -4,9 +4,11 @@
 
 Branch: `externalize_game_metadata`
 
-This document is the authoritative plan and progress log for the game metadata
-cleanup. It covers CPS1, CPS2, MVS, and NCDZ. It must be kept current as each
-migration lands.
+This document is the historical authoritative plan and progress log for the game
+metadata externalization cleanup. It covers CPS1, CPS2, MVS, and NCDZ. CPS2's
+runtime contract was subsequently superseded by `docs/UNIFIED_GAME_DATABASE_PLAN.md`:
+`rominfo.cps2` and `game_metadata.cps2` are now build-time/history artifacts rather
+than CPS2 runtime package inputs.
 
 The work has two related goals:
 
