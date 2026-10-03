@@ -604,3 +604,48 @@ This is an accounting decomposition, not a claim that the remaining bytes up to
 heap allocations, allocator fragmentation and transient I/O allocations remain
 outside the table. The empirical R10 probe remains authoritative for actual
 cache capacity.
+
+## 8. Game/DIP metadata externalization result (2026-10-03)
+
+The `externalize_game_metadata` phase moved cold game-identity and menu metadata
+out of the executable while keeping ROM layout, bit manipulation and emulator
+behavior in C. Generated runtime metadata is versioned, bounded and checksummed;
+large metadata blobs are loaded only for the phase that needs them and released
+before gameplay allocations where applicable.
+
+The largest measured win is CPS1 DIP menu data. Four complete localized
+`dipswitch_t` table sets previously lived in `dipsw.c.o`; because every row
+reserved 33 choice pointers, the object contributed 516,800 bytes of data.
+After migration the selected profile/language is materialized from
+`dip_metadata.cps1` only while the DIP menu is open.
+
+Desktop object measurements:
+
+| Area | Before | After compiled objects | Delta | External runtime metadata |
+| --- | ---: | ---: | ---: | ---: |
+| CPS1 DIP menus | 558,919 B | 29,534 B | **-529,385 B** | 60,783 B |
+| MVS DIP menus | 15,471 B | 3,638 B | **-11,833 B** | 4,524 B |
+| CPS2 crypto table (`cps2crpt.c.o`) | 18,231 B | 10,608 B | **-7,623 B** | folded into `game_metadata.cps2` |
+| NCDZ identity (`driver.c.o`) | 11,638 B | 10,291 B | **-1,347 B** | folded into `game_metadata.ncdz` |
+
+The CPS1 DIP compiled-data contribution specifically falls from 516,800 B to
+512 B across `dipsw.c.o` plus the shared reader. MVS falls from 13,376 B to
+144 B. The external files do not consume executable/static RAM and are not kept
+resident during gameplay.
+
+MVS also removed duplicate processed-asset ownership tables from the emulator
+and converter. The representative emulator `driver.c.o` + `memintrf.c.o` pair
+shrinks by 3,868 B, while the converter objects shrink by 2,734 B. CPS2's
+converter now consumes the same cache-parent policy as the emulator; that change
+is a correctness/ownership improvement rather than a converter-size win.
+
+The final static-data audit deliberately retains renderer/sprite tables and
+game-specific behavior dispatch. Examples include roughly 599 KiB of CPS1
+`vidhrdw.c.o` data, 400 KiB of CPS2 `sprite.c.o` data and 348 KiB MVS/NCDZ
+sprite objects. These are hot decode/render state or behavior, not cold game
+metadata, so externalizing them would violate the no-hot-path-regression rule.
+
+Desktop validation at this milestone includes 23/23 CPS1 tests, 28/28 MVS
+tests, release GUI and no-GUI builds for both DIP-metadata cores, plus the
+earlier complete CPS2/NCDZ metadata suites. Cross-platform validation is tracked
+separately in `docs/GAME_METADATA_EXTERNALIZATION_PLAN.md` M7.

@@ -414,6 +414,13 @@ measurable code/data and still compile/test cleanly.
 
 ### S5 - Continue feature/lifetime-scoped RAM reduction
 
+**Game-metadata follow-up completed (2026-10-03):** cold game-name/decryption/
+ownership data and localized CPS1/MVS DIP menu schemas were moved to generated
+runtime metadata. Most notably, CPS1 DIP compiled objects dropped by about
+529 KiB while the selected menu profile is loaded only for the configuration
+screen. See `docs/GAME_METADATA_EXTERNALIZATION_PLAN.md` and
+`docs/BINARY_SIZE_AUDIT.md` for the detailed ownership and measurements.
+
 Resume `.bss`/lifetime work only for candidates where memory can be **removed or
 released**, not merely moved from static storage to permanent heap.
 

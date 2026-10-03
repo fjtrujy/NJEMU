@@ -73,3 +73,23 @@ files (UTF-8, CP932, and GBK depending on core/language).
 The old `resources/zipname*` files are legacy reference data only once the
 runtime migration is complete. They must not be treated as generated output or
 as the source of truth.
+
+## DIP menu metadata
+
+CPS1 and MVS also keep localized DIP-menu schema/text under `metadata/`:
+
+- `cps1_dips.json`
+- `mvs_dips.json`
+
+These files are UTF-8 source authority for menu labels, option labels, enabled
+state, masks, and value ranges. The actual DIP bit manipulation remains in the
+core C code; the JSON is deliberately data-only.
+
+`tools/dip_metadata.py` validates that English, Japanese, Simplified Chinese,
+and Traditional Chinese have identical row structure and generates the compact
+versioned `dip_metadata.<core>` runtime file. The runtime reader validates the
+header, bounds, version and CRC before materializing only the selected profile
+and language. Do not edit generated `dip_metadata.*` files.
+
+The build also feeds these JSON sources into Unicode-glyph generation so all
+non-ASCII menu text must be representable by the shipped UI font.

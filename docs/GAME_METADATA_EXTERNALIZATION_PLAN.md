@@ -490,11 +490,56 @@ Desktop suite.
 
 ### M6 — remaining data audit
 
-- [ ] Measure CPS1 localized DIP tables and other large static candidates.
-- [ ] Classify each remaining table/list as behavior, small fixed data, or
+- [x] Measure CPS1 localized DIP tables and other large static candidates.
+- [x] Classify each remaining table/list as behavior, small fixed data, or
   worthwhile external metadata.
-- [ ] Externalize only candidates whose size/complexity tradeoff is positive.
-- [ ] Record intentionally retained tables and why.
+- [x] Externalize only candidates whose size/complexity tradeoff is positive.
+- [x] Record intentionally retained tables and why.
+
+#### CPS1 and MVS DIP menu metadata
+
+The largest remaining cold metadata candidate was CPS1 `dipsw.c`: its localized
+menu rows embedded labels, option strings and the same structural fields four
+times. The baseline Desktop object contributed 516,800 B of data and 558,919 B
+in total. MVS used the same representation on a smaller scale, contributing
+13,376 B of data and 15,471 B total.
+
+The menu schema/text is now authoritative in UTF-8 source files:
+
+- `metadata/cps1_dips.json`: 33 profiles, four languages, 1,844 localized rows;
+- `metadata/mvs_dips.json`: four profiles, four languages, 152 localized rows.
+
+`tools/dip_metadata.py` validates locale structure and emits the ABI-independent
+`NJDP` V1 runtime format. `src/common/dip_metadata.c` validates bounds/version/
+CRC and materializes only the selected language/profile into a transient
+`dipswitch_t` array. The allocation exists only while the DIP menu is active;
+bit-level load/save logic remains compiled in each core and gameplay hot paths
+do not parse or retain the metadata.
+
+The import/validation work exposed legacy localized-data drift and fixed it in
+the canonical source rather than preserving inconsistent behavior:
+
+- CPS1 `msword` English/Japanese `Vitality Packs` advertised four labels while
+  declaring `value_max=1`; the canonical range is 0..3 in every language;
+- MVS Mahjong Simplified/Traditional Chinese enabled a control-panel row that
+  English/Japanese disable; all locales now share the same structural bit;
+- MVS debug KOG Japanese disabled and mislabeled the autofire row as a Mahjong
+  control-panel option; it now matches the actual KOG DIP behavior;
+- legacy MVS octal-escaped Japanese/Chinese strings are normalized to UTF-8,
+  including the damaged Japanese return-menu label.
+
+Measured Desktop object results:
+
+| Core | Baseline DIP object | New core DIP object | Shared reader | Combined delta | Runtime pack |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| CPS1 | 558,919 B | 27,212 B | 2,322 B | **-529,385 B** | 60,783 B |
+| MVS | 15,471 B | 1,316 B | 2,322 B | **-11,833 B** | 4,524 B |
+
+CPS1 compiled DIP data falls from 516,800 B to 512 B across the core object and
+shared reader; MVS falls from 13,376 B to 144 B. Both packs are generated,
+installed and included in Vita packaging. GUI release/non-release and no-GUI
+Desktop builds pass for both cores. The complete current Desktop suites pass:
+23/23 CPS1 and 28/28 MVS tests.
 
 #### CPS2 converter policy follow-up
 
@@ -506,10 +551,29 @@ compare byte-for-byte identical.
 
 This cleanup is an ownership/correctness win rather than a converter-size win:
 the shared validated reader is larger than the small exception chain it
-replaces. The separate 43-entry `CPS2_cacheinfo[]` table remains under audit;
-it describes converter-specific graphics cache geometry rather than emulator
-identity or runtime behavior and should only be externalized if its measured
-size justifies an additional format.
+replaces. The separate `CPS2_cacheinfo[]` table is intentionally retained: its
+roughly forty entries describe converter-specific graphics cache geometry rather
+than emulator identity or runtime behavior. Externalizing it would introduce a
+second converter-only format/lookup for only a few KiB and would not reduce the
+emulator executable.
+
+#### Intentionally retained compiled data/conditions
+
+The final source/object sweep classifies these as executable behavior or hot
+runtime data, not external game metadata:
+
+- CPS1 loader/video name checks such as `sf2m3`, `wofb`, `sf2rb*`, `dinoh*`
+  select ROM patches or renderer behavior and remain in C;
+- MVS `irrmaze`/`fatfursa` checks select hardware/loader behavior;
+- NCDZ `GAME_NAME`/NGH branches select game-specific emulation hacks/driver
+  behavior, not display identity;
+- per-core driver tables contain function pointers/capability dispatch and stay
+  compiled;
+- the large CPS1/CPS2/MVS/NCDZ sprite/video objects are decode/render lookup and
+  runtime state used in hot paths. The largest measured examples still include
+  CPS1 `vidhrdw.c.o` (~599 KiB data), CPS2 `sprite.c.o` (~400 KiB data), and
+  MVS/NCDZ `sprite.c.o` (~348 KiB data). Moving them to runtime metadata would
+  add startup/hot-path complexity without addressing the game-name problem.
 
 ### M7 — final validation
 

@@ -280,6 +280,7 @@ For the complete per-core/per-platform classification and lookup order, see
 ├── njemu.ini                    # Settings (auto-created)
 ├── rominfo.cps1                # ROM database (REQUIRED)
 ├── game_metadata.cps1          # Generated names/game metadata (REQUIRED)
+├── dip_metadata.cps1           # Generated DIP menu metadata
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 ├── cache/                      # CPS2 streaming cache, only when needed
@@ -302,6 +303,7 @@ to streaming.
 ├── njemu.ini                  # Settings (auto-created)
 ├── rominfo.mvs                 # ROM database (REQUIRED)
 ├── game_metadata.mvs           # Generated names/game metadata (REQUIRED)
+├── dip_metadata.mvs            # Generated DIP menu metadata
 ├── command.dat                 # MAME Plus! command list (optional)
 ├── roms/                       # ROM files (ZIP format)
 │   └── neogeo.zip              # BIOS file (REQUIRED)
@@ -363,6 +365,11 @@ The UI language is selected through the platform driver. PSP and PS2 map their s
 Game display names are generated into `game_metadata.<core>` from the tracked
 UTF-8 sources under `metadata/`. Localized names fall back to English when a
 core-specific translation is absent.
+
+CPS1 and MVS DIP-menu labels/schema are likewise generated from the tracked
+UTF-8 `metadata/*_dips.json` sources into `dip_metadata.<core>`. The emulator
+loads only the selected DIP profile while that menu is open; DIP bit behavior
+remains core code.
 
 The build generates `lang/*.lng` and `font/gbk_s14.bin` from the tracked
 translation/font sources. Both GUI and no-GUI binaries initialize the common UI

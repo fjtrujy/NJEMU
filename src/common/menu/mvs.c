@@ -227,7 +227,11 @@ static keycfg2_t keycfg_jockeygp[] =
 	int old_value = neogeo_dipswitch & 0xff;
 	int old_harddip = neogeo_hard_dipsw;
 
-	dipswitch = load_dipswitch();
+	if ((dipswitch = load_dipswitch()) == NULL)
+	{
+		ui_popup(TEXT(THIS_GAME_HAS_NO_DIP_SWITCHES));
+		return 0;
+	}
 
 #elif defined(INCLUDE_SAVE_DIPSWITCH)
 

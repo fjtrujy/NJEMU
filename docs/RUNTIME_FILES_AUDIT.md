@@ -229,11 +229,10 @@ Runtime owner:
 It is only relevant when `COMMAND_LIST` is compiled. Missing data disables the
 command-list content rather than preventing emulation.
 
-For CPS1, CPS2, and MVS, the command-list size-reduction UI enumerates canonical
-set names from `game_metadata.<core>`. It therefore uses the same validated
-identity set as the GUI browser instead of maintaining a second dependency on
-the legacy `zipname*` catalogs. NCDZ still enumerates its compiled NGH table at
-this stage; that table is migrated separately by the game-metadata plan.
+The command-list size-reduction UI enumerates canonical set names from
+`game_metadata.<core>` on all four cores. It therefore uses the same validated
+identity source as the browser/NGH lookup instead of maintaining a second
+compiled or `zipname*` list.
 
 ### Cheats
 
@@ -344,6 +343,27 @@ sizes, CRCs, machine/input/init information, and ROM layout.
 The matching `romcnv` tools also consume the CPS2/MVS databases while
 building derived assets.
 
+## Generated DIP menu metadata: CPS1 and MVS
+
+Canonical runtime files:
+
+~~~text
+dip_metadata.cps1
+dip_metadata.mvs
+~~~
+
+Classification: generated distributed UI/runtime metadata.
+
+Source authority: `metadata/cps1_dips.json` and `metadata/mvs_dips.json`.
+Generator: `tools/dip_metadata.py`. Shared runtime reader:
+`src/common/dip_metadata.c`.
+
+The files contain localized menu schema/text only. CPS1/MVS bit-level DIP
+load/save behavior remains compiled in the respective `dipsw.c`. The selected
+language/profile is materialized only while the DIP menu is active and released
+after saving. Missing/corrupt DIP metadata prevents that configuration menu from
+being populated but is not required to run the emulation core itself.
+
 ## CPS1
 
 ### Mandatory inputs
@@ -352,7 +372,8 @@ building derived assets.
 | --- | --- | --- | --- |
 | `rominfo.cps1` | Runtime metadata | Any game boot | `src/cps1/memintrf.c` |
 | selected/parent `*.zip` | Game ROM | Any game boot | `src/common/loadrom.c` |
-| `game_metadata.cps1` | Generated runtime metadata | GUI browser | `src/common/game_metadata.c`, `src/common/filer.c` |
+| `game_metadata.cps1` | Generated runtime metadata | GUI browser; command-list reduction | `src/common/game_metadata.c`, `src/common/filer.c`, `src/common/cmdlist.c` |
+| `dip_metadata.cps1` | Generated UI metadata | DIP configuration menu | `src/common/dip_metadata.c`, `src/cps1/dipsw.c` |
 | `lang/en.lng` | Generated UI asset | Any normal runtime | common text catalog |
 | `font/gbk_s14.bin` | Generated UI asset | Current UI renderer initialization | common UI draw |
 
@@ -445,6 +466,7 @@ Desktop and PS Vita.
 | selected/parent `*.zip` | Game ROM | Game boot | `src/common/loadrom.c` |
 | `neogeo.zip` | BIOS ROM archive | MVS game boot | `src/mvs/biosmenu.c`, MVS memory loader |
 | `game_metadata.mvs` | Generated runtime metadata | Any game boot; GUI browser; `romcnv_mvs` processed-asset policy | `src/common/game_metadata.c`, `src/mvs/memintrf.c`, `src/common/filer.c`, `romcnv/src/mvs/romcnv.c` |
+| `dip_metadata.mvs` | Generated UI metadata | DIP configuration menu | `src/common/dip_metadata.c`, `src/mvs/dipsw.c` |
 
 The MVS BIOS archive must provide compatible BIOS content plus the system FIX
 ROM and low ROM by CRC. In particular, the loader expects:
@@ -816,6 +838,7 @@ Legend:
 | --- | --- | --- | --- | --- |
 | `rominfo.<core>` | M | M | M | -- |
 | `game_metadata.<core>` | C: GUI/command list | M | M | M: normal game boot |
+| `dip_metadata.<core>` | C: DIP menu | -- | C: DIP menu | -- |
 | arcade ROM ZIPs | M | M | M | -- |
 | `roms/neogeo.zip` | -- | -- | M | -- |
 | `neocd.bin` | -- | -- | -- | M |
@@ -934,6 +957,8 @@ The desired long-term separation is:
 - executable/package;
 - `rominfo.*` for CPS1/CPS2/MVS;
 - generated `game_metadata.<core>` from the canonical `metadata/*.tsv` source;
+- generated `dip_metadata.cps1` / `dip_metadata.mvs` from canonical UTF-8 DIP
+  menu sources;
 - generated `lang/*.lng`;
 - generated `font/gbk_s14.bin`;
 - documentation;

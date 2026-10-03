@@ -1,0 +1,1475 @@
+{
+  "version": 1,
+  "languages": [
+    "en",
+    "ja",
+    "zh-Hans",
+    "zh-Hant"
+  ],
+  "profiles": {
+    "default": {
+      "en": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "Return to main menu",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "ja": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "メインメニューに戻る",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hans": [
+        {
+          "label": "测试开关",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "投币槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自动连发(部分游戏)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "联机设置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "关",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免费游玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "锁定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜单",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hant": [
+        {
+          "label": "測試開關",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "投幣槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自動連發(部分遊戲)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "聯機設置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "關",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免費遊玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "鎖定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜單",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ]
+    },
+    "kog": {
+      "en": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Title Language",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Chinese",
+            "English"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "Return to main menu",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "ja": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Title Language",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Chinese",
+            "English"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "メインメニューに戻る",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hans": [
+        {
+          "label": "测试开关",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "投币槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自动连发(部分游戏)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "联机设置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "关",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免费游玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "锁定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "标题语言",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "中文",
+            "英文"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜单",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hant": [
+        {
+          "label": "測試開關",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "投幣槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自動連發(部分遊戲)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "聯機設置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "關",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免費遊玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "鎖定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "標題語言",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "中文",
+            "英文"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜單",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ]
+    },
+    "mjneogeo": {
+      "en": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Mahjong Control Panel",
+          "enable": 0,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "Return to main menu",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "ja": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Mahjong Control Panel",
+          "enable": 0,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "メインメニューに戻る",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hans": [
+        {
+          "label": "测试开关",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "投币槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "麻将操作版",
+          "enable": 0,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "联机设置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "关",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免费游玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "锁定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜单",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hant": [
+        {
+          "label": "測試開關",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "投幣槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "麻將操作版",
+          "enable": 0,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "聯機設置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "關",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免費遊玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "鎖定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜單",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ]
+    },
+    "pcb": {
+      "en": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Hard Dip 3 (Region)",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Asia",
+            "Japan"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "Return to main menu",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "ja": [
+        {
+          "label": "Test Switch",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Coin Chutes",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "Autofire (in some games)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "COMM Settings",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "Off",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "Free Play",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Freeze",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "Off",
+            "On"
+          ]
+        },
+        {
+          "label": "Hard Dip 3 (Region)",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "Asia",
+            "Japan"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "メインメニューに戻る",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hans": [
+        {
+          "label": "测试开关",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "投币槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自动连发(部分游戏)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "联机设置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "关",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免费游玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "锁定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "关",
+            "开"
+          ]
+        },
+        {
+          "label": "硬件Dip 3(区域)",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "亚版",
+            "日版"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜单",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ],
+      "zh-Hant": [
+        {
+          "label": "測試開關",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "投幣槽",
+          "enable": 1,
+          "mask": 2,
+          "value_max": 1,
+          "values": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "label": "自動連發(部分遊戲)",
+          "enable": 1,
+          "mask": 4,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "聯機設置",
+          "enable": 1,
+          "mask": 56,
+          "value_max": 4,
+          "values": [
+            "關",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "label": "免費遊玩",
+          "enable": 1,
+          "mask": 64,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "鎖定",
+          "enable": 1,
+          "mask": 128,
+          "value_max": 1,
+          "values": [
+            "關",
+            "開"
+          ]
+        },
+        {
+          "label": "硬件Dip 3(區域)",
+          "enable": 1,
+          "mask": 1,
+          "value_max": 1,
+          "values": [
+            "亞版",
+            "日版"
+          ]
+        },
+        {
+          "label": "\n",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "返回主菜單",
+          "enable": 1,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        },
+        {
+          "label": "\u0000",
+          "enable": 0,
+          "mask": 0,
+          "value_max": 0,
+          "values": []
+        }
+      ]
+    }
+  }
+}

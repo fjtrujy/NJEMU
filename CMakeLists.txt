@@ -631,6 +631,9 @@ if (${TARGET} STREQUAL "MVS")
         mvs/inptport.c
         mvs/dipsw.h
         mvs/dipsw.c
+        common/dip_menu.h
+        common/dip_metadata.h
+        common/dip_metadata.c
         mvs/timer.h
         mvs/timer.c
         mvs/vidhrdw.h
@@ -672,6 +675,9 @@ if (${TARGET} STREQUAL "CPS1")
         cps1/inptport.c
         cps1/dipsw.h
         cps1/dipsw.c
+        common/dip_menu.h
+        common/dip_metadata.h
+        common/dip_metadata.c
         cps1/timer.h
         cps1/timer.c
         cps1/vidhrdw.h
@@ -857,6 +863,13 @@ set_source_files_properties(
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}.tsv")
+set(UI_EXTRA_UNICODE_ARGS --unicode-source "${GAME_METADATA_SOURCE}")
+set(UI_EXTRA_UNICODE_DEPENDS "${GAME_METADATA_SOURCE}")
+if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
+    set(DIP_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}_dips.json")
+    list(APPEND UI_EXTRA_UNICODE_ARGS --unicode-source "${DIP_METADATA_SOURCE}")
+    list(APPEND UI_EXTRA_UNICODE_DEPENDS "${DIP_METADATA_SOURCE}")
+endif()
 set(TRANSLATION_PACK_DIR "${CMAKE_BINARY_DIR}/lang")
 set(UI_UNICODE_GLYPH_SOURCE "${CMAKE_BINARY_DIR}/generated/ui_unicode_glyph.c")
 set(TRANSLATION_PACKS
@@ -875,10 +888,10 @@ add_custom_command(
         --build
         --output-dir "${TRANSLATION_PACK_DIR}"
         --unicode-map-output "${UI_UNICODE_GLYPH_SOURCE}"
-        --unicode-source "${GAME_METADATA_SOURCE}"
+        ${UI_EXTRA_UNICODE_ARGS}
     DEPENDS
         "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
-        "${GAME_METADATA_SOURCE}"
+        ${UI_EXTRA_UNICODE_DEPENDS}
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         "${CMAKE_SOURCE_DIR}/translations/messages.def"
         "${CMAKE_SOURCE_DIR}/translations/en.lang"
@@ -969,6 +982,24 @@ add_custom_command(
 )
 add_custom_target(game_metadata ALL DEPENDS "${GAME_METADATA_OUTPUT}")
 add_dependencies(${TARGET} game_metadata)
+
+if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
+    set(DIP_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/dip_metadata.${TARGET_LOWER}")
+    add_custom_command(
+        OUTPUT "${DIP_METADATA_OUTPUT}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CMAKE_SOURCE_DIR}/tools/dip_metadata.py"
+            --source "${DIP_METADATA_SOURCE}"
+            --output "${DIP_METADATA_OUTPUT}"
+        DEPENDS
+            "${CMAKE_SOURCE_DIR}/tools/dip_metadata.py"
+            "${DIP_METADATA_SOURCE}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        VERBATIM
+    )
+    add_custom_target(dip_metadata ALL DEPENDS "${DIP_METADATA_OUTPUT}")
+    add_dependencies(${TARGET} dip_metadata)
+endif()
 
 # Keep release/install contents independent from whatever local validation data
 # happens to exist under resources/<target>. The source resource tree is also
@@ -1356,6 +1387,10 @@ if(PLATFORM STREQUAL "PSVITA")
     endforeach()
     list(APPEND VITA_VPK_FILE_ARGS
         FILE "${GAME_METADATA_OUTPUT}" "game_metadata.${TARGET_LOWER}")
+    if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
+        list(APPEND VITA_VPK_FILE_ARGS
+            FILE "${DIP_METADATA_OUTPUT}" "dip_metadata.${TARGET_LOWER}")
+    endif()
     list(APPEND VITA_VPK_FILE_ARGS
         FILE "${NJEMU_DEFAULT_GAME_SELECTOR}" "game_name.ini")
 
@@ -1410,6 +1445,36 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_dependencies(game_metadata_reader_tests game_metadata)
     add_test(NAME game_metadata_reader_tests
         COMMAND game_metadata_reader_tests "${GAME_METADATA_OUTPUT}")
+
+    if("${TARGET}" STREQUAL "CPS1")
+        add_test(NAME cps1_dip_metadata_generator_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/cps1_dip_metadata_generator_tests.py)
+        add_executable(cps1_dip_metadata_tests
+            tests/cps1_dip_metadata_tests.c
+            src/common/dip_metadata.c)
+        target_include_directories(cps1_dip_metadata_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_options(cps1_dip_metadata_tests PRIVATE ${WARNING_OPTIONS})
+        add_dependencies(cps1_dip_metadata_tests dip_metadata)
+        add_test(NAME cps1_dip_metadata_tests
+            COMMAND cps1_dip_metadata_tests "${DIP_METADATA_OUTPUT}")
+    endif()
+
+    if("${TARGET}" STREQUAL "MVS")
+        add_test(NAME mvs_dip_metadata_generator_tests
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/mvs_dip_metadata_generator_tests.py)
+        add_executable(mvs_dip_metadata_tests
+            tests/mvs_dip_metadata_tests.c
+            src/common/dip_metadata.c)
+        target_include_directories(mvs_dip_metadata_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_options(mvs_dip_metadata_tests PRIVATE ${WARNING_OPTIONS})
+        add_dependencies(mvs_dip_metadata_tests dip_metadata)
+        add_test(NAME mvs_dip_metadata_tests
+            COMMAND mvs_dip_metadata_tests "${DIP_METADATA_OUTPUT}")
+    endif()
 
     if("${TARGET}" STREQUAL "CPS2")
         add_test(NAME cps2_partial_cache_tests
@@ -1703,6 +1768,11 @@ endforeach()
 install(FILES "${GAME_METADATA_OUTPUT}"
     DESTINATION .
 )
+if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
+    install(FILES "${DIP_METADATA_OUTPUT}"
+        DESTINATION .
+    )
+endif()
 install(FILES "${NJEMU_DEFAULT_GAME_SELECTOR}"
     DESTINATION .
 )
