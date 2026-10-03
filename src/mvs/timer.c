@@ -97,6 +97,10 @@ static void cpu_execute(int cpunum)
 	if (!cpu[cpunum].suspended)
 	{
 		uint64_t start = mvs_me_sound_profile_now_us();
+		uint64_t z80_end_time = 0;
+
+		if (cpunum == CPU_Z80)
+			mvs_me_sound_shadow_z80_slice_begin();
 
 		if (cpunum == CPU_M68000)
 		{
@@ -108,10 +112,23 @@ static void cpu_execute(int cpunum)
 		active_cpu = cpunum;
 		cpu[cpunum].cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
 		cpu[cpunum].execute(cpu[cpunum].cycles);
+		if (cpunum == CPU_Z80)
+			z80_end_time = timer_get_time_us();
 		active_cpu = CPU_NOTACTIVE;
 		mvs_me_sound_profile_add_time(
 			cpunum == CPU_M68000 ? MVS_ME_SOUND_PROFILE_M68000 : MVS_ME_SOUND_PROFILE_Z80,
 			mvs_me_sound_profile_now_us() - start);
+
+		if (cpunum == CPU_Z80)
+		{
+			cz80_state_t state;
+			uint32_t banks[4];
+
+			Cz80_Get_State(&CZ80, &state);
+			neogeo_get_z80_shadow_state(banks, NULL, NULL, NULL);
+			mvs_me_sound_shadow_z80_slice_completed((uint32_t)cpu[cpunum].cycles,
+				z80_end_time, &state, banks, memory_region_cpu2);
+		}
 	}
 }
 
@@ -398,7 +415,7 @@ static void timer_update_cpu_normal(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed();
+	mvs_me_sound_shadow_frame_completed(timer_get_time_us());
 	mvs_me_sound_profile_frame_completed();
 }
 
@@ -478,7 +495,7 @@ static void timer_update_cpu_raster(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed();
+	mvs_me_sound_shadow_frame_completed(timer_get_time_us());
 	mvs_me_sound_profile_frame_completed();
 }
 

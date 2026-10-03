@@ -5,6 +5,7 @@
 
 void sceKernelDcacheWritebackInvalidateRange(void *address, uint32_t size);
 void sceKernelDcacheInvalidateRange(void *address, uint32_t size);
+void sceKernelDcacheWritebackAll(void);
 uint64_t sceKernelGetSystemTimeWide(void);
 
 #endif /* NJEMU_TEST_PSPKERNEL_H */

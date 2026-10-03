@@ -98,17 +98,7 @@ void Cz80_Init(cz80_struc *CPU)
 	uint8_t *padd, *padc, *psub, *psbc;
 #endif
 
-	memset(CPU, 0, sizeof(cz80_struc));
-
 	memset(cz80_bad_address, 0xff, sizeof(cz80_bad_address));
-
-	for (i = 0; i < CZ80_FETCH_BANK; i++)
-	{
-		CPU->Fetch[i] = (uintptr_t)cz80_bad_address - (i << CZ80_FETCH_SFT);
-#if CZ80_ENCRYPTED_ROM
-		CPU->OPFetch[i] = 0;
-#endif
-	}
 
 	// flags tables initialisation
 	for (i = 0; i < 256; i++)
@@ -180,6 +170,31 @@ void Cz80_Init(cz80_struc *CPU)
 		}
 	}
 #endif
+
+	Cz80_Init_Instance(CPU);
+	return;
+}
+
+
+/*--------------------------------------------------------
+	Initialize one CPU instance without rewriting shared tables
+--------------------------------------------------------*/
+
+void Cz80_Init_Instance(cz80_struc *CPU)
+{
+	uint32_t i;
+	uint8_t *bytes = (uint8_t *)CPU;
+
+	for (i = 0; i < sizeof(cz80_struc); i++)
+		bytes[i] = 0;
+
+	for (i = 0; i < CZ80_FETCH_BANK; i++)
+	{
+		CPU->Fetch[i] = (uintptr_t)cz80_bad_address - (i << CZ80_FETCH_SFT);
+#if CZ80_ENCRYPTED_ROM
+		CPU->OPFetch[i] = 0;
+#endif
+	}
 
 	CPU->pzR8[0] = &zB;
 	CPU->pzR8[1] = &zC;
@@ -387,6 +402,64 @@ void Cz80_Set_Reg(cz80_struc *CPU, int32_t regnum, uint32_t val)
 
 
 /*--------------------------------------------------------
+	Copy logical CPU state without copying host pointers
+--------------------------------------------------------*/
+
+void Cz80_Get_State(cz80_struc *CPU, cz80_state_t *state)
+{
+	uint32_t i;
+	uint8_t *bytes = (uint8_t *)state;
+
+	for (i = 0; i < sizeof(*state); i++)
+		bytes[i] = 0;
+	state->BC = CPU->BC.W;
+	state->DE = CPU->DE.W;
+	state->HL = CPU->HL.W;
+	state->FA = CPU->FA.W;
+	state->IX = CPU->IX.W;
+	state->IY = CPU->IY.W;
+	state->SP = CPU->SP.W;
+	state->BC2 = CPU->BC2.W;
+	state->DE2 = CPU->DE2.W;
+	state->HL2 = CPU->HL2.W;
+	state->FA2 = CPU->FA2.W;
+	state->R = CPU->R.W;
+	state->IFF = CPU->IFF.W;
+	state->PC = Cz80_Get_Reg(CPU, CZ80_PC);
+	state->IRQLine = CPU->IRQLine;
+	state->IRQState = CPU->IRQState;
+	state->I = CPU->I;
+	state->IM = CPU->IM;
+	state->Status = CPU->Status;
+}
+
+void Cz80_Set_State(cz80_struc *CPU, const cz80_state_t *state)
+{
+	CPU->BC.W = state->BC;
+	CPU->DE.W = state->DE;
+	CPU->HL.W = state->HL;
+	CPU->FA.W = state->FA;
+	CPU->IX.W = state->IX;
+	CPU->IY.W = state->IY;
+	CPU->SP.W = state->SP;
+	CPU->BC2.W = state->BC2;
+	CPU->DE2.W = state->DE2;
+	CPU->HL2.W = state->HL2;
+	CPU->FA2.W = state->FA2;
+	CPU->R.W = state->R;
+	CPU->IFF.W = state->IFF;
+	CPU->I = state->I;
+	CPU->IM = state->IM;
+	CPU->Status = state->Status;
+	CPU->IRQLine = state->IRQLine;
+	CPU->IRQState = state->IRQState;
+	CPU->ICount = 0;
+	CPU->ExtraCycles = 0;
+	Cz80_Set_Reg(CPU, CZ80_PC, state->PC);
+}
+
+
+/*--------------------------------------------------------
 	Set Fetch Address
 --------------------------------------------------------*/
 
@@ -438,6 +511,11 @@ void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr
 void Cz80_Set_ReadB(cz80_struc *CPU, uint8_t (*Func)(uint32_t address))
 {
 	CPU->Read_Byte = Func;
+}
+
+void Cz80_Set_ReadBase(cz80_struc *CPU, uintptr_t read_base)
+{
+	CPU->ReadBase = read_base;
 }
 
 void Cz80_Set_WriteB(cz80_struc *CPU, void (*Func)(uint32_t address, uint8_t data))

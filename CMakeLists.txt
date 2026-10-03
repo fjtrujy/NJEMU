@@ -536,6 +536,13 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     )
 endif()
 
+if(PSP_ME_SOUND_COPROCESSOR)
+    set_source_files_properties(
+        src/cpu/z80/cz80.c
+        PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
+    )
+endif()
+
 if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)
     list(APPEND COMMON_SRC psp/psp_audio_profile.c)
     add_definitions(-DPSP_AUDIO_PROFILE=1)
@@ -1009,6 +1016,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
             tests/psp_me_sound_worker_hardware.c
             src/psp/psp_me_spsc_ring.c
             src/psp/psp_me_sound_worker.c
+            src/cpu/z80/cz80.c
         )
         target_include_directories(psp_me_sound_worker_hardware_test PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -1788,7 +1796,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_executable(psp_me_sound_worker_tests
             tests/psp_me_sound_worker_tests.c
             src/psp/psp_me_spsc_ring.c
-            src/psp/psp_me_sound_worker.c)
+            src/psp/psp_me_sound_worker.c
+            src/cpu/z80/cz80.c)
         target_include_directories(psp_me_sound_worker_tests BEFORE PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/psp_me_host_stubs"
             "${CMAKE_CURRENT_SOURCE_DIR}/src")

@@ -10,6 +10,52 @@
 #define TEST_TIMEOUT_US 2000000ULL
 #define TEST_SHADOW_MESSAGES 10048u
 
+static uint8_t reference_memory[0x20000];
+static psp_me_sound_z80_io_t reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
+static uint32_t reference_io_count;
+
+static uint8_t reference_z80_read(uint32_t address)
+{
+	return reference_memory[address & 0xffffu];
+}
+
+static void reference_z80_write(uint32_t address, uint8_t value)
+{
+	address &= 0xffffu;
+	if (address >= PSP_ME_SOUND_Z80_RAM_OFFSET)
+		reference_memory[address] = value;
+}
+
+static uint8_t reference_z80_port_read(uint16_t port)
+{
+	psp_me_sound_z80_io_t *entry = &reference_io[reference_io_count++];
+	entry->port = port;
+	entry->type = PSP_ME_SOUND_Z80_IO_READ;
+	entry->value = 0x5au;
+	return entry->value;
+}
+
+static void reference_z80_port_write(uint16_t port, uint8_t value)
+{
+	psp_me_sound_z80_io_t *entry = &reference_io[reference_io_count++];
+	entry->port = port;
+	entry->type = PSP_ME_SOUND_Z80_IO_WRITE;
+	entry->value = value;
+}
+
+static uint32_t reference_ram_hash(void)
+{
+	uint32_t hash = 2166136261u;
+	uint32_t i;
+
+	for (i = PSP_ME_SOUND_Z80_RAM_OFFSET; i < PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE; i++)
+	{
+		hash ^= reference_memory[i];
+		hash *= 16777619u;
+	}
+	return hash;
+}
+
 typedef struct host_dispatch
 {
 	pthread_t thread;
@@ -60,6 +106,10 @@ void sceKernelDcacheInvalidateRange(void *address, uint32_t size)
 {
 	(void)address;
 	(void)size;
+}
+
+void sceKernelDcacheWritebackAll(void)
+{
 }
 
 void meCoreDcacheWritebackRange(void *address, uint32_t size)
@@ -239,11 +289,107 @@ static int test_time_regression_is_fatal(void)
 	return 1;
 }
 
+static int test_z80_shadow_slice_matches_reference(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint32_t cycles = 45u;
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	/* IN A,(04); OUT (0c),A; LD (f800),A; JP 0000. */
+	reference_memory[0x0000] = 0xdb;
+	reference_memory[0x0001] = 0x04;
+	reference_memory[0x0002] = 0xd3;
+	reference_memory[0x0003] = 0x0c;
+	reference_memory[0x0004] = 0x32;
+	reference_memory[0x0005] = 0x00;
+	reference_memory[0x0006] = 0xf8;
+	reference_memory[0x0007] = 0xc3;
+	reference_memory[0x0008] = 0x00;
+	reference_memory[0x0009] = 0x00;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Z80 shadow snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (reference_io_count != 2u ||
+		!psp_me_sound_worker_z80_slice(&worker, reference_io, reference_io_count,
+			cycles, 100u, &expected_state, banks, reference_ram_hash(), true) ||
+		!psp_me_sound_worker_sync(&worker, 100u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		psp_me_sound_worker_get_stats(&worker, &stats);
+		fprintf(stderr,
+			"Z80 shadow slice execution failed: io_count=%u slices=%u io=%u state=%u "
+			"ram=%u bank=%u io_mismatch=%u send_fail=%u fatal=%u\n",
+			reference_io_count, stats.z80_slices, stats.z80_io_events,
+			stats.z80_state_mismatches, stats.z80_ram_mismatches,
+			stats.z80_bank_mismatches, stats.z80_io_mismatches,
+			stats.z80_send_failures, stats.fatal_error);
+		return 0;
+	}
+
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (stats.z80_snapshots != 1u || stats.z80_slices != 1u ||
+		stats.z80_io_events != 2u || stats.z80_state_mismatches != 0u ||
+		stats.z80_ram_mismatches != 0u || stats.z80_bank_mismatches != 0u ||
+		stats.z80_io_mismatches != 0u || stats.z80_send_failures != 0u ||
+		stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		fprintf(stderr,
+			"Z80 shadow stats mismatch: snapshots=%u slices=%u io=%u state=%u ram=%u "
+			"bank=%u io_mismatch=%u send_fail=%u fatal=%u\n",
+			stats.z80_snapshots, stats.z80_slices, stats.z80_io_events,
+			stats.z80_state_mismatches, stats.z80_ram_mismatches,
+			stats.z80_bank_mismatches, stats.z80_io_mismatches,
+			stats.z80_send_failures, stats.fatal_error);
+		return 0;
+	}
+	return 1;
+}
+
 int main(void)
 {
-	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal())
+	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
+		!test_z80_shadow_slice_matches_reference())
 		return 1;
 
-	printf("PSP ME sound worker host oracle: 10,048 ordered shadow commands, reset/sync interleave, and time regression passed\n");
+	printf("PSP ME sound worker host oracle: C3 transport/lifecycle plus isolated C4 Z80 slice passed\n");
 	return 0;
 }

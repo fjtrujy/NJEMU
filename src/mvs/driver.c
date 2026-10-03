@@ -120,6 +120,24 @@ static void neogeo_set_cpu2_bank(int bank, uint32_t offset)
 	}
 }
 
+void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code_out,
+	uint8_t *pending_command_out, uint8_t *result_code_out)
+{
+	if (banks)
+	{
+		banks[0] = z80_bank[0];
+		banks[1] = z80_bank[1];
+		banks[2] = z80_bank[2];
+		banks[3] = z80_bank[3];
+	}
+	if (sound_code_out)
+		*sound_code_out = (uint8_t)sound_code;
+	if (pending_command_out)
+		*pending_command_out = (uint8_t)pending_command;
+	if (result_code_out)
+		*result_code_out = (uint8_t)result_code;
+}
+
 
 /*------------------------------------------------------
 	Inisialize driver
@@ -908,24 +926,30 @@ WRITE16_HANDLER( neogeo_sram16_w )
 
 uint8_t neogeo_z80_port_r(uint16_t port)
 {
+	uint8_t value = 0;
+
 	switch (port & 0xff)
 	{
 	case 0x00:
 		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_Z80_COMMAND_READ);
 		pending_command = 0;
-		return sound_code;
+		value = (uint8_t)sound_code;
+		break;
 
 	case 0x04:
 		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_STATUS_A_READ);
-		return YM2610_status_port_A_r(0);
+		value = YM2610_status_port_A_r(0);
+		break;
 
 	case 0x05:
 		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_DATA_READ);
-		return YM2610_read_port_r(0);
+		value = YM2610_read_port_r(0);
+		break;
 
 	case 0x06:
 		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_STATUS_B_READ);
-		return YM2610_status_port_B_r(0);
+		value = YM2610_status_port_B_r(0);
+		break;
 
 	case 0x08:
 		neogeo_set_cpu2_bank(3, (port & 0x7f00) << 3);
@@ -944,7 +968,8 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 		break;
 	};
 
-	return 0;
+	mvs_me_sound_shadow_z80_io_read(port, value);
+	return value;
 }
 
 
@@ -977,6 +1002,8 @@ void neogeo_z80_port_w(uint16_t port, uint8_t data)
 		result_code = data;
 		break;
 	}
+
+	mvs_me_sound_shadow_z80_io_write(port, data);
 }
 
 
@@ -989,6 +1016,8 @@ void neogeo_sound_irq(int irq)
 	mvs_me_sound_profile_event(irq ? MVS_ME_SOUND_PROFILE_YM_IRQ_ASSERT :
 		MVS_ME_SOUND_PROFILE_YM_IRQ_CLEAR);
 	z80_set_irq_line(0, irq ? ASSERT_LINE : CLEAR_LINE);
+	mvs_me_sound_shadow_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
+		timer_get_time_us());
 }
 
 

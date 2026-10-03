@@ -5,7 +5,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "cpu/z80/cz80.h"
 #include "psp/psp_me_spsc_ring.h"
+
+#define PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE 0x10000u
+#define PSP_ME_SOUND_Z80_RAM_OFFSET 0xf800u
+#define PSP_ME_SOUND_Z80_RAM_SIZE 0x0800u
+#define PSP_ME_SOUND_Z80_IO_CAPACITY 128u
+#define PSP_ME_SOUND_Z80_BATCH_CAPACITY 16u
 
 typedef bool (*psp_me_sound_worker_start_fn)(void (*task)(void *), void *data,
 	uint32_t size, void *opaque);
@@ -23,7 +30,10 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_RESET = 1,
 	PSP_ME_SOUND_WORKER_COMMAND_SYNC,
 	PSP_ME_SOUND_WORKER_COMMAND_SHUTDOWN,
-	PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND
+	PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_SNAPSHOT,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_IRQ,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_SLICE
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -33,6 +43,7 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_SYNC_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_SHUTDOWN_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO,
+	PSP_ME_SOUND_WORKER_EVENT_Z80_SNAPSHOT_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_ERROR
 } psp_me_sound_worker_event_type_t;
 
@@ -45,6 +56,8 @@ typedef enum psp_me_sound_worker_error
 	PSP_ME_SOUND_WORKER_ERROR_PROTOCOL,
 	PSP_ME_SOUND_WORKER_ERROR_GENERATION,
 	PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION,
+	PSP_ME_SOUND_WORKER_ERROR_Z80_TRACE,
+	PSP_ME_SOUND_WORKER_ERROR_Z80_STATE,
 	PSP_ME_SOUND_WORKER_ERROR_TIMEOUT,
 	PSP_ME_SOUND_WORKER_ERROR_ABORTED
 } psp_me_sound_worker_error_t;
@@ -62,6 +75,54 @@ typedef struct psp_me_sound_worker_message
 
 _Static_assert(sizeof(psp_me_sound_worker_message_t) == 32,
 	"sound worker protocol message must remain fixed-size");
+
+typedef enum psp_me_sound_z80_io_type
+{
+	PSP_ME_SOUND_Z80_IO_READ = 1,
+	PSP_ME_SOUND_Z80_IO_WRITE
+} psp_me_sound_z80_io_type_t;
+
+typedef struct psp_me_sound_z80_io
+{
+	uint16_t port;
+	uint8_t type;
+	uint8_t value;
+} psp_me_sound_z80_io_t;
+
+_Static_assert(sizeof(psp_me_sound_z80_io_t) == 4,
+	"Z80 I/O oracle entry must remain compact");
+
+typedef struct psp_me_sound_z80_snapshot
+{
+	cz80_state_t state;
+	const uint8_t *source_rom;
+	uint32_t source_length;
+	uint32_t banks[4];
+	uint32_t generation;
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+	uint8_t reserved;
+} psp_me_sound_z80_snapshot_t;
+
+typedef struct psp_me_sound_z80_slice
+{
+	cz80_state_t expected_state;
+	uint64_t emulated_time;
+	uint32_t generation;
+	uint32_t sequence;
+	uint32_t cycles;
+	uint32_t io_count;
+	uint32_t banks[4];
+	uint32_t ram_hash;
+	uint32_t flags;
+	psp_me_sound_z80_io_t io[PSP_ME_SOUND_Z80_IO_CAPACITY];
+} psp_me_sound_z80_slice_t;
+
+enum
+{
+	PSP_ME_SOUND_Z80_SLICE_CHECK_RAM = 1u << 0
+};
 
 typedef struct psp_me_sound_worker_stats
 {
@@ -85,6 +146,19 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t shadow_send_failures;
 	uint32_t shadow_pending;
 	uint32_t shadow_pending_high_water;
+	uint32_t z80_snapshots;
+	uint32_t z80_irqs;
+	uint32_t z80_slices;
+	uint32_t z80_io_events;
+	uint32_t z80_state_mismatches;
+	uint32_t z80_ram_mismatches;
+	uint32_t z80_bank_mismatches;
+	uint32_t z80_io_mismatches;
+	uint32_t z80_send_failures;
+	uint32_t z80_last_mismatch;
+	uint32_t z80_batch_high_water;
+	uint32_t z80_batch_overflow;
+	uint32_t z80_batch_underflow;
 	uint64_t emulated_time;
 } psp_me_sound_worker_stats_t;
 
@@ -107,10 +181,15 @@ typedef struct psp_me_sound_worker
 	psp_me_sound_worker_dispatch_t dispatch;
 	psp_me_spsc_ring_t *commands;
 	psp_me_spsc_ring_t *events;
+	psp_me_spsc_ring_t *z80_batches;
 	void *shared_context;
 	void *main_control;
 	void *progress;
+	void *z80_progress;
+	psp_me_sound_z80_snapshot_t *z80_snapshot;
+	uint8_t *z80_memory;
 	size_t ring_size;
+	size_t z80_batch_ring_size;
 	uint32_t capacity;
 	uint32_t next_token;
 	uint32_t generation;
@@ -123,6 +202,8 @@ typedef struct psp_me_sound_worker
 	uint32_t shadow_mismatches;
 	uint32_t shadow_send_failures;
 	uint32_t shadow_pending_high_water;
+	uint32_t z80_next_sequence;
+	uint32_t z80_send_failures;
 	bool running;
 	psp_me_sound_worker_stats_t last_stats;
 } psp_me_sound_worker_t;
@@ -136,6 +217,17 @@ bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, uint64_t timeout_us);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);
+bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
+	const cz80_state_t *state, const uint8_t *visible_memory,
+	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
+	uint64_t timeout_us);
+bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
+	int32_t state, uint64_t emulated_time);
+bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
+	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
+	uint64_t emulated_time, const cz80_state_t *expected_state,
+	const uint32_t banks[4], uint32_t ram_hash, bool check_ram);
 bool psp_me_sound_worker_poll(psp_me_sound_worker_t *worker);
 bool psp_me_sound_worker_shutdown(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us);

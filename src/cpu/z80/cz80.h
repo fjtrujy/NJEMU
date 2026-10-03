@@ -225,6 +225,7 @@ typedef struct cz80_t
 	uintptr_t BasePC;
 	uintptr_t PC;
 	uintptr_t Fetch[CZ80_FETCH_BANK];
+	uintptr_t ReadBase;
 #if CZ80_ENCRYPTED_ROM
 	uintptr_t OPBase;
 	uintptr_t OPFetch[CZ80_FETCH_BANK];
@@ -243,6 +244,30 @@ typedef struct cz80_t
 
 } cz80_struc;
 
+typedef struct cz80_state_t
+{
+	uint16_t BC;
+	uint16_t DE;
+	uint16_t HL;
+	uint16_t FA;
+	uint16_t IX;
+	uint16_t IY;
+	uint16_t SP;
+	uint16_t BC2;
+	uint16_t DE2;
+	uint16_t HL2;
+	uint16_t FA2;
+	uint16_t R;
+	uint16_t IFF;
+	uint32_t PC;
+	int32_t IRQLine;
+	int32_t IRQState;
+	uint8_t I;
+	uint8_t IM;
+	uint8_t Status;
+	uint8_t reserved;
+} cz80_state_t;
+
 
 /*************************/
 /* Publics Z80 variables */
@@ -255,6 +280,7 @@ extern cz80_struc CZ80;
 /*************************/
 
 void Cz80_Init(cz80_struc *CPU);
+void Cz80_Init_Instance(cz80_struc *CPU);
 
 void Cz80_Reset(cz80_struc *CPU);
 
@@ -264,6 +290,8 @@ void Cz80_Set_IRQ(cz80_struc *CPU, int32_t line, int32_t state);
 
 uint32_t  Cz80_Get_Reg(cz80_struc *CPU, int32_t regnum);
 void Cz80_Set_Reg(cz80_struc *CPU, int32_t regnum, uint32_t value);
+void Cz80_Get_State(cz80_struc *CPU, cz80_state_t *state);
+void Cz80_Set_State(cz80_struc *CPU, const cz80_state_t *state);
 
 void Cz80_Set_Fetch(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr, uintptr_t fetch_adr);
 #if CZ80_ENCRYPTED_ROM
@@ -271,6 +299,7 @@ void Cz80_Set_Encrypt_Range(cz80_struc *CPU, uint32_t low_adr, uint32_t high_adr
 #endif
 
 void Cz80_Set_ReadB(cz80_struc *CPU, uint8_t (*Func)(uint32_t address));
+void Cz80_Set_ReadBase(cz80_struc *CPU, uintptr_t read_base);
 void Cz80_Set_WriteB(cz80_struc *CPU, void (*Func)(uint32_t address, uint8_t data));
 
 void Cz80_Set_INPort(cz80_struc *CPU, uint8_t (*Func)(uint16_t port));

@@ -332,6 +332,8 @@ void neogeo_driver_init(void);
 void neogeo_driver_exit(void);
 void neogeo_driver_reset(void);
 void neogeo_reset_driver_type(void);
+void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code,
+	uint8_t *pending_command, uint8_t *result_code);
 
 void neogeo_vblank_interrupt(void);
 void neogeo_raster_interrupt(int line);

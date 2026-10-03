@@ -51,7 +51,7 @@
 #define READ_ARG16()		(*(uint8_t *)PC | (*(uint8_t *)(PC + 1) << 8)); PC += 2
 
 #ifndef BUILD_CPS1
-#define READ_MEM8(A)		memory_region_cpu2[(A)]
+#define READ_MEM8(A)		(*(uint8_t *)(CPU->ReadBase + (A)))
 #else
 #define READ_MEM8(A)		CPU->Read_Byte(A)
 #endif

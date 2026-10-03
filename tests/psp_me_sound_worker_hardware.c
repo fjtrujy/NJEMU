@@ -17,6 +17,53 @@ PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER);
 #define PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES 256u
 #define PSP_ME_SOUND_WORKER_HW_LOG_PATH "host0:/njemu_me_sound_worker_hw.log"
 
+static uint8_t z80_reference_memory[0x20000] __attribute__((aligned(64)));
+static psp_me_sound_z80_io_t z80_reference_io[PSP_ME_SOUND_Z80_IO_CAPACITY];
+static uint32_t z80_reference_io_count;
+
+static uint8_t z80_reference_read(uint32_t address)
+{
+	return z80_reference_memory[address & 0xffffu];
+}
+
+static void z80_reference_write(uint32_t address, uint8_t value)
+{
+	address &= 0xffffu;
+	if (address >= PSP_ME_SOUND_Z80_RAM_OFFSET)
+		z80_reference_memory[address] = value;
+}
+
+static uint8_t z80_reference_port_read(uint16_t port)
+{
+	psp_me_sound_z80_io_t *entry = &z80_reference_io[z80_reference_io_count++];
+	entry->port = port;
+	entry->type = PSP_ME_SOUND_Z80_IO_READ;
+	entry->value = 0x5au;
+	return entry->value;
+}
+
+static void z80_reference_port_write(uint16_t port, uint8_t value)
+{
+	psp_me_sound_z80_io_t *entry = &z80_reference_io[z80_reference_io_count++];
+	entry->port = port;
+	entry->type = PSP_ME_SOUND_Z80_IO_WRITE;
+	entry->value = value;
+}
+
+static uint32_t z80_reference_ram_hash(void)
+{
+	uint32_t hash = 2166136261u;
+	uint32_t i;
+
+	for (i = PSP_ME_SOUND_Z80_RAM_OFFSET;
+		i < PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE; i++)
+	{
+		hash ^= z80_reference_memory[i];
+		hash *= 16777619u;
+	}
+	return hash;
+}
+
 typedef struct psp_me_sound_worker_hw_job
 {
 	void (*task)(void *);
@@ -113,6 +160,58 @@ static bool run_shadow_sequence(psp_me_sound_worker_t *worker,
 	return true;
 }
 
+static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
+	uint64_t emulated_time)
+{
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint32_t cycles = 45u;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+
+	memset(z80_reference_memory, 0, sizeof(z80_reference_memory));
+	memset(z80_reference_io, 0, sizeof(z80_reference_io));
+	z80_reference_io_count = 0;
+	/* IN A,(04); OUT (0c),A; LD (f800),A; JP 0000. */
+	z80_reference_memory[0x0000] = 0xdb;
+	z80_reference_memory[0x0001] = 0x04;
+	z80_reference_memory[0x0002] = 0xd3;
+	z80_reference_memory[0x0003] = 0x0c;
+	z80_reference_memory[0x0004] = 0x32;
+	z80_reference_memory[0x0005] = 0x00;
+	z80_reference_memory[0x0006] = 0xf8;
+	z80_reference_memory[0x0007] = 0xc3;
+	z80_reference_memory[0x0008] = 0x00;
+	z80_reference_memory[0x0009] = 0x00;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)z80_reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)z80_reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, z80_reference_read);
+	Cz80_Set_WriteB(&reference_cpu, z80_reference_write);
+	Cz80_Set_INPort(&reference_cpu, z80_reference_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, z80_reference_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
+		z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
+		banks, 0, 0, 0, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
+		return false;
+
+	Cz80_Set_IRQ(&reference_cpu, 0, ASSERT_LINE);
+	if (!psp_me_sound_worker_z80_irq(worker, ASSERT_LINE, emulated_time - 1u))
+		return false;
+	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (z80_reference_io_count != 2u)
+		return false;
+	return psp_me_sound_worker_z80_slice(worker, z80_reference_io,
+		z80_reference_io_count, cycles, emulated_time, &expected_state, banks,
+		z80_reference_ram_hash(), true);
+}
+
 static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	uint32_t generation, uint64_t first_time, uint64_t second_time,
 	psp_me_sound_worker_stats_t *stats)
@@ -124,10 +223,11 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 		return false;
 	if (!psp_me_sound_worker_reset(&worker, generation,
-		PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_sync(&worker, first_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!run_shadow_sequence(&worker, first_time + 1u) ||
+		!run_z80_shadow_sequence(&worker, second_time - 1u) ||
 		!psp_me_sound_worker_sync(&worker, second_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_shutdown(&worker,
@@ -140,13 +240,18 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-		stats->commands_processed == 4u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+		stats->commands_processed == 7u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
 		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_matched == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_mismatches == 0u && stats->shadow_send_failures == 0u &&
 		stats->shadow_pending == 0u &&
+		stats->z80_snapshots == 1u && stats->z80_irqs == 1u &&
+		stats->z80_slices == 1u && stats->z80_io_events == 2u &&
+		stats->z80_state_mismatches == 0u && stats->z80_ram_mismatches == 0u &&
+		stats->z80_bank_mismatches == 0u && stats->z80_io_mismatches == 0u &&
+		stats->z80_send_failures == 0u &&
 		stats->fatal_error == PSP_ME_SOUND_WORKER_ERROR_NONE &&
 		stats->emulated_time == second_time &&
 		stats->command_overflow == 0u && stats->event_overflow == 0u;
@@ -165,7 +270,12 @@ static void log_result(int init_result, uint32_t completed_cycles,
 		"elapsed_us=%llu generation=%lu commands=%lu resets=%lu syncs=%lu "
 		"shutdowns=%lu shadow_commands=%lu shadow_sent=%lu shadow_matched=%lu "
 		"shadow_mismatches=%lu shadow_send_failures=%lu shadow_pending=%lu "
-		"shadow_pending_high_water=%lu heartbeat=%lu fatal=%lu emulated_time=%llu "
+		"shadow_pending_high_water=%lu z80_snapshots=%lu z80_irqs=%lu "
+		"z80_slices=%lu z80_io=%lu z80_state_mismatches=%lu z80_ram_mismatches=%lu "
+		"z80_bank_mismatches=%lu z80_io_mismatches=%lu z80_send_failures=%lu "
+		"z80_last_mismatch=%lu z80_batch_high_water=%lu z80_batch_overflow=%lu "
+		"heartbeat=%lu fatal=%lu "
+		"emulated_time=%llu "
 		"cmd_high_water=%lu cmd_overflow=%lu cmd_underflow=%lu "
 		"event_high_water=%lu event_overflow=%lu event_underflow=%lu\n",
 		passed ? 1 : 0,
@@ -185,6 +295,18 @@ static void log_result(int init_result, uint32_t completed_cycles,
 		(unsigned long)last_stats->shadow_send_failures,
 		(unsigned long)last_stats->shadow_pending,
 		(unsigned long)last_stats->shadow_pending_high_water,
+		(unsigned long)last_stats->z80_snapshots,
+		(unsigned long)last_stats->z80_irqs,
+		(unsigned long)last_stats->z80_slices,
+		(unsigned long)last_stats->z80_io_events,
+		(unsigned long)last_stats->z80_state_mismatches,
+		(unsigned long)last_stats->z80_ram_mismatches,
+		(unsigned long)last_stats->z80_bank_mismatches,
+		(unsigned long)last_stats->z80_io_mismatches,
+		(unsigned long)last_stats->z80_send_failures,
+		(unsigned long)last_stats->z80_last_mismatch,
+		(unsigned long)last_stats->z80_batch_high_water,
+		(unsigned long)last_stats->z80_batch_overflow,
 		(unsigned long)last_stats->heartbeat,
 		(unsigned long)last_stats->fatal_error,
 		(unsigned long long)last_stats->emulated_time,
