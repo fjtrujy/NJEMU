@@ -214,5 +214,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}-me_audio_${{ matrix.psp_me_audio }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}-me_sound_${{ matrix.psp_me_audio }}
         path: build/install/
