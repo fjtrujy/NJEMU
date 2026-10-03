@@ -47,6 +47,9 @@ Useful options include:
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
   pair with `PSP_AUDIO_PROFILE` for YM2610/producer/ME-wait timing);
+- `PSP_ME_RING_SELFTEST=ON/OFF` (PSP MVS + `PSP_ME_AUDIO=ON` only; default OFF;
+  runs the synthetic Allegrex/ME shared-ring transport oracle at startup and
+  builds the standalone `psp_me_ring_hardware_test` PRX for psplink validation);
 - `USE_ASAN=ON` (Desktop development).
 
 PSP packages request the large user-memory partition (`MEMSIZE=1`). Platform
