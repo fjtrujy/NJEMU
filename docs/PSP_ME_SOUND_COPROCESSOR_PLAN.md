@@ -646,6 +646,80 @@ measured.
 
 **Gate:** zero mismatches and no silent overwrite/underflow.
 
+#### C1 validation status (2026-10-03) [complete]
+
+The generic transport is implemented in `src/psp/psp_me_spsc_ring.*`.  The ring
+uses fixed-size slots and deliberately makes cache ownership visible in the
+layout rather than relying on `volatile` or implicit coherence:
+
+- producer and consumer cursors occupy separate 64-byte cache lines;
+- immutable ring configuration occupies a third cache line;
+- every slot starts on a 64-byte boundary and its stride is rounded to 64 bytes;
+- producer and consumer sequence counters are monotonic 32-bit counters, with
+  power-of-two masking used only for the physical slot index;
+- only the producer writes producer state and only the consumer writes consumer
+  state;
+- publication/acquisition use explicit memory barriers plus platform cache
+  callbacks;
+- full, empty, sequence-mismatch and corrupt-distance conditions are reported
+  explicitly, with saturating diagnostic counters;
+- producer high-water occupancy is measured rather than using a guessed large
+  production ring.
+
+The Desktop oracle covers full/empty handling, ownership, sequence corruption,
+wrap across `UINT32_MAX`, 64-byte cache-maintenance ranges and 1,000,000 exact
+ordered messages.  It passes under the normal Desktop MVS CTest configuration.
+The identical transport source also cross-compiles in the PSP ME build with the
+ME boundary compiled `-G0 -fno-pic`.
+
+For hardware validation, `PSP_ME_RING_SELFTEST=ON` builds a standalone
+`psp_me_ring_hardware_test` PRX and can also run the same oracle from the NJEMU
+ME bootstrap.  The standalone PRX avoids ROM loading and emulator state; MIST is
+used once to start an ME worker, after which normal traffic flows only through
+two shared SPSC rings:
+
+```text
+Allegrex -> ME ring -> persistent test worker -> ME -> Allegrex ring
+```
+
+The real-PSP run completed exactly **1,004,096 round-trips** with `error=0`:
+
+| hardware metric | result |
+| --- | ---: |
+| ping-pong messages | 4,096 |
+| ping-pong wall time | 34.201 ms |
+| average ping-pong round-trip | 8.349 us |
+| bulk round-trips | 1,000,000 |
+| bulk wall time | 6.345116 s |
+| bulk round-trips / second | 157,601 |
+| Allegrex -> ME high-water | 1 / 256 slots |
+| ME -> Allegrex high-water | 2 / 256 slots |
+| ring overflows | 0 |
+| sequence mismatches | 0 |
+| corrupt-distance detections | 0 |
+
+The test deliberately busy-polls both queues, so empty-ring observations are
+expected and explicitly counted (`5,054,954` on the ME consumer and `4,098` on
+the Allegrex consumer).  They are detected underflows/empty polls, not missing
+messages: all 1,004,096 expected payloads returned in exact sequence.  There
+were no silent overwrites, no overflow and no payload mismatch.
+
+The very low synthetic high-water values are evidence that capacity 256 is
+oversized for this tight transport loop, but they are **not** used to choose the
+event or PCM ring depth for the emulator.  C3/C5 gameplay measurements must size
+those rings from their own scheduling jitter and latency requirements.
+
+Compared with the previously measured approximately 59 us isolated MIST
+dispatch/wait cost, the 8.349 us shared-ring ping-pong demonstrates why the
+persistent-worker architecture is worth pursuing: normal messages no longer pay
+one MIST trigger/wait per event.  This result is transport-only and does not yet
+claim whole-emulator performance improvement.
+
+**C1 gate is closed successfully:** the shared transport passed both deterministic
+host validation and the real-PSP MIST cache/coherency oracle with zero semantic
+mismatches.  C2 may proceed.  The independent C0 baseline gate still prevents
+making the Z80 authoritative on ME.
+
 ### C2 - persistent ME sound worker bootstrap
 
 - start one persistent MIST-backed worker for the sound experiment;

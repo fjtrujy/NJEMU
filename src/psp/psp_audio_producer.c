@@ -6,11 +6,21 @@
 #include <me-core-mapper/hw-registers.h>
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
+#ifdef PSP_ME_RING_SELFTEST
+#include <fcntl.h>
+#include <unistd.h>
+#include "common/runtime_paths.h"
+#include "psp/psp_me_spsc_ring_mist_test.h"
+#endif
 
 static bool me_available;
 static bool me_suspended;
 static bool me_job_in_flight;
 static uint32_t me_probe_data[16] __attribute__((aligned(64)));
+#ifdef PSP_ME_RING_SELFTEST
+static bool me_ring_selftest_attempted;
+static bool me_ring_selftest_passed;
+#endif
 
 typedef struct psp_me_audio_job
 {
@@ -109,6 +119,98 @@ static void psp_me_dispatch_wait(void)
 	meSafeTaskMistWait();
 }
 
+#ifdef PSP_ME_RING_SELFTEST
+
+static bool psp_me_ring_selftest_dispatch_start(void (*task)(void *), void *data,
+	uint32_t size, void *opaque)
+{
+	(void)opaque;
+	if (!task || !data || size == 0 || me_job_in_flight)
+		return false;
+
+	me_job.job = task;
+	me_job.data = data;
+	me_job.size = size;
+	sceKernelDcacheWritebackInvalidateRange(&me_job, sizeof(me_job));
+	return psp_me_dispatch_job() >= 0;
+}
+
+static void psp_me_ring_selftest_dispatch_wait(void *opaque)
+{
+	(void)opaque;
+	psp_me_dispatch_wait();
+}
+
+static void psp_me_ring_selftest_log(
+	const psp_me_spsc_ring_mist_result_t *result)
+{
+	char path[1024];
+	char line[1024];
+	uint64_t latency_ns =
+		(result->latency_us * 1000ULL) / PSP_ME_SPSC_RING_MIST_LATENCY_MESSAGES;
+	uint64_t bulk_roundtrips_per_sec = result->bulk_us ?
+		((uint64_t)PSP_ME_SPSC_RING_MIST_BULK_MESSAGES * 1000000ULL) /
+			result->bulk_us : 0;
+	int fd;
+	int length;
+
+	length = snprintf(line, sizeof(line),
+		"[psp-me-ring] latency_messages=%u latency_us=%llu latency_avg_ns=%llu "
+		"bulk_messages=%u bulk_us=%llu bulk_roundtrips_per_sec=%llu completed=%lu "
+		"to_me_high_water=%lu to_me_overflow=%lu to_me_underflow=%lu "
+		"to_me_seqerr=%lu to_me_corrupt=%lu "
+		"to_main_high_water=%lu to_main_overflow=%lu to_main_underflow=%lu "
+		"to_main_seqerr=%lu to_main_corrupt=%lu error=%lu\n",
+		PSP_ME_SPSC_RING_MIST_LATENCY_MESSAGES,
+		(unsigned long long)result->latency_us,
+		(unsigned long long)latency_ns,
+		PSP_ME_SPSC_RING_MIST_BULK_MESSAGES,
+		(unsigned long long)result->bulk_us,
+		(unsigned long long)bulk_roundtrips_per_sec,
+		(unsigned long)result->completed,
+		(unsigned long)result->to_me_high_water,
+		(unsigned long)result->to_me_overflow,
+		(unsigned long)result->to_me_underflow,
+		(unsigned long)result->to_me_sequence_errors,
+		(unsigned long)result->to_me_corrupt,
+		(unsigned long)result->to_main_high_water,
+		(unsigned long)result->to_main_overflow,
+		(unsigned long)result->to_main_underflow,
+		(unsigned long)result->to_main_sequence_errors,
+		(unsigned long)result->to_main_corrupt,
+		(unsigned long)result->error);
+	if (length <= 0 || (size_t)length >= sizeof(line))
+		return;
+
+	printf("%s", line);
+	snprintf(path, sizeof(path), "%spsp_me_ring_selftest.log", launchDir);
+	fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+	if (fd >= 0)
+	{
+		write(fd, line, (size_t)length);
+		close(fd);
+	}
+}
+
+static bool psp_me_ring_selftest(void)
+{
+	const psp_me_spsc_ring_mist_dispatch_t dispatch = {
+		psp_me_ring_selftest_dispatch_start,
+		psp_me_ring_selftest_dispatch_wait,
+		NULL,
+	};
+	psp_me_spsc_ring_mist_result_t result;
+
+	if (me_ring_selftest_attempted)
+		return me_ring_selftest_passed;
+	me_ring_selftest_attempted = true;
+	me_ring_selftest_passed = psp_me_spsc_ring_mist_test_run(&dispatch, &result);
+	psp_me_ring_selftest_log(&result);
+	return me_ring_selftest_passed;
+}
+
+#endif /* PSP_ME_RING_SELFTEST */
+
 static bool psp_me_probe(void)
 {
 	int result;
@@ -155,6 +257,15 @@ static bool psp_me_enable(const char *context)
 		me_available = false;
 		return false;
 	}
+#ifdef PSP_ME_RING_SELFTEST
+	if (!psp_me_ring_selftest())
+	{
+		printf("[PSP_ME_AUDIO] %s: shared-ring self-test failed; using Main CPU\n",
+			context);
+		me_available = false;
+		return false;
+	}
+#endif
 
 	me_available = true;
 	printf("[PSP_ME_AUDIO] %s: %s -> Media Engine (MIST); Main CPU retained as fallback\n",

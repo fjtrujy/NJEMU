@@ -90,6 +90,7 @@ option(USE_PG "Use Performance Graph" OFF)
 option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
 option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
 option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
+option(PSP_ME_RING_SELFTEST "PSP MVS: run the synthetic ME shared-ring self-test" OFF)
 if((USE_ASAN OR USE_UBSAN OR USE_PG) AND NOT PLATFORM STREQUAL "DESKTOP")
     message(FATAL_ERROR "USE_ASAN, USE_UBSAN, and USE_PG are desktop-only diagnostic capabilities")
 endif()
@@ -101,6 +102,9 @@ if(PSP_AUDIO_PROFILE AND NOT PLATFORM STREQUAL "PSP")
 endif()
 if(PSP_ME_SOUND_PROFILE AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS"))
     message(FATAL_ERROR "PSP_ME_SOUND_PROFILE requires PLATFORM=PSP and TARGET=MVS")
+endif()
+if(PSP_ME_RING_SELFTEST AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
+    message(FATAL_ERROR "PSP_ME_RING_SELFTEST requires PLATFORM=PSP, TARGET=MVS, and PSP_ME_AUDIO=ON")
 endif()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
@@ -428,6 +432,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     set_source_files_properties(
         src/psp/psp_audio_producer.c
         src/psp/psp_me_spsc_ring.c
+        src/psp/psp_me_spsc_ring_mist_test.c
         src/common/ym2610_adpcma_job.c
         PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
     )
@@ -441,6 +446,14 @@ endif()
 if(PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_SOUND_PROFILE)
     list(APPEND COMMON_SRC psp/psp_me_sound_profile.c)
     add_definitions(-DPSP_ME_SOUND_PROFILE=1)
+endif()
+
+if(PSP_ME_RING_SELFTEST)
+    list(APPEND COMMON_SRC
+        psp/psp_me_spsc_ring_mist_test.h
+        psp/psp_me_spsc_ring_mist_test.c
+    )
+    add_definitions(-DPSP_ME_RING_SELFTEST=1)
 endif()
 
 find_package(miniz 3.1.2 CONFIG QUIET)
@@ -851,6 +864,32 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         "${PSP_ME_CORE_INCLUDE_DIR}"
         "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
     )
+
+    if(PSP_ME_RING_SELFTEST)
+        add_executable(psp_me_ring_hardware_test
+            tests/psp_me_spsc_ring_mist_hardware.c
+            src/psp/psp_me_spsc_ring.c
+            src/psp/psp_me_spsc_ring_mist_test.c
+        )
+        target_include_directories(psp_me_ring_hardware_test PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        )
+        target_include_directories(psp_me_ring_hardware_test SYSTEM PRIVATE
+            "${PSP_ME_CORE_INCLUDE_DIR}"
+            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+        )
+        target_compile_options(psp_me_ring_hardware_test PRIVATE
+            ${COMMON_FLAGS}
+            ${WARNING_OPTIONS}
+            -G0
+            -fno-pic
+        )
+        target_link_libraries(psp_me_ring_hardware_test PRIVATE
+            "${PSP_ME_SAFE_TASK_LIBRARY}"
+            "${PSP_ME_CORE_MAPPER_LIBRARY}"
+            pspkubridge
+        )
+    endif()
 endif()
 
 # Keep miniz's usage requirements local to implementation files that consume
@@ -1386,6 +1425,16 @@ if(PLATFORM STREQUAL "PSP")
         VERSION "${VERSION_STR}"
         MEMSIZE 1
     )
+    if(PSP_ME_RING_SELFTEST)
+        create_pbp_file(
+            TARGET psp_me_ring_hardware_test
+            BUILD_PRX
+            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_ring_hardware_package"
+            TITLE "NJEMU PSP ME Ring Hardware Test"
+            VERSION "${VERSION_STR}"
+            MEMSIZE 1
+        )
+    endif()
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
