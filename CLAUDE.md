@@ -50,6 +50,9 @@ Useful options include:
 - `PSP_ME_RING_SELFTEST=ON/OFF` (PSP MVS + `PSP_ME_AUDIO=ON` only; default OFF;
   runs the synthetic Allegrex/ME shared-ring transport oracle at startup and
   builds the standalone `psp_me_ring_hardware_test` PRX for psplink validation);
+- `PSP_ME_SOUND_COPROCESSOR=ON/OFF` (PSP MVS + `PSP_ME_AUDIO=ON` only; default
+  OFF; builds the experimental persistent ME sound worker and standalone
+  lifecycle harness while keeping authoritative YM2610 production on Allegrex);
 - `USE_ASAN=ON` (Desktop development).
 
 PSP packages request the large user-memory partition (`MEMSIZE=1`). Platform
