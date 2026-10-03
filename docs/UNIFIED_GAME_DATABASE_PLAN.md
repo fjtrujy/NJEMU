@@ -313,12 +313,16 @@ the complete selected-game semantic model for every CPS2 set, not just a sample.
 
 ### U1 - Baseline and schema inventory
 
+**Status: COMPLETE (2026-10-03).**
+
 - measure current CPS2 file sizes, transient allocations and parsing time;
 - enumerate every field used from `rominfo.cps2` by emulator and converter;
 - document maxima/counts needed to choose compact field widths;
 - add tests for legacy parsing semantics before changing the runtime.
 
 ### U2 - Build-time ROM-info parser
+
+**Status: COMPLETE (2026-10-03).**
 
 - implement a deterministic host-side parser for `rominfo.cps2`;
 - normalize it into an intermediate model;
@@ -327,6 +331,8 @@ the complete selected-game semantic model for every CPS2 set, not just a sample.
 
 ### U3 - Unified binary generator
 
+**Status: COMPLETE (2026-10-03).**
+
 - define format V1 and common serialization helpers;
 - merge the ROM topology model with `metadata/cps2.tsv`;
 - emit one CPS2 database plus optional human-readable diagnostics/gamelist;
@@ -334,12 +340,16 @@ the complete selected-game semantic model for every CPS2 set, not just a sample.
 
 ### U4 - Random-access common reader
 
+**Status: COMPLETE (2026-10-03).**
+
 - implement the common header/index reader without whole-file allocation;
 - expose lookup/read APIs that return one selected game's metadata and variable ROM
   records;
 - add bounded-memory tests and malformed-offset/range rejection.
 
 ### U5 - CPS2 emulator migration
+
+**Status: COMPLETE (2026-10-03) for code migration and Desktop validation.**
 
 - replace `load_rom_info()` text parsing with the new reader;
 - replace separate CPS2 `game_metadata` game-boot loading with the unified record;
@@ -349,11 +359,15 @@ the complete selected-game semantic model for every CPS2 set, not just a sample.
 
 ### U6 - CPS2 converter migration
 
+**Status: COMPLETE (2026-10-03) for code migration and Desktop cache parity.**
+
 - make `romcnv_cps2` consume the same unified database;
 - remove its textual `rominfo.cps2` parser and separate game-metadata dependency;
 - compare generated cache outputs against the current implementation.
 
 ### U7 - Packaging cutover
+
+**Status: COMPLETE (2026-10-03) for build/install logic and CI package guards.**
 
 - package only the unified CPS2 database;
 - remove runtime/install dependency on `rominfo.cps2` and `game_metadata.cps2`;
@@ -410,6 +424,9 @@ the package guards for those matrices have nevertheless been updated to require
 the new CPS2 database and reject both legacy runtime files.
 
 ### U8 - Cross-platform CPS2 validation
+
+**Status: IN PROGRESS.** Desktop is complete; PSP/PS2/Vita validation requires
+toolchains/runtimes that are not available in the current local shell.
 
 - Desktop: full tests plus real ROM boot coverage;
 - PSP: PPSSPP smoke tests plus real-hardware memory/startup measurements;
