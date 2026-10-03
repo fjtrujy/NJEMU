@@ -501,7 +501,11 @@ else()
 endif()
 
 if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-    list(APPEND COMMON_SRC psp/psp_audio_producer.c)
+    list(APPEND COMMON_SRC
+        psp/psp_audio_producer.c
+        psp/psp_me_spsc_ring.h
+        psp/psp_me_spsc_ring.c
+    )
     add_definitions(-DPSP_ME_AUDIO=1 -DAUDIO_PRODUCER_JOBS=1)
 else()
     list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
@@ -514,6 +518,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     # and non-PIC code.
     set_source_files_properties(
         src/psp/psp_audio_producer.c
+        src/psp/psp_me_spsc_ring.c
         src/common/ym2610_adpcma_job.c
         PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
     )
@@ -1672,6 +1677,12 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         target_include_directories(ym2610_adpcma_job_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
         add_test(NAME ym2610_adpcma_job_tests COMMAND ym2610_adpcma_job_tests)
+        add_executable(psp_me_spsc_ring_tests
+            tests/psp_me_spsc_ring_tests.c
+            src/psp/psp_me_spsc_ring.c)
+        target_include_directories(psp_me_spsc_ring_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        add_test(NAME psp_me_spsc_ring_tests COMMAND psp_me_spsc_ring_tests)
         foreach(UPLOAD_MODE IN ITEMS dirty legacy)
             add_executable(mvs_sprite_upload_${UPLOAD_MODE}_tests
                 tests/mvs_sprite_upload_tests.c
