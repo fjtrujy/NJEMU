@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }}
+    name: ${{ matrix.target }} USE_CACHE=${{ matrix.use_cache || 'DEFAULT' }} COMMAND_LIST=${{ matrix.command_list }} ADHOC=${{ matrix.adhoc }} SAVE_STATE=${{ matrix.save_state }} GUI=${{ matrix.gui }} PSP_ME_AUDIO=${{ matrix.psp_me_audio }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -22,6 +22,7 @@ jobs:
         adhoc: [OFF]
         save_state: [OFF]
         gui: [OFF, ON]
+        psp_me_audio: [OFF]
         include:
           - target: MVS
             use_cache: OFF
@@ -29,38 +30,79 @@ jobs:
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           - target: CPS2
             use_cache: OFF
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           - target: CPS1
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           - target: CPS2
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           - target: MVS
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           - target: NCDZ
             command_list: ON
             adhoc: OFF
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
           # ADHOC is an MVS-only PSP capability.
           - target: MVS
             command_list: OFF
             adhoc: ON
             save_state: ON
             gui: ON
+            psp_me_audio: OFF
+          # The current ME workload is MVS-only. Ship matching ME-enabled MVS
+          # artifacts while retaining the OFF variants above as the CPU-only
+          # reference/PPSSPP configuration.
+          - target: MVS
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            psp_me_audio: ON
+          - target: MVS
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: ON
+            psp_me_audio: ON
+          - target: MVS
+            use_cache: OFF
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            psp_me_audio: ON
+          - target: MVS
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            psp_me_audio: ON
+          - target: MVS
+            command_list: OFF
+            adhoc: ON
+            save_state: ON
+            gui: ON
+            psp_me_audio: ON
       fail-fast: false
 
     # miniz is already packaged in the development toolchain but has not yet
@@ -71,7 +113,27 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash python3
+        apk add build-base git bash python3 xxd
+
+    - name: Build and install Media Engine dependencies
+      if: ${{ matrix.psp_me_audio == 'ON' }}
+      run: |
+        git clone https://github.com/mcidclan/psp-media-engine-custom-core.git /tmp/psp-media-engine-custom-core
+        git -C /tmp/psp-media-engine-custom-core checkout fe871e12754060f3b42fbca6b251bb8ee3ade453
+        cmake -S /tmp/psp-media-engine-custom-core \
+          -B /tmp/psp-media-engine-custom-core-build \
+          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake
+        cmake --build /tmp/psp-media-engine-custom-core-build --parallel $(getconf _NPROCESSORS_ONLN)
+        cmake --install /tmp/psp-media-engine-custom-core-build
+
+        git clone https://github.com/mcidclan/psp-media-engine-safe-task.git /tmp/psp-media-engine-safe-task
+        git -C /tmp/psp-media-engine-safe-task checkout 7d4c41f77b0be8815a720e0c8212ed504c01806d
+        cmake -S /tmp/psp-media-engine-safe-task \
+          -B /tmp/psp-media-engine-safe-task-build \
+          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
+          -DPRX_FREE=1
+        cmake --build /tmp/psp-media-engine-safe-task-build --parallel $(getconf _NPROCESSORS_ONLN)
+        cmake --install /tmp/psp-media-engine-safe-task-build
     
 
     - name: Resolve cache override
@@ -94,7 +156,7 @@ jobs:
           -DADHOC=${{ matrix.adhoc }} \
           -DSAVE_STATE=${{ matrix.save_state }} \
           -DGUI=${{ matrix.gui }} \
-          -DPSP_ME_AUDIO=OFF \
+          -DPSP_ME_AUDIO=${{ matrix.psp_me_audio }} \
           ..
         cmake --build . --parallel $(getconf _NPROCESSORS_ONLN)
         cmake --install . --prefix "$PWD/install"
@@ -129,61 +191,5 @@ jobs:
       if: ${{ success() }}
       uses: actions/upload-artifact@v7
       with:
-        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}
+        name: NJEMU-${{ steps.slug.outputs.sha8 }}-${{ matrix.target }}-cache_${{ matrix.use_cache || 'DEFAULT' }}-command_list_${{ matrix.command_list }}-adhoc_${{ matrix.adhoc }}-save_state_${{ matrix.save_state }}-gui_${{ matrix.gui }}-me_audio_${{ matrix.psp_me_audio }}
         path: build/install/
-
-  me-build:
-    name: MVS PSP_ME_AUDIO=ON MIST build-only
-    runs-on: ubuntu-latest
-    container: ghcr.io/pspdev/pspdev:develop
-    steps:
-    - uses: actions/checkout@v7
-
-    - name: Install host build dependencies
-      run: |
-        apk add build-base git bash python3 xxd
-
-    - name: Build and install Media Engine dependencies
-      run: |
-        git clone https://github.com/mcidclan/psp-media-engine-custom-core.git /tmp/psp-media-engine-custom-core
-        git -C /tmp/psp-media-engine-custom-core checkout fe871e12754060f3b42fbca6b251bb8ee3ade453
-        cmake -S /tmp/psp-media-engine-custom-core \
-          -B /tmp/psp-media-engine-custom-core-build \
-          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake
-        cmake --build /tmp/psp-media-engine-custom-core-build --parallel $(getconf _NPROCESSORS_ONLN)
-        cmake --install /tmp/psp-media-engine-custom-core-build
-
-        git clone https://github.com/mcidclan/psp-media-engine-safe-task.git /tmp/psp-media-engine-safe-task
-        git -C /tmp/psp-media-engine-safe-task checkout 7d4c41f77b0be8815a720e0c8212ed504c01806d
-        cmake -S /tmp/psp-media-engine-safe-task \
-          -B /tmp/psp-media-engine-safe-task-build \
-          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
-          -DPRX_FREE=1
-        cmake --build /tmp/psp-media-engine-safe-task-build --parallel $(getconf _NPROCESSORS_ONLN)
-        cmake --install /tmp/psp-media-engine-safe-task-build
-
-    - name: Compile ME-enabled MVS builds
-      run: |
-        cmake -S . -B build-me-nogui \
-          -DPLATFORM=PSP \
-          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
-          -DTARGET=MVS \
-          -DGUI=OFF \
-          -DSAVE_STATE=OFF \
-          -DCOMMAND_LIST=OFF \
-          -DADHOC=OFF \
-          -DPSP_AUDIO_PROFILE=OFF \
-          -DPSP_ME_AUDIO=ON
-        cmake --build build-me-nogui --parallel $(getconf _NPROCESSORS_ONLN)
-
-        cmake -S . -B build-me-gui \
-          -DPLATFORM=PSP \
-          -DCMAKE_TOOLCHAIN_FILE=$PSPDEV/psp/share/pspdev.cmake \
-          -DTARGET=MVS \
-          -DGUI=ON \
-          -DSAVE_STATE=OFF \
-          -DCOMMAND_LIST=OFF \
-          -DADHOC=OFF \
-          -DPSP_AUDIO_PROFILE=OFF \
-          -DPSP_ME_AUDIO=ON
-        cmake --build build-me-gui --parallel $(getconf _NPROCESSORS_ONLN)

@@ -110,15 +110,19 @@ the active PSPDEV toolchain:
 - `libme-stask.a` built with `PRX_FREE=1`;
 - PSP `kubridge` support (`pspkubridge`).
 
-The normal OFF build does not search for or link these libraries.  The regular
-PSP GitHub Actions matrix explicitly configures `PSP_ME_AUDIO=OFF`.
+The normal OFF build does not search for or link these libraries.  The PSP
+GitHub Actions matrix now makes `PSP_ME_AUDIO` explicit in every job/artifact.
+CPS1/CPS2/NCDZ remain OFF because no workload from those emulators has been
+migrated to ME yet.  MVS produces both OFF reference artifacts and ON artifacts
+for the normal GUI/no-GUI variants plus the existing MVS command-list/cache and
+ADHOC variants.
 
-The regular PSP matrix remains OFF-only.  A separate MVS build-only job installs
-the two upstream dependencies from the exact revisions above, builds safe-task
-with `PRX_FREE=1`, and compiles the MIST-backed `PSP_ME_AUDIO=ON` path; it does
-not run PPSSPP or claim ME runtime coverage.  The custom-core dependency still
-uses its own upstream kernel bridge build machinery, while NJEMU itself avoids
-loading a temporary safe-task kernel PRX at runtime.
+Each MVS `PSP_ME_AUDIO=ON` matrix job installs the two upstream dependencies from
+the exact revisions above and builds safe-task with `PRX_FREE=1` before compiling
+NJEMU.  These jobs validate/build the ME-capable binary but do not run PPSSPP as
+ME execution evidence.  The custom-core dependency still uses its own upstream
+kernel bridge build machinery, while NJEMU itself avoids loading a temporary
+safe-task kernel PRX at runtime.
 
 ## Memory and synchronization findings
 
