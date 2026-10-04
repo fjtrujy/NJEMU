@@ -601,8 +601,7 @@ static int test_sound_status_snapshot(void)
 	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_io_count != 2u ||
-		!psp_me_sound_worker_z80_advance(&worker, cycles, 1000u,
-			cycles / 4u, 101u) ||
+		!psp_me_sound_worker_z80_advance(&worker, cycles, 1000u, 101u) ||
 		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
 			reference_ram_hash(), 101u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_sync(&worker, 102u, TEST_TIMEOUT_US) ||
@@ -618,6 +617,7 @@ static int test_sound_status_snapshot(void)
 	if (final_status.generation != 1u || final_status.emulated_time != 102u ||
 		final_status.sound_code != 0x5au || final_status.pending_command != 0u ||
 		final_status.result_code != 0x5au ||
+		final_status.last_advance_elapsed_us != cycles / 4u ||
 		final_status.sequence <= initial_status.sequence)
 	{
 		fprintf(stderr,
@@ -664,6 +664,7 @@ static int test_ym_shadow_timer_irq_and_status(void)
 	};
 	psp_me_sound_worker_t worker;
 	psp_me_sound_worker_stats_t stats;
+	psp_me_sound_status_snapshot_t status;
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	cz80_state_t expected_state;
@@ -876,6 +877,7 @@ static int test_autonomous_ym_timer_preemption_boundary(void)
 	};
 	psp_me_sound_worker_t worker;
 	psp_me_sound_worker_stats_t stats;
+	psp_me_sound_status_snapshot_t status;
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	cz80_state_t expected_state;
@@ -931,10 +933,10 @@ static int test_autonomous_ym_timer_preemption_boundary(void)
 	reference_preempt_cpu = NULL;
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_preempt_on_timer_start || Cz80_Get_Reg(&reference_cpu, CZ80_PC) != 24u ||
-		!psp_me_sound_worker_z80_advance(&worker, requested_cycles, 1000u,
-			24u, 100u) ||
+		!psp_me_sound_worker_z80_advance(&worker, requested_cycles, 1000u, 100u) ||
 		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
 			reference_ram_hash(), 100u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr,
@@ -943,6 +945,12 @@ static int test_autonomous_ym_timer_preemption_boundary(void)
 			reference_preempt_on_timer_start ? 1 : 0);
 		if (worker.running)
 			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.last_advance_elapsed_us != 24u)
+	{
+		fprintf(stderr, "Autonomous YM preemption elapsed mismatch: %u\n",
+			status.last_advance_elapsed_us);
 		return 0;
 	}
 
@@ -1008,8 +1016,8 @@ static int test_autonomous_ym_timer_overflow_schedule(void)
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
 			44100u, 0x1000u, 0x1000u, false,
 			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
-		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 24u, 24u) ||
-		!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 18u, 42u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 24u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 42u) ||
 		!psp_me_sound_worker_ym_render_prepare(&worker, 1u, 42u, &window,
 			TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &first_status))
@@ -1031,7 +1039,7 @@ static int test_autonomous_ym_timer_overflow_schedule(void)
 		return 0;
 	}
 
-	if (!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 18u, 60u) ||
+	if (!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 60u) ||
 		!psp_me_sound_worker_sync(&worker, 60u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &second_status) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
@@ -1099,9 +1107,9 @@ static int test_autonomous_ym_timer_b_stop_restart(void)
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
 			44100u, 0x1000u, 0x1000u, false,
 			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
-		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 16u, 16u) ||
-		!psp_me_sound_worker_z80_advance(&worker, 200u, 984u, 16u, 32u) ||
-		!psp_me_sound_worker_z80_advance(&worker, 1152u, 288u, 288u, 320u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 16u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 984u, 32u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 1152u, 288u, 320u) ||
 		!psp_me_sound_worker_sync(&worker, 320u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))

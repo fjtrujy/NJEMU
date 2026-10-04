@@ -864,7 +864,7 @@ done:
 }
 
 void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint32_t elapsed_us, uint64_t emulated_time)
+	uint32_t scheduler_time_left, uint64_t emulated_time)
 {
 	bool result = true;
 
@@ -889,7 +889,7 @@ void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
 	{
 		result = psp_me_sound_worker_z80_advance(&me_sound_worker, cycles,
-			scheduler_time_left, elapsed_us, emulated_time);
+			scheduler_time_left, emulated_time);
 		if (result)
 			me_sound_status_required_time = emulated_time;
 	}

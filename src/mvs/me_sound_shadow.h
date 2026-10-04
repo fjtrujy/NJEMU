@@ -27,7 +27,7 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	uint8_t status_b);
 void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint32_t elapsed_us, uint64_t emulated_time);
+	uint32_t scheduler_time_left, uint64_t emulated_time);
 bool mvs_me_sound_shadow_checkpoint_due(void);
 void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
@@ -132,11 +132,10 @@ static inline void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer,
 }
 
 static inline void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint32_t elapsed_us, uint64_t emulated_time)
+	uint32_t scheduler_time_left, uint64_t emulated_time)
 {
 	(void)cycles;
 	(void)scheduler_time_left;
-	(void)elapsed_us;
 	(void)emulated_time;
 }
 

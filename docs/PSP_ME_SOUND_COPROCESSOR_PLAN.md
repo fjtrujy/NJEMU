@@ -1582,6 +1582,46 @@ live and is required for validation/fallback; the next C6 steps must make comman
 delivery, scheduler progress and failure recovery sufficient to remove that oracle
 without turning M68000 status reads into synchronous ME barriers.
 
+#### C6 readiness: ME-derived Z80 slice elapsed time (2026-10-04) [host/build complete]
+
+The autonomous `Z80_ADVANCE` protocol no longer carries Allegrex's measured
+`elapsed_us`.  Allegrex now sends only the requested Z80 cycle budget, the semantic
+MVS scheduler `timer_left` value and the completed emulated timestamp.  The ME
+derives the amount of scheduler time consumed by the slice locally.
+
+This cannot use the raw `Cz80_Exec()` return value.  The focused preemption oracle
+demonstrates why: a 200-cycle slice preempted by a YM timer at the same boundary as
+MVS returns **211 cycles** from CZ80 after the current instruction completes, while
+the MVS scheduler advances only **24 us / 96 cycles**.  The production scheduler
+computes that boundary from the still-live `ICount` inside `timer_adjust()` before
+forcing it to zero.
+
+The ME now mirrors that exact rule:
+
+- a normal slice consumes `requested_cycles / 4` microseconds, matching the fixed
+  4 MHz MVS Z80 scheduler even if CZ80 internally overshoots the cycle budget to
+  finish an instruction;
+- when a YM timer start preempts the active slice, the ME timer callback captures
+  `(requested_cycles - ICount) / 4` **before** forcing its CZ80 `ICount` to zero;
+- that locally derived elapsed value is then used to age the ME-owned Timer A/B
+  deadlines, so timer scheduling no longer depends on a CPU-measured slice duration.
+
+The status cache line publishes the last locally derived slice elapsed value for
+oracle/debug coverage.  Host tests assert both sides explicitly: a 22-cycle normal
+slice reports **5 us**, while the Timer-A preemption workload reports **24 us**.
+The autonomous Timer A reload and Timer B stop/restart tests continue to pass after
+removing the elapsed-time field from the command protocol.
+
+Regression coverage remains clean after this protocol reduction: Desktop MVS is
+**31/31 CTest green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations, including the standalone
+hardware harness.
+
+This removes another CPU oracle from each Z80 slice, but Allegrex still owns the
+outer scheduler boundaries and supplies `timer_left`.  Full C6 ownership still
+requires replacing those boundaries with ME-driven progress/deadlines before CPU
+Z80/YM execution can be stopped.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;
