@@ -98,12 +98,13 @@ static int32_t sound_update_thread(uint32_t args, void *argp)
 			start = audio_profile_now_us();
 			audio_producer_driver->render(sound->update, sound_buffer[flip]);
 			audio_profile_add(AUDIO_PROFILE_PRODUCER, audio_profile_now_us() - start);
-		}
-		else
-			memset(sound_buffer[flip], 0, sound->samples * sound->channels * sizeof(int16_t));
+			}
+			else
+				memset(sound_buffer[flip], 0, sound_output_buffer_bytes(sound));
 
-		start = audio_profile_now_us();
-		audio_driver->srcOutputBlocking(game_audio, sound_volume, sound_buffer[flip], sound->samples * sound->channels * sizeof(int16_t));
+			start = audio_profile_now_us();
+			audio_driver->srcOutputBlocking(game_audio, sound_volume, sound_buffer[flip],
+				sound_output_buffer_bytes(sound));
 		audio_profile_add(AUDIO_PROFILE_OUTPUT_BLOCK, audio_profile_now_us() - start);
 		audio_profile_buffer_completed();
 		flip ^= 1;
@@ -213,8 +214,8 @@ void sound_thread_notify_power_event(int suspended)
 
 int sound_thread_start(void)
 {
-	/* Verify that the sound buffer is large enough for the configured audio format */
-	assert(sound->samples * sound->channels <= SOUND_BUFFER_SIZE);
+	/* The synthesis callback may be mono, but every platform receives stereo. */
+	assert(sound_output_sample_count(sound) <= SOUND_BUFFER_SIZE);
 
 	sound_active = 0;
 	sound_thread = NULL;
@@ -225,7 +226,7 @@ int sound_thread_start(void)
 	memset(sound_buffer[0], 0, sizeof(sound_buffer[0]));
 	memset(sound_buffer[1], 0, sizeof(sound_buffer[1]));
 	audio_profile_configure((uint32_t)sound->samples, (uint32_t)sound->frequency,
-		(uint32_t)sound->channels);
+		SOUND_OUTPUT_CHANNELS);
 
 	if (!audio_producer_driver->init())
 		return 0;
@@ -234,7 +235,8 @@ int sound_thread_start(void)
 
 	game_audio = audio_driver->init();
 
-	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency, sound->channels))
+	if (!audio_driver->chSRCReserve(game_audio, sound->samples, sound->frequency,
+		SOUND_OUTPUT_CHANNELS))
 	{
 		fatalerror(TEXT(COULD_NOT_RESERVE_AUDIO_CHANNEL_FOR_SOUND));
 		audio_driver->free(game_audio);

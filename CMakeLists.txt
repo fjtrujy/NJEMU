@@ -1643,6 +1643,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME frame_pacing_tests COMMAND frame_pacing_tests)
 
+    add_executable(sound_output_contract_tests
+        tests/sound_output_contract_tests.c
+    )
+    target_include_directories(sound_output_contract_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME sound_output_contract_tests COMMAND sound_output_contract_tests)
+
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c
         src/common/ui_layout.c
