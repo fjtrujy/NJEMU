@@ -37,6 +37,18 @@ static void YM2610_shadow_update(int32_t **buffer, int length)
 	bool shadow_started = mvs_me_sound_shadow_ym_render_begin((uint32_t)length,
 		timer_get_time_us());
 
+	if (shadow_started && mvs_me_sound_shadow_ym_authoritative())
+	{
+		if (mvs_me_sound_shadow_ym_render_completed_authoritative(buffer,
+				(uint32_t)length))
+			return;
+		/* The ME path failed before committing output. The CPU YM context is
+		 * kept synchronized after every successful ME block, so rendering this
+		 * block locally is an immediate, state-continuous fallback. */
+		YM2610Update(buffer, length);
+		return;
+	}
+
 	YM2610Update(buffer, length);
 	if (shadow_started)
 		mvs_me_sound_shadow_ym_render_completed(buffer, (uint32_t)length,

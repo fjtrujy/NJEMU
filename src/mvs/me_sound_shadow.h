@@ -25,6 +25,9 @@ void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time);
 void mvs_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time);
 void mvs_me_sound_shadow_ym_timer_completed(void);
 bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time);
+bool mvs_me_sound_shadow_ym_authoritative(void);
+bool mvs_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
+	uint32_t samples);
 void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	uint8_t status_b);
 void mvs_me_sound_shadow_z80_slice_completed(uint64_t emulated_time);
@@ -107,6 +110,19 @@ static inline bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples,
 {
 	(void)samples;
 	(void)emulated_time;
+	return false;
+}
+
+static inline bool mvs_me_sound_shadow_ym_authoritative(void)
+{
+	return false;
+}
+
+static inline bool mvs_me_sound_shadow_ym_render_completed_authoritative(
+	int32_t **buffer, uint32_t samples)
+{
+	(void)buffer;
+	(void)samples;
 	return false;
 }
 

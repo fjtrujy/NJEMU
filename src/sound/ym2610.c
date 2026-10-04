@@ -3324,6 +3324,42 @@ bool YM2610DefaultFillPcmWindow(ym2610_pcm_window_t *window)
 	return true;
 }
 
+static bool ym2610_context_rebindable(const ym2610_context_t *source)
+{
+	uint32_t channel;
+	uint32_t slot;
+	uint32_t index;
+
+	if (!source)
+		return false;
+	for (channel = 0; channel < 6; channel++)
+	{
+		for (slot = 0; slot < 4; slot++)
+		{
+			const int32_t *source_dt = CTX_YM2610(source).CH[channel].SLOT[slot].DT;
+			bool valid = source_dt == NULL;
+
+			for (index = 0; !valid && index < 8; index++)
+				if (source_dt == CTX_YM2610(source).OPN.ST.dt_tab[index])
+					valid = true;
+			if (!valid)
+				return false;
+		}
+
+		for (index = 0; index < 4; index++)
+			if (CTX_YM2610(source).adpcma[channel].pan ==
+				&CTX_out_adpcma(source)[index])
+				break;
+		if (index == 4)
+			return false;
+	}
+
+	for (index = 0; index < 4; index++)
+		if (CTX_YM2610(source).adpcmb.pan == &CTX_out_delta(source)[index])
+			break;
+	return index != 4;
+}
+
 static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 	const ym2610_context_t *source)
 {
@@ -3331,7 +3367,8 @@ static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 	uint32_t slot;
 	uint32_t index;
 
-	if (!destination || !source || destination == source)
+	if (!destination || !source || destination == source ||
+		!ym2610_context_rebindable(source))
 		return false;
 	*destination = *source;
 
@@ -3341,20 +3378,17 @@ static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 		for (slot = 0; slot < 4; slot++)
 		{
 			const int32_t *source_dt = CTX_YM2610(source).CH[channel].SLOT[slot].DT;
-			bool rebound = source_dt == NULL;
 
 			CTX_YM2610(destination).CH[channel].SLOT[slot].DT = NULL;
-			for (index = 0; !rebound && index < 8; index++)
+			for (index = 0; source_dt && index < 8; index++)
 			{
 				if (source_dt == CTX_YM2610(source).OPN.ST.dt_tab[index])
 				{
 					CTX_YM2610(destination).CH[channel].SLOT[slot].DT =
 						CTX_YM2610(destination).OPN.ST.dt_tab[index];
-					rebound = true;
+					break;
 				}
 			}
-			if (!rebound)
-				return false;
 		}
 		setup_connection(destination, &CTX_YM2610(destination).CH[channel],
 			(int)channel);
@@ -3369,8 +3403,6 @@ static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 				break;
 			}
 		}
-		if (index == 4)
-			return false;
 	}
 
 	for (index = 0; index < 4; index++)
@@ -3381,8 +3413,6 @@ static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 			break;
 		}
 	}
-	if (index == 4)
-		return false;
 	return true;
 }
 
