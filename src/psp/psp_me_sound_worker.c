@@ -1078,6 +1078,26 @@ static void psp_me_sound_worker_entry(void *param)
 			event.emulated_time = context->progress->emulated_time;
 			break;
 
+		case PSP_ME_SOUND_WORKER_COMMAND_FENCE:
+			if (command.generation != context->progress->generation)
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_GENERATION);
+				return;
+			}
+			if (z80_runtime.initialized && !me_ym_process_due_timers(&z80_runtime))
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
+				return;
+			}
+			if (z80_runtime.initialized)
+				me_z80_publish_status(context, &z80_runtime,
+					context->progress->emulated_time);
+			event.type = PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK;
+			event.emulated_time = context->progress->emulated_time;
+			break;
+
 		case PSP_ME_SOUND_WORKER_COMMAND_SHUTDOWN:
 			if (command.generation != context->progress->generation)
 			{
@@ -1671,6 +1691,15 @@ static bool wait_event(psp_me_sound_worker_t *worker, uint32_t expected_type,
 		{
 			if (event.type == PSP_ME_SOUND_WORKER_EVENT_ERROR)
 				return false;
+			if (event.type == PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK &&
+				worker->fence_in_flight &&
+				event.generation == worker->generation &&
+				event.token == worker->fence_token)
+			{
+				worker->fence_in_flight = false;
+				worker->fence_token = 0;
+				continue;
+			}
 			if (event.type == PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO)
 			{
 				if (!consume_shadow_echo(worker, &event))
@@ -1862,6 +1891,8 @@ bool psp_me_sound_worker_reset(psp_me_sound_worker_t *worker,
 	worker->z80_next_sequence = 0;
 	worker->ym_render_in_flight = false;
 	worker->ym_render_token = 0;
+	worker->fence_in_flight = false;
+	worker->fence_token = 0;
 	return event.emulated_time == 0;
 }
 
@@ -1883,6 +1914,96 @@ bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 			command.token, timeout_us, &event))
 		return false;
 	return event.emulated_time == emulated_time;
+}
+
+bool psp_me_sound_worker_fence_begin(psp_me_sound_worker_t *worker)
+{
+	psp_me_sound_worker_message_t command;
+	psp_me_spsc_ring_result_t result;
+
+	if (!worker || !worker->running || worker->generation == 0)
+		return false;
+	if (worker->fence_in_flight)
+		return true;
+	if (worker->ym_render_in_flight)
+		return false;
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_FENCE;
+	command.generation = worker->generation;
+	command.token = worker->next_token;
+	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
+		&command, NULL);
+	if (result != PSP_ME_SPSC_RING_OK)
+		return false;
+	worker->next_token++;
+	worker->fence_token = command.token;
+	worker->fence_in_flight = true;
+	return true;
+}
+
+psp_me_sound_fence_result_t psp_me_sound_worker_fence_poll(
+	psp_me_sound_worker_t *worker, uint64_t *emulated_time)
+{
+	if (!worker || !worker->running || worker->generation == 0 ||
+		!worker->fence_in_flight)
+		return PSP_ME_SOUND_FENCE_FAILED;
+
+	for (;;)
+	{
+		psp_me_sound_worker_message_t event;
+		psp_me_spsc_ring_result_t result = psp_me_spsc_ring_try_pop(worker->events,
+			&allegrex_cache_ops, &event, NULL);
+
+		if (result == PSP_ME_SPSC_RING_EMPTY)
+			return PSP_ME_SOUND_FENCE_PENDING;
+		if (result != PSP_ME_SPSC_RING_OK ||
+			event.type == PSP_ME_SOUND_WORKER_EVENT_ERROR)
+		{
+			worker->fence_in_flight = false;
+			worker->fence_token = 0;
+			return PSP_ME_SOUND_FENCE_FAILED;
+		}
+		if (event.type == PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO)
+		{
+			if (!consume_shadow_echo(worker, &event))
+				return PSP_ME_SOUND_FENCE_FAILED;
+			continue;
+		}
+		if (event.type != PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK ||
+			event.generation != worker->generation ||
+			event.token != worker->fence_token)
+		{
+			worker->fence_in_flight = false;
+			worker->fence_token = 0;
+			return PSP_ME_SOUND_FENCE_FAILED;
+		}
+		worker->fence_in_flight = false;
+		worker->fence_token = 0;
+		if (emulated_time)
+			*emulated_time = event.emulated_time;
+		return PSP_ME_SOUND_FENCE_COMPLETE;
+	}
+}
+
+bool psp_me_sound_worker_fence(psp_me_sound_worker_t *worker,
+	uint64_t timeout_us)
+{
+	uint64_t start_us;
+
+	if (!psp_me_sound_worker_fence_begin(worker))
+		return false;
+	start_us = sceKernelGetSystemTimeWide();
+	for (;;)
+	{
+		psp_me_sound_fence_result_t result = psp_me_sound_worker_fence_poll(worker, NULL);
+
+		if (result == PSP_ME_SOUND_FENCE_COMPLETE)
+			return true;
+		if (result == PSP_ME_SOUND_FENCE_FAILED)
+			return false;
+		if (timed_out(start_us, timeout_us))
+			return false;
+	}
 }
 
 bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,

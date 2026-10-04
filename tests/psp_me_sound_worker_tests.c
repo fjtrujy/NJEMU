@@ -654,6 +654,117 @@ static int test_sound_status_snapshot(void)
 	return 1;
 }
 
+static int test_sound_status_fence_ordering(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
+	psp_me_sound_fence_result_t fence_result;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	uint64_t fenced_time = 0;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x66u, 20u) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status))
+	{
+		fprintf(stderr, "Sound status fence setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.emulated_time != 20u || status.sound_code != 0x66u ||
+		status.pending_command != 1u || status.last_advance_elapsed_us != 0u)
+	{
+		fprintf(stderr,
+			"Sound status fence mutated time/state: time=%llu code=%u pending=%u elapsed=%u\n",
+			(unsigned long long)status.emulated_time, status.sound_code,
+			status.pending_command, status.last_advance_elapsed_us);
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	/* Equal timestamps do not prove FIFO visibility: a newly queued sound
+	 * command can legitimately make the previous snapshot look mismatched. */
+	if (psp_me_sound_worker_validate_status(&status, 1u, 20u,
+			0x77u, 1u, 0u) != PSP_ME_SOUND_STATUS_MISMATCH ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x77u, 20u) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		psp_me_sound_worker_validate_status(&status, 1u, 20u,
+			0x77u, 1u, 0u) != PSP_ME_SOUND_STATUS_MATCH)
+	{
+		fprintf(stderr, "Sound status equal-time fence recovery failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_fence_begin(&worker) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 40u, 40u))
+	{
+		fprintf(stderr, "Sound status old-fence setup failed\n");
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	do
+	{
+		fence_result = psp_me_sound_worker_fence_poll(&worker, &fenced_time);
+		if (fence_result == PSP_ME_SOUND_FENCE_PENDING)
+			sched_yield();
+	} while (fence_result == PSP_ME_SOUND_FENCE_PENDING);
+	if (fence_result != PSP_ME_SOUND_FENCE_COMPLETE || fenced_time != 20u)
+	{
+		fprintf(stderr, "Sound status old fence coverage mismatch: result=%d time=%llu\n",
+			(int)fence_result, (unsigned long long)fenced_time);
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Sound status fence ordering failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.emulated_time != 40u || status.last_advance_elapsed_us != 40u)
+	{
+		fprintf(stderr,
+			"Sound status fence did not observe prior horizon: time=%llu elapsed=%u\n",
+			(unsigned long long)status.emulated_time,
+			status.last_advance_elapsed_us);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_ym_shadow_timer_irq_and_status(void)
 {
 	host_dispatch_t host = { 0 };
@@ -1106,7 +1217,7 @@ static int test_autonomous_advance_horizon_timer_boundary(void)
 			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_advance_horizon(&worker, 50u, 1000u) ||
 		!psp_me_sound_worker_z80_advance_horizon(&worker, 42u, 976u) ||
-		!psp_me_sound_worker_sync(&worker, 42u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status))
 	{
 		fprintf(stderr, "Autonomous advance-horizon first timer setup failed\n");
@@ -1126,7 +1237,7 @@ static int test_autonomous_advance_horizon_timer_boundary(void)
 	}
 
 	if (!psp_me_sound_worker_z80_advance_horizon(&worker, 60u, 958u) ||
-		!psp_me_sound_worker_sync(&worker, 60u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
 	{
@@ -1562,7 +1673,7 @@ int main(void)
 {
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
-		!test_sound_status_snapshot() ||
+		!test_sound_status_snapshot() || !test_sound_status_fence_ordering() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_overflow_schedule() ||

@@ -1658,15 +1658,77 @@ Host coverage now checks all of the relevant edges:
 The regression matrix remains clean: Desktop MVS is **31/31 CTest green**, Desktop
 NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
 sound-coprocessor configurations, including the standalone hardware harness.
-The current PSPLink/MIST session loads the new harness but does not reach a usable
-worker log, so no new physical-runtime claim is made for this exact build.  This
-does not block continued C6 work under the current hardware-check waiver.
+The current PSPLink/MIST session now runs the standalone worker cleanly again;
+integrated gameplay evidence for later C6 subphases is recorded separately rather
+than retroactively changing the gate of this scheduler-horizon step.
 
 CPU Z80 execution is still retained as the bounded checkpoint oracle in this
 subphase.  The important ownership change is that the ME's requested work is now
 known **before** CPU Z80 execution and is derived entirely from scheduler state;
 this makes a later CPU-Z80 skip possible without inventing a replacement cycle
 budget from CPU results.
+
+#### C6 readiness: FIFO status fence / bounded status barrier (2026-10-04) [host + standalone hardware complete]
+
+The M68000-visible sound status path now has an explicit FIFO barrier for the cases
+where the lock-free ME status snapshot is not immediately usable.  A new `FENCE`
+worker command carries **no synthetic timestamp**.  When the ME reaches it in the
+command ring it:
+
+- applies any YM timer overflow that was already due from previously processed
+  scheduler horizons;
+- republishes the current sound status snapshot;
+- returns `FENCE_ACK` with the worker's existing `emulated_time` unchanged.
+
+That ACK therefore proves only that every command queued **before the fence** has
+been observed.  It never moves Z80/YM time merely to satisfy a main-CPU read.
+
+The normal `$320001` read keeps the non-blocking fast path: if the current ME
+snapshot already matches the still-authoritative CPU state it is presented
+immediately.  Any other validation result -- including an equal-timestamp value
+mismatch, which can simply mean that a sound command is still ahead in the FIFO --
+gets a bounded fence attempt.  The M68000 thread spins for at most **250 us**; if
+the worker mutex is busy, a render is in flight, or the fence does not complete
+inside that budget, the read falls back to the CPU-owned status values.
+
+A timed-out fence is intentionally left in flight.  A later status read can finish
+that same fence instead of injecting another barrier.  `FENCE_ACK.emulated_time`
+is used as the coverage marker: if that old fence predates the current
+`required_time`, the producer queues a fresh fence (within the same bounded wait)
+rather than falsely declaring divergence.  Once a completed fence covers the
+required time, any remaining stale/unavailable/mismatched state is a real oracle
+failure and the ME shadow path fails closed back to CPU authority.
+
+Host coverage now proves:
+
+- a fence after a timestamped sound command observes that command without changing
+  the emulated timestamp or synthetic Z80 elapsed time;
+- an equal-timestamp pre-command snapshot is correctly classified as a mismatch,
+  then resolves to an exact match after the FIFO fence;
+- a fence queued **before** a later scheduler horizon reports the older covered
+  time, and a subsequent fence observes the horizon;
+- Timer A/B local scheduling and existing PCM/Z80/status oracles remain green.
+
+The exact standalone PSP build also executes the fence on the physical ME in every
+lifecycle.  The final real-hardware record is clean: **4/4 cycles**, `init=0`,
+**268 commands** in the final lifecycle (one additional fence versus the previous
+harness), `fatal=0`, zero command/event overflow, zero Z80/YM mismatches, and
+`emulated_time=19000` before and after the fence/sync sequence.  The harness still
+contains its historical synthetic in-process lifecycle exercise; no physical
+sleep/resume claim is made or required for this subphase.
+
+The final regression matrix is clean: Desktop MVS **31/31 CTest**, Desktop NCDZ,
+PSP CPU-only, PSP ADPCM-A-only ME, and PSP full sound-coprocessor + hardware-harness
+builds all pass.  A scripted `mslug3` launch on the current PSPLink session produced
+normal CPU audio-profile windows but no ME shadow log, indicating startup fallback
+before the status barrier became active; that run is therefore **not** counted as
+integrated barrier evidence.  The standalone MIST worker immediately before/after
+that attempt is healthy, so the fallback is tracked as an integration/bootstrap
+environment issue rather than as a fence protocol failure.
+
+CPU status remains the oracle and fallback in this dry-run.  The fence/barrier is
+the ordering primitive needed before ME status can become authoritative; it does
+not itself transfer ownership.
 
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;

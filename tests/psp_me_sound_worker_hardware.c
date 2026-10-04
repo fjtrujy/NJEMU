@@ -306,6 +306,9 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!run_shadow_sequence(&worker, first_time + 1u) ||
 		!run_z80_shadow_sequence(&worker, second_time - 2u) ||
+		!psp_me_sound_worker_fence(&worker, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		status.generation != generation || status.emulated_time != second_time ||
 		!psp_me_sound_worker_sync(&worker, second_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status) ||
@@ -322,7 +325,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-			stats->commands_processed == 11u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+			stats->commands_processed == 12u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
 		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&

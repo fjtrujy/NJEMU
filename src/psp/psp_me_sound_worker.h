@@ -41,7 +41,8 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT,
-	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON,
+	PSP_ME_SOUND_WORKER_COMMAND_FENCE
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -55,7 +56,8 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_ERROR,
 	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK,
-	PSP_ME_SOUND_WORKER_EVENT_Z80_CHECKPOINT_ACK
+	PSP_ME_SOUND_WORKER_EVENT_Z80_CHECKPOINT_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK
 } psp_me_sound_worker_event_type_t;
 
 typedef enum psp_me_sound_worker_error
@@ -154,6 +156,13 @@ typedef enum psp_me_sound_status_validation
 	PSP_ME_SOUND_STATUS_MATCH,
 	PSP_ME_SOUND_STATUS_MISMATCH
 } psp_me_sound_status_validation_t;
+
+typedef enum psp_me_sound_fence_result
+{
+	PSP_ME_SOUND_FENCE_FAILED = -1,
+	PSP_ME_SOUND_FENCE_PENDING = 0,
+	PSP_ME_SOUND_FENCE_COMPLETE = 1
+} psp_me_sound_fence_result_t;
 
 typedef struct psp_me_sound_z80_slice
 {
@@ -285,7 +294,9 @@ typedef struct psp_me_sound_worker
 	uint32_t ym_first_pcm_mismatch_channel;
 	int32_t ym_first_pcm_expected;
 	int32_t ym_first_pcm_actual;
+	uint32_t fence_token;
 	bool ym_render_in_flight;
+	bool fence_in_flight;
 	bool running;
 	psp_me_sound_worker_stats_t last_stats;
 } psp_me_sound_worker_t;
@@ -297,6 +308,11 @@ bool psp_me_sound_worker_reset(psp_me_sound_worker_t *worker,
 	uint32_t generation, uint64_t timeout_us);
 bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, uint64_t timeout_us);
+bool psp_me_sound_worker_fence_begin(psp_me_sound_worker_t *worker);
+psp_me_sound_fence_result_t psp_me_sound_worker_fence_poll(
+	psp_me_sound_worker_t *worker, uint64_t *emulated_time);
+bool psp_me_sound_worker_fence(psp_me_sound_worker_t *worker,
+	uint64_t timeout_us);
 bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 	psp_me_sound_status_snapshot_t *status);
 psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(

@@ -62,6 +62,12 @@ static uint32_t me_sound_status_mismatches;
 static uint32_t me_sound_status_presented_reads;
 static uint32_t me_sound_status_fallback_busy;
 static uint32_t me_sound_status_fallback_stale;
+static uint32_t me_sound_status_fence_attempts;
+static uint32_t me_sound_status_fence_matches;
+static uint32_t me_sound_status_fence_pending;
+static uint32_t me_sound_status_fence_failures;
+static uint64_t me_sound_status_fence_wait_us;
+static uint32_t me_sound_status_fence_wait_max_us;
 static uint64_t me_sound_status_required_time;
 static bool me_sound_worker_mutex_ready;
 static bool me_sound_ym_gate_ready;
@@ -83,6 +89,7 @@ static void psp_audio_producer_waitJob(void);
 
 #define PSP_ME_PROBE_A 0x13579bdfu
 #define PSP_ME_PROBE_B 0x2468ace0u
+#define PSP_ME_SOUND_STATUS_FENCE_BUDGET_US 250ULL
 
 static bool psp_me_mode_enabled(void)
 {
@@ -283,6 +290,12 @@ static void psp_me_sound_z80_reset_tracking(void)
 	me_sound_status_presented_reads = 0;
 	me_sound_status_fallback_busy = 0;
 	me_sound_status_fallback_stale = 0;
+	me_sound_status_fence_attempts = 0;
+	me_sound_status_fence_matches = 0;
+	me_sound_status_fence_pending = 0;
+	me_sound_status_fence_failures = 0;
+	me_sound_status_fence_wait_us = 0;
+	me_sound_status_fence_wait_max_us = 0;
 	me_sound_status_required_time = 0;
 	__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
 	me_sound_z80_failed = false;
@@ -293,7 +306,7 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 {
 	psp_me_sound_worker_stats_t stats;
 	char path[1024];
-	char line[1536];
+	char line[2048];
 	uint32_t frames;
 	uint32_t sent;
 	uint32_t matched;
@@ -316,6 +329,12 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	uint32_t status_presented_reads;
 	uint32_t status_fallback_busy;
 	uint32_t status_fallback_stale;
+	uint32_t status_fence_attempts;
+	uint32_t status_fence_matches;
+	uint32_t status_fence_pending;
+	uint32_t status_fence_failures;
+	uint64_t status_fence_wait_us;
+	uint32_t status_fence_wait_max_us;
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
@@ -362,6 +381,12 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	status_presented_reads = me_sound_status_presented_reads;
 	status_fallback_busy = me_sound_status_fallback_busy;
 	status_fallback_stale = me_sound_status_fallback_stale;
+	status_fence_attempts = me_sound_status_fence_attempts;
+	status_fence_matches = me_sound_status_fence_matches;
+	status_fence_pending = me_sound_status_fence_pending;
+	status_fence_failures = me_sound_status_fence_failures;
+	status_fence_wait_us = me_sound_status_fence_wait_us;
+	status_fence_wait_max_us = me_sound_status_fence_wait_max_us;
 	ym_renders = stats.ym_renders - me_sound_shadow_window_base.ym_renders;
 	ym_render_samples = stats.ym_render_samples -
 		me_sound_shadow_window_base.ym_render_samples;
@@ -390,6 +415,9 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			"ym_timer_callbacks=%lu ym_timer_overflows=%lu "
 			"status_checks=%lu status_mismatches=%lu status_presented=%lu "
 			"status_fallback_busy=%lu status_fallback_stale=%lu "
+			"status_fence_attempts=%lu status_fence_matches=%lu "
+			"status_fence_pending=%lu status_fence_failures=%lu "
+			"status_fence_wait_us=%llu status_fence_wait_max_us=%lu "
 			"ym_renders=%lu ym_samples=%lu ym_render_errors=%lu "
 			"ym_presented_renders=%lu ym_presented_samples=%lu "
 			"ym_pcm_mismatches=%lu ym_status_mismatches=%lu ym_send_failures=%lu "
@@ -435,6 +463,12 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			(unsigned long)status_presented_reads,
 			(unsigned long)status_fallback_busy,
 			(unsigned long)status_fallback_stale,
+			(unsigned long)status_fence_attempts,
+			(unsigned long)status_fence_matches,
+			(unsigned long)status_fence_pending,
+			(unsigned long)status_fence_failures,
+			(unsigned long long)status_fence_wait_us,
+			(unsigned long)status_fence_wait_max_us,
 			(unsigned long)ym_renders,
 			(unsigned long)ym_render_samples,
 			(unsigned long)ym_render_errors,
@@ -468,6 +502,12 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	me_sound_status_presented_reads = 0;
 	me_sound_status_fallback_busy = 0;
 	me_sound_status_fallback_stale = 0;
+	me_sound_status_fence_attempts = 0;
+	me_sound_status_fence_matches = 0;
+	me_sound_status_fence_pending = 0;
+	me_sound_status_fence_failures = 0;
+	me_sound_status_fence_wait_us = 0;
+	me_sound_status_fence_wait_max_us = 0;
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 }
 
@@ -500,12 +540,23 @@ void mvs_me_sound_shadow_status_pending(void)
 		__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
 }
 
+static void psp_me_sound_status_record_fence_wait(uint64_t wait_us)
+{
+	me_sound_status_fence_wait_us += wait_us;
+	if (wait_us > me_sound_status_fence_wait_max_us)
+		me_sound_status_fence_wait_max_us = (uint32_t)wait_us;
+}
+
 bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command,
 	uint8_t result_code, uint8_t *presented_pending, uint8_t *presented_result)
 {
 	psp_me_sound_status_snapshot_t status;
 	psp_me_sound_status_validation_t validation;
+	psp_me_sound_fence_result_t fence_result;
 	uint64_t required_time;
+	uint64_t fence_start;
+	uint64_t fence_wait;
+	uint64_t fenced_time = 0;
 	bool result = false;
 
 	if (!presented_pending || !presented_result ||
@@ -533,17 +584,93 @@ bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command
 		me_sound_status_presented_reads++;
 		result = true;
 	}
-	else if (validation == PSP_ME_SOUND_STATUS_STALE ||
-		validation == PSP_ME_SOUND_STATUS_UNAVAILABLE)
-	{
-		me_sound_status_fallback_stale++;
-	}
 	else
 	{
+		fence_start = sceKernelGetSystemTimeWide();
+		if (!me_sound_worker.fence_in_flight)
+		{
+			me_sound_status_fence_attempts++;
+			if (!psp_me_sound_worker_fence_begin(&me_sound_worker))
+			{
+				me_sound_status_fence_pending++;
+				goto stale_fallback;
+			}
+		}
+		for (;;)
+		{
+			fence_result = psp_me_sound_worker_fence_poll(&me_sound_worker,
+				&fenced_time);
+			fence_wait = sceKernelGetSystemTimeWide() - fence_start;
+			if (fence_result == PSP_ME_SOUND_FENCE_COMPLETE)
+			{
+				if (!psp_me_sound_worker_read_status(&me_sound_worker, &status))
+				{
+					psp_me_sound_status_record_fence_wait(fence_wait);
+					me_sound_status_fence_failures++;
+					goto stale_fallback;
+				}
+				validation = psp_me_sound_worker_validate_status(&status,
+					me_sound_worker.generation, required_time, sound_code,
+					pending_command, result_code);
+				if (validation == PSP_ME_SOUND_STATUS_MATCH)
+				{
+					psp_me_sound_status_record_fence_wait(fence_wait);
+					*presented_pending = status.pending_command;
+					*presented_result = status.result_code;
+					me_sound_status_presented_reads++;
+					me_sound_status_fence_matches++;
+					result = true;
+					goto done;
+				}
+				if (validation == PSP_ME_SOUND_STATUS_MISMATCH)
+				{
+					psp_me_sound_status_record_fence_wait(fence_wait);
+					goto mismatch;
+				}
+				if (fenced_time < required_time)
+				{
+					if (fence_wait >= PSP_ME_SOUND_STATUS_FENCE_BUDGET_US)
+					{
+						psp_me_sound_status_record_fence_wait(fence_wait);
+						me_sound_status_fence_pending++;
+						goto stale_fallback;
+					}
+					me_sound_status_fence_attempts++;
+					if (!psp_me_sound_worker_fence_begin(&me_sound_worker))
+					{
+						me_sound_status_fence_pending++;
+						goto stale_fallback;
+					}
+					continue;
+				}
+				/* A completed FIFO fence must expose all work that was queued
+				 * before this read. Remaining stale state is a timing divergence. */
+				psp_me_sound_status_record_fence_wait(fence_wait);
+				me_sound_status_fence_failures++;
+				goto mismatch;
+			}
+			if (fence_result == PSP_ME_SOUND_FENCE_FAILED)
+			{
+				psp_me_sound_status_record_fence_wait(fence_wait);
+				me_sound_status_fence_failures++;
+				goto mismatch;
+			}
+			if (fence_wait >= PSP_ME_SOUND_STATUS_FENCE_BUDGET_US)
+			{
+				psp_me_sound_status_record_fence_wait(fence_wait);
+				me_sound_status_fence_pending++;
+				goto stale_fallback;
+			}
+		}
+	}
+mismatch:
 		me_sound_status_mismatches++;
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_STATUS_SNAPSHOT;
 		psp_me_sound_z80_mark_failed("main status snapshot");
-	}
+	goto done;
+
+stale_fallback:
+	me_sound_status_fallback_stale++;
 
 done:
 	psp_me_sound_worker_unlock();
