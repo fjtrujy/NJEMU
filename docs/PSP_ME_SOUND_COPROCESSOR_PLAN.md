@@ -2274,6 +2274,107 @@ Record:
 Only then decide which ME mode should ship as the default `Media Engine` runtime
 implementation.
 
+#### C9 measurement harness and final PSP comparison (2026-10-04) [complete]
+
+The profiling output has been tightened before collecting the final three-way
+comparison so a fallback or a tail-latency regression cannot be hidden by a single
+average.  `psp_me_sound_profile.log` now records, for every 300-frame window:
+
+- existing wall time and uncapped whole-emulator FPS;
+- per-frame average, p50, p95, p99 and maximum wall time;
+- the configured `AudioProcessor` value;
+- whether the PSP ME producer is actually available at runtime;
+- whether the binary contains the full sound coprocessor;
+- whether the full Z80/control + YM sound island is still ME-authoritative for that
+  window.
+
+The last field is important for C9: a full-coprocessor binary that has recovered to
+CPU after a worker error must not be accidentally counted as a successful ME
+performance window merely because MIST itself is still available.
+
+`psp_audio_profile.log` now writes total time as well as average/max/count for every
+metric.  The existing `me_wait` metric remains the common synchronization-cost
+metric across modes: the ADPCM-A reference records its MIST job wait as before, while
+the full coprocessor records both the synchronous PCM-window prepare ACK and the
+render-completion ACK.  `me_wait_total / buffers` can therefore be compared directly
+without being distorted by the full path having two waits per audio block.  The
+existing status-fence counters in `psp_me_sound_shadow.log` remain the complementary
+main-thread barrier measurement.
+
+Three Release PSP/MVS binaries have been built with both profilers enabled and the
+same temporary, non-committed 5,400-frame C0 input script (`mslug3`, credit/start,
+then deterministic movement/fire/jump).  The input header remains outside the repo,
+so profiling support does not hardcode a benchmark workload into production code.
+
+| mode | build | SHA-256 |
+| --- | --- | --- |
+| Main CPU | `/tmp/njemu-c9-script-main/MVS.prx` | `0f92a49d3054a3adfe64f36efd891234aa62d5a12c9dcae83b32d6c2a8295692` |
+| ADPCM-A ME reference | `/tmp/njemu-c9-script-adpcma/MVS.prx` | `70192dbb8c0b375d9833e8e66e1de2521f14bbfada9197a1f81923f41bae14ce` |
+| full ME sound coprocessor | `/tmp/njemu-c9-script-full/MVS.prx` | `a4ff4c29bc55dd23ea6c4c6bc3511ca0d6e50d54898e1eb28f4b7b6b9f94b0cb` |
+
+The endpoint later recovered without changing any of the three frozen binaries.
+All three were then run on the same real PSP with the same scripted `mslug3`
+workload.  The 300-frame windows align exactly by `sound_cmd` sequence across the
+three modes.  As in the original C0 comparison, windows **8-11** (`4, 5, 4, 3`
+commands) are used as the representative gameplay interval so boot/attract work does
+not skew the result.
+
+| mode | gameplay FPS | delta vs Main | frame avg | p50 | p95 | p99 | worst max | Allegrex Z80 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Main CPU | **85.61** | baseline | 11.681 ms | 11.073 ms | 18.292 ms | 20.625 ms | 23.372 ms | 2.673 ms/frame |
+| ADPCM-A ME | **89.90** | **+5.02%** | 11.123 ms | 10.994 ms | 16.679 ms | 19.002 ms | 21.087 ms | 2.485 ms/frame |
+| full ME sound coprocessor | **103.11** | **+20.44%** | **9.698 ms** | **9.123 ms** | 17.418 ms | 19.133 ms | 21.785 ms | **0.065 ms/frame** |
+
+The full sound coprocessor is also **+14.69%** faster than the ADPCM-A-only ME
+reference in the same four gameplay windows.  Its p95/p99 tail is close to the
+ADPCM-A reference while its median and average frame times are substantially lower.
+The remaining Allegrex-side Z80 time is only scheduler/control overhead; the
+authoritative sound CPU itself is no longer being emulated there.
+
+The audio-thread comparison shows where the remaining optimization opportunity is:
+
+| mode | producer avg | callback avg | ME wait / audio buffer | waits / buffer | worst single ME wait |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Main CPU | 6.103 ms | 5.957 ms | 0 | 0 | 0 |
+| ADPCM-A ME | **4.749 ms** | **4.614 ms** | **27.5 us** | ~1 | 93 us |
+| full ME sound coprocessor | 7.395 ms | 7.258 ms | **6.762 ms** | ~2 | 9.725 ms |
+
+The full path therefore wins whole-emulator performance despite spending much more
+time waiting in the audio thread: each audio block currently has a synchronous PCM
+window-prepare fence plus a render-completion fence.  Those waits are now the clearest
+remaining performance target.  They should be reduced by deeper pipelining / fewer
+round trips rather than by moving sound emulation back to Allegrex.
+
+The full-coprocessor run remained genuinely authoritative throughout every measured
+window (`me_available=1`, `me_coprocessor=1`, `me_authoritative=1`).  Across the
+complete run the shadow log reports:
+
+- **0** fatal errors and **0** CPU recovery attempts;
+- **0** Z80/RAM/bank/I/O, PCM or YM-status mismatches;
+- **0** command/event/batch overflows;
+- **1,674** authoritative YM renders / **1,247,320** rendered sample frames;
+- **22,493** autonomous Z80 slices and **6,059** ME-owned scheduler slices;
+- status fences with **0 failures**, total recorded wait **295.009 ms** and maximum
+  individual wait **301 us**.
+
+The blocking PSP audio backend does not expose a hardware underrun counter.  As the
+available timing proxy, every profiled run continued producing/outputting complete
+300-buffer windows; the worst observed audio-loop period was 37.439 ms (Main),
+38.683 ms (ADPCM-A) and 36.890 ms (full) against the 33.378 ms nominal period.  No
+audible/output failure or producer abort was observed during the scripted runs.
+
+**C9 decision:** for PSP/MVS builds that include ME audio support, the runtime
+`Media Engine` mode should use the **full ME sound coprocessor**, not the legacy
+ADPCM-A-only accelerator.  Keep Main CPU as the correctness/failure fallback and
+retain ADPCM-A-only as a benchmark/diagnostic build path.  The generic CMake options
+remain opt-in here; changing release/preset defaults is a separate packaging change
+and should not be hidden inside this profiling commit.
+
+The final regression matrix after the profiling changes is clean: Desktop MVS is
+**31/31 CTest green**, Desktop NCDZ builds, and PSP Main CPU, ADPCM-A ME and full
+sound-coprocessor profile builds all compile; the full PSP standalone hardware
+harness also builds successfully.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

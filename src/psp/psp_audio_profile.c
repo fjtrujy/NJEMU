@@ -90,7 +90,8 @@ static void audio_profile_report(void)
 		uint64_t average = stats->count ? stats->total_us / stats->count : 0;
 
 		written = snprintf(cursor, remaining,
-			" %s_avg=%llu %s_max=%lu %s_n=%lu",
+			" %s_total=%llu %s_avg=%llu %s_max=%lu %s_n=%lu",
+			metric_names[i], (unsigned long long)stats->total_us,
 			metric_names[i], (unsigned long long)average,
 			metric_names[i], (unsigned long)stats->max_us,
 			metric_names[i], (unsigned long)stats->count);
