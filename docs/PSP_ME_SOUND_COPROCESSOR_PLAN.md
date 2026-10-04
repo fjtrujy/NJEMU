@@ -2207,6 +2207,53 @@ no ring overflow and `fatal=0`).  Its historical `suspend_resume=1` field refers
 the harness's synthetic stop/rebootstrap ownership cycle only; it is not evidence
 for a physical PSP sleep / `RESUME_COMPLETE` callback.
 
+#### C8.3 - fatal-worker teardown and next-game restart (2026-10-04) [host/build complete]
+
+The next lifecycle pass covers the case where the ME worker fails during one game,
+the emulator returns to the browser, and a later game starts in the **same PRX
+process**.  The producer object itself is reconstructed for every sound-thread
+startup, but several ownership/recovery variables are static PSP state and therefore
+outlive an individual MVS game unless they are reset explicitly.
+
+`psp_audio_producer_init()` now invokes the same complete sound-island tracking reset
+used at generation/worker teardown instead of resetting only a hand-picked subset of
+flags.  A new game therefore cannot inherit stale `ME authoritative`, CPU-recovery,
+save/load reseed, status-dirty, command-replay or shadow-failure state from the game
+that just ended.  The per-game mutex/gate flags are still initialized separately
+because they describe synchronization objects rather than sound-island ownership.
+
+Fatal worker shutdown is also bounded now.  The ME publishes `fatal_error` and exits
+its command loop before Allegrex observes the failure.  Previously a later normal
+`psp_me_sound_worker_shutdown()` could still enqueue `SHUTDOWN` to that already-dead
+consumer and wait for the full shutdown timeout before falling back to `abort()`.
+Shutdown now samples the published progress first; when a fatal is already visible it
+joins the completed dispatch and frees all shared state immediately.  Producer
+shutdown has an additional final abort guard before deleting its mutexes, so an
+exceptional gate/mutex teardown failure cannot leave a live ME task behind while a
+new browser/game lifecycle begins.
+
+Host coverage exercises the complete failure/restart sequence.  A generation-1
+worker is deliberately killed with an emulated-time regression, the normal shutdown
+API observes that fatal and releases every shared allocation, then the **same worker
+object and host dispatch** are bootstrapped again at generation 2, synced and shut
+down with `fatal_error == NONE`.  This is in addition to C8.2's clean
+reset-generation / browser-new-game rebootstrap test.
+
+The MIST dependency was also audited before adding any restart-specific workaround.
+The installed `libme-stask` exposes no MIST deinit API, and its `meSafeTaskMistInit()`
+path re-selects the active ME table on each call rather than rejecting an
+already-initialized library instance.  Its observed `-4` path is the unsupported /
+unrecognized-table result, not an `already initialized` status.  The intermittent
+real-PSP `init=-4` seen in earlier sessions therefore must not be "fixed" by inventing
+a per-game deinit sequence that the dependency does not provide.
+
+The complete regression matrix remains clean after this hardening: Desktop MVS is
+**31/31 CTest green**, Desktop NCDZ builds, PSP MVS builds in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations including the hardware
+harness, and both the Desktop MVS and PSP full-coprocessor `SAVE_STATE=ON` builds
+pass.  Physical sleep/resume remains intentionally deferred and is not part of this
+subphase.
+
 ### C9 - final performance decision
 
 Use identical frame-driven workloads on a real PSP to compare:

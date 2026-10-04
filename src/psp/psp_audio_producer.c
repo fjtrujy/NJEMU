@@ -1723,7 +1723,7 @@ static bool psp_audio_producer_init(void)
 	me_sound_worker_generation = 0;
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
-	me_sound_shadow_failed = false;
+	psp_me_sound_z80_reset_tracking();
 	me_sound_z80_slice_gate_locked = false;
 	me_sound_ym_timer_gate_locked = false;
 	me_sound_ym_render_gate_locked = false;
@@ -1767,6 +1767,12 @@ static void psp_audio_producer_shutdown(void)
 {
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	psp_me_sound_worker_stop();
+	/* sound_thread_stop() has already joined the audio thread here.  If an
+	 * exceptional mutex/gate failure prevented the orderly stop, do not delete
+	 * synchronization objects or start another game while the ME still owns
+	 * shared worker state. */
+	if (me_sound_worker.running)
+		psp_me_sound_worker_abort(&me_sound_worker);
 	if (me_sound_ym_gate_ready)
 	{
 		(void)sceKernelDeleteLwMutex(&me_sound_ym_gate);

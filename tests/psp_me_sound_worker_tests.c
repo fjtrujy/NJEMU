@@ -439,12 +439,51 @@ static int test_time_regression_is_fatal(void)
 		}
 		sched_yield();
 	}
-	psp_me_sound_worker_abort(&worker);
-	psp_me_sound_worker_get_stats(&worker, &stats);
-	if (!observed_failure || stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION)
+	if (psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
 	{
-		fprintf(stderr, "time regression was not rejected: observed=%d fatal=%u\n",
-			observed_failure, stats.fatal_error);
+		fprintf(stderr, "fatal worker unexpectedly reported clean shutdown\n");
+		return 0;
+	}
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (!observed_failure || worker.running ||
+		stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION)
+	{
+		fprintf(stderr,
+			"time regression teardown mismatch: observed=%d running=%d fatal=%u\n",
+			observed_failure, worker.running ? 1 : 0, stats.fatal_error);
+		return 0;
+	}
+	if (worker.commands || worker.events || worker.z80_batches ||
+		worker.shared_context || worker.main_control || worker.progress ||
+		worker.z80_progress || worker.ym_context || worker.z80_snapshot ||
+		worker.status_snapshot || worker.recovery_snapshot || worker.z80_memory ||
+		worker.ym_render_job)
+	{
+		fprintf(stderr, "fatal worker teardown left shared state alive\n");
+		return 0;
+	}
+
+	/* A fatal worker belongs only to its old game/lifecycle.  Reuse the same
+	 * public worker object and dispatch after teardown to model the next game
+	 * starting in the same PRX process. */
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 8u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 2u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_sync(&worker, 0u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "worker did not recover after fatal lifecycle teardown\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (stats.generation != 2u || stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE ||
+		stats.resets != 1u || stats.syncs != 1u || stats.shutdowns != 1u)
+	{
+		fprintf(stderr,
+			"post-fatal worker lifecycle was not clean: generation=%u fatal=%u resets=%u syncs=%u shutdowns=%u\n",
+			stats.generation, stats.fatal_error, stats.resets, stats.syncs,
+			stats.shutdowns);
 		return 0;
 	}
 	return 1;

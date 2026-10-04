@@ -2874,6 +2874,16 @@ bool psp_me_sound_worker_shutdown(psp_me_sound_worker_t *worker,
 
 	if (!worker || !worker->running)
 		return false;
+
+	/* A fatal worker has already left its ME loop.  Do not spend a full
+	 * shutdown timeout sending to a ring with no consumer; just join the
+	 * completed dispatch and release the shared state. */
+	snapshot_stats(worker);
+	if (worker->last_stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		psp_me_sound_worker_abort(worker);
+		return false;
+	}
 	memset(&command, 0, sizeof(command));
 	command.type = PSP_ME_SOUND_WORKER_COMMAND_SHUTDOWN;
 	command.generation = worker->generation;
