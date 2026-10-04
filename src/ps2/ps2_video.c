@@ -480,7 +480,55 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 	if (!GS_CSR_FINISH)
 		WaitSema(finish_sema_id);
 
-   	while (PollSema(finish_sema_id) >= 0);
+	while (PollSema(finish_sema_id) >= 0);
+}
+
+/* gsKit's release allocator does not bounds-check the one-shot render queue.
+ * CPS1 attract scenes can generate close to 1 MiB of sprite commands in one
+ * frame, so leave generous room for the smaller state/texture commands that
+ * are emitted between the large portable batches.  Flush before the next
+ * batch can cross that boundary instead of increasing the double-buffered
+ * queue allocation (and therefore PS2 RAM use). */
+#define PS2_RENDER_QUEUE_HEADROOM (64u * 1024u)
+#define PS2_RENDER_BATCH_MAX_VERTICES 2048u
+
+static bool ps2_reserve_render_queue(ps2_video_t *ps2, size_t required_bytes)
+{
+	GSGLOBAL *gsGlobal;
+	GSQUEUE *queue;
+	size_t used;
+	size_t capacity;
+
+	if (!ps2 || !ps2->gsGlobal)
+		return false;
+
+	gsGlobal = ps2->gsGlobal;
+	queue = gsGlobal->CurQueue;
+	if (!queue || queue->mode != GS_ONESHOT)
+		return false;
+
+	capacity = (size_t)((uintptr_t)queue->pool_max[queue->dbuf] -
+		(uintptr_t)queue->pool[queue->dbuf]);
+	if (required_bytes + PS2_RENDER_QUEUE_HEADROOM > capacity)
+		return false;
+
+	used = (size_t)((uintptr_t)queue->pool_cur -
+		(uintptr_t)queue->pool[queue->dbuf]);
+	if (used + required_bytes + PS2_RENDER_QUEUE_HEADROOM > capacity) {
+		/* Preserve draw order: finish the previously submitted chunk before
+		 * submitting this partial frame, then continue in gsKit's alternate
+		 * one-shot buffer. GS render state survives the queue boundary. */
+		gsKit_wait_finish(gsGlobal);
+		gsKit_queue_exec(gsGlobal);
+
+		queue = gsGlobal->CurQueue;
+		used = (size_t)((uintptr_t)queue->pool_cur -
+			(uintptr_t)queue->pool[queue->dbuf]);
+		if (used + required_bytes + PS2_RENDER_QUEUE_HEADROOM > capacity)
+			return false;
+	}
+
+	return true;
 }
 
 static inline void gsKit_set_tw_th(const GSTEXTURE *Texture, int *tw, int *th)
@@ -1753,23 +1801,47 @@ static void ps2_blitSpriteVertices(void *data, uint8_t textureIndex,
 	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
 {
 	ps2_video_t *ps2 = (ps2_video_t *)data;
-	GSTEXTURE *tex = ps2_prepareSpriteTexture(ps2, textureIndex, clut, bank_index);
-	GSPRIMUVPOINTFLAT *native_vertices;
-	uint32_t i;
+	GSTEXTURE *tex;
+	uint32_t offset = 0;
 
-	if (!tex || !vertices || vertices_count == 0)
+	if (!ps2 || !vertices || vertices_count == 0)
+		return;
+
+	/* Reserve headroom before ps2_prepareSpriteTexture() too, since changing
+	 * TEXCLUT may itself append a small gsKit command. */
+	if (!ps2_reserve_render_queue(ps2, 0))
+		return;
+	tex = ps2_prepareSpriteTexture(ps2, textureIndex, clut, bank_index);
+	if (!tex)
 		return;
 
 	/* Materialize the compact portable vertices directly into gsKit's command
-	 * queue. This preserves the retained-memory saving of the portable arrays
-	 * without an 8 KiB native stack buffer or a second memcpy into the queue. */
-	native_vertices = ps2_beginSpriteTextureList(ps2->gsGlobal, tex,
-		ps2->vertexColor, (int)vertices_count);
-	for (i = 0; i < vertices_count; i++) {
-		const video_sprite_vertex_t *src = &vertices[i];
-		native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
-			src->x, src->y, src->z);
-		native_vertices[i].uv = ps2_spriteUV(tex, src->u, src->v);
+	 * queue. Split large batches so every allocation is bounded and flush the
+	 * one-shot queue before the next chunk could overflow its 1 MiB pool. */
+	while (offset < vertices_count) {
+		uint32_t chunk_count = vertices_count - offset;
+		GSPRIMUVPOINTFLAT *native_vertices;
+		size_t queue_bytes;
+		uint32_t i;
+
+		if (chunk_count > PS2_RENDER_BATCH_MAX_VERTICES)
+			chunk_count = PS2_RENDER_BATCH_MAX_VERTICES;
+
+		/* ps2_beginSpriteTextureList() requests (2*N+3) QW and gsKit adds
+		 * one GIF-tag QW for GIF_AD allocations. */
+		queue_bytes = ((size_t)chunk_count * 2u + 4u) * 16u;
+		if (!ps2_reserve_render_queue(ps2, queue_bytes))
+			return;
+
+		native_vertices = ps2_beginSpriteTextureList(ps2->gsGlobal, tex,
+			ps2->vertexColor, (int)chunk_count);
+		for (i = 0; i < chunk_count; i++) {
+			const video_sprite_vertex_t *src = &vertices[offset + i];
+			native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
+				src->x, src->y, src->z);
+			native_vertices[i].uv = ps2_spriteUV(tex, src->u, src->v);
+		}
+		offset += chunk_count;
 	}
 }
 
@@ -1777,22 +1849,39 @@ static void ps2_blitPointVertices(void *data, uint32_t points_count,
 	const video_point_vertex_t *vertices) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	int prev_alpha_test;
-	GSPRIMPOINT *native_vertices;
-	uint32_t i;
+	uint32_t offset = 0;
 
 	if (!ps2 || !vertices || points_count == 0)
+		return;
+	if (!ps2_reserve_render_queue(ps2, 0))
 		return;
 
 	prev_alpha_test = ps2->gsGlobal->Test->ATE;
 	/* Disable alpha test for point drawing (matches PSP behavior). */
 	gsKit_set_test(ps2->gsGlobal, GS_ATEST_OFF);
-	native_vertices = ps2_beginPointList(ps2->gsGlobal, (int)points_count);
-	for (i = 0; i < points_count; i++) {
-		const video_point_vertex_t *src = &vertices[i];
-		native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
-			src->x, src->y, src->z);
-		native_vertices[i].rgbaq = color_to_RGBAQ(GETR15(src->color),
-			GETG15(src->color), GETB15(src->color), 0x80, 0);
+	while (offset < points_count) {
+		uint32_t chunk_count = points_count - offset;
+		GSPRIMPOINT *native_vertices;
+		size_t queue_bytes;
+		uint32_t i;
+
+		if (chunk_count > PS2_RENDER_BATCH_MAX_VERTICES)
+			chunk_count = PS2_RENDER_BATCH_MAX_VERTICES;
+		/* ps2_beginPointList() requests (2*N+2) QW and gsKit adds one
+		 * GIF-tag QW for GIF_AD allocations. */
+		queue_bytes = ((size_t)chunk_count * 2u + 3u) * 16u;
+		if (!ps2_reserve_render_queue(ps2, queue_bytes))
+			break;
+
+		native_vertices = ps2_beginPointList(ps2->gsGlobal, (int)chunk_count);
+		for (i = 0; i < chunk_count; i++) {
+			const video_point_vertex_t *src = &vertices[offset + i];
+			native_vertices[i].xyz2 = ps2_spriteXYZ2(ps2->gsGlobal,
+				src->x, src->y, src->z);
+			native_vertices[i].rgbaq = color_to_RGBAQ(GETR15(src->color),
+				GETG15(src->color), GETB15(src->color), 0x80, 0);
+		}
+		offset += chunk_count;
 	}
 	gsKit_set_test(ps2->gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
