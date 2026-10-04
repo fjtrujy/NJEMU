@@ -671,3 +671,306 @@ footer a:hover {
     background: var(--text-muted);
 }
 
+/* Project landing page */
+.site-body {
+    min-height: 100vh;
+}
+
+.site-container {
+    max-width: 1120px;
+}
+
+.site-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.site-brand {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: 0.08em;
+}
+
+.site-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.site-nav-links a,
+.site-section a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.site-nav-links a:hover,
+.site-section a:hover {
+    color: var(--accent-secondary);
+}
+
+.site-hero {
+    text-align: left;
+    padding: 5rem 0 4rem;
+    max-width: 900px;
+}
+
+.site-hero h1 {
+    margin: 0.25rem 0 1rem;
+    font-size: clamp(3.5rem, 9vw, 7rem);
+    line-height: 0.9;
+    letter-spacing: -0.055em;
+}
+
+.site-eyebrow {
+    margin: 0;
+    color: var(--accent-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.site-lead {
+    max-width: 780px;
+    color: var(--text-secondary);
+    font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+    line-height: 1.65;
+}
+
+.site-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    margin-top: 2rem;
+}
+
+.site-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary) !important;
+    font-weight: 700;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.site-button:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
+.site-button-primary {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-primary) !important;
+}
+
+.site-section {
+    padding: 3.5rem 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.site-section-heading {
+    margin-bottom: 1.5rem;
+}
+
+.site-section-heading h2,
+.site-tool-callout h2 {
+    margin: 0.35rem 0 0;
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+}
+
+.site-card-grid,
+.site-download-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.site-card,
+.site-download-card {
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+.site-card h3,
+.site-download-card h3 {
+    margin: 0 0 0.5rem;
+    color: var(--text-primary);
+}
+
+.site-card p,
+.site-download-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+.site-link-card,
+.site-download-card {
+    color: inherit !important;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.site-link-card:hover,
+.site-download-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+}
+
+.site-platforms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+
+.site-platforms span {
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88rem;
+}
+
+.site-muted {
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.site-download-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+.site-release-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+}
+
+.site-release-meta strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.site-notice {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.site-download-card {
+    display: block;
+}
+
+.site-download-meta {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--accent-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.site-download-card-unavailable {
+    opacity: 0.62;
+}
+
+.site-download-card-unavailable:hover {
+    border-color: var(--border-color);
+    transform: none;
+}
+
+.site-tool-callout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+}
+
+.site-tool-callout > div {
+    max-width: 760px;
+}
+
+.site-tool-callout p:last-child {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.site-card-grid-small {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.site-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.75rem 2rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 800px) {
+    .site-card-grid-small {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .site-tool-callout,
+    .site-download-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .site-release-meta {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 600px) {
+    .site-nav {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .site-nav-links {
+        justify-content: flex-start;
+    }
+
+    .site-hero {
+        padding: 3.5rem 0 3rem;
+    }
+
+    .site-card-grid,
+    .site-card-grid-small,
+    .site-download-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

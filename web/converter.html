@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NJEMU ROM Converter</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🎮</span>
+                <h1>NJEMU ROM Converter</h1>
+            </div>
+            <p class="subtitle">Create processed ROM assets for NJEMU</p>
+        </header>
+
+        <main>
+            <section class="info-panel">
+                <h2>Why Convert ROMs?</h2>
+                <p>
+                    Some MVS and CPS2 data must be transformed before NJEMU can use it efficiently.
+                    This tool creates portable processed assets that the emulator can load fully resident
+                    or stream when memory is constrained.
+                </p>
+            </section>
+
+            <section class="converter-panel">
+                <div class="system-selector">
+                    <label>Select Arcade System:</label>
+                    <div class="radio-group">
+                        <input type="radio" id="mvs" name="system" value="mvs">
+                        <label for="mvs" class="radio-label">
+                            <span class="radio-icon">🕹️</span>
+                            <span>Neo-Geo MVS</span>
+                        </label>
+
+                        <input type="radio" id="cps2" name="system" value="cps2">
+                        <label for="cps2" class="radio-label">
+                            <span class="radio-icon">👊</span>
+                            <span>CPS2</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="loading-overlay" id="loading-overlay" hidden>
+                    <div class="loading-spinner"></div>
+                    <p class="loading-text" id="loading-text">Loading module...</p>
+                </div>
+
+                <div class="converter-content" id="converter-content" hidden>
+                    <div class="options-panel">
+                        <div class="format-selector" id="format-selector">
+                            <label class="options-label">Output Format:</label>
+                            <div class="format-group" id="format-group">
+                                <!-- Options populated by JS based on selected system -->
+                            </div>
+                            <div class="format-info" id="format-info"></div>
+                        </div>
+
+                    </div>
+
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-content">
+                            <div class="upload-icon">📁</div>
+                            <p class="upload-text">Drop your ROM ZIP files here</p>
+                            <p class="upload-hint">or click to browse (multiple files supported)</p>
+                            <input type="file" id="rom-input" accept=".zip" multiple hidden>
+                        </div>
+                        <div class="file-list" id="file-list" hidden>
+                            <div class="file-list-header">
+                                <span class="file-count" id="file-count"></span>
+                                <button class="clear-btn" id="clear-files">Clear All</button>
+                            </div>
+                            <div class="file-list-items" id="file-list-items"></div>
+                        </div>
+                    </div>
+
+                    <button class="convert-btn" id="convert-btn" disabled>
+                        <span class="btn-icon">⚙️</span>
+                        <span>Convert ROMs</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="progress-panel" id="progress-panel" hidden>
+                <h3>Processing...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p class="progress-text" id="progress-text">Initializing...</p>
+            </section>
+
+            <section class="output-panel" id="output-panel" hidden>
+                <div class="console-header">
+                    <h3>Console Output</h3>
+                    <button class="copy-console-btn" id="copy-console-btn" title="Copy console output to clipboard">
+                        <span class="copy-icon">📋</span>
+                        <span class="copy-text">Copy</span>
+                    </button>
+                </div>
+                <div class="console" id="console"></div>
+            </section>
+
+            <section class="download-panel" id="download-panel" hidden>
+                <h3>✅ Conversion Complete!</h3>
+                <p>Your converted files are ready for download.</p>
+                <button class="download-btn" id="download-btn">
+                    <span class="btn-icon">💾</span>
+                    <span>Download Converted Files</span>
+                </button>
+            </section>
+        </main>
+
+        <footer>
+            <div class="version-info">
+                <span id="version-text">ROMCNV</span>
+                <span class="separator">•</span>
+                <span id="date-text">Loading...</span>
+            </div>
+            <p>
+                <a href="./">NJEMU Home</a>
+                <span class="separator">•</span>
+                Part of the <a href="https://github.com/fjtrujy/NJEMU" target="_blank">NJEMU Project</a>
+                <span class="separator">•</span>
+                <a href="doc_mvs.html">MVS Documentation</a>
+                <span class="separator">•</span>
+                <a href="doc_cps2.html">CPS2 Documentation</a>
+            </p>
+            <p class="copyright">Licensed under GPL-3.0</p>
+        </footer>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="version.js" onerror="/* version.js not found - using fallback values */"></script>
+    <script src="app.js"></script>
+</body>
+</html>

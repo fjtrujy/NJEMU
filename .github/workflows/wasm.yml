@@ -63,7 +63,9 @@ jobs:
 
         # Copy web interface files
         cp web/index.html dist/
+        cp web/converter.html dist/
         cp web/style.css dist/
+        cp web/site.js dist/
         cp web/app.js dist/
 
         # Generate documentation HTML from markdown using pandoc
