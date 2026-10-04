@@ -2200,10 +2200,12 @@ worker harness builds.  The C8-specific `SAVE_STATE=ON` Desktop MVS executable a
 PSP full sound-coprocessor + hardware harness builds also pass.
 
 No physical sleep/resume test is part of this subphase; that check remains deferred
-by the current development decision.  A non-suspend attempt to run the rebuilt
-standalone lifecycle harness could not start because the current PSPLink endpoint
-was not responding even though the host `usbhostfs_pc` process was still alive, so
-no new real-hardware pass or failure is claimed here.
+by the current development decision.  The rebuilt standalone lifecycle harness was
+also rerun on real PSP hardware without any suspend operation and passed all four
+worker lifecycles cleanly (`init=0`, `cycles=4`, no Z80/RAM/bank/I/O mismatches,
+no ring overflow and `fatal=0`).  Its historical `suspend_resume=1` field refers to
+the harness's synthetic stop/rebootstrap ownership cycle only; it is not evidence
+for a physical PSP sleep / `RESUME_COMPLETE` callback.
 
 ### C9 - final performance decision
 
