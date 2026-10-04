@@ -2407,6 +2407,31 @@ development host during this packaging-only revalidation, so the earlier PPSSPP
 runtime evidence remains the current compatibility run rather than being replaced
 by a new one.
 
+#### Post-C9 wait split: render completion dominates [measured]
+
+Before changing the authoritative protocol, the aggregate full-ME `me_wait` metric
+was split into two additional counters while retaining the original total for direct
+C9 comparability:
+
+- `me_prepare_wait`: synchronous `YM_RENDER_PREPARE` ACK, which orders prior ME
+  Z80/YM work and returns the exact compressed-PCM ranges Allegrex must fill;
+- `me_render_wait`: wait for the completed authoritative `YM_RENDER` output.
+
+A new Release PSP/MVS build used the exact same 5,400-frame `mslug3` script and full
+coprocessor configuration as C9.  The frozen PRX SHA-256 was
+`b84f03c5b60b854e4cd945b075889624d5f5a033242581b612e4f096e82762f5`.
+The run remained ME-authoritative with the existing correctness counters clean.
+Across the five complete 300-buffer audio windows:
+
+- aggregate ME wait: **6.695 ms / buffer**;
+- prepare wait: **0.563 ms / buffer** (**8.4%** of aggregate wait);
+- render-completion wait: **6.132 ms / buffer** (**91.6%** of aggregate wait).
+
+This rules out a prepare-message micro-optimization as the primary follow-up.  The
+next optimization should overlap the authoritative ME render with Allegrex/main-thread
+work while preserving FIFO ordering, rather than adding a full audio block of latency
+or moving YM work back to the CPU.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

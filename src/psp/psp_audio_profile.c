@@ -27,6 +27,8 @@ static const char *const metric_names[AUDIO_PROFILE_METRIC_COUNT] = {
 	"callback",
 	"post",
 	"me_wait",
+	"me_prepare_wait",
+	"me_render_wait",
 	"output_block",
 	"loop_period",
 };

@@ -1178,8 +1178,9 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 		wait_start = audio_profile_now_us();
 		result = psp_me_sound_worker_ym_render_prepare(&me_sound_worker,
 			samples, emulated_time, &window, PSP_ME_SOUND_WORKER_TIMEOUT_US);
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
-			audio_profile_now_us() - wait_start);
+		wait_start = audio_profile_now_us() - wait_start;
+		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+		audio_profile_add(AUDIO_PROFILE_ME_PREPARE_WAIT, wait_start);
 	}
 	psp_me_sound_worker_unlock();
 	if (!result)
@@ -1267,8 +1268,9 @@ bool mvs_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 			&me_sound_worker, buffer[0], buffer[1], samples,
 			!me_sound_z80_control_authoritative,
 			PSP_ME_SOUND_WORKER_TIMEOUT_US);
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
-			audio_profile_now_us() - wait_start);
+		wait_start = audio_profile_now_us() - wait_start;
+		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+		audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
 	}
 	psp_me_sound_worker_unlock();
 	if (!result)
@@ -1307,8 +1309,9 @@ void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 		result = psp_me_sound_worker_ym_render_finish_present(&me_sound_worker,
 			buffer[0], buffer[1], buffer[0], buffer[1], samples, status_b,
 			PSP_ME_SOUND_WORKER_TIMEOUT_US);
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
-			audio_profile_now_us() - wait_start);
+		wait_start = audio_profile_now_us() - wait_start;
+		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+		audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
 	}
 	psp_me_sound_worker_unlock();
 	if (!result)
