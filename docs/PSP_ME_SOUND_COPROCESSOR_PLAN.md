@@ -837,13 +837,13 @@ experimental option:
 The integrated PSP MVS build passes with `-Werror`.  No Z80/YM2610 state has
 moved and no MVS scheduler path has changed.
 
-**C2 gate remains open only for observing the post-wake `RESUME_COMPLETE` worker
+**C2 remains open only for observing the post-wake `RESUME_COMPLETE` worker
 rebootstrap on real hardware.**  Normal init/reset/shutdown behavior, the real
 physical suspend stop, and repeated bootstrap in one process are already
-hardware validated.  Shadow-only milestones are allowed to proceed under an
-explicit temporary gate waiver because they cannot become authoritative; the
-deferred resume evidence must still be revisited before the authoritative
-ownership transition.
+hardware validated.  The original plan treated the remaining resume observation
+as a hard ownership gate; the current development decision explicitly defers it
+so it no longer blocks C6 implementation or ownership experiments.  It must still
+be revisited before final lifecycle/release validation.
 
 ### C2 - persistent ME sound worker bootstrap [in progress]
 
@@ -1076,9 +1076,9 @@ z80_io_peak=187 z80_batch_high_water=4 z80_batch_overflow=0 fatal=0
 
 **C4 gate is closed successfully:** repeated real-PSP gameplay checkpoints match
 the authoritative CPU Z80 with no state or transport divergence.  CPU Z80 and
-YM2610 still own all emulation/audio output.  C5 may proceed while remaining
-shadow-only under the deferred C2 resume-evidence waiver; the authoritative C6
-transition must revisit that deferred lifecycle evidence first.
+YM2610 still own all emulation/audio output.  C5 proceeded under the deferred C2
+resume-evidence waiver; that physical lifecycle check remains outstanding but is
+not currently blocking C6 implementation.
 
 ### C4 - ME shadow Z80 execution [complete]
 
@@ -1165,8 +1165,9 @@ z80_io_peak=187 z80_batch_high_water=3 z80_batch_overflow=0 fatal=0
 
 This closes only the **control/timer** portion of C5.  Shadow PCM generation,
 ADPCM end/busy ownership and CPU-vs-ME PCM/state comparison remained required at
-that checkpoint.  The deferred C2 physical-resume evidence also remains mandatory
-before any C6 authoritative ownership transfer.
+that checkpoint.  The deferred C2 physical-resume evidence remains an outstanding
+lifecycle item, but under the current development decision it no longer blocks
+C6 ownership experiments.
 
 #### C5 PCM/render shadow status (2026-10-04) [complete subphase]
 
@@ -1304,9 +1305,9 @@ ADPCM-A-only ME and full sound-coprocessor configurations.
 
 **C5 gate is closed successfully:** the complete ME sound island now matches the CPU
 oracle across representative real-PSP workloads while the CPU path remains fully
-authoritative.  C6 does **not** start yet: the deferred C2 physical
-post-`RESUME_COMPLETE` worker rebootstrap evidence is still mandatory before any
-authoritative ownership transfer.
+authoritative.  C6 may proceed under the explicit waiver for the deferred physical
+post-`RESUME_COMPLETE` observation; that check remains a final lifecycle/release
+item rather than a current development blocker.
 
 - move a shadow copy of YM2610 and its sound-side timers into the ME worker;
 - execute shadow Z80 -> YM2610 port writes locally on ME;
@@ -1432,9 +1433,57 @@ MVS timer-overflow scheduling is still driven by Allegrex, the CPU Z80/YM path s
 executes authoritatively, and ME-generated PCM is still only an oracle.  Those are
 intentional safety boundaries for the next C6 step.
 
-No ownership transfer is permitted yet.  The physical C2 post-wake
-`RESUME_COMPLETE` fresh-worker rebootstrap evidence remains deferred and is still
-a hard gate before Allegrex stops executing the authoritative Z80/YM2610 path.
+#### C6 readiness: ME-local YM timer overflow scheduling (2026-10-04) [host/build complete]
+
+The next dry-run removes the explicit Allegrex `YM_TIMER` overflow stream from the
+integrated autonomous path.  Timer A/B are now represented inside the ME worker as
+local scheduler state:
+
+- the YM timer callback records start/stop/reload state independently for each
+  channel;
+- Allegrex supplies only the semantic elapsed microseconds for each Z80 scheduler
+  slice, in addition to the already-required cycle budget and `timer_left` value;
+- a timer armed part-way through a Z80 slice discounts only the elapsed time after
+  that exact arm point;
+- a timer that reaches zero is expired locally before the next ME-visible sound,
+  Z80, checkpoint, sync or PCM-observation boundary;
+- `YM2610ContextTimerOver()` performs the real ME-side overflow, IRQ transition and
+  timer reload.  The CPU `timer_callback_2610()` still runs for the authoritative
+  CPU oracle, but in autonomous mode it no longer sends an overflow command to the
+  ME worker.
+
+This preserves the MVS scheduler's existing slice boundaries while removing the
+timer-overflow replay dependency.  It is deliberately one step short of a fully
+ME-owned scheduler: Allegrex still determines when a Z80 scheduler slice begins and
+how much emulated time that slice consumes.
+
+Focused host oracles now cover:
+
+- Timer A start, local overflow, IRQ assertion and automatic reload;
+- a second Timer A overflow after the reload, with no Allegrex timer event;
+- Timer B start, stop, restart and later local overflow;
+- the existing timer-start preemption boundary (`duration < timer_left`);
+- a PCM render-preparation boundary where an already-due timer must be expired
+  before the ME YM state is observed.
+
+The post-rebase regression matrix is clean: Desktop MVS is **31/31 CTest green**,
+Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations; the standalone PSP hardware harness also builds
+with `-Wall -Wextra -Werror`.
+
+Real-PSP execution of this exact timer-autonomy build is currently blocked by the
+test environment rather than by the worker: `meSafeTaskMistInit()` returns `-4`
+before worker startup, and an older previously validated C5 hardware PRX reproduces
+the same `init=-4` result in the same PSPLink session.  Therefore no new gameplay
+hardware result is claimed for this subphase yet.
+
+Per the current development decision, the earlier physical C2 sleep / post-wake
+`RESUME_COMPLETE` rebootstrap check remains **deferred** and does not block further
+C6 implementation work.  It should still be revisited before final lifecycle/release
+validation, but C6 development must not wait on that physical power-cycle oracle.
+
+No production-default ownership transfer has happened yet.  The CPU path remains
+authoritative while the remaining C6 ownership pieces are implemented and compared.
 
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;

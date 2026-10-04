@@ -14,6 +14,7 @@
 		~(PSP_ME_SOUND_WORKER_CACHE_LINE - 1u))
 #define PSP_ME_SOUND_WORKER_SHARED_POINTERS 11u
 #define PSP_ME_SOUND_YM_IRQ_QUEUE_CAPACITY 8u
+#define PSP_ME_SOUND_Z80_CYCLES_PER_USEC 4u
 #define PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS \
 	((PSP_ME_SOUND_WORKER_SHARED_SIZE - \
 			PSP_ME_SOUND_WORKER_SHARED_POINTERS * sizeof(void *)) / sizeof(uint32_t))
@@ -111,6 +112,11 @@ typedef struct psp_me_sound_z80_runtime
 	uint8_t initialized;
 	uint8_t mode;
 	uint32_t scheduler_time_left;
+	uint32_t advance_cycles;
+	uint64_t ym_timer_remaining[2];
+	uint32_t ym_timer_arm_elapsed[2];
+	uint8_t ym_timer_enabled[2];
+	uint8_t in_z80_execute;
 	ym2610_context_t *ym_context;
 	uint8_t ym_irq_queue[PSP_ME_SOUND_YM_IRQ_QUEUE_CAPACITY];
 	uint8_t ym_irq_head;
@@ -220,6 +226,8 @@ static void me_z80_publish_status(psp_me_sound_worker_shared_context_t *context,
 	status->result_code = runtime->result_code;
 	status->irq_state = runtime->ym_irq_state;
 	status->initialized = runtime->initialized ? 1u : 0u;
+	status->ym_timer_callbacks = runtime->ym_timer_callbacks;
+	status->ym_timer_overflows = runtime->ym_timer_overflows;
 	meCoreDcacheWritebackRange(status, sizeof(*status));
 }
 
@@ -262,19 +270,45 @@ static void me_ym_timer_callback(void *opaque, int channel, int count,
 {
 	psp_me_sound_z80_runtime_t *runtime = me_z80_runtime;
 	const psp_me_sound_z80_io_t *event;
+	uint32_t elapsed_us = 0;
 	(void)opaque;
 	if (!runtime)
 		return;
 	runtime->ym_timer_callbacks++;
 	if (runtime->mode == PSP_ME_SOUND_Z80_MODE_AUTONOMOUS)
 	{
-		if (count != 0)
+		if (channel < 0 || channel > 1)
+		{
+			runtime->mismatch = PSP_ME_SOUND_Z80_MISMATCH_IO_VALUE;
+			return;
+		}
+		if (count == 0)
+		{
+			runtime->ym_timer_enabled[channel] = 0;
+			runtime->ym_timer_remaining[channel] = 0;
+			runtime->ym_timer_arm_elapsed[channel] = 0;
+			return;
+		}
+		if (!runtime->ym_timer_enabled[channel])
 		{
 			int duration = count * (int)((float)step_time * 1000000.0);
 
+			if (runtime->in_z80_execute)
+			{
+				int64_t elapsed_cycles = (int64_t)runtime->advance_cycles -
+					(int64_t)runtime->cpu.ICount;
+
+				if (elapsed_cycles > 0)
+					elapsed_us = (uint32_t)(elapsed_cycles /
+						PSP_ME_SOUND_Z80_CYCLES_PER_USEC);
+			}
+			runtime->ym_timer_enabled[channel] = 1;
+			runtime->ym_timer_remaining[channel] = (uint64_t)(uint32_t)duration;
+			runtime->ym_timer_arm_elapsed[channel] = elapsed_us;
 			/* Match MVS timer_adjust(): it compares a newly armed timer against
 			 * the scheduler's current timer_left, not the Z80 ICount remainder. */
-			if (duration < (int)runtime->scheduler_time_left)
+			if (runtime->in_z80_execute &&
+				duration < (int)runtime->scheduler_time_left)
 				runtime->cpu.ICount = 0;
 		}
 		return;
@@ -295,6 +329,58 @@ static void me_ym_timer_callback(void *opaque, int channel, int count,
 	 * Mirror that boundary so the current instruction completes and the ME exits
 	 * the slice at the same semantic point. */
 	runtime->cpu.ICount = 0;
+}
+
+static bool me_ym_process_due_timers(psp_me_sound_z80_runtime_t *runtime)
+{
+	uint32_t channel;
+
+	if (!runtime || runtime->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
+		!runtime->ym_context)
+		return true;
+	for (channel = 0; channel < 2u; channel++)
+	{
+		if (!runtime->ym_timer_enabled[channel] ||
+			runtime->ym_timer_remaining[channel] != 0)
+			continue;
+		runtime->ym_timer_enabled[channel] = 0;
+		runtime->ym_timer_arm_elapsed[channel] = 0;
+		runtime->ym_timer_overflows++;
+		(void)YM2610ContextTimerOver(runtime->ym_context, (int)channel);
+		if (runtime->mismatch != PSP_ME_SOUND_Z80_MISMATCH_NONE)
+			return false;
+	}
+	return true;
+}
+
+static bool me_ym_consume_elapsed(psp_me_sound_z80_runtime_t *runtime,
+	uint32_t elapsed_us)
+{
+	uint32_t channel;
+
+	if (!runtime || runtime->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS)
+		return true;
+	for (channel = 0; channel < 2u; channel++)
+	{
+		uint64_t active_elapsed = elapsed_us;
+
+		if (!runtime->ym_timer_enabled[channel])
+			continue;
+		if (runtime->ym_timer_arm_elapsed[channel] != 0)
+		{
+			if (active_elapsed <= runtime->ym_timer_arm_elapsed[channel])
+				active_elapsed = 0;
+			else
+				active_elapsed -= runtime->ym_timer_arm_elapsed[channel];
+		}
+		if (active_elapsed >= runtime->ym_timer_remaining[channel])
+			runtime->ym_timer_remaining[channel] = 0;
+		else
+			runtime->ym_timer_remaining[channel] -= active_elapsed;
+	}
+	runtime->ym_timer_arm_elapsed[0] = 0;
+	runtime->ym_timer_arm_elapsed[1] = 0;
+	return true;
 }
 
 static void me_ym_irq_callback(void *opaque, int irq)
@@ -672,18 +758,25 @@ static bool me_z80_execute_slice(psp_me_sound_worker_shared_context_t *context,
 
 static bool me_z80_advance_autonomous(psp_me_sound_z80_runtime_t *runtime,
 	psp_me_sound_z80_progress_t *progress, uint32_t cycles,
-	uint32_t scheduler_time_left)
+	uint32_t scheduler_time_left, uint32_t elapsed_us)
 {
 	if (!runtime || !progress || runtime->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
 		cycles > (uint32_t)INT32_MAX)
+		return false;
+	if (!me_ym_process_due_timers(runtime))
 		return false;
 
 	runtime->slice = NULL;
 	runtime->io_cursor = 0;
 	runtime->mismatch = PSP_ME_SOUND_Z80_MISMATCH_NONE;
 	runtime->scheduler_time_left = scheduler_time_left;
+	runtime->advance_cycles = cycles;
+	runtime->in_z80_execute = 1;
 	me_z80_runtime = runtime;
 	(void)Cz80_Exec(&runtime->cpu, (int32_t)cycles);
+	runtime->in_z80_execute = 0;
+	if (!me_ym_consume_elapsed(runtime, elapsed_us))
+		return false;
 	progress->slices++;
 	progress->autonomous_slices++;
 	if (runtime->mismatch != PSP_ME_SOUND_Z80_MISMATCH_NONE)
@@ -930,6 +1023,12 @@ static void psp_me_sound_worker_entry(void *param)
 				me_fail_time_regression(context, &command);
 				return;
 			}
+			if (z80_runtime.initialized && !me_ym_process_due_timers(&z80_runtime))
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
+				return;
+			}
 			context->progress->emulated_time = command.emulated_time;
 			context->progress->syncs++;
 			if (z80_runtime.initialized)
@@ -965,6 +1064,12 @@ static void psp_me_sound_worker_entry(void *param)
 			if (command.emulated_time < context->progress->emulated_time)
 			{
 				me_fail_time_regression(context, &command);
+				return;
+			}
+			if (z80_runtime.initialized && !me_ym_process_due_timers(&z80_runtime))
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
 				return;
 			}
 				context->progress->emulated_time = command.emulated_time;
@@ -1092,7 +1197,8 @@ static void psp_me_sound_worker_entry(void *param)
 			case PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER:
 				if (command.generation != context->progress->generation ||
 					!z80_runtime.initialized || !z80_runtime.ym_context ||
-					command.value > 1u)
+					command.value > 1u ||
+					z80_runtime.mode == PSP_ME_SOUND_Z80_MODE_AUTONOMOUS)
 				{
 					me_fail(context, context->progress->generation, command.token,
 						PSP_ME_SOUND_WORKER_ERROR_PROTOCOL);
@@ -1169,7 +1275,8 @@ static void psp_me_sound_worker_entry(void *param)
 					return;
 				}
 				if (!me_z80_advance_autonomous(&z80_runtime,
-						context->z80_progress, command.value, command.reserved))
+						context->z80_progress, command.value, command.reserved,
+						command.flags))
 				{
 					meCoreDcacheWritebackRange(context->z80_progress,
 						sizeof(*context->z80_progress));
@@ -1196,6 +1303,12 @@ static void psp_me_sound_worker_entry(void *param)
 				if (command.emulated_time < context->progress->emulated_time)
 				{
 					me_fail_time_regression(context, &command);
+					return;
+				}
+				if (!me_ym_process_due_timers(&z80_runtime))
+				{
+					me_fail(context, context->progress->generation, command.token,
+						PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
 					return;
 				}
 				if (!me_z80_check_checkpoint(context, &z80_runtime,
@@ -1236,8 +1349,15 @@ static void psp_me_sound_worker_entry(void *param)
 						context->z80_progress->ym_render_errors++;
 						job->error = 1;
 					}
+					else if (!me_ym_process_due_timers(&z80_runtime))
+					{
+						context->z80_progress->ym_render_errors++;
+						job->error = 4u;
+					}
 					else
 					{
+						me_z80_publish_status(context, &z80_runtime,
+							command.emulated_time);
 						job->error = YM2610ContextPreparePcmWindow(
 							z80_runtime.ym_context, job->samples, &job->window) ? 0u : 3u;
 						if (job->error != 0)
@@ -1351,6 +1471,7 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 {
 	psp_me_sound_worker_progress_t *progress;
 	psp_me_sound_z80_progress_t *z80_progress;
+	psp_me_sound_status_snapshot_t *status;
 
 	memset(&worker->last_stats, 0, sizeof(worker->last_stats));
 	if (!worker->progress || !worker->z80_progress || !worker->commands ||
@@ -1359,8 +1480,11 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 
 	progress = (psp_me_sound_worker_progress_t *)worker->progress;
 	z80_progress = (psp_me_sound_z80_progress_t *)worker->z80_progress;
+	status = worker->status_snapshot;
 	sceKernelDcacheInvalidateRange(progress, sizeof(*progress));
 	sceKernelDcacheInvalidateRange(z80_progress, sizeof(*z80_progress));
+	if (status)
+		sceKernelDcacheInvalidateRange(status, sizeof(*status));
 	psp_me_spsc_ring_acquire_initial(worker->commands, &allegrex_cache_ops);
 	psp_me_spsc_ring_acquire_initial(worker->events, &allegrex_cache_ops);
 	psp_me_spsc_ring_acquire_initial(worker->z80_batches, &allegrex_cache_ops);
@@ -1403,6 +1527,11 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.z80_batch_underflow = worker->z80_batches->consumer.underflow_count;
 	worker->last_stats.z80_autonomous_slices = z80_progress->autonomous_slices;
 	worker->last_stats.z80_checkpoints = z80_progress->checkpoints;
+	if (status && status->generation == progress->generation)
+	{
+		worker->last_stats.ym_timer_callbacks = status->ym_timer_callbacks;
+		worker->last_stats.ym_timer_overflows = status->ym_timer_overflows;
+	}
 	worker->last_stats.ym_renders = z80_progress->ym_renders;
 	worker->last_stats.ym_render_samples = z80_progress->ym_render_samples;
 	worker->last_stats.ym_render_errors = z80_progress->ym_render_errors;
@@ -2083,7 +2212,8 @@ bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 }
 
 bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
-	uint32_t cycles, uint32_t scheduler_time_left, uint64_t emulated_time)
+	uint32_t cycles, uint32_t scheduler_time_left, uint32_t elapsed_us,
+	uint64_t emulated_time)
 {
 	psp_me_sound_worker_message_t command;
 	psp_me_spsc_ring_result_t result;
@@ -2099,6 +2229,7 @@ bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
 	command.emulated_time = emulated_time;
 	command.value = cycles;
 	command.reserved = scheduler_time_left;
+	command.flags = elapsed_us;
 	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
 		&command, NULL);
 	if (result != PSP_ME_SPSC_RING_OK)

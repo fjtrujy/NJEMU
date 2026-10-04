@@ -137,7 +137,9 @@ typedef struct psp_me_sound_status_snapshot
 	uint8_t irq_state;
 	uint8_t initialized;
 	uint8_t reserved8[3];
-	uint32_t reserved[10];
+	uint32_t ym_timer_callbacks;
+	uint32_t ym_timer_overflows;
+	uint32_t reserved[8];
 } psp_me_sound_status_snapshot_t;
 
 _Static_assert(sizeof(psp_me_sound_status_snapshot_t) == 64,
@@ -200,6 +202,8 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t z80_batch_underflow;
 	uint32_t z80_autonomous_slices;
 	uint32_t z80_checkpoints;
+	uint32_t ym_timer_callbacks;
+	uint32_t ym_timer_overflows;
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
@@ -307,7 +311,8 @@ bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, const cz80_state_t *expected_state,
 	const uint32_t banks[4], uint32_t ram_hash, bool check_ram);
 bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
-	uint32_t cycles, uint32_t scheduler_time_left, uint64_t emulated_time);
+	uint32_t cycles, uint32_t scheduler_time_left, uint32_t elapsed_us,
+	uint64_t emulated_time);
 bool psp_me_sound_worker_z80_checkpoint(psp_me_sound_worker_t *worker,
 	const cz80_state_t *expected_state, const uint32_t banks[4],
 	uint32_t ram_hash, uint64_t emulated_time, uint64_t timeout_us);

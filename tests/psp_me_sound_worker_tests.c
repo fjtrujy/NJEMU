@@ -601,7 +601,8 @@ static int test_sound_status_snapshot(void)
 	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_io_count != 2u ||
-		!psp_me_sound_worker_z80_advance(&worker, cycles, 1000u, 101u) ||
+		!psp_me_sound_worker_z80_advance(&worker, cycles, 1000u,
+			cycles / 4u, 101u) ||
 		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
 			reference_ram_hash(), 101u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_sync(&worker, 102u, TEST_TIMEOUT_US) ||
@@ -918,7 +919,8 @@ static int test_autonomous_ym_timer_preemption_boundary(void)
 	reference_preempt_cpu = NULL;
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_preempt_on_timer_start || Cz80_Get_Reg(&reference_cpu, CZ80_PC) != 24u ||
-		!psp_me_sound_worker_z80_advance(&worker, requested_cycles, 1000u, 100u) ||
+		!psp_me_sound_worker_z80_advance(&worker, requested_cycles, 1000u,
+			24u, 100u) ||
 		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
 			reference_ram_hash(), 100u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
@@ -944,6 +946,165 @@ static int test_autonomous_ym_timer_preemption_boundary(void)
 			stats.z80_io_events, stats.z80_state_mismatches,
 			stats.z80_ram_mismatches, stats.z80_bank_mismatches,
 			stats.z80_io_mismatches, stats.fatal_error);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_autonomous_ym_timer_overflow_schedule(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t first_status;
+	psp_me_sound_status_snapshot_t second_status;
+	ym2610_pcm_window_t window;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint8_t timer_program[] = {
+		0x3e, 0x24, 0xd3, 0x04,
+		0x3e, 0xff, 0xd3, 0x05,
+		0x3e, 0x25, 0xd3, 0x04,
+		0x3e, 0x03, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04,
+		0x3e, 0x05, 0xd3, 0x05,
+		0x00, 0x00, 0x00, 0x00,
+	};
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, timer_program, sizeof(timer_program));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 24u, 24u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 18u, 42u) ||
+		!psp_me_sound_worker_ym_render_prepare(&worker, 1u, 42u, &window,
+			TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &first_status))
+	{
+		fprintf(stderr, "Autonomous YM local timer first overflow failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (first_status.ym_timer_overflows != 1u ||
+		first_status.ym_timer_callbacks < 2u ||
+		first_status.irq_state != ASSERT_LINE)
+	{
+		fprintf(stderr,
+			"Autonomous YM first timer status mismatch: callbacks=%u overflows=%u irq=%u\n",
+			first_status.ym_timer_callbacks, first_status.ym_timer_overflows,
+			first_status.irq_state);
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_z80_advance(&worker, 72u, 18u, 18u, 60u) ||
+		!psp_me_sound_worker_sync(&worker, 60u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &second_status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Autonomous YM local timer reload failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (second_status.ym_timer_overflows != 2u ||
+		second_status.ym_timer_callbacks < 3u ||
+		second_status.irq_state != ASSERT_LINE)
+	{
+		fprintf(stderr,
+			"Autonomous YM reload status mismatch: callbacks=%u overflows=%u irq=%u\n",
+			second_status.ym_timer_callbacks, second_status.ym_timer_overflows,
+			second_status.irq_state);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_autonomous_ym_timer_b_stop_restart(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint8_t timer_program[] = {
+		0x3e, 0x26, 0xd3, 0x04, /* Timer B register. */
+		0x3e, 0xff, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04, /* Load + enable Timer B IRQ. */
+		0x3e, 0x0a, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04, /* Stop Timer B before expiry. */
+		0x3e, 0x00, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04, /* Restart Timer B. */
+		0x3e, 0x0a, 0xd3, 0x05,
+		0x00, 0x00, 0x00, 0x00,
+	};
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, timer_program, sizeof(timer_program));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 1000u, 16u, 16u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 200u, 984u, 16u, 32u) ||
+		!psp_me_sound_worker_z80_advance(&worker, 1152u, 288u, 288u, 320u) ||
+		!psp_me_sound_worker_sync(&worker, 320u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Autonomous YM Timer B stop/restart failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.ym_timer_overflows != 1u || status.ym_timer_callbacks < 4u ||
+		status.irq_state != ASSERT_LINE)
+	{
+		fprintf(stderr,
+			"Autonomous YM Timer B status mismatch: callbacks=%u overflows=%u irq=%u\n",
+			status.ym_timer_callbacks, status.ym_timer_overflows, status.irq_state);
 		return 0;
 	}
 	return 1;
@@ -1108,9 +1269,11 @@ int main(void)
 		!test_sound_status_snapshot() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_preemption_boundary() ||
+		!test_autonomous_ym_timer_overflow_schedule() ||
+		!test_autonomous_ym_timer_b_stop_restart() ||
 		!test_ym_shadow_pcm_render())
 		return 1;
 
-	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 autonomous status/checkpoint passed\n");
+	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 autonomous scheduling/timers passed\n");
 	return 0;
 }
