@@ -1754,6 +1754,58 @@ static int test_autonomous_ym_timer_b_stop_restart(void)
 	return 1;
 }
 
+static int test_snapshot_restores_active_ym_timer_deadline(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint8_t timer_enabled[2] = { 1u, 0u };
+	const uint64_t timer_remaining[2] = { 10u, 0u };
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot_with_timers(&worker, &initial_state,
+			reference_memory, reference_memory, sizeof(reference_memory), banks,
+			0, 0, 0, 44100u, 0x1000u, 0x1000u, timer_enabled,
+			timer_remaining, false, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS,
+			TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 10u, 10u) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Seeded YM timer snapshot lifecycle failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.ym_timer_overflows != 1u || status.z80_time < 10u)
+	{
+		fprintf(stderr,
+			"Seeded YM timer did not preserve deadline: overflows=%u z80_time=%llu\n",
+			status.ym_timer_overflows, (unsigned long long)status.z80_time);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_ym_shadow_pcm_render(void)
 {
 	host_dispatch_t host = { 0 };
@@ -2222,6 +2274,7 @@ int main(void)
 		!test_autonomous_advance_horizon_uses_z80_clock() ||
 		!test_autonomous_advance_horizon_long_timer_preemption() ||
 		!test_autonomous_ym_timer_b_stop_restart() ||
+		!test_snapshot_restores_active_ym_timer_deadline() ||
 		!test_ym_shadow_pcm_render() ||
 		!test_ym_authoritative_render_and_cpu_fallback() ||
 		!test_ym_authoritative_render_without_hot_cpu_sync())

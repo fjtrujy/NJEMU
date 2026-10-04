@@ -36,5 +36,7 @@ enum TEXTURE_LAYER_INDEX {
 };
 
 void neogeo_main(void);
+bool neogeo_sound_state_prepare(void);
+bool neogeo_sound_state_resume(void);
 
 #endif /* MVS_H */

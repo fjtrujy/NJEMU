@@ -2771,7 +2771,17 @@ static int state_save_slot(void)
 		video_driver->endFrame(video_data);
 
 		power_set_performance_level(platform_performance_level);
+#if (EMU_SYSTEM == MVS)
+		if (!neogeo_sound_state_prepare())
+			res = 0;
+		else
+		{
+			res = state_save(state_sel);
+			(void)neogeo_sound_state_resume();
+		}
+#else
 		res = state_save(state_sel);
+#endif
 		power_set_lowest_performance_level();
 
 		load_background(WP_STATE);
@@ -2803,7 +2813,17 @@ static int state_load_slot(void)
 		video_driver->endFrame(video_data);
 
 		power_set_performance_level(platform_performance_level);
+#if (EMU_SYSTEM == MVS)
+		if (!neogeo_sound_state_prepare())
+			res = 0;
+		else
+		{
+			res = state_load(state_sel);
+			(void)neogeo_sound_state_resume();
+		}
+#else
 		res = state_load(state_sel);
+#endif
 		power_set_lowest_performance_level();
 
 		if (res)

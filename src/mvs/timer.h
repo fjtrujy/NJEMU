@@ -11,6 +11,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifdef SAVE_STATE
+#include "common/state.h"
+#endif
 
 #define YM2610_TIMERA			0
 #define YM2610_TIMERB			1
@@ -46,6 +49,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int raram
 void timer_set(int which, int duration, int param, void (*callback)(int param));
 bool timer_restore_ym2610_state(const uint8_t enabled[2],
 	const uint64_t remaining_us[2]);
+bool timer_get_ym2610_state(uint8_t enabled[2], uint64_t remaining_us[2]);
 float timer_get_time(void);
 uint64_t timer_get_time_us(void);
 int timer_getscanline(void);

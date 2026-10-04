@@ -16,6 +16,8 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
 	uint8_t pending_command, uint8_t result_code, uint32_t pcm_a_size,
 	uint32_t pcm_b_size);
+bool mvs_me_sound_shadow_prepare_cpu_state(void);
+bool mvs_me_sound_shadow_state_resume_requested(void);
 void mvs_me_sound_shadow_scheduler_boundary(void);
 bool mvs_me_sound_shadow_z80_cpu_suppressed(void);
 bool mvs_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
@@ -64,6 +66,16 @@ static inline bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	(void)pcm_a_size;
 	(void)pcm_b_size;
 	return true;
+}
+
+static inline bool mvs_me_sound_shadow_prepare_cpu_state(void)
+{
+	return true;
+}
+
+static inline bool mvs_me_sound_shadow_state_resume_requested(void)
+{
+	return false;
 }
 
 static inline void mvs_me_sound_shadow_scheduler_boundary(void)

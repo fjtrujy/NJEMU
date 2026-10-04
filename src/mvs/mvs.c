@@ -42,6 +42,35 @@ static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
 	}
 }
 
+static bool neogeo_sync_me_sound_from_cpu(void)
+{
+	cz80_state_t z80_state;
+	uint32_t z80_banks[4];
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+
+	Cz80_Get_State(&CZ80, &z80_state);
+	neogeo_get_z80_shadow_state(z80_banks, &sound_code, &pending_command,
+		&result_code);
+	return mvs_me_sound_shadow_z80_snapshot(&z80_state, memory_region_cpu2,
+		memory_region_cpu2, memory_length_cpu2, z80_banks, sound_code,
+		pending_command, result_code, memory_length_sound1,
+		memory_length_sound2 ? memory_length_sound2 : memory_length_sound1);
+}
+
+bool neogeo_sound_state_prepare(void)
+{
+	return mvs_me_sound_shadow_prepare_cpu_state();
+}
+
+bool neogeo_sound_state_resume(void)
+{
+	if (!mvs_me_sound_shadow_state_resume_requested())
+		return true;
+	return neogeo_sync_me_sound_from_cpu();
+}
+
 /******************************************************************************
 	Global Variables
 ******************************************************************************/
@@ -175,12 +204,6 @@ static int neogeo_init(void)
 
 static void neogeo_reset(void)
 {
-	cz80_state_t z80_state;
-	uint32_t z80_banks[4];
-	uint8_t sound_code;
-	uint8_t pending_command;
-	uint8_t result_code;
-
 	video_driver->clearScreen(video_data);
 
 	timer_reset();
@@ -190,13 +213,7 @@ static void neogeo_reset(void)
 	neogeo_video_reset();
 
 	sound_reset();
-	Cz80_Get_State(&CZ80, &z80_state);
-	neogeo_get_z80_shadow_state(z80_banks, &sound_code, &pending_command,
-		&result_code);
-	(void)mvs_me_sound_shadow_z80_snapshot(&z80_state, memory_region_cpu2,
-		memory_region_cpu2, memory_length_cpu2, z80_banks, sound_code,
-		pending_command, result_code, memory_length_sound1,
-		memory_length_sound2 ? memory_length_sound2 : memory_length_sound1);
+	(void)neogeo_sync_me_sound_from_cpu();
 	blit_clear_all_sprite();
 	autoframeskip_reset();
 

@@ -2095,6 +2095,49 @@ path, not merely over Main CPU.
 
 ### C8 - lifecycle/save-state hardening
 
+#### C8.1 - save/load round-trip through the existing CPU state format (2026-10-04) [host/build complete]
+
+Save states continue to use the existing NJEMU MVS file format; no ME-specific state
+chunk or version bump is introduced.  The normal format already serializes CZ80,
+visible Z80 RAM, bank/latch/result state, MVS scheduler timers and the complete CPU
+YM2610 semantic state.  C8 therefore materializes the authoritative sound island back
+into those existing CPU owners before state I/O, then reseeds the ME afterward.
+
+The MVS save/load menu now wraps `state_save()` / `state_load()` with two lifecycle
+hooks while audio is already muted by the menu:
+
+1. `neogeo_sound_state_prepare()` synchronously consumes the ME recovery snapshot and
+   reconstructs CPU CZ80/RAM/banks/latch/YM/timers when ME owns sound;
+2. the unchanged state serializer saves or loads the normal CPU-side format;
+3. `neogeo_sound_state_resume()` snapshots the resulting CPU state back into the ME
+   only if ME was authoritative when the state operation began.
+
+That last condition is important: saving or loading while the emulator is already in
+CPU fallback must not accidentally reactivate a worker that previously failed.  If
+post-state ME reseeding itself fails, the newly saved/loaded CPU state remains valid
+and execution stays on the CPU path.
+
+Production Z80 snapshots now also carry the CPU scheduler's Timer A/B enabled state
+and **remaining** durations.  The worker seeds its local YM deadlines from those
+values when the snapshot is applied, so a save/load round trip does not restart an
+active YM timer from its full period.  The original snapshot API remains as a
+zero-timer wrapper for the C3-C7 host/hardware oracles.  A focused host oracle seeds
+an already-active Timer A with 10 us remaining and proves the ME generates its
+overflow at that inherited deadline without the Z80 reprogramming the timer.
+
+Reset continues to use the same CPU-to-ME snapshot path after `timer_reset()` and
+`sound_reset()`, so it now benefits from the same timer-state representation without
+special reset-only protocol.
+
+Validation is clean: the normal Desktop MVS suite remains **31/31 CTest green**,
+Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations.  Dedicated `SAVE_STATE=ON` builds also succeed for
+Desktop MVS and PSP full sound-coprocessor + hardware harness.  Building *all* Desktop
+test executables with `SAVE_STATE=ON` still exposes a pre-existing test-link issue
+(`ym2610_context_tests` / worker tests do not provide the global `state_buffer` used by
+the save-state-only YM functions); the actual MVS executable builds successfully and
+that unrelated test-harness issue is not part of this lifecycle change.
+
 - save/load state with ME-owned sound state;
 - game/browser/game transitions;
 - AudioProcessor mode changes;

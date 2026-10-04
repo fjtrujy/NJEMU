@@ -291,6 +291,25 @@ bool timer_restore_ym2610_state(const uint8_t enabled[2],
 	return true;
 }
 
+bool timer_get_ym2610_state(uint8_t enabled[2], uint64_t remaining_us[2])
+{
+	int channel;
+	int time;
+
+	if (!enabled || !remaining_us || active_cpu != CPU_NOTACTIVE)
+		return false;
+	time = getabsolutetime();
+	for (channel = 0; channel < 2; channel++)
+	{
+		int remaining = timer[channel].expire - time;
+
+		enabled[channel] = timer[channel].enable ? 1u : 0u;
+		remaining_us[channel] = enabled[channel] && remaining > 0 ?
+			(uint64_t)(uint32_t)remaining : 0u;
+	}
+	return true;
+}
+
 
 /*------------------------------------------------------
 	Set timer

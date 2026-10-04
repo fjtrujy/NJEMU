@@ -123,6 +123,7 @@ typedef enum psp_me_sound_z80_mode
 typedef struct psp_me_sound_z80_snapshot
 {
 	cz80_state_t state;
+	uint64_t ym_timer_remaining[2];
 	const uint8_t *source_rom;
 	uint32_t source_length;
 	uint32_t banks[4];
@@ -131,6 +132,8 @@ typedef struct psp_me_sound_z80_snapshot
 	uint8_t pending_command;
 	uint8_t result_code;
 	uint8_t mode;
+	uint8_t ym_timer_enabled[2];
+	uint8_t reserved8[2];
 	uint32_t ym_sample_rate;
 	uint32_t ym_pcm_a_size;
 	uint32_t ym_pcm_b_size;
@@ -376,6 +379,13 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
 	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us);
+bool psp_me_sound_worker_z80_snapshot_with_timers(psp_me_sound_worker_t *worker,
+	const cz80_state_t *state, const uint8_t *visible_memory,
+	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
+	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	const uint8_t ym_timer_enabled[2], const uint64_t ym_timer_remaining[2],
 	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
 	int32_t state, uint64_t emulated_time);

@@ -725,6 +725,10 @@ static void me_z80_apply_snapshot(psp_me_sound_worker_shared_context_t *context,
 	runtime->pending_command = snapshot->pending_command;
 	runtime->result_code = snapshot->result_code;
 	runtime->mode = snapshot->mode;
+	runtime->ym_timer_enabled[0] = snapshot->ym_timer_enabled[0];
+	runtime->ym_timer_enabled[1] = snapshot->ym_timer_enabled[1];
+	runtime->ym_timer_remaining[0] = snapshot->ym_timer_remaining[0];
+	runtime->ym_timer_remaining[1] = snapshot->ym_timer_remaining[1];
 	runtime->z80_time = context->progress->emulated_time;
 	runtime->ym_context = context->ym_context;
 	me_z80_runtime = runtime;
@@ -2300,12 +2304,31 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
 	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us)
 {
+	static const uint8_t no_timers_enabled[2] = { 0, 0 };
+	static const uint64_t no_timers_remaining[2] = { 0, 0 };
+
+	return psp_me_sound_worker_z80_snapshot_with_timers(worker, state,
+		visible_memory, source_rom, source_length, banks, sound_code,
+		pending_command, result_code, ym_sample_rate, ym_pcm_a_size,
+		ym_pcm_b_size, no_timers_enabled, no_timers_remaining,
+		clone_default_ym, mode, timeout_us);
+}
+
+bool psp_me_sound_worker_z80_snapshot_with_timers(psp_me_sound_worker_t *worker,
+	const cz80_state_t *state, const uint8_t *visible_memory,
+	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
+	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	const uint8_t ym_timer_enabled[2], const uint64_t ym_timer_remaining[2],
+	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us)
+{
 	psp_me_sound_worker_message_t command;
 	psp_me_sound_z80_snapshot_t *snapshot;
 
 	if (!worker || !worker->running || worker->generation == 0 || !state ||
 		!visible_memory || !source_rom || source_length < PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE ||
-		!banks || !worker->ym_context || !worker->z80_snapshot || !worker->z80_memory ||
+		!banks || !ym_timer_enabled || !ym_timer_remaining || !worker->ym_context ||
+		!worker->z80_snapshot || !worker->z80_memory ||
 		ym_sample_rate == 0 ||
 		(mode != PSP_ME_SOUND_Z80_MODE_ORACLE &&
 			mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS))
@@ -2322,6 +2345,10 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	snapshot->pending_command = pending_command;
 	snapshot->result_code = result_code;
 	snapshot->mode = (uint8_t)mode;
+	memcpy(snapshot->ym_timer_enabled, ym_timer_enabled,
+		sizeof(snapshot->ym_timer_enabled));
+	memcpy(snapshot->ym_timer_remaining, ym_timer_remaining,
+		sizeof(snapshot->ym_timer_remaining));
 	snapshot->ym_sample_rate = ym_sample_rate;
 	snapshot->ym_pcm_a_size = ym_pcm_a_size;
 	snapshot->ym_pcm_b_size = ym_pcm_b_size;

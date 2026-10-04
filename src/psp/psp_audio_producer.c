@@ -98,6 +98,7 @@ static bool me_sound_ym_authoritative;
 static bool me_sound_z80_control_authoritative;
 static bool me_sound_cpu_recovery_required;
 static bool me_sound_cpu_replay_command_pending;
+static bool me_sound_state_resume_me;
 static bool me_sound_status_dirty;
 #endif
 
@@ -870,11 +871,15 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 {
 	bool result = false;
 	bool gate_locked = false;
+	uint8_t ym_timer_enabled[2];
+	uint64_t ym_timer_remaining[2];
 
 	psp_me_sound_z80_reset_tracking();
 	if (!state || !visible_memory || !source_rom || !banks)
 		return false;
 	if (!me_available || !me_sound_worker.running)
+		return false;
+	if (!timer_get_ym2610_state(ym_timer_enabled, ym_timer_remaining))
 		return false;
 	if (!psp_me_sound_ym_gate_lock())
 	{
@@ -888,9 +893,10 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	if (me_available && me_sound_worker.running)
 	{
 		uint32_t ym_sample_rate = 44100u >> (2 - option_samplerate);
-		result = psp_me_sound_worker_z80_snapshot(&me_sound_worker, state,
+		result = psp_me_sound_worker_z80_snapshot_with_timers(&me_sound_worker, state,
 			visible_memory, source_rom, source_length, banks, sound_code,
 			pending_command, result_code, ym_sample_rate, pcm_a_size, pcm_b_size,
+			ym_timer_enabled, ym_timer_remaining,
 			true, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, PSP_ME_SOUND_WORKER_TIMEOUT_US);
 		if (result)
 		{
@@ -914,6 +920,30 @@ done:
 	if (gate_locked)
 		psp_me_sound_ym_gate_unlock();
 	return result;
+}
+
+bool mvs_me_sound_shadow_prepare_cpu_state(void)
+{
+	me_sound_state_resume_me = me_sound_z80_control_authoritative &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
+	if (!me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required)
+		return true;
+	if (me_sound_z80_control_authoritative)
+		me_sound_cpu_recovery_required = true;
+	if (!psp_me_sound_recover_cpu())
+	{
+		me_sound_state_resume_me = false;
+		return false;
+	}
+	return true;
+}
+
+bool mvs_me_sound_shadow_state_resume_requested(void)
+{
+	bool resume = me_sound_state_resume_me;
+
+	me_sound_state_resume_me = false;
+	return resume;
 }
 
 bool mvs_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
