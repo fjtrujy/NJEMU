@@ -117,6 +117,23 @@ typedef struct psp_me_sound_z80_snapshot
 	uint32_t ym_pcm_b_size;
 } psp_me_sound_z80_snapshot_t;
 
+typedef struct psp_me_sound_status_snapshot
+{
+	uint32_t generation;
+	uint32_t sequence;
+	uint64_t emulated_time;
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+	uint8_t irq_state;
+	uint8_t initialized;
+	uint8_t reserved8[3];
+	uint32_t reserved[10];
+} psp_me_sound_status_snapshot_t;
+
+_Static_assert(sizeof(psp_me_sound_status_snapshot_t) == 64,
+	"sound status snapshot must occupy exactly one cache line");
+
 typedef struct psp_me_sound_z80_slice
 {
 	cz80_state_t expected_state;
@@ -212,6 +229,7 @@ typedef struct psp_me_sound_worker
 	void *z80_progress;
 	void *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
+	psp_me_sound_status_snapshot_t *status_snapshot;
 	uint8_t *z80_memory;
 	void *ym_render_job;
 	size_t ring_size;
@@ -250,6 +268,8 @@ bool psp_me_sound_worker_reset(psp_me_sound_worker_t *worker,
 	uint32_t generation, uint64_t timeout_us);
 bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, uint64_t timeout_us);
+bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
+	psp_me_sound_status_snapshot_t *status);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,

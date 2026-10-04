@@ -422,7 +422,15 @@ static void timer_update_cpu_normal(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed(frame_end_time);
+	{
+		uint8_t sound_code;
+		uint8_t pending_command;
+		uint8_t result_code;
+
+		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
+		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+			pending_command, result_code);
+	}
 	mvs_me_sound_profile_frame_completed();
 }
 
@@ -504,7 +512,15 @@ static void timer_update_cpu_raster(void)
 	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
 		mvs_me_sound_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
-	mvs_me_sound_shadow_frame_completed(frame_end_time);
+	{
+		uint8_t sound_code;
+		uint8_t pending_command;
+		uint8_t result_code;
+
+		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
+		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+			pending_command, result_code);
+	}
 	mvs_me_sound_profile_frame_completed();
 }
 

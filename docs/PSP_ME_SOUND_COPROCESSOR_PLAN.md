@@ -1318,6 +1318,58 @@ authoritative ownership transfer.
 
 ### C6 - ME becomes authoritative sound owner
 
+#### C6 readiness: ME status snapshot dry-run (2026-10-04) [complete subphase]
+
+Before moving any authority away from Allegrex, the worker now publishes the
+main-visible sound communication state that C6 will eventually own.  This is a
+dedicated **64-byte, ME-written cache-line snapshot** containing:
+
+- lifecycle generation and a monotonically increasing snapshot sequence;
+- completed emulated time;
+- `sound_code`;
+- `pending_command`;
+- `result_code`;
+- current YM/Z80 IRQ state;
+- initialization state.
+
+Allegrex only invalidates and reads this snapshot; it never writes it.  The ME
+publishes it after snapshot bootstrap, sound-command application, Z80 slices,
+timer/IRQ transitions and explicit `SYNC` completion.  A host oracle verifies a
+complete sound-side transition where a pending command is consumed by Z80, the
+result byte is written back and a later `SYNC` publishes the expected completed
+emulated time.
+
+The integrated MVS path remains deliberately **non-authoritative**.  Every 300
+frames, after the existing C5 checkpoint `SYNC`, Allegrex reads the ME snapshot
+and compares `sound_code`, `pending_command`, `result_code` and completed time
+against the still-authoritative CPU state.  The 68000-visible read path in
+`neogeo_timer_r()` is unchanged and continues to use the Allegrex-owned values.
+
+Real-PSP dry-run evidence with the same complete C5 worker is clean:
+
+- standalone worker: 4/4 lifecycles pass with the status snapshot read after the
+  final `SYNC`, with no protocol/state/cache failure;
+- `mslug3`: **19/19** 300-frame status checkpoints match, zero status mismatches,
+  C5 remains active through `reason=stop` and all existing PCM/Z80/YM oracles stay
+  clean;
+- `wjammers`: **19/19** status checkpoints also match under the higher-command,
+  timer-preemption workload, again with zero status or existing C5 mismatches.
+
+Desktop MVS remains **26/26 CTest green** after this plumbing; Desktop NCDZ and
+PSP MVS CPU-only, ADPCM-A-only ME and full sound-coprocessor builds also remain
+green.
+
+This proves the future **ME -> Allegrex status/result channel and
+`sound_time_completed` representation**, but it does not yet prove autonomous ME
+scheduling.  In this dry-run the ME still advances because Allegrex supplies the
+C5 CPU-oracle `Z80_SLICE` stream, and `SYNC` merely confirms the time reached by
+that already-replayed work.  True C6 still needs a timestamp/event-driven
+`ADVANCE_TO_TIME` implementation that can execute Z80/YM without CPU Z80 slices.
+
+No ownership transfer is permitted yet.  The physical C2 post-wake
+`RESUME_COMPLETE` fresh-worker rebootstrap evidence remains deferred and is still
+a hard gate before Allegrex stops executing the authoritative Z80/YM2610 path.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;

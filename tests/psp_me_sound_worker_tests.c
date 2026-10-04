@@ -529,6 +529,101 @@ static int test_z80_shadow_large_io_trace(void)
 	return 1;
 }
 
+static int test_sound_status_snapshot(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t initial_status;
+	psp_me_sound_status_snapshot_t final_status;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint32_t cycles = 22u;
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	reference_port_read_value = 0x5au;
+	reference_preempt_cpu = NULL;
+	reference_preempt_on_timer_start = false;
+	/* IN A,(00) consumes the command, OUT (0c),A publishes the result. */
+	reference_memory[0x0000] = 0xdb;
+	reference_memory[0x0001] = 0x00;
+	reference_memory[0x0002] = 0xd3;
+	reference_memory[0x0003] = 0x0c;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0x5au, 1u, 0x22u,
+			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &initial_status))
+	{
+		fprintf(stderr, "Sound status snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (initial_status.generation != 1u || initial_status.emulated_time != 0u ||
+		initial_status.sound_code != 0x5au || initial_status.pending_command != 1u ||
+		initial_status.result_code != 0x22u || initial_status.sequence == 0u)
+	{
+		fprintf(stderr,
+			"Initial sound status mismatch: gen=%u seq=%u time=%llu code=%u pending=%u result=%u\n",
+			initial_status.generation, initial_status.sequence,
+			(unsigned long long)initial_status.emulated_time, initial_status.sound_code,
+			initial_status.pending_command, initial_status.result_code);
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (reference_io_count != 2u ||
+		!psp_me_sound_worker_z80_slice(&worker, reference_io, reference_io_count,
+			cycles, 101u, &expected_state, banks, reference_ram_hash(), true) ||
+		!psp_me_sound_worker_sync(&worker, 102u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &final_status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Sound status snapshot replay failed: io=%u\n",
+			reference_io_count);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (final_status.generation != 1u || final_status.emulated_time != 102u ||
+		final_status.sound_code != 0x5au || final_status.pending_command != 0u ||
+		final_status.result_code != 0x5au ||
+		final_status.sequence <= initial_status.sequence)
+	{
+		fprintf(stderr,
+			"Final sound status mismatch: gen=%u seq=%u time=%llu code=%u pending=%u result=%u\n",
+			final_status.generation, final_status.sequence,
+			(unsigned long long)final_status.emulated_time, final_status.sound_code,
+			final_status.pending_command, final_status.result_code);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_ym_shadow_timer_irq_and_status(void)
 {
 	host_dispatch_t host = { 0 };
@@ -894,10 +989,11 @@ int main(void)
 {
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
+		!test_sound_status_snapshot() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_ym_shadow_pcm_render())
 		return 1;
 
-	printf("PSP ME sound worker host oracle: C3/C4 plus C5 YM timer/status/PCM passed\n");
+	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 status snapshot dry-run passed\n");
 	return 0;
 }

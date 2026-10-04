@@ -294,6 +294,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	psp_me_sound_worker_stats_t *stats)
 {
 	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
 
 	memset(&worker, 0, sizeof(worker));
 	if (!psp_me_sound_worker_start(&worker, dispatch, 8u,
@@ -307,6 +308,10 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		!run_z80_shadow_sequence(&worker, second_time - 2u) ||
 		!psp_me_sound_worker_sync(&worker, second_time,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		status.generation != generation || status.emulated_time != second_time ||
+		status.sound_code != 0u || status.pending_command != 0u ||
+		status.result_code != 0u || status.initialized == 0u ||
 		!psp_me_sound_worker_shutdown(&worker,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 	{

@@ -57,6 +57,8 @@ static uint32_t me_sound_z80_io_count;
 static uint32_t me_sound_z80_slice_count;
 static uint32_t me_sound_z80_io_peak;
 static uint32_t me_sound_z80_failure_reason;
+static uint32_t me_sound_status_checks;
+static uint32_t me_sound_status_mismatches;
 static bool me_sound_worker_mutex_ready;
 static bool me_sound_ym_gate_ready;
 static bool me_sound_z80_slice_gate_locked;
@@ -174,7 +176,8 @@ enum
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_SEND,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_COMPARE,
-	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_GATE_LOCK
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_GATE_LOCK,
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_STATUS_SNAPSHOT
 };
 
 static bool psp_me_sound_worker_lock(void)
@@ -261,6 +264,8 @@ static void psp_me_sound_z80_reset_tracking(void)
 	me_sound_z80_slice_count = 0;
 	me_sound_z80_io_peak = 0;
 	me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_NONE;
+	me_sound_status_checks = 0;
+	me_sound_status_mismatches = 0;
 	me_sound_z80_failed = false;
 	me_sound_ym_render_pending = false;
 }
@@ -338,6 +343,7 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			"z80_ram_mismatches=%lu z80_bank_mismatches=%lu z80_io_mismatches=%lu "
 			"z80_send_failures=%lu z80_last_mismatch=%lu z80_batch_high_water=%lu "
 			"z80_batch_overflow=%lu z80_local_failure=%lu z80_io_peak=%lu "
+			"status_checks=%lu status_mismatches=%lu "
 			"ym_renders=%lu ym_samples=%lu ym_render_errors=%lu "
 			"ym_pcm_mismatches=%lu ym_status_mismatches=%lu ym_send_failures=%lu "
 			"ym_first_sample=%lu ym_first_channel=%lu ym_first_expected=%ld "
@@ -373,6 +379,8 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			(unsigned long)stats.z80_batch_overflow,
 			(unsigned long)me_sound_z80_failure_reason,
 			(unsigned long)me_sound_z80_io_peak,
+			(unsigned long)me_sound_status_checks,
+			(unsigned long)me_sound_status_mismatches,
 			(unsigned long)ym_renders,
 			(unsigned long)ym_render_samples,
 			(unsigned long)ym_render_errors,
@@ -399,6 +407,8 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 		}
 	}
 	me_sound_shadow_window_base = stats;
+	me_sound_status_checks = 0;
+	me_sound_status_mismatches = 0;
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 }
 
@@ -782,7 +792,8 @@ done:
 	}
 }
 
-void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time)
+void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code)
 {
 	uint32_t frames = __atomic_add_fetch(&me_sound_shadow_window_frames, 1u,
 		__ATOMIC_RELAXED);
@@ -801,13 +812,33 @@ void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time)
 	{
 		if (pending && !psp_me_sound_worker_poll(&me_sound_worker))
 			psp_me_sound_shadow_mark_failed("echo mismatch");
-		if (frames >= 300u && z80_active &&
-			!psp_me_sound_worker_sync(&me_sound_worker, emulated_time,
-				PSP_ME_SOUND_WORKER_TIMEOUT_US))
+		if (frames >= 300u && z80_active)
 		{
-			me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_CHECKPOINT_SYNC;
-			psp_me_sound_z80_mark_failed("checkpoint sync");
-			psp_me_sound_shadow_mark_failed("checkpoint sync");
+			psp_me_sound_status_snapshot_t status;
+
+			if (!psp_me_sound_worker_sync(&me_sound_worker, emulated_time,
+					PSP_ME_SOUND_WORKER_TIMEOUT_US))
+			{
+				me_sound_z80_failure_reason =
+					PSP_ME_SOUND_Z80_LOCAL_FAILURE_CHECKPOINT_SYNC;
+				psp_me_sound_z80_mark_failed("checkpoint sync");
+				psp_me_sound_shadow_mark_failed("checkpoint sync");
+			}
+			else
+			{
+				me_sound_status_checks++;
+				if (!psp_me_sound_worker_read_status(&me_sound_worker, &status) ||
+					status.emulated_time != emulated_time ||
+					status.sound_code != sound_code ||
+					status.pending_command != pending_command ||
+					status.result_code != result_code)
+				{
+					me_sound_status_mismatches++;
+					me_sound_z80_failure_reason =
+						PSP_ME_SOUND_Z80_LOCAL_FAILURE_STATUS_SNAPSHOT;
+					psp_me_sound_z80_mark_failed("status snapshot");
+				}
+			}
 		}
 		__atomic_store_n(&me_sound_shadow_pending_hint,
 			me_sound_worker.shadow_expected_count != 0, __ATOMIC_RELEASE);
