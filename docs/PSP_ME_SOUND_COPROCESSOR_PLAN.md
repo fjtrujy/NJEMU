@@ -2375,6 +2375,38 @@ The final regression matrix after the profiling changes is clean: Desktop MVS is
 sound-coprocessor profile builds all compile; the full PSP standalone hardware
 harness also builds successfully.
 
+#### C9 packaging follow-up: normal ME artifacts use the full coprocessor [complete]
+
+The PSP CI/package matrix now reflects the C9 runtime decision instead of continuing
+to label the legacy ADPCM-A-only build as the normal `Media Engine` artifact.
+
+- the base PSP matrix remains `PSP_ME_AUDIO=OFF` /
+  `PSP_ME_SOUND_COPROCESSOR=OFF`, preserving explicit CPU-only / PPSSPP-safe
+  artifacts;
+- normal MVS rows with `PSP_ME_AUDIO=ON` now also set
+  `PSP_ME_SOUND_COPROCESSOR=ON`;
+- one explicit `PSP_ME_AUDIO=ON` / `PSP_ME_SOUND_COPROCESSOR=OFF` MVS row remains
+  as the ADPCM-A benchmark/diagnostic reference;
+- job and artifact names include both flags, so full-coprocessor and ADPCM-A-only
+  packages cannot be mistaken for one another;
+- the generic CMake defaults remain `OFF`.  Cross-platform and developer builds
+  therefore retain explicit control over whether ME dependencies are required.
+
+Fresh local builds of all three packaging combinations pass after this matrix change:
+
+1. `PSP_ME_AUDIO=OFF`, `PSP_ME_SOUND_COPROCESSOR=OFF`;
+2. `PSP_ME_AUDIO=ON`, `PSP_ME_SOUND_COPROCESSOR=OFF`;
+3. `PSP_ME_AUDIO=ON`, `PSP_ME_SOUND_COPROCESSOR=ON`, including the standalone
+   worker hardware harness.
+
+No runtime fallback code changes are part of this packaging follow-up.  The full
+binary therefore retains the already-validated contract that selecting `Main CPU`
+does not initialize MIST and remains suitable for PPSSPP; the CPU-only CI artifact
+also remains available independently.  A PPSSPP executable was not present on the
+development host during this packaging-only revalidation, so the earlier PPSSPP
+runtime evidence remains the current compatibility run rather than being replaced
+by a new one.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
