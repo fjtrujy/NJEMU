@@ -918,7 +918,9 @@ Supported cache representations are:
 
 - `cache/<game>.cache`
 - `cache/<game>_cache.zip`
-- `cache/<game>_cache/` with `cache_info` and block files
+
+The runtime also accepts the older `cache/<game>_cache/` folder representation
+for backwards compatibility, but current ROMCNV output is raw or ZIP.
 
 #### Special Cases
 
@@ -992,20 +994,20 @@ The `romcnv` tools create derived assets for the runtime paths that need them.
 not fit fully in RAM. `romcnv_mvs` generates canonical `processed/` assets for
 sets that require offline C/S/V-ROM processing and for MVS streaming paths.
 
-### Web Interface (Experimental)
+### Web Interface
 
 A web-based ROM converter is available at: **[https://fjtrujy.github.io/NJEMU/](https://fjtrujy.github.io/NJEMU/)**
 
-This allows you to convert ROMs directly in your browser without installing any software. 
-
-> **Note:** The web converter is experimental and under active development.
+This allows you to convert ROMs directly in your browser without installing any software.
 
 ### Why is it needed?
 
-Many arcade ROMs (especially MVS and CPS2 games) have sprite/graphics data that exceeds the available RAM on PSP (~24-64MB) and PS2 (~32MB). The `romcnv` tool:
+MVS and CPS2 can use processed ROM data through either resident or streaming
+runtime paths. The `romcnv` tool prepares that data independently of the target
+platform or memory tier:
 
 1. Extracts and processes sprite data from ROM files
-2. Creates optimized cache files split into manageable chunks
+2. Creates reusable processed/cache assets for resident or streaming access
 3. Decrypts encrypted ROMs (for newer Neo-Geo games)
 
 ### Building romcnv
@@ -1030,17 +1032,13 @@ cmake --build .
 # Convert all ROMs in a directory
 ./romcnv_mvs /path/to/roms -all
 
-# For PSP-2000 (slim) - skip PCM cache for unencrypted games
-./romcnv_mvs /path/to/rom.zip -slim
 ```
 
 ### Output
 
-The tool creates a `cache/` directory containing:
-- `[game]_cache/` folder with processed sprite and sound data
-- Cache files that the emulator loads instead of the full ROM
-
-Copy the generated cache folder to your emulator's `cache/` directory alongside the original ROM in `roms/`.
+MVS writes canonical processed assets under `processed/`; CPS2 writes cache data
+under `cache/`. The generated files are shared across NJEMU platforms rather
+than having separate PSP/PS2/Desktop variants.
 
 See [romcnv/README_MVS.md](romcnv/README_MVS.md) and [romcnv/README_CPS2.md](romcnv/README_CPS2.md) for detailed instructions.
 
@@ -2263,18 +2261,14 @@ The cache system (`src/common/cache.c`) enables running games with graphics larg
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | Block Size | 64 KB | Single cache unit |
-| Max Blocks (Normal) | 320 (20 MB) | PSP Fat |
-| Max Blocks (Large) | 512 (32 MB) | PSP Slim |
-| Safety Margin | 128 KB | Reserved after allocation |
+| Active cache size | Runtime-selected | Chosen from the retained allocation probe and game requirements |
+| Addressability limit | Target/core-specific | Format limit, not a PSP model or memory tier |
 
 #### PCM Cache (MVS Only)
 
-For MVS games with large ADPCM sound data, a separate PCM cache can be used:
-
-| Parameter | Value |
-|-----------|-------|
-| Max PCM Blocks | 320 |
-| PCM Cache Size | 3 MB (0x30 blocks × 64 KB) |
+For MVS games with large ADPCM sound data, the runtime planner can reserve a
+separate PCM/V-ROM cache. Its active size is selected from the same runtime
+memory plan instead of a PSP model-specific build mode.
 
 ### Input System
 

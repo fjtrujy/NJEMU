@@ -4,21 +4,16 @@ A tool to convert Neo-Geo MVS arcade ROMs into processed assets for use with NJE
 
 ## Why Convert ROMs?
 
-Neo-Geo MVS ROMs often contain graphics data larger than the available RAM on:
-- **PSP**: ~24-64MB available RAM
-- **PS2**: ~32MB available RAM
+The MVS runtime can choose between fully resident data and streaming according to
+the memory that is actually available when a game starts. The converter prepares
+the decrypted/decoded C-ROM, S-ROM, and V-ROM assets needed by those runtime
+paths. The generated assets are not tied to a PSP model or memory tier.
 
-This converter decrypts/decodes the ROM data that must be prepared offline and writes reusable processed assets. Streaming-cache builds can read those assets in smaller chunks, while full-resident builds can load the same processed data directly.
+## Converter Availability
 
-## Supported Platforms
-
-| Platform | Executable | Processed Asset Location |
-|----------|------------|----------------|
-| Windows | `romcnv_mvs.exe` | `./processed/` |
-| Linux/macOS | `romcnv_mvs` | `./processed/` |
-| Web | [Online Converter](https://fjtrujy.github.io/NJEMU/) | Download as ZIP |
-| PSP | N/A (use desktop tool) | `/PSP/GAME/MVSPSP/processed/` |
-| PS2 | N/A (use desktop tool) | `mass:/MVSPSP/processed/` |
+The converter runs on Windows, Linux/macOS, or in the
+[online converter](https://fjtrujy.github.io/NJEMU/). The generated processed
+assets are portable across NJEMU platforms.
 
 ## Usage
 
@@ -35,8 +30,6 @@ romcnv_mvs /path/to/game.zip
 |--------|-------------|
 | `-all` | Convert all ROMs in the specified directory |
 | `-zip` | Create a ZIP-compressed processed asset instead of a folder |
-| `-batch` | Batch mode - don't pause between conversions |
-| `-slim` | PSP Slim mode - skip processed PCM data for unencrypted games (reduces asset size) |
 | `-lang <tag>` | Select converter messages at runtime (`en` or `zh-Hans`) |
 
 ### Examples
@@ -44,13 +37,6 @@ romcnv_mvs /path/to/game.zip
 **Convert a single game:**
 ```bash
 romcnv_mvs "D:\roms\kof99.zip"
-```
-
-**Convert multiple games in batch mode:**
-```bash
-romcnv_mvs "D:\roms\garou.zip" -batch
-romcnv_mvs "D:\roms\kof2002.zip" -batch
-romcnv_mvs "D:\roms\kof2003.zip"
 ```
 
 **Convert all ROMs in a directory:**
@@ -61,11 +47,6 @@ romcnv_mvs "D:\roms" -all
 **Convert with ZIP compression:**
 ```bash
 romcnv_mvs "D:\roms\kof99.zip" -zip
-```
-
-**Convert for PSP Slim (reduced processed asset size):**
-```bash
-romcnv_mvs "D:\roms\kof99.zip" -slim
 ```
 
 **Use Simplified Chinese converter messages:**
@@ -87,9 +68,6 @@ romcnv_mvs "D:\roms\kof99.zip" -lang zh-Hans
 
 # Convert all with ZIP compression
 ./romcnv_mvs /home/user/roms -all -zip
-
-# Convert with slim mode
-./romcnv_mvs /home/user/roms/garou.zip -slim
 ```
 
 ## Output
@@ -140,7 +118,9 @@ mass:/MVSPSP/
 
 ## Processed Asset Format Comparison
 
-The emulator supports reading processed MVS assets in **folder** and **zip** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
+The emulator supports the same processed MVS assets in **folder** and **zip**
+formats on every platform. The difference is storage versus runtime I/O cost,
+not compatibility.
 
 ### Memory
 
@@ -169,14 +149,12 @@ The emulator supports reading processed MVS assets in **folder** and **zip** for
 | File count | Multiple files (`cache_info`, `crom`, `srom`, `vrom`) | **1 file** |
 | Filesystem friendliness | ✅ Few large files | ✅ Single file |
 
-### Recommendation per Platform
+### Recommendation
 
-| Platform | Best format | Reason |
-|---|---|---|
-| **PSP** | Folder (default) | Weakest CPU; `lseek`/`read` on `crom` is the cheapest cache miss path. No decompression overhead. |
-| **PS2** | Folder (default) | Same — limited CPU, limited I/O drivers. |
-| **Desktop** | Either (zip for disk savings) | CPU is a non-issue; zip saves ~50% disk with negligible cost. |
-| **WASM / Web** | ZIP | Single HTTP download; in-memory inflate is fast in browser. |
+Use the default folder format when runtime performance matters. Use `-zip` when
+smaller storage is more important and the extra decompression work is acceptable.
+The web converter is only another way to run ROMCNV; it does not produce a
+separate "Web" asset format.
 
 ## Building from Source
 
@@ -216,5 +194,5 @@ emmake make
 - Check that parent ROMs are available for clone sets
 
 **Large processed asset sizes:**
-- Use `-slim` option for PSP Slim/PS Vita
-- Some games (especially later titles) require more processed asset space
+- Processed assets intentionally contain the data required by both resident and streaming runtime paths.
+- ZIP output can reduce storage use without changing emulator compatibility.

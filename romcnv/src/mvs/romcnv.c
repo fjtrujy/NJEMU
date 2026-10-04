@@ -2,7 +2,7 @@
 
 	romcnv.c
 
-	ROM converter for MVSPSP
+	NJEMU MVS ROM converter
 
 ******************************************************************************/
 
@@ -100,8 +100,6 @@ static int encrypt_snd1;
 static int convert_crom;
 static int convert_srom;
 static int convert_vrom;
-
-static int psp2k;
 
 static char game_names[MAX_GAMES][16];
 static game_metadata_t mvs_game_metadata;
@@ -387,7 +385,6 @@ static int load_rom_info(const char *game_name)
 	char buf[256];
 	int rom_start = 0;
 	int region = 0;
-	int total_size = 0;
 
 	num_gfx2rom = 0;
 	num_gfx3rom = 0;
@@ -456,34 +453,11 @@ static int load_rom_info(const char *game_name)
 						rom_start = 1;
 					}
 				}
-/*
-				else if (rom_start && str_cmp(buf, "END") == 0)
-				{
-					close(fp);
-					if (total_size >= 16*1024*1024)
+					else if (rom_start && str_cmp(buf, "END") == 0)
+					{
+						close(fp);
 						return 0;
-					else
-						return 4;
-				}
-*/
-				else if (rom_start && str_cmp(buf, "END") == 0)
-				{
-					close(fp);
-					if (psp2k)
-						{
-						if ((total_size > 0x2b50000) || (encrypt_gfx3))
-						return 0;
-						else
-						return 4;
-						}
-					else
-						{
-						if (total_size >= 16*1024*1024)
-						return 0;
-						else
-						return 4;
-						}
-				}
+					}
 			}
 			else if (rom_start)
 			{
@@ -491,15 +465,11 @@ static int load_rom_info(const char *game_name)
 				{
 					char *size, *type, *flag;
 					int encrypted = 0;
-					int size2;
 
-					strtok(&buf[1], " ");
-					size = strtok(NULL, " ,");
-					type = strtok(NULL, " ,");
-					flag = strtok(NULL, " ");
-
-					sscanf(size, "%x", &size2);
-					total_size += size2;
+						strtok(&buf[1], " ");
+						size = strtok(NULL, " ,");
+						type = strtok(NULL, " ,");
+						flag = strtok(NULL, " ");
 
 					if (strstr(flag, "SOUND_DISABLE")) disable_sound = 1;
 					if (strstr(flag, "ENCRYPTED")) encrypted = 1;
@@ -660,7 +630,6 @@ static int convert_rom(char *game_name)
 		case 1: fputs(ROMCNV_TEXT(ERROR_GAME_NOT_SUPPORTED), stdout); break;
 		case 2: fputs(ROMCNV_TEXT(ERROR_ROM_NOT_FOUND), stdout); break;
 		case 3: fputs(ROMCNV_TEXT(ERROR_MVS_ROMINFO_NOT_FOUND), stdout); break;
-		case 4: fputs(ROMCNV_TEXT(INFO_NO_CONVERSION_REQUIRED), stdout); break;
 		}
 		return 0;
 	}
@@ -674,8 +643,6 @@ static int convert_rom(char *game_name)
 		printf("INFO: Cache data inherited from parent; no conversion needed.\n");
 		return 2;
 	}
-
-	if (psp2k) disable_sound = 0;
 
 	if (convert_vrom && (encrypt_snd1 || disable_sound))
 	{
@@ -1104,7 +1071,6 @@ int main(int argc, char *argv[])
 	printf(ROMCNV_TEXT(MVS_BANNER), VERSION_STR);
 	printf("----------------------------------------------\n\n");
 
-	psp2k = 0;
 	if (argc > 1)
 	{
 		for (i = 1; i < argc; i++)
@@ -1118,13 +1084,14 @@ int main(int argc, char *argv[])
 			{
 				all = 1;
 			}
-			else if (!strcasecmp(argv[i], "-slim"))
-			{
-				psp2k = 1;
-			}
 			else if (!strcasecmp(argv[i], "-zip"))
 			{
 				zip = 1;
+			}
+			else if (argv[i][0] == '-')
+			{
+				printf(ROMCNV_TEXT(ERROR_UNKNOWN_OPTION), argv[i]);
+				return 1;
 			}
 			else if (strchr(argv[i], DELIMITER) != NULL)
 			{

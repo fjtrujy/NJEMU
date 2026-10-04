@@ -1,24 +1,19 @@
 # ROMCNV - CPS2 ROM Converter
 
-A tool to convert Capcom CPS2 arcade ROMs into an optimized cache format for use with NJEMU emulators on memory-constrained platforms.
+A tool to convert Capcom CPS2 arcade ROMs into processed cache data for NJEMU.
 
 ## Why Convert ROMs?
 
-CPS2 ROMs contain graphics data that may exceed the available RAM on:
-- **PSP**: ~24-64MB available RAM
-- **PS2**: ~32MB available RAM
+The CPS2 runtime can use processed graphics data either fully resident or through
+its streaming cache, depending on the memory available when the game starts.
+ROMCNV prepares that data once so the same cache can be used on every NJEMU
+platform.
 
-This converter processes the ROM files and creates optimized cache files that can be loaded in smaller chunks during emulation.
+## Converter Availability
 
-## Supported Platforms
-
-| Platform | Executable | Cache Location |
-|----------|------------|----------------|
-| Windows | `romcnv_cps2.exe` | `./cache/` |
-| Linux/macOS | `romcnv_cps2` | `./cache/` |
-| Web | [Online Converter](https://fjtrujy.github.io/NJEMU/) | Download as ZIP |
-| PSP | N/A (use desktop tool) | `/PSP/GAME/CPS2PSP/cache/` |
-| PS2 | N/A (use desktop tool) | `mass:/CPS2PSP/cache/` |
+The converter runs on Windows, Linux/macOS, or in the
+[online converter](https://fjtrujy.github.io/NJEMU/). Generated caches are
+portable across NJEMU platforms.
 
 ## Usage
 
@@ -34,14 +29,8 @@ romcnv_cps2 /path/to/game.zip
 | Option | Description |
 |--------|-------------|
 | `-all` | Convert all ROMs in the specified directory |
-| `-raw` | Force raw cache file format (overrides per-game defaults) |
 | `-zip` | Create a ZIP compressed cache file (reduces storage space) |
-| `-folder` | Create a folder with individual block files instead of a single raw cache |
-| `-batch` | Batch mode - don't pause between conversions |
 | `-lang <tag>` | Select converter messages at runtime (`en` or `zh-Hans`) |
-
-> **Note:** Some games default to ZIP format for historical reasons. Use `-raw` to explicitly
-> force the single-file `.cache` format regardless of per-game defaults.
 
 ### Examples
 
@@ -53,14 +42,6 @@ romcnv_cps2 "D:\roms\ssf2.zip"
 **Convert with ZIP compression:**
 ```bash
 romcnv_cps2 "D:\roms\avsp.zip" -zip
-```
-
-**Convert multiple games in batch mode:**
-```bash
-romcnv_cps2 "D:\roms\avsp.zip" -zip -batch
-romcnv_cps2 "D:\roms\qndream.zip" -zip -batch
-romcnv_cps2 "D:\roms\mvsc.zip" -batch
-romcnv_cps2 "D:\roms\vsav.zip"
 ```
 
 **Convert all ROMs in a directory:**
@@ -78,11 +59,6 @@ romcnv_cps2 "D:\roms" -all -zip
 romcnv_cps2 "D:\roms\ssf2.zip" -lang zh-Hans
 ```
 
-**Convert with folder format:**
-```bash
-romcnv_cps2 "D:\roms\avsp.zip" -folder
-```
-
 ### Linux/macOS Examples
 
 ```bash
@@ -92,17 +68,11 @@ romcnv_cps2 "D:\roms\avsp.zip" -folder
 # Convert with ZIP compression
 ./romcnv_cps2 /home/user/roms/ssf2.zip -zip
 
-# Convert with folder format
-./romcnv_cps2 /home/user/roms/ssf2.zip -folder
-
 # Convert all ROMs in directory
 ./romcnv_cps2 /home/user/roms -all
 
 # Convert all with ZIP compression
 ./romcnv_cps2 /home/user/roms -all -zip
-
-# Convert all with folder format
-./romcnv_cps2 /home/user/roms -all -folder
 ```
 
 ## Output
@@ -110,9 +80,9 @@ romcnv_cps2 "D:\roms\avsp.zip" -folder
 The converter creates a `cache` directory containing one of:
 - `gamename.cache` — Single raw cache file (default)
 - `gamename_cache.zip` — ZIP compressed cache file (with `-zip`)
-- `gamename_cache/` — Folder with individual block files (with `-folder`)
 
-All three formats are supported by the emulator on all platforms.
+Both generated formats are supported by the emulator on all platforms. The
+runtime also continues to read older folder-format caches for compatibility.
 
 ### File Structure for Emulators
 
@@ -132,15 +102,6 @@ All three formats are supported by the emulator on all platforms.
 │   └── game.zip
 └── cache/
     └── game_cache.zip
-```
-
-**PSP (folder format):**
-```
-/PSP/GAME/CPS2PSP/
-├── roms/
-│   └── game.zip
-└── cache/
-    └── game_cache/
 ```
 
 **PS2 (raw format — default):**
@@ -186,44 +147,43 @@ emmake make
 
 ## Cache Format Comparison
 
-The emulator supports reading caches in **raw file**, **zip**, and **folder** formats. The table below compares them from a memory and performance perspective to help you choose the right format for your target platform.
+ROMCNV generates **raw file** and **zip** caches. These are storage/runtime-I/O
+tradeoffs, not platform-specific cache variants. The runtime keeps folder-cache
+reading only for backwards compatibility.
 
 ### Memory
 
-| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
-|---|---|---|---|
-| Persistent open FD | 1 file descriptor held open | Zip archive kept open (central directory in RAM) | None — open/read/close per block |
-| ZIP central directory overhead | — | ~32 bytes × num_entries | — |
-| Block metadata | `block_offset[0x200]` = 2 KB | `block_empty[0x200]` = 512 B | `block_empty[0x200]` = 512 B |
-| Sleep/resume cost | `close()`/`open()` 1 FD | `zip_close()`/`zip_open()` (re-parse central dir) | Nothing to do |
-| **Overall RAM overhead** | **Lowest** | **Medium** | **Lowest** |
+| Aspect | Raw File (default) | ZIP (`-zip`) |
+|---|---|---|
+| Persistent open FD | 1 file descriptor held open | Zip archive kept open (central directory in RAM) |
+| ZIP central directory overhead | — | ~32 bytes × num_entries |
+| Block metadata | `block_offset[0x200]` = 2 KB | `block_empty[0x200]` = 512 B |
+| Sleep/resume cost | `close()`/`open()` 1 FD | `zip_close()`/`zip_open()` (re-parse central dir) |
+| **Overall RAM overhead** | **Lowest** | **Medium** |
 
 ### Read Performance
 
-| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
-|---|---|---|---|
-| Cache miss (block load) | `lseek()` + `read()` — 1 syscall pair, direct offset | `zopen()` → scan zip dir + `zread()` decompress 64 KB + `zclose()` — **slowest** | `open()` + `read()` + `close()` — 3 syscalls, no decompression |
-| Cache hit | LRU pointer update only | LRU pointer update only | LRU pointer update only |
-| I/O pattern | Random seek in single file ✅ | Sequential scan of zip entries + inflate ❌ | Path lookup + read small file 🔶 |
-| Decompression CPU | **None** | miniz inflate per 64 KB block — **significant on PSP/PS2** | **None** |
-| Startup (`fill_cache`) | Sequential `lseek`+`read` — fast | Open+decompress+close each block — **slowest** | Open+read+close each block — moderate |
+| Aspect | Raw File (default) | ZIP (`-zip`) |
+|---|---|---|
+| Cache miss (block load) | `lseek()` + `read()` — 1 syscall pair, direct offset | `zopen()` → scan zip dir + `zread()` decompress 64 KB + `zclose()` — **slowest** |
+| Cache hit | LRU pointer update only | LRU pointer update only |
+| I/O pattern | Random seek in single file ✅ | Sequential scan of zip entries + inflate ❌ |
+| Decompression CPU | **None** | miniz inflate per 64 KB block — **significant on PSP/PS2** |
+| Startup (`fill_cache`) | Sequential `lseek`+`read` — fast | Open+decompress+close each block — **slowest** |
 
 ### Disk / Storage
 
-| Aspect | Raw File (default) | ZIP (`-zip`) | Folder (`-folder`) |
-|---|---|---|---|
-| Disk size | Largest — offset table + uncompressed blocks, padded to 64 KB alignment | **Smallest** — deflate typically 30–70% compression | Same as raw — uncompressed blocks + metadata |
-| File count | **1 file** | **1 file** | Many files (up to 512 blocks + `cache_info`) |
-| Filesystem friendliness | ✅ Best | ✅ Good | ⚠️ FAT16/FAT32 may struggle with 500+ entries (PSP Memory Stick) |
-
-### Recommendation per Platform
-
-| Platform | Best format | Reason |
+| Aspect | Raw File (default) | ZIP (`-zip`) |
 |---|---|---|
-| **PSP** | Raw file (default) | Weakest CPU; `lseek`/`read` is the cheapest cache miss path. Single FD. FAT16 hates many files. |
-| **PS2** | Raw file (default) | Same — limited CPU, limited I/O drivers. |
-| **Desktop** | Any (zip for disk savings) | CPU is a non-issue; zip saves ~50% disk with negligible cost. |
-| **WASM / Web** | ZIP | Single HTTP download; in-memory inflate is fast in browser. |
+| Disk size | Largest — offset table + uncompressed blocks, padded to 64 KB alignment | **Smallest** — deflate typically 30–70% compression |
+| File count | **1 file** | **1 file** |
+| Filesystem friendliness | ✅ Best | ✅ Good |
+
+### Recommendation
+
+Use the default raw format for the lowest runtime overhead and a single file.
+Use ZIP when storage size matters more than decompression cost. Running the
+converter in a browser does not require ZIP output for the emulator.
 
 ## Troubleshooting
 

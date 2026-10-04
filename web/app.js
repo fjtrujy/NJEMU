@@ -1,5 +1,4 @@
 // NJEMU ROM Converter - Web Application
-// Note: WASM build is work-in-progress. This interface is ready for when the build completes.
 
 class RomConverter {
     constructor() {
@@ -39,7 +38,6 @@ class RomConverter {
 
         // Options
         this.systemRadios = document.querySelectorAll('input[name="system"]');
-        this.slimModeCheckbox = document.getElementById('slim-mode');
         this.formatSelector = document.getElementById('format-selector');
         this.formatGroup = document.getElementById('format-group');
         this.formatInfo = document.getElementById('format-info');
@@ -217,9 +215,8 @@ class RomConverter {
     }
 
     showWasmUnavailable(system) {
-        this.log(`${system.toUpperCase()} WASM module not yet available.`, 'error');
-        this.log('The web converter is under development.', 'error');
-        this.log('Please use the command-line romcnv tool for now.', 'error');
+        this.log(`${system.toUpperCase()} WASM module is unavailable.`, 'error');
+        this.log('Please retry or use the command-line romcnv tool.', 'error');
         this.convertBtn.disabled = true;
     }
 
@@ -337,15 +334,13 @@ class RomConverter {
                 value: 'folder',
                 label: 'Folder',
                 icon: '📁',
-                description: 'Individual block files in a folder. Best for PSP/PS2 — zero decompression, fast random I/O.',
-                recommended: ['PSP', 'PS2'],
+                description: 'Uncompressed processed files. Fastest runtime access and the default choice.',
             },
             {
                 value: 'zip',
                 label: 'ZIP',
                 icon: '📦',
-                description: 'Single compressed archive. Best for Web/Desktop — saves 30–70% disk, single download.',
-                recommended: ['Desktop', 'Web'],
+                description: 'Single compressed archive. Uses less storage but adds decompression work at runtime.',
             },
         ],
         cps2: [
@@ -353,22 +348,13 @@ class RomConverter {
                 value: 'raw',
                 label: 'Raw File',
                 icon: '💾',
-                description: 'Single uncompressed file with offset table. Best for PSP/PS2 — fastest I/O, single file descriptor.',
-                recommended: ['PSP', 'PS2'],
+                description: 'Single uncompressed cache file. Fastest runtime access and the default choice.',
             },
             {
                 value: 'zip',
                 label: 'ZIP',
                 icon: '📦',
-                description: 'Single compressed archive. Best for Web/Desktop — saves 30–70% disk, single download.',
-                recommended: ['Desktop', 'Web'],
-            },
-            {
-                value: 'folder',
-                label: 'Folder',
-                icon: '📁',
-                description: 'Individual block files in a folder. No decompression overhead, but many files — avoid on FAT16.',
-                recommended: [],
+                description: 'Single compressed archive. Uses less storage but adds decompression work at runtime.',
             },
         ],
     };
@@ -378,10 +364,6 @@ class RomConverter {
         if (!formats) return;
 
         this.formatGroup.innerHTML = '';
-
-        // Slim mode only applies to MVS
-        this.slimModeCheckbox.closest('.checkbox-label').style.display =
-            (system === 'mvs') ? 'flex' : 'none';
 
         formats.forEach((fmt, i) => {
             const radio = document.createElement('input');
@@ -406,17 +388,7 @@ class RomConverter {
             name.className = 'format-name';
             name.textContent = fmt.label;
 
-            const badges = document.createElement('span');
-            badges.className = 'format-badges';
-            fmt.recommended.forEach(plat => {
-                const badge = document.createElement('span');
-                badge.className = 'format-badge';
-                badge.textContent = plat;
-                badges.appendChild(badge);
-            });
-
             text.appendChild(name);
-            text.appendChild(badges);
             label.appendChild(icon);
             label.appendChild(text);
 
@@ -436,10 +408,6 @@ class RomConverter {
         if (fmt) {
             this.formatInfo.textContent = fmt.description;
         }
-    }
-    
-    isSlimMode() {
-        return this.slimModeCheckbox.checked;
     }
     
     log(message, type = '') {
@@ -550,16 +518,13 @@ class RomConverter {
                 try { FS.unlink(staleRaw); } catch (e) { /* ignore */ }
 
                 // Get options
-                const slim = this.isSlimMode();
                 const format = this.getSelectedFormat();
-                this.log(`Options: ${slim ? 'Slim mode' : 'Standard mode'}, Format: ${format}`);
+                this.log(`Output format: ${format}`);
 
                 // Build command-line arguments
                 const args = [`/roms/${fileName}`];
                 if (system === 'mvs' && format === 'zip') args.push('-zip');
-                if (system === 'cps2' && format === 'raw') args.push('-raw');
                 if (system === 'cps2' && format === 'zip') args.push('-zip');
-                if (system === 'cps2' && format === 'folder') args.push('-folder');
 
                 // Call main() with command-line arguments
                 const result = this.Module.callMain(args);
@@ -575,7 +540,7 @@ class RomConverter {
                     cachePath = `${outputRoot}/${gameName}_cache.zip`;
                     cacheType = 'zip';
                 } else {
-                    // folder format (MVS default, or CPS2 -folder)
+                    // MVS uses an uncompressed processed-asset directory.
                     cachePath = `${outputRoot}/${gameName}_cache`;
                     cacheType = 'dir';
                 }

@@ -17,22 +17,22 @@
                 <span class="logo-icon">🎮</span>
                 <h1>NJEMU ROM Converter</h1>
             </div>
-            <p class="subtitle">Convert arcade ROMs for PSP & PS2 emulation</p>
+            <p class="subtitle">Create processed ROM assets for NJEMU</p>
         </header>
 
         <main>
             <section class="info-panel">
                 <h2>Why Convert ROMs?</h2>
                 <p>
-                    Many arcade ROMs have graphics data larger than the available RAM on PSP (~24-64MB)
-                    and PS2 (~32MB). This tool creates processed assets that can be loaded fully resident
-                    or streamed in chunks when memory is constrained.
+                    Some MVS and CPS2 data must be transformed before NJEMU can use it efficiently.
+                    This tool creates portable processed assets that the emulator can load fully resident
+                    or stream when memory is constrained.
                 </p>
             </section>
 
             <section class="converter-panel">
                 <div class="system-selector">
-                    <label>Select Target System:</label>
+                    <label>Select Arcade System:</label>
                     <div class="radio-group">
                         <input type="radio" id="mvs" name="system" value="mvs">
                         <label for="mvs" class="radio-label">
@@ -63,14 +63,6 @@
                             <div class="format-info" id="format-info"></div>
                         </div>
 
-                        <div class="options-divider"></div>
-
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="slim-mode">
-                            <span class="checkmark"></span>
-                            <span>PSP Slim Mode</span>
-                            <span class="hint">(Skip processed PCM for unencrypted games)</span>
-                        </label>
                     </div>
 
                     <div class="upload-zone" id="upload-zone">

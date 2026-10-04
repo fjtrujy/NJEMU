@@ -3,8 +3,8 @@
 This catalog owns user-visible messages that historically lived behind the
 ROM converter's `CHINESE` preprocessor flag.
 
-The editable sources are UTF-8 `KEY=value` files. `messages.def` is the stable
-numeric key list, and `tools/build_romcnv_translations.py` validates key order,
+The editable sources are UTF-8 `KEY=value` files. `messages.def` is the numeric
+key list, and `tools/build_romcnv_translations.py` validates key order,
 completeness and `printf` format compatibility before generating the C string
 tables used by ROMCNV.
 
