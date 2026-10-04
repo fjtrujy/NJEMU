@@ -89,8 +89,55 @@ option(RELEASE "Release" OFF)
 option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
+option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
 option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
 option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
+
+# Official downloadable builds use one stable, feature-complete configuration
+# per platform instead of exposing the CI/developer option matrix. Set future
+# option cache entries here, before any capability validation/definitions, so
+# every downstream check sees the canonical policy consistently.
+if(NJEMU_CANONICAL_RELEASE)
+    set(GUI ON CACHE BOOL "GUI" FORCE)
+    set(SAVE_STATE ON CACHE BOOL "Save State" FORCE)
+    set(COMMAND_LIST ON CACHE BOOL "Command List" FORCE)
+
+    # These are diagnostics, experimental capabilities, or alternate bootstrap
+    # paths rather than part of the recommended end-user distribution.
+    set(KERNEL_MODE OFF CACHE BOOL "Kernel Mode" FORCE)
+    set(ADHOC OFF CACHE BOOL "Ad Hoc" FORCE)
+    set(RELEASE OFF CACHE BOOL "Release" FORCE)
+    set(USE_ASAN OFF CACHE BOOL "Use ASAN" FORCE)
+    set(USE_UBSAN OFF CACHE BOOL "Use UBSAN" FORCE)
+    set(USE_PG OFF CACHE BOOL "Use Performance Graph" FORCE)
+    set(PSP_ME_AUDIO OFF CACHE BOOL "PSP: enable experimental Media Engine audio producer" FORCE)
+    set(PSP_AUDIO_PROFILE OFF CACHE BOOL "PSP: log audio producer/chip/output timing" FORCE)
+    set(CACHE_IO_PROFILE OFF CACHE BOOL "Profile MVS cache I/O" FORCE)
+    set(CACHE_IO_FORCE_SEEK OFF CACHE BOOL "Force legacy seek-before-read MVS cache behavior" FORCE)
+    set(CACHE_IO_VALIDATE_ACCELERATED OFF CACHE BOOL "Validate accelerated MVS cache reads against POSIX" FORCE)
+    set(PS2_EXTERNAL_IRX_IMAGE OFF CACHE BOOL "PS2: load ps2_drivers IRXs from an external image" FORCE)
+    set(PSVITA_VIDEO_STATS OFF CACHE BOOL "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" FORCE)
+
+    if((PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PS2") AND
+       ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2"))
+        set(USE_CACHE ON CACHE BOOL "Enable streaming cache support (MVS/CPS2 only)" FORCE)
+    else()
+        set(USE_CACHE OFF CACHE BOOL "Enable streaming cache support (MVS/CPS2 only)" FORCE)
+    endif()
+
+    if(PLATFORM STREQUAL "DESKTOP")
+        set(USE_DESKTOP_GL ON CACHE BOOL "Desktop: compile the OpenGL 3.3 video backend alongside SDL" FORCE)
+    endif()
+
+    if(PLATFORM STREQUAL "PS2" AND USE_CACHE)
+        set(PS2_FAST_CACHE ON CACHE BOOL "PS2: enable accelerated cache I/O for cached cores" FORCE)
+    else()
+        set(PS2_FAST_CACHE OFF CACHE BOOL "PS2: enable accelerated cache I/O for cached cores" FORCE)
+    endif()
+
+    message(STATUS "NJEMU canonical release configuration enabled")
+endif()
+
 if((USE_ASAN OR USE_UBSAN OR USE_PG) AND NOT PLATFORM STREQUAL "DESKTOP")
     message(FATAL_ERROR "USE_ASAN, USE_UBSAN, and USE_PG are desktop-only diagnostic capabilities")
 endif()
@@ -1505,6 +1552,8 @@ endif()
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME version_derivation_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/version_derivation_tests.py)
+    add_test(NAME release_packaging_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/release_packaging_tests.py)
     add_test(NAME game_metadata_generator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
     if(NOT "${TARGET}" STREQUAL "CPS2")

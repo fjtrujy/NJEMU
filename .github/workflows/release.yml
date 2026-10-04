@@ -1,0 +1,359 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vMAJOR.MINOR.PATCH tag to validate/build without publishing
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Validate SemVer tag and source identity
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release tag must be strict vMAJOR.MINOR.PATCH: $tag" >&2
+            exit 1
+          fi
+
+          version="$(python3 tools/njemu_version.py --source-dir .)"
+          if [[ "$version" != "${tag#v}" ]]; then
+            echo "Tagged source produced version '$version', expected '${tag#v}'" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  desktop:
+    name: Desktop ${{ matrix.label }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux
+            slug: desktop-linux
+          - os: macos-latest
+            label: macOS
+            slug: desktop-macos
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git python3 libbz2-dev libsdl2-dev libmad0-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install cmake sdl2 mad
+
+      - name: Build canonical Desktop packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for core in CPS1 CPS2 MVS NCDZ; do
+            core_lower="$(printf '%s' "$core" | tr '[:upper:]' '[:lower:]')"
+            build="build-release-$core_lower"
+            install="$PWD/release-stage/$core"
+            cmake -S . -B "$build" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DPLATFORM=DESKTOP \
+              -DTARGET="$core" \
+              -DNJEMU_CANONICAL_RELEASE=ON \
+              -DBUILD_TESTING=OFF
+            cmake --build "$build" --parallel "$(getconf _NPROCESSORS_ONLN)"
+            cmake --install "$build" --prefix "$install"
+          done
+
+          python3 tools/package_release.py \
+            --source-dir . \
+            --platform "${{ matrix.slug }}" \
+            --version "${{ needs.version.outputs.version }}" \
+            --core-install CPS1=release-stage/CPS1 \
+            --core-install CPS2=release-stage/CPS2 \
+            --core-install MVS=release-stage/MVS \
+            --core-install NCDZ=release-stage/NCDZ \
+            --output-dir release-assets
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.slug }}
+          path: release-assets/
+          if-no-files-found: error
+
+  psp:
+    name: PSP
+    needs: version
+    runs-on: ubuntu-latest
+    container: ghcr.io/pspdev/pspdev:develop
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install dependencies
+        run: apk add build-base git bash python3
+
+      - name: Build canonical PSP package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for core in CPS1 CPS2 MVS NCDZ; do
+            core_lower="$(printf '%s' "$core" | tr '[:upper:]' '[:lower:]')"
+            build="build-release-$core_lower"
+            install="$PWD/release-stage/$core"
+            cmake -S . -B "$build" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="$PSPDEV/psp/share/pspdev.cmake" \
+              -DPLATFORM=PSP \
+              -DTARGET="$core" \
+              -DNJEMU_CANONICAL_RELEASE=ON \
+              -DBUILD_TESTING=OFF
+            cmake --build "$build" --parallel "$(getconf _NPROCESSORS_ONLN)"
+            cmake --install "$build" --prefix "$install"
+          done
+
+          python3 tools/package_release.py \
+            --source-dir . \
+            --platform psp \
+            --version "${{ needs.version.outputs.version }}" \
+            --core-install CPS1=release-stage/CPS1 \
+            --core-install CPS2=release-stage/CPS2 \
+            --core-install MVS=release-stage/MVS \
+            --core-install NCDZ=release-stage/NCDZ \
+            --output-dir release-assets
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-psp
+          path: release-assets/
+          if-no-files-found: error
+
+  ps2:
+    name: PlayStation 2
+    needs: version
+    runs-on: ubuntu-latest
+    container: ps2dev/ps2dev:latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install dependencies
+        run: apk add build-base git bash cmake python3
+
+      - name: Checkout PS2SDK BDM cache fix
+        uses: actions/checkout@v7
+        with:
+          repository: fjtrujy/ps2sdk
+          ref: bdm-cache-read-ahead-fix
+          path: .ci-deps/ps2sdk
+          persist-credentials: false
+
+      - name: Build and install PS2SDK
+        working-directory: .ci-deps/ps2sdk
+        run: |
+          export PS2SDKSRC="$PWD"
+          make -j "$(getconf _NPROCESSORS_ONLN)"
+          make install
+
+      - name: Checkout ps2_drivers
+        uses: actions/checkout@v7
+        with:
+          repository: fjtrujy/ps2_drivers
+          ref: njemu
+          path: .ci-deps/ps2_drivers
+          persist-credentials: false
+
+      - name: Build and install ps2_drivers
+        run: |
+          cmake -S .ci-deps/ps2_drivers -B .ci-deps/ps2_drivers/build \
+            -DCMAKE_TOOLCHAIN_FILE="$PS2DEV/share/ps2dev.cmake" \
+            -DBUILD_SAMPLES=OFF
+          cmake --build .ci-deps/ps2_drivers/build --parallel "$(getconf _NPROCESSORS_ONLN)"
+          cmake --build .ci-deps/ps2_drivers/build --target \
+            ps2_drivers_irximg_check ps2_drivers_irximg_stage_check ps2_drivers_img_payload_check
+          cmake --install .ci-deps/ps2_drivers/build
+
+      - name: Build canonical PS2 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for core in CPS1 CPS2 MVS NCDZ; do
+            core_lower="$(printf '%s' "$core" | tr '[:upper:]' '[:lower:]')"
+            build="build-release-$core_lower"
+            install="$PWD/release-stage/$core"
+            cmake -S . -B "$build" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="$PS2DEV/share/ps2dev.cmake" \
+              -DPLATFORM=PS2 \
+              -DTARGET="$core" \
+              -DNJEMU_CANONICAL_RELEASE=ON \
+              -DBUILD_TESTING=OFF
+            cmake --build "$build" --parallel "$(getconf _NPROCESSORS_ONLN)"
+            cmake --install "$build" --prefix "$install"
+          done
+
+          python3 tools/package_release.py \
+            --source-dir . \
+            --platform ps2 \
+            --version "${{ needs.version.outputs.version }}" \
+            --core-install CPS1=release-stage/CPS1 \
+            --core-install CPS2=release-stage/CPS2 \
+            --core-install MVS=release-stage/MVS \
+            --core-install NCDZ=release-stage/NCDZ \
+            --output-dir release-assets
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-ps2
+          path: release-assets/
+          if-no-files-found: error
+
+  psvita:
+    name: PlayStation Vita
+    needs: version
+    runs-on: ubuntu-latest
+    container: vitasdk/vitasdk:latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.tag }}
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential git cmake python3
+
+      - name: Install miniz 3.1.2
+        run: |
+          git clone --depth 1 --branch 3.1.2 https://github.com/richgel999/miniz.git
+          cmake -S miniz -B miniz/build \
+            -DCMAKE_TOOLCHAIN_FILE=${VITASDK}/share/vita.toolchain.cmake \
+            -DCMAKE_INSTALL_PREFIX=${VITASDK}/arm-vita-eabi \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-ffunction-sections -fdata-sections" \
+            -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DBUILD_SHARED_LIBS=OFF
+          cmake --build miniz/build --parallel "$(getconf _NPROCESSORS_ONLN)"
+          cmake --install miniz/build
+
+      - name: Install VitaGL
+        run: |
+          git clone --depth 1 https://github.com/Rinnegatamante/vitashark
+          make -C vitashark -j "$(getconf _NPROCESSORS_ONLN)" install
+          git clone --depth 1 https://github.com/Rinnegatamante/vitaGL
+          if grep -R -q 'update_scissor_clear_precomputed_uniforms' vitaGL/source; then
+            sed -i 's/update_scissor_clear_precomputed_uniforms/update_scissor_test_uniforms/g' vitaGL/source/*.c vitaGL/source/*.h
+          fi
+          make -C vitaGL -j "$(getconf _NPROCESSORS_ONLN)" USE_SCRATCH_MEMORY=1 install
+
+      - name: Build canonical Vita package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for core in CPS1 CPS2 MVS NCDZ; do
+            core_lower="$(printf '%s' "$core" | tr '[:upper:]' '[:lower:]')"
+            build="build-release-$core_lower"
+            install="$PWD/release-stage/$core"
+            cmake -S . -B "$build" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="$VITASDK/share/vita.toolchain.cmake" \
+              -DPLATFORM=PSVITA \
+              -DTARGET="$core" \
+              -DNJEMU_CANONICAL_RELEASE=ON \
+              -DBUILD_TESTING=OFF
+            cmake --build "$build" --parallel "$(getconf _NPROCESSORS_ONLN)"
+            cmake --install "$build" --prefix "$install"
+          done
+
+          python3 tools/package_release.py \
+            --source-dir . \
+            --platform psvita \
+            --version "${{ needs.version.outputs.version }}" \
+            --core-install CPS1=release-stage/CPS1 \
+            --core-install CPS2=release-stage/CPS2 \
+            --core-install MVS=release-stage/MVS \
+            --core-install NCDZ=release-stage/NCDZ \
+            --output-dir release-assets
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-psvita
+          path: release-assets/
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    if: needs.version.outputs.publish == 'true'
+    needs: [version, desktop, psp, ps2, psvita]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download canonical packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find release-assets -maxdepth 1 -type f -name '*.zip' | wc -l)" -eq 5
+          test "$(find release-assets -maxdepth 1 -type f -name '*.zip.json' | wc -l)" -eq 5
+          ls -lh release-assets
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "${{ needs.version.outputs.tag }}" \
+            release-assets/*.zip \
+            release-assets/*.zip.json \
+            --verify-tag \
+            --title "NJEMU ${{ needs.version.outputs.version }}" \
+            --generate-notes
