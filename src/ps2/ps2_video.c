@@ -128,12 +128,21 @@ static const ps2_output_mode_t ps2_output_modes[VIDEO_OUTPUT_MODE_COUNT] = {
 	{ GS_MODE_DTV_480P, 704, 480, GS_NONINTERLACED, GS_FRAME, 10, 11 },
 };
 
-static const ps2_output_mode_t *ps2_selected_output_mode(void)
+static int ps2_sanitize_output_mode(int index)
 {
-	int index = option_video_output_mode;
 	if (index < 0 || index >= VIDEO_OUTPUT_MODE_COUNT)
 		index = VIDEO_OUTPUT_480I;
-	return &ps2_output_modes[index];
+	return index;
+}
+
+static const ps2_output_mode_t *ps2_output_mode_at(int index)
+{
+	return &ps2_output_modes[ps2_sanitize_output_mode(index)];
+}
+
+static const ps2_output_mode_t *ps2_selected_output_mode(void)
+{
+	return ps2_output_mode_at(option_video_output_mode);
 }
 
 typedef struct texture_layer {
@@ -174,6 +183,8 @@ typedef struct ps2_video {
 	uint32_t offset;
 	uint8_t vsync; /* 0 (Disabled), 1 (Enabled), 2 (Dynamic) */
 	uint8_t pixel_format;
+	int output_mode;
+	uint8_t output_mode_valid;
 
 	void *vram_cluts;
 	uint32_t clut_vram_size;
@@ -653,6 +664,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	if (!ps2)
 		return NULL;
 	ps2->finish_callback_id = -1;
+	ps2->output_mode = ps2_sanitize_output_mode(option_video_output_mode);
+	ps2->output_mode_valid = 1;
 	output_mode = ps2_selected_output_mode();
 
 	gsGlobal = gsKit_init_global();
@@ -842,6 +855,7 @@ static void ps2_free(void *data)
 		gsKit_remove_finish_handler(ps2->finish_callback_id);
 		ps2->finish_callback_id = -1;
 	}
+	ps2->output_mode_valid = 0;
 
 	gsKit_clear(ps2->gsGlobal, GS_BLACK);
 	gsKit_vram_clear(ps2->gsGlobal);
@@ -1460,6 +1474,185 @@ static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
 	gsKit_texture_send_inline(ps2->gsGlobal, (u32 *)clut, CLUT_WIDTH,
 		CLUT_HEIGHT * ps2->clut_bank_height, (u32)vram, GS_PSM_CT16, 1,
 		GS_CLUT_PALLETE);
+}
+
+static int ps2_reallocate_output_vram(ps2_video_t *ps2)
+{
+	GSGLOBAL *gsGlobal = ps2->gsGlobal;
+	u32 vram;
+
+#if (EMU_SYSTEM == CPS2)
+	gsGlobal->PSMZ = GS_PSMZ_16;
+	vram = gsKit_vram_alloc(gsGlobal,
+		gsKit_texture_size(RENDER_SCREEN_WIDTH, RENDER_SCREEN_HEIGHT,
+			gsGlobal->PSMZ),
+		GSKIT_ALLOC_SYSBUFFER);
+	if (vram == GSKIT_ALLOC_ERROR)
+		return 0;
+	gsGlobal->ZBuffer = vram;
+#endif
+
+	vram = gsKit_vram_alloc(gsGlobal,
+		gsKit_texture_size(ps2->scrbitmap->Width, ps2->scrbitmap->Height,
+			ps2->scrbitmap->PSM),
+		GSKIT_ALLOC_USERBUFFER);
+	if (vram == GSKIT_ALLOC_ERROR)
+		return 0;
+	ps2->scrbitmap->Vram = vram;
+	gsKit_setup_tbw(ps2->scrbitmap);
+
+	for (int i = 0; i < ps2->tex_layers_count; i++) {
+		GSTEXTURE *texture = ps2->tex_layers[i].texture;
+
+		vram = gsKit_vram_alloc(gsGlobal,
+			gsKit_texture_size(texture->Width, texture->Height, texture->PSM),
+			GSKIT_ALLOC_USERBUFFER);
+		if (vram == GSKIT_ALLOC_ERROR)
+			return 0;
+		texture->Vram = vram;
+		texture->VramClut = 0;
+		gsKit_setup_tbw(texture);
+	}
+
+	{
+		uint32_t all_clut_vram_size = ps2->clut_vram_size * ps2->clut_bank_count;
+		void *vram_cluts = (void *)gsKit_vram_alloc(gsGlobal,
+			all_clut_vram_size, GSKIT_ALLOC_USERBUFFER);
+
+		if ((uintptr_t)vram_cluts == (uintptr_t)GSKIT_ALLOC_ERROR)
+			return 0;
+		ps2->vram_cluts = vram_cluts;
+	}
+
+#if defined(GUI)
+	vram = gsKit_vram_alloc(gsGlobal,
+		gsKit_texture_size(ps2->ui_scratch->Width, ps2->ui_scratch->Height,
+			ps2->ui_scratch->PSM),
+		GSKIT_ALLOC_USERBUFFER);
+	if (vram == GSKIT_ALLOC_ERROR)
+		return 0;
+	ps2->ui_scratch->Vram = vram;
+	gsKit_setup_tbw(ps2->ui_scratch);
+#endif
+
+	return 1;
+}
+
+static void ps2_restore_output_vram_contents(ps2_video_t *ps2)
+{
+	for (int i = 0; i < ps2->tex_layers_count; i++)
+		ps2_uploadMem(ps2, (uint8_t)i);
+
+	for (int bank = 0; bank < ps2->clut_bank_count; bank++) {
+		uint16_t *clut = ps2->clut_base +
+			(size_t)bank * ps2->clut_entries_per_bank;
+		ps2_uploadClut(ps2, clut, (uint8_t)bank);
+	}
+
+#if defined(GUI)
+	if (ps2->ui_scratch && ps2->ui_scratch->Mem) {
+		size_t size = gsKit_texture_size_ee(ps2->ui_scratch->Width,
+			ps2->ui_scratch->Height, ps2->ui_scratch->PSM);
+		SyncDCache(ps2->ui_scratch->Mem,
+			(uint8_t *)ps2->ui_scratch->Mem + size);
+		gsKit_texture_send_inline(ps2->gsGlobal,
+			(u32 *)ps2->ui_scratch->Mem,
+			ps2->ui_scratch->Width, ps2->ui_scratch->Height,
+			ps2->ui_scratch->Vram, ps2->ui_scratch->PSM,
+			ps2->ui_scratch->TBW, GS_CLUT_NONE);
+		ps2->ui_scratch_cpu_dirty = 0;
+	}
+#endif
+
+	ps2->currentTexclut.specification.cov = 0xFF;
+}
+
+static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
+{
+	GSGLOBAL *gsGlobal;
+	const ps2_output_mode_t *output_mode;
+	int had_pending_queue;
+
+	if (!ps2 || !ps2->gsGlobal)
+		return 0;
+
+	mode_index = ps2_sanitize_output_mode(mode_index);
+	output_mode = ps2_output_mode_at(mode_index);
+	gsGlobal = ps2->gsGlobal;
+
+	/* Finish every command that still references the old VRAM map before
+	 * gsKit resets the GS and its linear VRAM allocator. */
+	had_pending_queue = gsGlobal->Per_Queue->tag_size != 0 ||
+		gsGlobal->Os_Queue->tag_size != 0;
+	gsKit_wait_finish(gsGlobal);
+	gsKit_queue_exec(gsGlobal);
+	if (had_pending_queue) {
+		dmaKit_wait_fast();
+		gsKit_finish();
+	}
+
+	if (ps2->finish_callback_id >= 0) {
+		gsKit_remove_finish_handler(ps2->finish_callback_id);
+		ps2->finish_callback_id = -1;
+	}
+
+	gsGlobal->Mode = output_mode->mode;
+	gsGlobal->Width = output_mode->width;
+	gsGlobal->Height = output_mode->height;
+	gsGlobal->Interlace = output_mode->interlace;
+	gsGlobal->Field = output_mode->field;
+	gsGlobal->ZBuffering = GS_SETTING_OFF;
+
+	gsKit_vram_clear(gsGlobal);
+	gsKit_init_screen(gsGlobal);
+	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+
+	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
+	if (ps2->finish_callback_id < 0)
+		return 0;
+
+	if (!ps2_reallocate_output_vram(ps2))
+		return 0;
+
+	ps2_restore_output_vram_contents(ps2);
+	ps2_setOutputOffset(ps2, option_video_offset_x, option_video_offset_y);
+
+	ps2_fillFrameRGBAQ(ps2, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER,
+		ps2->clearScreenColor);
+	ps2_fillFrameRGBAQ(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
+		ps2->clearScreenColor);
+	ps2_fillFrameRGBAQ(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
+		ps2->clearScreenColor);
+	ps2_flipScreen(ps2, true);
+
+	video_set_pixel_aspect_ratio(output_mode->pixel_aspect_num,
+		output_mode->pixel_aspect_den);
+	ps2->output_mode = mode_index;
+	ps2->output_mode_valid = 1;
+	return 1;
+}
+
+static int ps2_setOutputMode(void *data, int mode_index)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	int old_mode;
+
+	if (!ps2)
+		return 0;
+	mode_index = ps2_sanitize_output_mode(mode_index);
+	if (mode_index == ps2->output_mode && ps2->output_mode_valid) {
+		ps2_setOutputOffset(ps2, option_video_offset_x, option_video_offset_y);
+		return 1;
+	}
+
+	old_mode = ps2->output_mode;
+	if (ps2_apply_output_mode(ps2, mode_index))
+		return 1;
+
+	/* A larger mode can exhaust GS VRAM. Restore the last known-good layout
+	 * so the caller can keep running and revert the setting cleanly. */
+	(void)ps2_apply_output_mode(ps2, old_mode);
+	return 0;
 }
 
 static void ps2_writeIndexedTextureRect(void *data, uint8_t textureIndex,
@@ -2097,4 +2290,5 @@ video_driver_t video_ps2 = {
 	NULL,
 	ps2_getPresentationViewport,
 	ps2_setOutputOffset,
+	ps2_setOutputMode,
 };

@@ -1335,4 +1335,5 @@ video_driver_t video_psp = {
 	psp_prepareSpriteVertices,
 	NULL,
 	NULL,
+	NULL,
 };

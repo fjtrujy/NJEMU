@@ -203,6 +203,10 @@ typedef struct video_driver
 	 * output pixels; the backend converts them to native display timing units. */
 	void (*setOutputOffset)(void *data, int x, int y);
 
+	/* Optional live output-mode switch. Returns nonzero when the backend has
+	 * applied the requested platform mode without requiring an emulator restart. */
+	int (*setOutputMode)(void *data, int mode);
+
 } video_driver_t;
 
 typedef struct video_backend_choice

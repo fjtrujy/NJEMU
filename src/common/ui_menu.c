@@ -694,6 +694,40 @@ static int menu_audio_processor_settings(void)
 #endif
 
 #ifdef PS2
+static int menu_apply_live_video_output_mode(int previous_mode)
+{
+	int requested_mode = option_video_output_mode;
+
+	if (!video_driver->setOutputMode)
+		return 0;
+
+	/* The PS2 UI driver owns VRAM textures allocated after the emulator video
+	 * resources. Drop those first, let the video backend rebuild the GS/VRAM
+	 * layout, then recreate the UI against the new output geometry. */
+	ui_exit();
+	if (video_driver->setOutputMode(video_data, requested_mode) && ui_init())
+	{
+		load_background(WP_GAMECFG);
+		ui_popup_reset();
+		return 1;
+	}
+
+	/* A mode can fail because the larger framebuffer leaves insufficient GS
+	 * VRAM. Restore the previous known-good mode and UI instead of requiring a
+	 * process restart or leaving a partially rebuilt renderer behind. */
+	option_video_output_mode = previous_mode;
+	ui_exit();
+	if (!video_driver->setOutputMode(video_data, previous_mode) || !ui_init())
+	{
+		Loop = LOOP_EXIT;
+		return 0;
+	}
+
+	load_background(WP_GAMECFG);
+	ui_popup_reset();
+	return 0;
+}
+
 static int menu_system_video_settings(void)
 {
 	static const int value_labels[] = {
@@ -718,6 +752,8 @@ static int menu_system_video_settings(void)
 
 	do
 	{
+		int mode_before_input;
+
 		if (update)
 		{
 			video_driver->beginFrame(video_data);
@@ -773,6 +809,7 @@ static int menu_system_video_settings(void)
 
 		pad_update();
 		update = 0;
+		mode_before_input = option_video_output_mode;
 		if (pad_pressed(PLATFORM_PAD_UP))
 		{
 			selected--;
@@ -810,6 +847,12 @@ static int menu_system_video_settings(void)
 				option_video_offset_y++;
 				update = 1;
 			}
+		}
+
+		if (option_video_output_mode != mode_before_input)
+		{
+			menu_apply_live_video_output_mode(mode_before_input);
+			update = 1;
 		}
 
 		if (update && selected != 0 && video_driver->setOutputOffset)

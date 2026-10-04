@@ -1000,4 +1000,5 @@ video_driver_t video_desktop_sdl = {
 	NULL, // prepareSpriteVertices
 	NULL, // getPresentationViewport
 	NULL, // setOutputOffset
+	NULL, // setOutputMode
 };
