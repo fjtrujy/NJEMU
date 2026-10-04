@@ -713,10 +713,13 @@ static int test_sound_status_fence_ordering(void)
 	if (psp_me_sound_worker_validate_status(&status, 1u, 20u,
 			0x77u, 1u, 0u) != PSP_ME_SOUND_STATUS_MISMATCH ||
 		!psp_me_sound_worker_shadow_sound(&worker, 0x77u, 20u) ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x88u, 20u) ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x88u, 20u) ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x99u, 20u) ||
 		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status) ||
 		psp_me_sound_worker_validate_status(&status, 1u, 20u,
-			0x77u, 1u, 0u) != PSP_ME_SOUND_STATUS_MATCH)
+			0x99u, 1u, 0u) != PSP_ME_SOUND_STATUS_MATCH)
 	{
 		fprintf(stderr, "Sound status equal-time fence recovery failed\n");
 		if (worker.running)

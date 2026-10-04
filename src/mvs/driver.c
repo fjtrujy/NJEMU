@@ -750,9 +750,12 @@ READ16_HANDLER( neogeo_timer_r )
 TIMER_CALLBACK( neogeo_sound_write )
 {
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_SOUND_LATCH_APPLY);
+	/* In the experimental coprocessor path, publish the timestamped command to
+	 * the ME first. The CPU latch/NMI below remains the authoritative oracle and
+	 * fallback, and the scheduler does not resume until both steps are done. */
+	(void)mvs_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 	sound_code = param;
 	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
-	(void)mvs_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 }
 
 

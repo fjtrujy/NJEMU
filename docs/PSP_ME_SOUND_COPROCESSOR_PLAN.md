@@ -1730,6 +1730,57 @@ CPU status remains the oracle and fallback in this dry-run.  The fence/barrier i
 the ordering primitive needed before ME status can become authoritative; it does
 not itself transfer ownership.
 
+#### C6 readiness: enqueue-first sound command ownership dry-run (2026-10-04) [host/build complete]
+
+The normal MVS sound-command path now exercises the next ownership boundary while
+keeping the CPU Z80/YM implementation fully authoritative.  `neogeo_sound_write()`
+publishes the timestamped command to the ME worker **before** updating the CPU-owned
+`sound_code` latch and pulsing the CPU Z80 NMI.  The CPU write/NMI still runs
+unconditionally immediately afterwards, so it remains both the oracle and the
+fallback for gameplay.
+
+This ordering means the ME command ring is now the primary ordered command queue in
+the experimental path rather than a post-hoc copy of an already-applied CPU event.
+The FIFO fence from the previous subphase supplies the bounded observation barrier:
+once a fence completes, all earlier same-timestamp command messages have been
+consumed in ring order before status is presented.
+
+The transition is fail-closed.  If an active coprocessor path cannot acquire the
+worker lock or cannot enqueue/poll the sound command, the experimental Z80/sound
+path is marked failed and falls back to CPU authority; the CPU latch/NMI is still
+applied.  When the ME path is unavailable or disabled, the same CPU behavior is
+preserved without making MIST mandatory.
+
+Host coverage now includes both sustained queue pressure and the equal-time FIFO
+case needed for command ownership:
+
+- the existing **10,048-message** shadow-command stress still completes with exact
+  ordering, no corruption and no lost expectations;
+- four commands with the **same emulated timestamp** (`0x77`, `0x88`, duplicate
+  `0x88`, `0x99`) are enqueued before a fence, and the post-fence status resolves to
+  the final FIFO value `0x99`;
+- duplicate values are therefore not treated as an ordering shortcut, and equal
+  timestamps do not collapse distinct command events;
+- all existing autonomous Z80, local YM timer, PCM-presentation and status-fence
+  oracles remain green.
+
+The regression matrix after this dry-run is clean: Desktop MVS is **31/31 CTest
+green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and
+full sound-coprocessor configurations, including the hardware harness.
+
+Current real-PSP integration evidence is explicitly **not counted as passing** for
+this subphase.  The current PSPLink/MIST session runs `mslug3` with
+`AudioProcessor=2`, but produces normal CPU audio/profile windows with no ME shadow
+log and `me_wait_n=0`, which means startup fell back before the enqueue-first path
+became active.  This is the same environment/bootstrap limitation seen while
+testing surrounding C6 work, not an observed command-ordering mismatch.
+
+This remains a dry-run: Allegrex still applies the authoritative sound latch/NMI,
+executes the CPU Z80/YM oracle, and can recover immediately if ME enqueue fails.
+The next ownership step can stop mirroring command application into the CPU only
+after the ME command/status path is active in integrated hardware and the bounded
+fallback semantics are proven there.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;
