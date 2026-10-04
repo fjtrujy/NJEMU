@@ -18,6 +18,7 @@
 #include "mvs/driver.h"
 #include "mvs/me_sound_shadow.h"
 #include "psp/psp_me_sound_worker.h"
+#include "psp/psp_me_sound_lifecycle.h"
 #include "sound/ym2610.h"
 #endif
 #ifdef PSP_ME_RING_SELFTEST
@@ -343,6 +344,8 @@ static void psp_me_sound_z80_reset_tracking(void)
 	me_sound_z80_horizon_queued = false;
 	me_sound_ym_render_pending = false;
 	me_sound_ym_authoritative = false;
+	me_sound_state_resume_me = false;
+	me_sound_shadow_failed = false;
 }
 
 static bool psp_me_sound_recover_cpu(void)
@@ -1450,8 +1453,18 @@ done:
 
 static void psp_me_sound_worker_stop(void)
 {
+	bool gate_locked = false;
+	bool worker_locked = false;
+
+	if (me_sound_ym_gate_ready)
+	{
+		if (!psp_me_sound_ym_gate_lock())
+			return;
+		gate_locked = true;
+	}
 	if (!psp_me_sound_worker_lock())
-		return;
+		goto done;
+	worker_locked = true;
 	if (me_sound_worker.running)
 	{
 		if (!psp_me_sound_worker_shutdown(&me_sound_worker,
@@ -1461,15 +1474,26 @@ static void psp_me_sound_worker_stop(void)
 	}
 	__atomic_store_n(&me_sound_shadow_pending_hint, false, __ATOMIC_RELEASE);
 	psp_me_sound_z80_reset_tracking();
-	psp_me_sound_worker_unlock();
+
+done:
+	if (worker_locked)
+		psp_me_sound_worker_unlock();
+	if (gate_locked)
+		psp_me_sound_ym_gate_unlock();
 }
 
 static bool psp_me_sound_worker_reset_generation(void)
 {
 	bool result = false;
+	bool gate_locked = false;
+	bool worker_locked = false;
 
-	if (!psp_me_sound_worker_lock())
+	if (!psp_me_sound_ym_gate_lock())
 		return false;
+	gate_locked = true;
+	if (!psp_me_sound_worker_lock())
+		goto done;
+	worker_locked = true;
 	if (!me_sound_worker.running)
 		goto done;
 	psp_me_sound_shadow_log_window("reset", true);
@@ -1489,7 +1513,10 @@ static bool psp_me_sound_worker_reset_generation(void)
 	}
 
 done:
-	psp_me_sound_worker_unlock();
+	if (worker_locked)
+		psp_me_sound_worker_unlock();
+	if (gate_locked)
+		psp_me_sound_ym_gate_unlock();
 	return result;
 }
 
@@ -1623,6 +1650,19 @@ static bool psp_me_enable(const char *context)
 		printf("[PSP_ME_AUDIO] %s: sound worker synchronization unavailable; using Main CPU\n",
 			context);
 		return false;
+	}
+	if (me_sound_worker.running)
+	{
+		printf("[PSP_ME_AUDIO] %s: stopping stale sound worker before ME bootstrap\n",
+			context);
+		psp_me_sound_worker_stop();
+		if (me_sound_worker.running)
+		{
+			printf("[PSP_ME_AUDIO] %s: stale sound worker did not stop; using Main CPU\n",
+				context);
+			me_available = false;
+			return false;
+		}
 	}
 #endif
 
@@ -1758,17 +1798,40 @@ static void psp_audio_producer_shutdown(void)
 static void psp_audio_producer_reset(void)
 {
 	psp_audio_producer_waitJob();
-	if (!psp_me_mode_enabled())
-		me_available = false;
 #ifdef PSP_ME_SOUND_COPROCESSOR
-	else if (me_available)
+	psp_me_sound_reset_action_t action = psp_me_sound_reset_action(
+		psp_me_mode_enabled(), me_available, me_sound_worker.running, me_suspended);
+	switch (action)
 	{
+	case PSP_ME_SOUND_RESET_STOP_WORKER:
+		psp_me_sound_worker_stop();
+		me_available = false;
+		break;
+	case PSP_ME_SOUND_RESET_RESET_WORKER:
 		if (!psp_me_sound_worker_reset_generation())
 			me_available = false;
+		break;
+	case PSP_ME_SOUND_RESET_START_WORKER:
+		me_available = false;
+		(void)psp_me_enable("reset");
+		break;
+	case PSP_ME_SOUND_RESET_RESTART_WORKER:
+		psp_me_sound_worker_stop();
+		me_available = false;
+		(void)psp_me_enable("reset");
+		break;
+	case PSP_ME_SOUND_RESET_DEFER_SUSPENDED:
+	case PSP_ME_SOUND_RESET_KEEP_CPU:
+	default:
+		me_available = false;
+		break;
 	}
-#endif
+#else
+	if (!psp_me_mode_enabled())
+		me_available = false;
 	else if (!me_available && !me_suspended)
-		psp_me_enable("reset");
+		(void)psp_me_enable("reset");
+#endif
 	audio_producer_cpu.reset();
 }
 

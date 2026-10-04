@@ -2149,6 +2149,62 @@ that unrelated test-harness issue is not part of this lifecycle change.
 **Gate:** all existing M6 lifecycle coverage plus save/load-state coverage passes
 on real hardware.
 
+#### C8.2 - reset / restart lifecycle reconciliation (2026-10-04) [host/build complete]
+
+The producer lifecycle now explicitly reconciles the requested `AudioProcessor`
+mode with the worker that is actually alive at each sound reset.  Previously the
+`Main CPU` reset branch only cleared `me_available`; if a worker was still running
+because of an unusual runtime transition, the ME task could survive even though the
+frontend had already selected CPU ownership.  Likewise, an inconsistent
+`me_available == false` / `worker.running == true` state could make a later ME
+bootstrap fail without first retiring the stale generation.
+
+The reset policy is now a small platform-independent state machine with explicit
+actions for keep-CPU, stop, reset-generation, start, stale-worker restart and
+suspend-deferred cases.  The normal UI path still uses `LOOP_RESTART` when the
+`AudioProcessor` setting changes, so the common case continues to tear down the
+whole sound producer between games.  The explicit policy hardens direct/reset-time
+transitions as well instead of relying on that UI behavior.
+
+Generation reset and worker stop now also obey the same lock hierarchy as YM
+render/control work: **YM gate -> worker mutex**.  This prevents `sound_reset()` on
+the main thread from advancing the worker generation while the audio thread is
+finishing a render from the previous generation.  Worker stop waits behind any
+current YM operation before issuing `SHUTDOWN`, so game exit, browser return and
+stale-worker cleanup cannot free shared state that is still being observed by the
+audio path.
+
+Lifecycle-local tracking is cleared at the same boundary.  In particular the
+save/load `resume ME after state I/O` latch is discarded on reset/stop so an
+exceptional state-operation sequence cannot request a later ME reseed after the
+generation that created the request has already ended.  The legacy shadow failure
+log latch is also reset per generation so a new lifecycle can report its own first
+failure independently.
+
+Host coverage now checks both policy and concrete worker reuse:
+
+- all reset-policy combinations cover Main CPU, active ME, suspended ME and the
+  inconsistent stale-worker cases;
+- a worker is reset from generation 1 to generation 2 while a FIFO fence is still
+  outstanding, proving the reset drains the earlier event and clears in-flight
+  fence/render state;
+- that worker is then shut down, all shared allocations are verified released, and
+  the **same public worker object** is bootstrapped again at generation 7, synced and
+  shut down cleanly.  This models browser -> new-game reuse within one emulator
+  process without relying on fresh static storage.
+
+The regression matrix is clean after the lifecycle hardening: Desktop MVS remains
+**31/31 CTest green**, Desktop NCDZ builds, PSP MVS builds in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations, and the standalone PSP
+worker harness builds.  The C8-specific `SAVE_STATE=ON` Desktop MVS executable and
+PSP full sound-coprocessor + hardware harness builds also pass.
+
+No physical sleep/resume test is part of this subphase; that check remains deferred
+by the current development decision.  A non-suspend attempt to run the rebuilt
+standalone lifecycle harness could not start because the current PSPLink endpoint
+was not responding even though the host `usbhostfs_pc` process was still alive, so
+no new real-hardware pass or failure is claimed here.
+
 ### C9 - final performance decision
 
 Use identical frame-driven workloads on a real PSP to compare:

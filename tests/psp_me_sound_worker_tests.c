@@ -7,6 +7,7 @@
 #include <sys/time.h>
 
 #include "common/sound.h"
+#include "psp/psp_me_sound_lifecycle.h"
 #include "psp/psp_me_sound_worker.h"
 
 #define TEST_TIMEOUT_US 2000000ULL
@@ -302,6 +303,100 @@ static int test_shadow_order_reset_and_sync(void)
 			stats.generation, stats.shadow_commands, stats.shadow_sent,
 			stats.shadow_matched, stats.shadow_mismatches, stats.shadow_send_failures,
 			stats.shadow_pending, stats.command_overflow, stats.event_overflow,
+			stats.fatal_error);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_audio_reset_lifecycle_policy(void)
+{
+	if (psp_me_sound_reset_action(false, false, false, false) !=
+			PSP_ME_SOUND_RESET_KEEP_CPU ||
+		psp_me_sound_reset_action(false, true, true, false) !=
+			PSP_ME_SOUND_RESET_STOP_WORKER ||
+		psp_me_sound_reset_action(true, true, true, false) !=
+			PSP_ME_SOUND_RESET_RESET_WORKER ||
+		psp_me_sound_reset_action(true, true, false, false) !=
+			PSP_ME_SOUND_RESET_START_WORKER ||
+		psp_me_sound_reset_action(true, false, true, false) !=
+			PSP_ME_SOUND_RESET_RESTART_WORKER ||
+		psp_me_sound_reset_action(true, false, false, false) !=
+			PSP_ME_SOUND_RESET_START_WORKER ||
+		psp_me_sound_reset_action(true, false, false, true) !=
+			PSP_ME_SOUND_RESET_DEFER_SUSPENDED ||
+		psp_me_sound_reset_action(true, true, true, true) !=
+			PSP_ME_SOUND_RESET_STOP_WORKER)
+	{
+		fprintf(stderr, "PSP ME audio reset lifecycle policy mismatch\n");
+		return 0;
+	}
+	return 1;
+}
+
+static int test_worker_reset_and_rebootstrap_lifecycle(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_fence_begin(&worker) ||
+		!psp_me_sound_worker_reset(&worker, 2u, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Worker reset lifecycle setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (worker.generation != 2u || worker.fence_in_flight ||
+		worker.ym_render_in_flight ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr,
+			"Worker reset lifecycle state mismatch: generation=%u fence=%d render=%d\n",
+			worker.generation, worker.fence_in_flight ? 1 : 0,
+			worker.ym_render_in_flight ? 1 : 0);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (worker.running || worker.commands || worker.events || worker.z80_batches ||
+		worker.shared_context || worker.main_control || worker.progress ||
+		worker.z80_progress || worker.ym_context || worker.z80_snapshot ||
+		worker.status_snapshot || worker.recovery_snapshot || worker.z80_memory ||
+		worker.ym_render_job)
+	{
+		fprintf(stderr, "Worker shutdown left shared state alive\n");
+		return 0;
+	}
+
+	/* Reuse the exact same public worker object as a browser -> new-game
+	 * transition would reuse the producer process. */
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 7u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_sync(&worker, 0u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Worker rebootstrap lifecycle failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (stats.generation != 7u || stats.resets != 1u || stats.syncs != 1u ||
+		stats.shutdowns != 1u || stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		fprintf(stderr,
+			"Worker rebootstrap stats mismatch: generation=%u resets=%u syncs=%u shutdowns=%u fatal=%u\n",
+			stats.generation, stats.resets, stats.syncs, stats.shutdowns,
 			stats.fatal_error);
 		return 0;
 	}
@@ -2261,7 +2356,9 @@ done:
 
 int main(void)
 {
-	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
+	if (!test_audio_reset_lifecycle_policy() ||
+		!test_worker_reset_and_rebootstrap_lifecycle() ||
+		!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
 		!test_sound_status_snapshot() ||
 		!test_authoritative_sound_command_without_echo() ||
