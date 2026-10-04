@@ -775,6 +775,7 @@ bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command
 	{
 		me_sound_status_presented_reads++;
 		result = true;
+		goto done;
 	}
 	else
 	{
