@@ -442,36 +442,6 @@ static inline void gsKit_renderToTexture(GSGLOBAL *gsGlobal, GSTEXTURE *texture)
 	gsKit_setRegFrame(gsGlobal, texture->Vram, texture->Width, texture->Height, texture->PSM);
 }
 
-void gsKit_setactive_queue(GSGLOBAL *gsGlobal)
-{
-	u64 *p_data;
-	u64 *p_store;
-
-	p_data = p_store = (u64 *)gsGlobal->dma_misc;
-
-	*p_data++ = GIF_TAG( 4, 1, 0, 0, GSKIT_GIF_FLG_PACKED, 1 );
-	*p_data++ = GIF_AD;
-
-	// Context 1
-
-	*p_data++ = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
-	*p_data++ = GS_SCISSOR_1;
-
-	*p_data++ = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192,
-                                 gsGlobal->Width / 64, gsGlobal->PSM, 0 );
-	*p_data++ = GS_FRAME_1;
-
-	// Context 2
-
-	*p_data++ = GS_SETREG_SCISSOR_1( 0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1 );
-	*p_data++ = GS_SCISSOR_2;
-
-	*p_data++ = GS_SETREG_FRAME_1( gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192,
-                                 gsGlobal->Width / 64, gsGlobal->PSM, 0 );
-	*p_data++ = GS_FRAME_2;
-}
-
-
 /* Copy of gsKit_sync_flip, but without the 'sync' */
 static inline void gsKit_flip(GSGLOBAL *gsGlobal)
 {
@@ -486,7 +456,11 @@ static inline void gsKit_flip(GSGLOBAL *gsGlobal)
       }
    }
 
-   gsKit_setactive_queue(gsGlobal);
+   /* Keep the render target in lockstep with ActiveBuffer exactly like
+    * gsKit_sync_flip().  This must submit the FRAME/SCISSOR state to the GS;
+    * merely constructing that packet leaves subsequent immediate flips
+    * rendering into the previously active framebuffer. */
+   gsKit_setactive(gsGlobal);
 }
 
 static inline u32 lzw(u32 val)
