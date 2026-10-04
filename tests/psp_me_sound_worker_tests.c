@@ -664,6 +664,30 @@ static int test_sound_status_snapshot(void)
 	}
 	presented_pending = 0xaau;
 	presented_result = 0xbbu;
+	if (psp_me_sound_worker_present_authoritative_status(&final_status, 1u, 102u,
+			&presented_pending, &presented_result) != PSP_ME_SOUND_STATUS_MATCH ||
+		presented_pending != 0u || presented_result != 0x5au)
+	{
+		fprintf(stderr,
+			"Sound authoritative status presentation failed: pending=%u result=%u\n",
+			presented_pending, presented_result);
+		return 0;
+	}
+	presented_pending = 0xaau;
+	presented_result = 0xbbu;
+	if (psp_me_sound_worker_present_authoritative_status(&final_status, 1u, 103u,
+			&presented_pending, &presented_result) != PSP_ME_SOUND_STATUS_STALE ||
+		presented_pending != 0xaau || presented_result != 0xbbu ||
+		psp_me_sound_worker_present_authoritative_status(&final_status, 2u, 102u,
+			&presented_pending, &presented_result) != PSP_ME_SOUND_STATUS_UNAVAILABLE ||
+		presented_pending != 0xaau || presented_result != 0xbbu)
+	{
+		fprintf(stderr,
+			"Sound authoritative status fail-closed mutated fallback values\n");
+		return 0;
+	}
+	presented_pending = 0xaau;
+	presented_result = 0xbbu;
 	if (psp_me_sound_worker_present_status(&final_status, 1u, 103u,
 			0x5au, 0u, 0x5au, &presented_pending, &presented_result) !=
 			PSP_ME_SOUND_STATUS_STALE ||
@@ -894,8 +918,7 @@ static int test_sound_recovery_snapshot(void)
 		memcmp(recovery.banks, banks, sizeof(banks)) != 0 ||
 		recovered_ram[0] != 0x5au ||
 		(YM2610ContextWrite(recovered_ym, 0, 0x08),
-			YM2610ContextRead(recovered_ym, 1)) != 0x0fu ||
-		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+			YM2610ContextRead(recovered_ym, 1)) != 0x0fu)
 	{
 		fprintf(stderr,
 			"Recovery snapshot mismatch: gen=%u time=%llu z80=%llu code=%u pending=%u result=%u ram=%u\n",
@@ -903,6 +926,20 @@ static int test_sound_recovery_snapshot(void)
 			(unsigned long long)recovery.z80_time, recovery.sound_code,
 			recovery.pending_command, recovery.result_code,
 			recovered_ram[0]);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+	memset(&recovery, 0, sizeof(recovery));
+	memset(recovered_ram, 0xa5, sizeof(recovered_ram));
+	if (!psp_me_sound_worker_read_recovery_snapshot(&worker, &recovery,
+			recovered_ram, NULL, TEST_TIMEOUT_US) ||
+		recovery.z80_time != 25u || recovered_ram[0] != 0x5au ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Recovery snapshot metadata-only read failed\n");
 		if (worker.running)
 			psp_me_sound_worker_abort(&worker);
 		free(restored_ym_storage);
@@ -1409,7 +1446,6 @@ static int test_autonomous_advance_horizon_timer_boundary(void)
 			44100u, 0x1000u, 0x1000u, false,
 			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_advance_horizon(&worker, 50u, 1000u) ||
-		!psp_me_sound_worker_z80_advance_horizon(&worker, 42u, 976u) ||
 		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &status))
 	{
@@ -1418,12 +1454,14 @@ static int test_autonomous_advance_horizon_timer_boundary(void)
 			psp_me_sound_worker_abort(&worker);
 		return 0;
 	}
-	if (status.emulated_time != 42u || status.ym_timer_overflows != 1u ||
+	if (status.emulated_time != 50u || status.z80_time != 50u ||
+		status.ym_timer_overflows != 1u ||
 		status.ym_timer_callbacks < 2u || status.irq_state != ASSERT_LINE)
 	{
 		fprintf(stderr,
-			"Autonomous advance-horizon first timer mismatch: time=%llu callbacks=%u overflows=%u irq=%u\n",
-			(unsigned long long)status.emulated_time, status.ym_timer_callbacks,
+			"Autonomous advance-horizon first timer mismatch: time=%llu z80=%llu callbacks=%u overflows=%u irq=%u\n",
+			(unsigned long long)status.emulated_time,
+			(unsigned long long)status.z80_time, status.ym_timer_callbacks,
 			status.ym_timer_overflows, status.irq_state);
 		psp_me_sound_worker_abort(&worker);
 		return 0;
@@ -1439,12 +1477,14 @@ static int test_autonomous_advance_horizon_timer_boundary(void)
 			psp_me_sound_worker_abort(&worker);
 		return 0;
 	}
-	if (status.emulated_time != 60u || status.ym_timer_overflows != 2u ||
+	if (status.emulated_time != 60u || status.z80_time != 60u ||
+		status.ym_timer_overflows != 2u ||
 		status.ym_timer_callbacks < 3u || status.irq_state != ASSERT_LINE)
 	{
 		fprintf(stderr,
-			"Autonomous advance-horizon reload mismatch: time=%llu callbacks=%u overflows=%u irq=%u\n",
-			(unsigned long long)status.emulated_time, status.ym_timer_callbacks,
+			"Autonomous advance-horizon reload mismatch: time=%llu z80=%llu callbacks=%u overflows=%u irq=%u\n",
+			(unsigned long long)status.emulated_time,
+			(unsigned long long)status.z80_time, status.ym_timer_callbacks,
 			status.ym_timer_overflows, status.irq_state);
 		return 0;
 	}
@@ -1569,11 +1609,15 @@ static int test_autonomous_advance_horizon_long_timer_preemption(void)
 	reference_preempt_on_timer_start = true;
 	(void)Cz80_Exec(&reference_cpu, 200);
 	reference_preempt_cpu = NULL;
+	/* The ME horizon contract now consumes the complete requested time. The
+	 * first execution stops at the timer-start boundary (24 us); the scheduler
+	 * would immediately resume the remaining 26 us as a second Z80 chunk. */
+	(void)Cz80_Exec(&reference_cpu, 26 * 4);
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_preempt_on_timer_start ||
 		!psp_me_sound_worker_z80_advance_horizon(&worker, 50u, 1000u) ||
 		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
-			reference_ram_hash(), 24u, TEST_TIMEOUT_US) ||
+			reference_ram_hash(), 50u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr,

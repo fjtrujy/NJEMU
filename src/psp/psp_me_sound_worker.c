@@ -233,6 +233,7 @@ static void me_z80_publish_status(psp_me_sound_worker_shared_context_t *context,
 	status->ym_timer_callbacks = runtime->ym_timer_callbacks;
 	status->ym_timer_overflows = runtime->ym_timer_overflows;
 	status->last_advance_elapsed_us = runtime->advance_elapsed_us;
+	status->z80_time = runtime->z80_time;
 	meCoreDcacheWritebackRange(status, sizeof(*status));
 }
 
@@ -845,27 +846,51 @@ static bool me_z80_advance_horizon(psp_me_sound_z80_runtime_t *runtime,
 	psp_me_sound_z80_progress_t *progress, uint64_t horizon_time,
 	uint32_t scheduler_time_left)
 {
-	uint64_t requested_us;
-	uint32_t cycles;
-	uint32_t elapsed_us;
+	uint64_t total_elapsed = 0;
+	uint32_t iterations = 0;
 
 	if (!runtime || !progress || runtime->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
 		horizon_time < runtime->z80_time)
 		return false;
-	requested_us = horizon_time - runtime->z80_time;
-	if (requested_us == 0)
-		return me_ym_process_due_timers(runtime);
-	if (requested_us > (uint64_t)INT32_MAX / PSP_ME_SOUND_Z80_CYCLES_PER_USEC)
-		return false;
-	cycles = (uint32_t)requested_us * PSP_ME_SOUND_Z80_CYCLES_PER_USEC;
-	if (!me_z80_advance_autonomous(runtime, progress, cycles,
-			scheduler_time_left))
-		return false;
-	elapsed_us = runtime->advance_elapsed_us;
-	if ((uint64_t)elapsed_us > requested_us)
-		return false;
-	runtime->z80_time += elapsed_us;
-	return true;
+
+	while (runtime->z80_time < horizon_time)
+	{
+		uint64_t requested_us = horizon_time - runtime->z80_time;
+		uint64_t next_timer = UINT64_MAX;
+		uint32_t channel;
+		uint32_t chunk_us;
+		uint32_t cycles;
+		uint32_t local_scheduler_left;
+		uint32_t elapsed_us;
+
+		if (++iterations > 65536u || !me_ym_process_due_timers(runtime))
+			return false;
+		for (channel = 0; channel < 2u; channel++)
+		{
+			if (runtime->ym_timer_enabled[channel] &&
+				runtime->ym_timer_remaining[channel] < next_timer)
+				next_timer = runtime->ym_timer_remaining[channel];
+		}
+		if (next_timer < requested_us)
+			requested_us = next_timer;
+		if (requested_us == 0)
+			continue;
+		if (requested_us > (uint64_t)INT32_MAX / PSP_ME_SOUND_Z80_CYCLES_PER_USEC)
+			return false;
+		chunk_us = (uint32_t)requested_us;
+		cycles = chunk_us * PSP_ME_SOUND_Z80_CYCLES_PER_USEC;
+		local_scheduler_left = total_elapsed < scheduler_time_left ?
+			scheduler_time_left - (uint32_t)total_elapsed : 0u;
+		if (!me_z80_advance_autonomous(runtime, progress, cycles,
+				local_scheduler_left))
+			return false;
+		elapsed_us = runtime->advance_elapsed_us;
+		if (elapsed_us > chunk_us)
+			return false;
+		runtime->z80_time += elapsed_us;
+		total_elapsed += elapsed_us;
+	}
+	return me_ym_process_due_timers(runtime);
 }
 
 static bool me_z80_check_checkpoint(psp_me_sound_worker_shared_context_t *context,
@@ -2102,7 +2127,7 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 	psp_me_sound_recovery_snapshot_t *shared;
 
 	if (!worker || !worker->running || worker->generation == 0 || !snapshot ||
-		!ram || !ym_context || !worker->recovery_snapshot ||
+		!ram || !worker->recovery_snapshot ||
 		!worker->z80_memory || !worker->ym_context || worker->ym_render_in_flight)
 		return false;
 	memset(&command, 0, sizeof(command));
@@ -2127,7 +2152,8 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 		shared->ym_timer_arm_elapsed[1] != 0 ||
 		shared->irq_state != (uint8_t)shared->state.IRQState ||
 		event.emulated_time != shared->emulated_time ||
-		!YM2610ContextCloneForPcmWindow(ym_context, worker->ym_context))
+		(ym_context &&
+			!YM2610ContextCloneForPcmWindow(ym_context, worker->ym_context)))
 		return false;
 	*snapshot = *shared;
 	memcpy(ram, worker->z80_memory + PSP_ME_SOUND_Z80_RAM_OFFSET,
@@ -2170,6 +2196,21 @@ psp_me_sound_status_validation_t psp_me_sound_worker_present_status(
 		*presented_result = status->result_code;
 	}
 	return validation;
+}
+
+psp_me_sound_status_validation_t psp_me_sound_worker_present_authoritative_status(
+	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
+	uint64_t required_time, uint8_t *presented_pending,
+	uint8_t *presented_result)
+{
+	if (!status || generation == 0 || status->generation != generation ||
+		status->initialized == 0 || !presented_pending || !presented_result)
+		return PSP_ME_SOUND_STATUS_UNAVAILABLE;
+	if (status->emulated_time < required_time)
+		return PSP_ME_SOUND_STATUS_STALE;
+	*presented_pending = status->pending_command;
+	*presented_result = status->result_code;
+	return PSP_ME_SOUND_STATUS_MATCH;
 }
 
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,

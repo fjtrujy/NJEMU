@@ -338,6 +338,7 @@ void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code,
 bool neogeo_restore_z80_shadow_state(const cz80_state_t *state,
 	const uint32_t banks[4], const uint8_t *ram, uint8_t sound_code,
 	uint8_t pending_command, uint8_t result_code);
+void neogeo_apply_z80_sound_command(uint8_t command);
 
 void neogeo_vblank_interrupt(void);
 void neogeo_raster_interrupt(int line);

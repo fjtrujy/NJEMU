@@ -168,6 +168,13 @@ bool neogeo_restore_z80_shadow_state(const cz80_state_t *state,
 	return true;
 }
 
+void neogeo_apply_z80_sound_command(uint8_t command)
+{
+	sound_code = command;
+	pending_command = 1;
+	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
+}
+
 
 /*------------------------------------------------------
 	Inisialize driver
@@ -785,11 +792,13 @@ TIMER_CALLBACK( neogeo_sound_write )
 {
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_SOUND_LATCH_APPLY);
 	/* In the experimental coprocessor path, publish the timestamped command to
-	 * the ME first. The CPU latch/NMI below remains the authoritative oracle and
-	 * fallback, and the scheduler does not resume until both steps are done. */
+	 * the ME first. The CPU latch remains warm for fallback; once ME control is
+	 * authoritative, the stale CPU CZ80 must not receive an NMI that it will not
+	 * execute before a recovery snapshot is applied. */
 	(void)mvs_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 	sound_code = param;
-	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
+	if (!mvs_me_sound_shadow_z80_cpu_suppressed())
+		z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
 }
 
 

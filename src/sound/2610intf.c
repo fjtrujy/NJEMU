@@ -9,6 +9,7 @@
 #include "sound/2610intf.h"
 #include "common/sound.h"
 #include "common/neogeo_sound_io.h"
+#include <string.h>
 #include <limits.h>
 
 #if (EMU_SYSTEM == MVS)
@@ -42,13 +43,25 @@ static void YM2610_shadow_update(int32_t **buffer, int length)
 		if (mvs_me_sound_shadow_ym_render_completed_authoritative(buffer,
 				(uint32_t)length))
 			return;
-		/* The ME path failed before committing output. The CPU YM context is
-		 * kept synchronized after every successful ME block, so rendering this
-		 * block locally is an immediate, state-continuous fallback. */
+		/* Once ME also owns Z80/control, the CPU YM can be behind writes made
+		 * since the previous block. Do not render from stale state; the next
+		 * scheduler boundary restores an exact recovery snapshot first. */
+		if (mvs_me_sound_shadow_z80_cpu_suppressed())
+		{
+			memset(buffer[0], 0, (size_t)length * sizeof(*buffer[0]));
+			memset(buffer[1], 0, (size_t)length * sizeof(*buffer[1]));
+			return;
+		}
 		YM2610Update(buffer, length);
 		return;
 	}
 
+	if (mvs_me_sound_shadow_z80_cpu_suppressed())
+	{
+		memset(buffer[0], 0, (size_t)length * sizeof(*buffer[0]));
+		memset(buffer[1], 0, (size_t)length * sizeof(*buffer[1]));
+		return;
+	}
 	YM2610Update(buffer, length);
 	if (shadow_started)
 		mvs_me_sound_shadow_ym_render_completed(buffer, (uint32_t)length,

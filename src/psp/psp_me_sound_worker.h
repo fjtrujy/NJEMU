@@ -136,6 +136,7 @@ typedef struct psp_me_sound_status_snapshot
 	uint32_t generation;
 	uint32_t sequence;
 	uint64_t emulated_time;
+	uint64_t z80_time;
 	uint8_t sound_code;
 	uint8_t pending_command;
 	uint8_t result_code;
@@ -145,7 +146,7 @@ typedef struct psp_me_sound_status_snapshot
 	uint32_t ym_timer_callbacks;
 	uint32_t ym_timer_overflows;
 	uint32_t last_advance_elapsed_us;
-	uint32_t reserved[7];
+	uint32_t reserved[5];
 } psp_me_sound_status_snapshot_t;
 
 _Static_assert(sizeof(psp_me_sound_status_snapshot_t) == 64,
@@ -356,6 +357,10 @@ psp_me_sound_status_validation_t psp_me_sound_worker_present_status(
 	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
 	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
 	uint8_t result_code, uint8_t *presented_pending,
+	uint8_t *presented_result);
+psp_me_sound_status_validation_t psp_me_sound_worker_present_authoritative_status(
+	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
+	uint64_t required_time, uint8_t *presented_pending,
 	uint8_t *presented_result);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);

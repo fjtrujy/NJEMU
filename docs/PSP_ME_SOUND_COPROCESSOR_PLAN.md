@@ -1947,6 +1947,69 @@ timer side are deliberately retained so fallback requires no recovery snapshot i
 the audio callback.  The next C6 step can use the recovery foundation above to
 remove CPU Z80/control execution at a separately fenced boundary.
 
+#### C6 ownership: ME-authoritative Z80/control with synchronous CPU recovery (2026-10-04) [host/build complete]
+
+The next ownership step now removes the normal Allegrex Z80/control execution while
+the experimental worker is healthy.  A successful initial Z80/YM snapshot marks the
+ME sound island authoritative.  At each MVS scheduler slice, Allegrex queues the
+semantic horizon to the ME **before** executing Z80; once that enqueue succeeds, the
+CPU CZ80 slice is skipped and the scheduler advances its normal emulated-time
+accounting as if the slice had completed.  CPU YM Timer A/B callbacks are likewise
+excluded from scheduler deadline selection while ME control is authoritative, so
+timer overflow/IRQ evolution now comes only from the ME-owned YM context.
+
+The main-visible communication path follows the same ownership model.  Sound
+commands are enqueued to the ME first; the CPU latch value remains warm for recovery,
+but the stale CPU CZ80 does not receive an NMI while its execution is suppressed.
+M68000-visible pending/result reads consume the generation/time-fenced ME status
+snapshot directly instead of comparing it to CPU communication state.  The 300-frame
+diagnostic boundary now checks only that ME `emulated_time` and `z80_time` reached the
+expected scheduler time; it no longer submits CPU CZ80/RAM/bank oracle checkpoints
+while ME owns control.
+
+Failback is deliberately synchronous and fail-closed.  Any recoverable command,
+horizon, status, PCM, lock or worker failure marks CPU recovery required while keeping
+CPU CZ80 and CPU YM timers suppressed.  At the next scheduler boundary Allegrex:
+
+1. acquires the YM gate and worker lock so no render/control mutation can race the
+   transfer;
+2. requests a FIFO recovery snapshot containing logical CZ80 state, banks,
+   communication state, IRQ state and ME-local timer deadlines, and copies the ME
+   Z80 RAM image;
+3. restores CPU CZ80/RAM/bank/latch state, restores the CPU YM singleton from the
+   ME semantic context while preserving CPU-native pointers/callbacks, and rearms
+   CPU YM timers from the **remaining** durations rather than their original periods;
+4. replays a sound command/NMI if the command that triggered failback could not be
+   enqueued to the ME;
+5. only then clears ME authority and lets subsequent scheduler slices execute on
+   Allegrex again.
+
+If recovery itself cannot complete, CPU execution stays suppressed rather than
+continuing from stale state.  Likewise, if an authoritative ME PCM render fails
+before recovery, the audio callback emits silence for that block instead of rendering
+from a stale CPU YM context; the scheduler then performs the exact restore before CPU
+audio/control can resume.
+
+Host coverage exercises the pieces needed by this transfer.  The autonomous horizon
+oracle now consumes the complete requested scheduler horizon across internal YM timer
+preemption boundaries, authoritative status presentation accepts only the active
+generation and required time without consulting CPU values, and the recovery-snapshot
+test supports metadata-only reads as used by production failback.  Existing recovery
+coverage still proves reconstruction of CZ80/RAM/banks/latch/YM/timer state from ME
+state after deliberately corrupting the CPU side.
+
+The regression matrix is clean for this ownership step: Desktop MVS is **31/31 CTest
+green**, Desktop NCDZ builds, and PSP MVS builds successfully in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations; the standalone PSP worker
+harness also compiles from the same tree.
+
+Real-PSP execution is currently **environment-blocked before the worker starts**.
+The rebuilt harness loads under PSPLink, but `meSafeTaskMistInit()` returns `-4` with
+generation 0 and `commands=0`, the same bootstrap failure previously reproduced by
+known-good C5 binaries.  No physical pass or failure of this ownership code is
+therefore claimed from that run.  Per the current development decision, physical
+sleep/resume validation remains deferred and does not block further C6 work.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;
