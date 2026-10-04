@@ -8,6 +8,9 @@
 
 #ifdef PSP_ME_SOUND_COPROCESSOR
 bool mvs_me_sound_shadow_command(uint8_t command, uint64_t emulated_time);
+void mvs_me_sound_shadow_status_pending(void);
+bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command,
+	uint8_t result_code, uint8_t *presented_pending, uint8_t *presented_result);
 bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	const uint8_t *visible_memory, const uint8_t *source_rom,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
@@ -101,6 +104,22 @@ static inline bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples,
 {
 	(void)samples;
 	(void)emulated_time;
+	return false;
+}
+
+static inline void mvs_me_sound_shadow_status_pending(void)
+{
+}
+
+static inline bool mvs_me_sound_shadow_main_status(uint8_t sound_code,
+	uint8_t pending_command, uint8_t result_code, uint8_t *presented_pending,
+	uint8_t *presented_result)
+{
+	(void)sound_code;
+	(void)pending_command;
+	(void)result_code;
+	(void)presented_pending;
+	(void)presented_result;
 	return false;
 }
 

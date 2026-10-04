@@ -1534,6 +1534,54 @@ boundaries and the final 16-bit PSP audio submission.  The next ownership step c
 remove CPU YM/Z80 execution only after the remaining ME status/scheduler handoff is
 able to fail back deterministically.
 
+#### C6 readiness: non-blocking ME status/result presentation dry-run (2026-10-04) [host/build complete]
+
+The M68000-visible `$320001` sound status read now has a validated ME presentation
+path without adding a blocking synchronization point to status polling.  The CPU
+`sound_code` / `pending_command` / `result_code` values remain the oracle, but the
+read path may return `pending/result` from the ME-owned 64-byte status cache line
+when all of the following are true:
+
+- the sound worker and autonomous Z80 path are active;
+- the producer can acquire the worker lock with `sceKernelTryLockLwMutex()`;
+- the snapshot belongs to the current worker generation;
+- its completed emulated time has reached the latest Z80/sound-command boundary
+  submitted to the worker;
+- `sound_code`, `pending_command` and `result_code` exactly match the CPU oracle.
+
+If the worker lock is busy, the snapshot is stale/unavailable, or a sound command
+has set CPU `pending_command` before the corresponding ME command has been
+published, the read immediately falls back to the CPU values with no wait.  A
+fresh snapshot that disagrees with the CPU oracle is treated as a real divergence:
+the autonomous shadow path is disabled through the existing fail-closed mechanism.
+
+The pending-command edge needs explicit treatment because the M68000 sets
+`pending_command=1` immediately, while the actual sound-latch callback that sends
+the ME command may occur later at the scheduler boundary.  The producer therefore
+marks ME status presentation dirty at the M68000 write and clears that condition
+only after the timestamped ME command has been successfully enqueued.  Z80 slice
+completion similarly advances the minimum required ME status time, so a previous
+snapshot cannot be presented after CPU Z80 has consumed a command or written a new
+result.
+
+The worker exposes a small deterministic status-validation helper used by the PSP
+producer and host tests.  Host coverage verifies exact-match, stale, fresh-mismatch
+and wrong-generation cases.  Runtime logging now distinguishes ME-presented reads
+from busy/stale CPU fallbacks, allowing later hardware runs to measure how often
+the non-blocking path can actually serve `$320001` without a barrier.
+
+Regression coverage remains clean: Desktop MVS is **31/31 CTest green**, Desktop
+NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations, including the standalone hardware harness.
+Real-PSP execution is still blocked before worker startup by the existing
+`meSafeTaskMistInit() == -4` environment state, so no new physical-runtime result is
+claimed for this exact status-presentation build.
+
+This is still not authoritative status ownership.  CPU communication state remains
+live and is required for validation/fallback; the next C6 steps must make command
+delivery, scheduler progress and failure recovery sufficient to remove that oracle
+without turning M68000 status reads into synchronous ME barriers.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;

@@ -627,6 +627,18 @@ static int test_sound_status_snapshot(void)
 			final_status.pending_command, final_status.result_code);
 		return 0;
 	}
+	if (psp_me_sound_worker_validate_status(&final_status, 1u, 102u,
+			0x5au, 0u, 0x5au) != PSP_ME_SOUND_STATUS_MATCH ||
+		psp_me_sound_worker_validate_status(&final_status, 1u, 103u,
+			0x5au, 0u, 0x5au) != PSP_ME_SOUND_STATUS_STALE ||
+		psp_me_sound_worker_validate_status(&final_status, 1u, 102u,
+			0x5au, 0u, 0x22u) != PSP_ME_SOUND_STATUS_MISMATCH ||
+		psp_me_sound_worker_validate_status(&final_status, 2u, 102u,
+			0x5au, 0u, 0x5au) != PSP_ME_SOUND_STATUS_UNAVAILABLE)
+	{
+		fprintf(stderr, "Sound status presentation validation failed\n");
+		return 0;
+	}
 	psp_me_sound_worker_get_stats(&worker, &stats);
 	if (stats.z80_autonomous_slices != 1u || stats.z80_checkpoints != 1u ||
 		stats.z80_io_events != 0u || stats.z80_state_mismatches != 0u ||

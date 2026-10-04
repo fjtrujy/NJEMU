@@ -1826,6 +1826,23 @@ bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 	return status->generation == worker->generation && status->initialized != 0;
 }
 
+psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
+	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
+	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
+	uint8_t result_code)
+{
+	if (!status || generation == 0 || status->generation != generation ||
+		status->initialized == 0)
+		return PSP_ME_SOUND_STATUS_UNAVAILABLE;
+	if (status->emulated_time < required_time)
+		return PSP_ME_SOUND_STATUS_STALE;
+	if (status->sound_code != sound_code ||
+		status->pending_command != pending_command ||
+		status->result_code != result_code)
+		return PSP_ME_SOUND_STATUS_MISMATCH;
+	return PSP_ME_SOUND_STATUS_MATCH;
+}
+
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command_value, uint64_t emulated_time)
 {

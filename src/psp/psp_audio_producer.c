@@ -59,6 +59,10 @@ static uint32_t me_sound_z80_io_peak;
 static uint32_t me_sound_z80_failure_reason;
 static uint32_t me_sound_status_checks;
 static uint32_t me_sound_status_mismatches;
+static uint32_t me_sound_status_presented_reads;
+static uint32_t me_sound_status_fallback_busy;
+static uint32_t me_sound_status_fallback_stale;
+static uint64_t me_sound_status_required_time;
 static bool me_sound_worker_mutex_ready;
 static bool me_sound_ym_gate_ready;
 static bool me_sound_z80_slice_gate_locked;
@@ -72,6 +76,7 @@ static bool me_sound_z80_collecting;
 static bool me_sound_z80_io_overflow;
 static bool me_sound_z80_failed;
 static bool me_sound_ym_render_pending;
+static bool me_sound_status_dirty;
 #endif
 
 static void psp_audio_producer_waitJob(void);
@@ -188,6 +193,12 @@ static bool psp_me_sound_worker_lock(void)
 		sceKernelLockLwMutex(&me_sound_worker_mutex, 1, NULL) >= 0;
 }
 
+static bool psp_me_sound_worker_try_lock(void)
+{
+	return me_sound_worker_mutex_ready &&
+		sceKernelTryLockLwMutex(&me_sound_worker_mutex, 1) >= 0;
+}
+
 static void psp_me_sound_worker_unlock(void)
 {
 	if (me_sound_worker_mutex_ready)
@@ -269,6 +280,11 @@ static void psp_me_sound_z80_reset_tracking(void)
 	me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_NONE;
 	me_sound_status_checks = 0;
 	me_sound_status_mismatches = 0;
+	me_sound_status_presented_reads = 0;
+	me_sound_status_fallback_busy = 0;
+	me_sound_status_fallback_stale = 0;
+	me_sound_status_required_time = 0;
+	__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
 	me_sound_z80_failed = false;
 	me_sound_ym_render_pending = false;
 }
@@ -297,6 +313,9 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	uint32_t z80_checkpoints;
 	uint32_t ym_timer_callbacks;
 	uint32_t ym_timer_overflows;
+	uint32_t status_presented_reads;
+	uint32_t status_fallback_busy;
+	uint32_t status_fallback_stale;
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
@@ -340,6 +359,9 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 		me_sound_shadow_window_base.ym_timer_callbacks;
 	ym_timer_overflows = stats.ym_timer_overflows -
 		me_sound_shadow_window_base.ym_timer_overflows;
+	status_presented_reads = me_sound_status_presented_reads;
+	status_fallback_busy = me_sound_status_fallback_busy;
+	status_fallback_stale = me_sound_status_fallback_stale;
 	ym_renders = stats.ym_renders - me_sound_shadow_window_base.ym_renders;
 	ym_render_samples = stats.ym_render_samples -
 		me_sound_shadow_window_base.ym_render_samples;
@@ -366,7 +388,8 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			"z80_batch_overflow=%lu z80_local_failure=%lu z80_io_peak=%lu "
 			"z80_autonomous_slices=%lu z80_checkpoints=%lu "
 			"ym_timer_callbacks=%lu ym_timer_overflows=%lu "
-			"status_checks=%lu status_mismatches=%lu "
+			"status_checks=%lu status_mismatches=%lu status_presented=%lu "
+			"status_fallback_busy=%lu status_fallback_stale=%lu "
 			"ym_renders=%lu ym_samples=%lu ym_render_errors=%lu "
 			"ym_presented_renders=%lu ym_presented_samples=%lu "
 			"ym_pcm_mismatches=%lu ym_status_mismatches=%lu ym_send_failures=%lu "
@@ -409,6 +432,9 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			(unsigned long)ym_timer_overflows,
 			(unsigned long)me_sound_status_checks,
 			(unsigned long)me_sound_status_mismatches,
+			(unsigned long)status_presented_reads,
+			(unsigned long)status_fallback_busy,
+			(unsigned long)status_fallback_stale,
 			(unsigned long)ym_renders,
 			(unsigned long)ym_render_samples,
 			(unsigned long)ym_render_errors,
@@ -439,6 +465,9 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	me_sound_shadow_window_base = stats;
 	me_sound_status_checks = 0;
 	me_sound_status_mismatches = 0;
+	me_sound_status_presented_reads = 0;
+	me_sound_status_fallback_busy = 0;
+	me_sound_status_fallback_stale = 0;
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 }
 
@@ -453,10 +482,70 @@ bool mvs_me_sound_shadow_command(uint8_t command, uint64_t emulated_time)
 		result = psp_me_sound_worker_shadow_sound(&me_sound_worker, command,
 			emulated_time);
 		if (result)
+		{
+			me_sound_status_required_time = emulated_time;
+			__atomic_store_n(&me_sound_status_dirty, false, __ATOMIC_RELEASE);
 			__atomic_store_n(&me_sound_shadow_pending_hint, true, __ATOMIC_RELEASE);
+		}
 		else
 			psp_me_sound_shadow_mark_failed("send/poll");
 	}
+	psp_me_sound_worker_unlock();
+	return result;
+}
+
+void mvs_me_sound_shadow_status_pending(void)
+{
+	if (__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+		__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
+}
+
+bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command,
+	uint8_t result_code, uint8_t *presented_pending, uint8_t *presented_result)
+{
+	psp_me_sound_status_snapshot_t status;
+	psp_me_sound_status_validation_t validation;
+	uint64_t required_time;
+	bool result = false;
+
+	if (!presented_pending || !presented_result ||
+		!__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE) ||
+		!me_sound_z80_autonomous ||
+		__atomic_load_n(&me_sound_status_dirty, __ATOMIC_ACQUIRE))
+		return false;
+	if (!psp_me_sound_worker_try_lock())
+	{
+		me_sound_status_fallback_busy++;
+		return false;
+	}
+	if (!me_available || !me_sound_worker.running ||
+		!psp_me_sound_worker_read_status(&me_sound_worker, &status))
+		goto done;
+
+	required_time = me_sound_status_required_time;
+	validation = psp_me_sound_worker_validate_status(&status,
+		me_sound_worker.generation, required_time, sound_code, pending_command,
+		result_code);
+	if (validation == PSP_ME_SOUND_STATUS_MATCH)
+	{
+		*presented_pending = status.pending_command;
+		*presented_result = status.result_code;
+		me_sound_status_presented_reads++;
+		result = true;
+	}
+	else if (validation == PSP_ME_SOUND_STATUS_STALE ||
+		validation == PSP_ME_SOUND_STATUS_UNAVAILABLE)
+	{
+		me_sound_status_fallback_stale++;
+	}
+	else
+	{
+		me_sound_status_mismatches++;
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_STATUS_SNAPSHOT;
+		psp_me_sound_z80_mark_failed("main status snapshot");
+	}
+
+done:
 	psp_me_sound_worker_unlock();
 	return result;
 }
@@ -494,6 +583,8 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 		if (result)
 		{
 			me_sound_z80_autonomous = true;
+			me_sound_status_required_time = 0;
+			__atomic_store_n(&me_sound_status_dirty, false, __ATOMIC_RELEASE);
 			__atomic_store_n(&me_sound_z80_active, true, __ATOMIC_RELEASE);
 		}
 		else
@@ -796,8 +887,12 @@ void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
 	}
 	if (me_available && me_sound_worker.running &&
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+	{
 		result = psp_me_sound_worker_z80_advance(&me_sound_worker, cycles,
 			scheduler_time_left, elapsed_us, emulated_time);
+		if (result)
+			me_sound_status_required_time = emulated_time;
+	}
 	psp_me_sound_worker_unlock();
 	if (!result)
 	{

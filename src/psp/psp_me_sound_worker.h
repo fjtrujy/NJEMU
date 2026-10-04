@@ -145,6 +145,14 @@ typedef struct psp_me_sound_status_snapshot
 _Static_assert(sizeof(psp_me_sound_status_snapshot_t) == 64,
 	"sound status snapshot must occupy exactly one cache line");
 
+typedef enum psp_me_sound_status_validation
+{
+	PSP_ME_SOUND_STATUS_UNAVAILABLE = 0,
+	PSP_ME_SOUND_STATUS_STALE,
+	PSP_ME_SOUND_STATUS_MATCH,
+	PSP_ME_SOUND_STATUS_MISMATCH
+} psp_me_sound_status_validation_t;
+
 typedef struct psp_me_sound_z80_slice
 {
 	cz80_state_t expected_state;
@@ -289,6 +297,10 @@ bool psp_me_sound_worker_sync(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, uint64_t timeout_us);
 bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 	psp_me_sound_status_snapshot_t *status);
+psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
+	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
+	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
+	uint8_t result_code);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
