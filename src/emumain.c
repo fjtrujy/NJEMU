@@ -602,6 +602,7 @@ void save_snapshot(void)
 
 int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
+	printf("%s %s [%s/%s]\n", APPNAME_STR, VERSION_STR, TARGET_STR, PLATFORM_STR);
 
 	    // Init process
 		platform_data = platform_driver->init();

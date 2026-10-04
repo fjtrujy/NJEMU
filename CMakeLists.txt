@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 project(NJEMU)
 
 include(CTest)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # Configuration
 
@@ -265,20 +266,42 @@ if(PSVITA_VIDEO_STATS)
 endif()
 
 # Version
-set(VERSION_MAJOR 2)
-set(VERSION_MINOR 4)
-set(VERSION_BUILD 0)
+#
+# The exact build identity comes from semantic Git tags plus the source commit.
+# tools/njemu_version.py also owns the pre-first-tag/source-archive fallback so
+# workflows and CMake do not maintain independent version constants.
+execute_process(
+    COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_SOURCE_DIR}/tools/njemu_version.py"
+        --source-dir "${CMAKE_SOURCE_DIR}"
+        --format cmake
+    RESULT_VARIABLE NJEMU_VERSION_RESULT
+    OUTPUT_VARIABLE NJEMU_VERSION_CMAKE
+    ERROR_VARIABLE NJEMU_VERSION_ERROR
+)
+if(NOT NJEMU_VERSION_RESULT EQUAL 0)
+    message(FATAL_ERROR "Unable to derive NJEMU version: ${NJEMU_VERSION_ERROR}")
+endif()
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+set(NJEMU_VERSION_CMAKE_FILE "${CMAKE_BINARY_DIR}/generated/njemu_version.cmake")
+file(WRITE "${NJEMU_VERSION_CMAKE_FILE}" "${NJEMU_VERSION_CMAKE}")
+include("${NJEMU_VERSION_CMAKE_FILE}")
+
+# Keep the legacy numeric macro names for platform SDK metadata and the Ad Hoc
+# product ID while sourcing all values from the central semantic version.
+set(VERSION_MAJOR ${NJEMU_VERSION_MAJOR})
+set(VERSION_MINOR ${NJEMU_VERSION_MINOR})
+set(VERSION_BUILD ${NJEMU_VERSION_PATCH})
+set(VERSION_STR "${NJEMU_VERSION}")
 add_definitions(-DVERSION_MAJOR=${VERSION_MAJOR})
 add_definitions(-DVERSION_MINOR=${VERSION_MINOR})
 add_definitions(-DVERSION_BUILD=${VERSION_BUILD})
-
-# Define the version string
-if (VERSION_BUILD EQUAL 0)
-    set(VERSION_STR "${VERSION_MAJOR}.${VERSION_MINOR}")
-else()
-    set(VERSION_STR "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
-endif()
 add_definitions(-DVERSION_STR="${VERSION_STR}")
+add_definitions(-DNJEMU_GIT_SHA="${NJEMU_GIT_SHA}")
+message(STATUS "NJEMU version: ${NJEMU_VERSION} (${NJEMU_VERSION_SOURCE})")
+
+set(NJEMU_VERSION_FILE "${CMAKE_BINARY_DIR}/generated/version.txt")
+file(WRITE "${NJEMU_VERSION_FILE}" "${NJEMU_VERSION}\n")
 
 # Define TARGET_STR in the code
 add_definitions(-DTARGET_STR="${TARGET}")
@@ -871,7 +894,6 @@ set_source_files_properties(
     COMPILE_DEFINITIONS "${MINIZ_COMPILE_DEFINITIONS}"
 )
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}.tsv")
 set(UI_EXTRA_UNICODE_ARGS --unicode-source "${GAME_METADATA_SOURCE}")
 set(UI_EXTRA_UNICODE_DEPENDS "${GAME_METADATA_SOURCE}")
@@ -1436,6 +1458,8 @@ if(PLATFORM STREQUAL "PSVITA")
     endif()
     list(APPEND VITA_VPK_FILE_ARGS
         FILE "${NJEMU_DEFAULT_GAME_SELECTOR}" "game_name.ini")
+    list(APPEND VITA_VPK_FILE_ARGS
+        FILE "${NJEMU_VERSION_FILE}" "version.txt")
 
     foreach(VITA_RUNTIME_PLACEHOLDER IN LISTS NJEMU_RUNTIME_PLACEHOLDER_FILES)
         get_filename_component(VITA_RUNTIME_DIR "${VITA_RUNTIME_PLACEHOLDER}" DIRECTORY)
@@ -1471,12 +1495,16 @@ if(PLATFORM STREQUAL "PSP")
         BACKGROUND_PATH NULL
         PREVIEW_PATH NULL
         TITLE "${TARGET} ${VERSION_STR} for PSP"
-        VERSION "${VERSION_STR}"
+        # PARAM.SFO's application version remains the SDK-friendly numeric
+        # major/minor pair; the title/runtime version carries the full source ID.
+        VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
         MEMSIZE 1
     )
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_test(NAME version_derivation_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/version_derivation_tests.py)
     add_test(NAME game_metadata_generator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
     if(NOT "${TARGET}" STREQUAL "CPS2")
@@ -1882,4 +1910,7 @@ install(FILES ${TRANSLATION_PACKS}
 install(FILES "${GBK_FONT_ASSET}"
     DESTINATION font
     COMPONENT translations
+)
+install(FILES "${NJEMU_VERSION_FILE}"
+    DESTINATION .
 )
