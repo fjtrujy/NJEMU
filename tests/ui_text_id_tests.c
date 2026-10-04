@@ -39,7 +39,8 @@ int main(void)
 	assert(AUDIO_PROCESSOR_MEDIA_ENGINE_LABEL == 403);
 	assert(MENU_AUDIO_PROCESSOR_SETTINGS == 404);
 	assert(MENUHELP_AUDIO_PROCESSOR_SETTINGS == 405);
-	assert(UI_TEXT_MAX == 406);
+	assert(ADAPTIVE == 406);
+	assert(UI_TEXT_MAX == 407);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

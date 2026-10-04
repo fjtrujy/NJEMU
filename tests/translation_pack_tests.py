@@ -38,7 +38,7 @@ class TranslationPackTests(unittest.TestCase):
                 translations.verify_pack_round_trip(language, self.names, catalog, first)
 
     def test_schema_hash_is_stable(self) -> None:
-        self.assertEqual(translations.schema_hash(self.names), 0xB35AF8FD)
+        self.assertEqual(translations.schema_hash(self.names), 0x1E4E25AB)
 
     def test_rejects_bad_magic(self) -> None:
         data = bytearray(self.make_pack())

@@ -101,15 +101,24 @@ when the backend supports that operation. `waitVsync()` waits for one refresh
 without changing the presented buffer. Backends must not silently ignore the
 `vsync` argument when runtime control is available.
 
-The common scheduler treats the two user options independently:
+The common scheduler treats frame limiting and VSync independently. VSync is a
+three-state presentation policy:
 
 - frame-rate limit off + VSync off: intentionally uncapped emulation;
 - frame-rate limit off + VSync on: presentation is paced by the host refresh;
+- frame-rate limit off + VSync adaptive: wait for VBlank only while the current
+  frame is safely ahead of its emulated deadline; a late frame presents
+  immediately rather than losing another refresh interval;
 - frame-rate limit on + VSync off: the monotonic software deadline paces the
   emulated system to its native `FPS`;
-- frame-rate limit on + VSync on: VBlank may consume part/all of the software
-  pacing budget, so the clock must be sampled again after the blocking flip
-  before applying any residual sleep. Never charge the same wait twice.
+- frame-rate limit on + VSync on/adaptive: VBlank is used only while safely ahead
+  of the deadline and may consume part/all of the software pacing budget, so the
+  clock must be sampled again after the blocking flip before applying any residual
+  sleep. Never charge the same wait twice.
+
+The historical `VideoSync` INI key remains compatible with `no` and `yes`; the
+new `adaptive` value selects the deadline-aware mode. Adaptive VSync never enables
+software frame limiting by itself.
 
 The historical INI key is still named `60FPSLimit` for compatibility, but the
 actual deadline uses each target's native refresh (for example MVS and CPS2 are

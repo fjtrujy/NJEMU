@@ -4,26 +4,30 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "common/emulator_options.h"
+
 /* Presentation and emulation pacing are independent controls:
  *
- *   limit off, vsync off: present immediately; emulation is intentionally uncapped
- *   limit off, vsync on : wait for VBlank when presenting
- *   limit on,  vsync off: sleep to the emulated system's frame deadline
- *   limit on,  vsync on : use VBlank while comfortably ahead, then sleep only any
- *                         remaining time after that wait; never pay both waits using
- *                         the same stale timestamp
+ *   VSync Off:      never wait for VBlank
+ *   VSync On:       preserve the legacy behavior: always wait when uncapped, or use
+ *                   VBlank only while safely ahead when the software limiter is on
+ *   VSync Adaptive: wait for VBlank only while safely ahead of the emulated frame
+ *                   deadline, even when the software limiter is off
  *
- * When already at/near the software deadline, a limited+VSync frame presents
- * immediately instead of risking a whole extra refresh interval.
+ * Frame limiting remains independent: it controls only software sleeping. Adaptive
+ * VSync therefore gives uncapped emulation a tear-free fast path without forcing a
+ * late frame to wait for a whole extra refresh interval.
  */
 #define FRAME_PACING_VSYNC_GUARD_US 100u
 
 static inline bool frame_pacing_should_sync_flip(bool limit_enabled,
-	bool vsync_enabled, uint64_t now_us, uint64_t target_us)
+		int vsync_mode, uint64_t now_us, uint64_t target_us)
 {
-	if (!vsync_enabled)
+	if (vsync_mode == VSYNC_MODE_OFF)
 		return false;
-	if (!limit_enabled)
+	if (vsync_mode != VSYNC_MODE_ON && vsync_mode != VSYNC_MODE_ADAPTIVE)
+		return false;
+	if (vsync_mode == VSYNC_MODE_ON && !limit_enabled)
 		return true;
 	if (target_us <= now_us)
 		return false;

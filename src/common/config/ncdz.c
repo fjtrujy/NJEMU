@@ -34,7 +34,7 @@ static cfg_type gamecfg_ncdz[] =
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
-	{ CFG_BOOL,	"VideoSync",			&option_vsync,			0,	1	, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},

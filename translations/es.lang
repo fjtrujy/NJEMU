@@ -409,3 +409,4 @@ AUDIO_PROCESSOR_MAIN_CPU_LABEL=CPU principal
 AUDIO_PROCESSOR_MEDIA_ENGINE_LABEL=Media Engine
 MENU_AUDIO_PROCESSOR_SETTINGS=Procesador de audio
 MENUHELP_AUDIO_PROCESSOR_SETTINGS=Seleccionar el procesador global para las tareas de audio.
+ADAPTIVE=Adaptativo

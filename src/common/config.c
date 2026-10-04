@@ -80,7 +80,8 @@ enum
 	CFG_BOOL,
 	CFG_PAD,
 	CFG_STR,
-	CFG_PERFORMANCE
+	CFG_PERFORMANCE,
+	CFG_VSYNC
 };
 
 enum
@@ -228,6 +229,15 @@ static int get_config_bool(char *str)
 		return 0;
 }
 
+static int get_config_vsync(char *str)
+{
+	if (!strcasecmp(str, "adaptive"))
+		return VSYNC_MODE_ADAPTIVE;
+	if (!strcasecmp(str, "yes") || !strcasecmp(str, "on"))
+		return VSYNC_MODE_ON;
+	return VSYNC_MODE_OFF;
+}
+
 
 /*------------------------------------------------------
 	CFG_INTの値を読み込む
@@ -282,6 +292,13 @@ static const char *set_config_bool(int value)
 		return "yes";
 	else
 		return "no";
+}
+
+static const char *set_config_vsync(int value)
+{
+	if (value == VSYNC_MODE_ADAPTIVE)
+		return "adaptive";
+	return value == VSYNC_MODE_ON ? "yes" : "no";
 }
 
 
@@ -364,9 +381,10 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 				{
 					switch (cfg[i].type)
 					{
-					case CFG_INT:  *cfg[i].value = get_config_int(value, cfg[i].max); break;
-					case CFG_BOOL: *cfg[i].value = get_config_bool(value); break;
-					case CFG_PAD:  *cfg[i].value = get_config_pad(value); break;
+					case CFG_INT:   *cfg[i].value = get_config_int(value, cfg[i].max); break;
+					case CFG_BOOL:  *cfg[i].value = get_config_bool(value); break;
+					case CFG_VSYNC: *cfg[i].value = get_config_vsync(value); break;
+					case CFG_PAD:   *cfg[i].value = get_config_pad(value); break;
 					case CFG_PERFORMANCE: *cfg[i].value = get_config_performance_level(value); break;
 					}
 				}
@@ -461,9 +479,10 @@ static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 			switch (cfg[i].type)
 			{
 			case CFG_NONE: if (cfg[i].name) fd_printf(fd, "\r\n%s\r\n", cfg[i].name); break;
-			case CFG_INT:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_int(*cfg[i].value, cfg[i].max)); break;
-			case CFG_BOOL: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_bool(*cfg[i].value)); break;
-			case CFG_PAD:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_pad(*cfg[i].value)); break;
+			case CFG_INT:   fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_int(*cfg[i].value, cfg[i].max)); break;
+			case CFG_BOOL:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_bool(*cfg[i].value)); break;
+			case CFG_VSYNC: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_vsync(*cfg[i].value)); break;
+			case CFG_PAD:   fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_pad(*cfg[i].value)); break;
 			case CFG_PERFORMANCE: fd_printf(fd, "%s = %s\r\n", cfg[i].name,
 				set_config_int(*cfg[i].value, power_get_highest_performance_level())); break;
 			}

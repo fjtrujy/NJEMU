@@ -394,7 +394,7 @@ void update_screen(void)
 		uint64_t target = this_frame_base +
 			(int)((float)frameskip_counter * TICKS_PER_FRAME);
 		bool sync_flip = frame_pacing_should_sync_flip(
-			option_speedlimit != 0, option_vsync != 0, curr, target);
+			option_speedlimit != 0, option_vsync, curr, target);
 		bool scheduler_blocked = sync_flip;
 
 		/* With software pacing but no useful VBlank wait, reach the emulation

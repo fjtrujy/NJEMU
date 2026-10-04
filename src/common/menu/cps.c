@@ -19,7 +19,7 @@ static gamecfg2_t gamecfg_normal[] =
 	MENU_BLANK,
 #endif
 	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, 3, { DISPLAY_ORIGINAL_SIZE, DISPLAY_ORIGINAL_ASPECT, DISPLAY_4_3, DISPLAY_FULLSCREEN }, 0},
-	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 1,  { OFF, ON } , 0},
+	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP, &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,      &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},
 	{ SHOW_FPS,       &option_showfps,       CFG_CONTINUE, 1,  { OFF, ON } , 0},
@@ -47,7 +47,7 @@ static gamecfg2_t gamecfg_vertical[] =
 #endif
 	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, 3, { DISPLAY_ORIGINAL_SIZE, DISPLAY_ORIGINAL_ASPECT, DISPLAY_4_3, DISPLAY_FULLSCREEN }, 0},
 	{ ROTATE_SCREEN,  &cps_rotate_screen,    CFG_CONTINUE, 1,  { NO, YES } , 0},
-	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 1,  { OFF, ON } , 0},
+	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP, &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,      &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},
 	{ SHOW_FPS,       &option_showfps,       CFG_CONTINUE, 1,  { OFF, ON } , 0},
@@ -76,7 +76,7 @@ static gamecfg2_t gamecfg_mercs[] =
 #endif
 	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, 3, { DISPLAY_ORIGINAL_SIZE, DISPLAY_ORIGINAL_ASPECT, DISPLAY_4_3, DISPLAY_FULLSCREEN }, 0},
 	{ ROTATE_SCREEN,  &cps_rotate_screen,    CFG_CONTINUE, 1,  { NO, YES } , 0},
-	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 1,  { OFF, ON } , 0},
+	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP, &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,      &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},
 	{ SHOW_FPS,       &option_showfps,       CFG_CONTINUE, 1,  { OFF, ON } , 0},
@@ -100,7 +100,7 @@ static gamecfg2_t gamecfg_qsound[] =
 	{ RASTER_EFFECTS, &cps_raster_enable,    CFG_CONTINUE, 1,  { OFF, ON } , 0},
 	MENU_BLANK,
 	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, 3, { DISPLAY_ORIGINAL_SIZE, DISPLAY_ORIGINAL_ASPECT, DISPLAY_4_3, DISPLAY_FULLSCREEN }, 0},
-	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 1,  { OFF, ON } , 0},
+	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP, &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,      &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},
 	{ SHOW_FPS,       &option_showfps,       CFG_CONTINUE, 1,  { OFF, ON } , 0},

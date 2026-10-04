@@ -18,6 +18,14 @@ extern int option_audio_processor;
 
 enum
 {
+	VSYNC_MODE_OFF = 0,
+	VSYNC_MODE_ON,
+	VSYNC_MODE_ADAPTIVE,
+	VSYNC_MODE_COUNT
+};
+
+enum
+{
 	VIDEO_BACKEND_AUTO = 0,
 	VIDEO_BACKEND_NATIVE,
 	VIDEO_BACKEND_OPENGL,
