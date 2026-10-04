@@ -91,6 +91,11 @@ typedef struct psp_me_sound_worker_message
 _Static_assert(sizeof(psp_me_sound_worker_message_t) == 32,
 	"sound worker protocol message must remain fixed-size");
 
+enum
+{
+	PSP_ME_SOUND_WORKER_MESSAGE_NO_ECHO = 1u << 0
+};
+
 typedef enum psp_me_sound_z80_io_type
 {
 	PSP_ME_SOUND_Z80_IO_READ = 1,
@@ -363,6 +368,8 @@ psp_me_sound_status_validation_t psp_me_sound_worker_present_authoritative_statu
 	uint64_t required_time, uint8_t *presented_pending,
 	uint8_t *presented_result);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
+	uint8_t command, uint64_t emulated_time);
+bool psp_me_sound_worker_authoritative_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const cz80_state_t *state, const uint8_t *visible_memory,

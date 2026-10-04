@@ -2021,6 +2021,35 @@ emulation regressions.
 
 ### C7 - scheduler/barrier optimization
 
+#### C7.1 - remove authoritative command echoes and diagnostic syncs (2026-10-04) [host/build complete]
+
+The first C7 pass removes two pieces of synchronization that were useful while
+the ME was only an oracle but are redundant after C6 ownership transfer.
+
+Authoritative sound commands now reuse the existing fixed-size command message with
+a `NO_ECHO` flag.  The worker still applies the latch/NMI and publishes status in
+FIFO order, but it does not push a `SHADOW_SOUND_ECHO` event and Allegrex does not
+allocate an expected-echo slot or set the per-frame pending-echo hint.  Legacy C3-C5
+oracle paths continue to use the original echo protocol unchanged.  A host oracle
+queues an authoritative no-echo command, then issues a later FIFO fence and verifies
+that the command is visible in the ME status snapshot with zero sent/matched/pending
+shadow-echo counters.  The fence succeeding also proves that dropping the echo does
+not weaken command ordering.
+
+The 300-frame diagnostic window no longer sends a blocking `SYNC` while Z80/control
+is ME-authoritative.  Correctness ordering is already provided by explicit status
+fences, render prepare/finish barriers and recovery fences at the points where state
+is consumed.  The periodic window now only samples the shared status snapshot if it
+is already available; it cannot stall the scheduler merely to satisfy diagnostics.
+The older shadow/autonomous-oracle path retains its `SYNC` + checkpoint behavior.
+
+This pass does not change the 32-byte protocol message ABI and does not alter ring
+capacity.  The complete regression matrix remains clean: Desktop MVS is **31/31
+CTest green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME
+and full sound-coprocessor configurations including the standalone hardware harness.
+Real-PSP execution is still blocked by the previously documented MIST `init=-4`
+environment state, so no new physical performance claim is made for this batch.
+
 - measure actual barriers and wait time;
 - reduce unnecessary end-of-slice synchronization while preserving timestamp
   semantics;

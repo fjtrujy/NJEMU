@@ -1226,9 +1226,14 @@ static void psp_me_sound_worker_entry(void *param)
 					me_z80_publish_status(context, &z80_runtime,
 						command.emulated_time);
 				}
-				event.type = PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO;
-			event.emulated_time = command.emulated_time;
-				event.value = command.value;
+				if ((command.flags & PSP_ME_SOUND_WORKER_MESSAGE_NO_ECHO) != 0)
+					send_response = false;
+				else
+				{
+					event.type = PSP_ME_SOUND_WORKER_EVENT_SHADOW_SOUND_ECHO;
+					event.emulated_time = command.emulated_time;
+					event.value = command.value;
+				}
 				break;
 
 			case PSP_ME_SOUND_WORKER_COMMAND_Z80_SNAPSHOT:
@@ -2257,6 +2262,34 @@ bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	worker->shadow_sent++;
 	if (worker->shadow_expected_count > worker->shadow_pending_high_water)
 		worker->shadow_pending_high_water = worker->shadow_expected_count;
+	return true;
+}
+
+bool psp_me_sound_worker_authoritative_sound(psp_me_sound_worker_t *worker,
+	uint8_t command_value, uint64_t emulated_time)
+{
+	psp_me_sound_worker_message_t command;
+	psp_me_spsc_ring_result_t result;
+
+	if (!worker || !worker->running || worker->generation == 0)
+		return false;
+	if (!psp_me_sound_worker_poll(worker))
+		return false;
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_SHADOW_SOUND;
+	command.generation = worker->generation;
+	command.token = worker->next_token;
+	command.flags = PSP_ME_SOUND_WORKER_MESSAGE_NO_ECHO;
+	command.emulated_time = emulated_time;
+	command.value = command_value;
+	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
+		&command, NULL);
+	if (result != PSP_ME_SPSC_RING_OK)
+	{
+		worker->shadow_send_failures++;
+		return false;
+	}
+	worker->next_token++;
 	return true;
 }
 

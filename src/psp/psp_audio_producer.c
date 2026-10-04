@@ -682,13 +682,18 @@ bool mvs_me_sound_shadow_command(uint8_t command, uint64_t emulated_time)
 	}
 	if (me_available && me_sound_worker.running)
 	{
-		result = psp_me_sound_worker_shadow_sound(&me_sound_worker, command,
-			emulated_time);
+		result = me_sound_z80_control_authoritative ?
+			psp_me_sound_worker_authoritative_sound(&me_sound_worker, command,
+				emulated_time) :
+			psp_me_sound_worker_shadow_sound(&me_sound_worker, command,
+				emulated_time);
 		if (result)
 		{
 			me_sound_status_required_time = emulated_time;
 			__atomic_store_n(&me_sound_status_dirty, false, __ATOMIC_RELEASE);
-			__atomic_store_n(&me_sound_shadow_pending_hint, true, __ATOMIC_RELEASE);
+			if (!me_sound_z80_control_authoritative)
+				__atomic_store_n(&me_sound_shadow_pending_hint, true,
+					__ATOMIC_RELEASE);
 		}
 	}
 	psp_me_sound_worker_unlock();
@@ -1310,7 +1315,19 @@ void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
 	{
 		if (pending && !psp_me_sound_worker_poll(&me_sound_worker))
 			psp_me_sound_shadow_mark_failed("echo mismatch");
-		if (frames >= 300u && z80_active)
+		if (frames >= 300u && z80_active && me_sound_z80_control_authoritative)
+		{
+			psp_me_sound_status_snapshot_t status;
+
+			/* Explicit status/render fences already provide ordering in the
+			 * authoritative path. Keep this 300-frame sample observational so it
+			 * cannot stall the scheduler merely to satisfy diagnostics. */
+			if (psp_me_sound_worker_read_status(&me_sound_worker, &status) &&
+				status.generation == me_sound_worker.generation &&
+				status.emulated_time <= emulated_time && status.z80_time <= emulated_time)
+				me_sound_status_checks++;
+		}
+		else if (frames >= 300u && z80_active)
 		{
 			psp_me_sound_status_snapshot_t status;
 			bool checkpoint_ok = true;
@@ -1325,20 +1342,7 @@ void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
 			}
 			else
 			{
-				if (me_sound_z80_control_authoritative)
-				{
-					me_sound_status_checks++;
-					if (!psp_me_sound_worker_read_status(&me_sound_worker, &status) ||
-						status.emulated_time != emulated_time ||
-						status.z80_time != emulated_time)
-					{
-						me_sound_status_mismatches++;
-						me_sound_z80_failure_reason =
-							PSP_ME_SOUND_Z80_LOCAL_FAILURE_STATUS_SNAPSHOT;
-						psp_me_sound_z80_mark_failed("authoritative frame status");
-					}
-				}
-				else if (me_sound_z80_autonomous)
+				if (me_sound_z80_autonomous)
 				{
 					if (!expected_state || !banks || !visible_memory ||
 						!psp_me_sound_worker_z80_checkpoint(&me_sound_worker,

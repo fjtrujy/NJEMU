@@ -715,6 +715,62 @@ static int test_sound_status_snapshot(void)
 	return 1;
 }
 
+static int test_authoritative_sound_command_without_echo(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+	psp_me_sound_status_snapshot_t status;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_authoritative_sound(&worker, 0x5au, 10u) ||
+		!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status))
+	{
+		fprintf(stderr, "Authoritative no-echo sound command failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (status.sound_code != 0x5au || status.pending_command != 1u ||
+		stats.shadow_commands != 1u || stats.shadow_sent != 0u ||
+		stats.shadow_matched != 0u || stats.shadow_pending != 0u ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr,
+			"Authoritative no-echo stats mismatch: code=%u pending=%u processed=%u sent=%u matched=%u queued=%u\n",
+			status.sound_code, status.pending_command, stats.shadow_commands,
+			stats.shadow_sent, stats.shadow_matched, stats.shadow_pending);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_sound_status_fence_ordering(void)
 {
 	host_dispatch_t host = { 0 };
@@ -2052,7 +2108,9 @@ int main(void)
 {
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
-		!test_sound_status_snapshot() || !test_sound_status_fence_ordering() ||
+		!test_sound_status_snapshot() ||
+		!test_authoritative_sound_command_without_echo() ||
+		!test_sound_status_fence_ordering() ||
 		!test_sound_recovery_snapshot() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_preemption_boundary() ||
