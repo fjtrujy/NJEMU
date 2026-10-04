@@ -1832,6 +1832,61 @@ of the value visible to the M68000 on the successful experimental path: it is no
 unambiguously the ME status snapshot rather than a CPU value optionally overwritten
 after the fact.
 
+#### C6 readiness: ME -> CPU recovery snapshot foundation (2026-10-04) [host/build complete]
+
+Before Allegrex Z80/YM execution can be skipped safely, the CPU fallback must be
+able to reconstruct the complete sound island from the ME rather than merely read
+the small M68000-visible status snapshot.  The worker therefore now publishes a
+separate coherent recovery payload at an explicit FIFO command boundary.
+
+The recovery snapshot contains the logical CZ80 state, Z80 bank offsets,
+communication latch/result state, YM IRQ state, ME Z80 time and both local YM timer
+remaining/enabled values.  The existing shared Z80 image supplies the 2 KiB visible
+RAM, and the shared ME YM2610 context is cloned into an Allegrex-owned aligned
+context after the recovery command ACK.  The reader rejects snapshots that are not
+from the active generation, are not autonomous, retain an in-slice timer arm offset,
+or disagree between the published YM IRQ and CZ80 IRQ state.
+
+The CPU-side restore pieces are also in place without importing ME-local pointers:
+
+- CZ80 registers/IRQ state, bank mappings, visible RAM and sound command/result
+  globals can be restored from the recovery payload;
+- bank offsets are range-checked before any CPU state is mutated, including an
+  explicit overflow guard for the ROM-base addition;
+- YM2610 semantic state can be restored from a window-backed ME context while
+  preserving the CPU context's callbacks, PCM/cache ownership and native handler
+  pointers;
+- the CPU YM timers are disabled/re-armed from the published remaining durations,
+  so fallback does not restart a timer from its full original period.
+
+Host coverage now exercises the round trip rather than only snapshot readability.
+The worker runs an autonomous Z80 program that modifies both visible RAM and a
+non-zero SSG register, exports recovery state, then the test deliberately corrupts
+CPU CZ80/RAM/bank/communication/YM state and reconstructs it solely from that
+payload.  The restored logical CPU state, RAM byte, banks, communication values and
+YM register all match the ME snapshot.  The independent YM context oracle also
+proves that native CPU timer callback bindings survive semantic restore.
+
+The full regression matrix is clean after this foundation: Desktop MVS is
+**31/31 CTest green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations.  The PSP hardware
+harness now contains an additional autonomous recovery-snapshot cycle so that its
+cache-line/ABI path is ready for physical validation.
+
+Physical execution is currently **environment-blocked rather than failed**.  From
+a clean PSPLink reset, the rebuilt recovery harness exits before starting the
+worker because `meSafeTaskMistInit()` returns `-4`; its log reports generation 0,
+commands 0 and no worker fatal.  This is the same recurring MIST bootstrap state
+seen in surrounding C6 testing, so no real-PSP recovery-snapshot pass is claimed
+from that run.  Per the current development decision, the separate physical
+sleep/resume check is also deferred and does not block continuing C6 ownership
+work.
+
+This foundation does **not** yet skip the CPU sound island.  The next ownership
+subphase may only suppress Allegrex Z80/YM work after establishing a fence at which
+the ME recovery snapshot can be consumed and the CPU oracle can be reconstructed
+immediately if the ME path fails.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;

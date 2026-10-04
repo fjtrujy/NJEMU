@@ -12,7 +12,7 @@
 #define PSP_ME_SOUND_WORKER_CACHE_SIZE(size) \
 	(((uint32_t)(size) + PSP_ME_SOUND_WORKER_CACHE_LINE - 1u) & \
 		~(PSP_ME_SOUND_WORKER_CACHE_LINE - 1u))
-#define PSP_ME_SOUND_WORKER_SHARED_POINTERS 11u
+#define PSP_ME_SOUND_WORKER_SHARED_POINTERS 12u
 #define PSP_ME_SOUND_YM_IRQ_QUEUE_CAPACITY 8u
 #define PSP_ME_SOUND_Z80_CYCLES_PER_USEC 4u
 #define PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS \
@@ -91,6 +91,7 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	ym2610_context_t *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
 	psp_me_sound_status_snapshot_t *status_snapshot;
+	psp_me_sound_recovery_snapshot_t *recovery_snapshot;
 	uint8_t *z80_memory;
 	psp_me_sound_ym_render_job_t *ym_render_job;
 	uint32_t reserved[PSP_ME_SOUND_WORKER_SHARED_RESERVED_WORDS];
@@ -233,6 +234,44 @@ static void me_z80_publish_status(psp_me_sound_worker_shared_context_t *context,
 	status->ym_timer_overflows = runtime->ym_timer_overflows;
 	status->last_advance_elapsed_us = runtime->advance_elapsed_us;
 	meCoreDcacheWritebackRange(status, sizeof(*status));
+}
+
+static bool me_z80_publish_recovery(
+	psp_me_sound_worker_shared_context_t *context,
+	psp_me_sound_z80_runtime_t *runtime)
+{
+	psp_me_sound_recovery_snapshot_t *snapshot;
+
+	if (!context || !runtime || !runtime->initialized ||
+		!context->recovery_snapshot || !context->z80_memory ||
+		!runtime->ym_context)
+		return false;
+	snapshot = context->recovery_snapshot;
+	me_zero(snapshot, sizeof(*snapshot));
+	Cz80_Get_State(&runtime->cpu, &snapshot->state);
+	snapshot->emulated_time = context->progress->emulated_time;
+	snapshot->z80_time = runtime->z80_time;
+	snapshot->ym_timer_remaining[0] = runtime->ym_timer_remaining[0];
+	snapshot->ym_timer_remaining[1] = runtime->ym_timer_remaining[1];
+	me_copy(snapshot->banks, runtime->banks, sizeof(snapshot->banks));
+	snapshot->generation = context->progress->generation;
+	snapshot->sequence = runtime->status_sequence;
+	snapshot->ym_timer_arm_elapsed[0] = runtime->ym_timer_arm_elapsed[0];
+	snapshot->ym_timer_arm_elapsed[1] = runtime->ym_timer_arm_elapsed[1];
+	snapshot->sound_code = runtime->sound_code;
+	snapshot->pending_command = runtime->pending_command;
+	snapshot->result_code = runtime->result_code;
+	snapshot->irq_state = runtime->ym_irq_state;
+	snapshot->ym_timer_enabled[0] = runtime->ym_timer_enabled[0];
+	snapshot->ym_timer_enabled[1] = runtime->ym_timer_enabled[1];
+	snapshot->initialized = runtime->initialized;
+	snapshot->mode = runtime->mode;
+	meCoreDcacheWritebackRange(context->z80_memory,
+		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
+	meCoreDcacheWritebackRange(runtime->ym_context,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(YM2610ContextSize()));
+	meCoreDcacheWritebackRange(snapshot, sizeof(*snapshot));
+	return true;
 }
 
 enum
@@ -1098,6 +1137,25 @@ static void psp_me_sound_worker_entry(void *param)
 			event.emulated_time = context->progress->emulated_time;
 			break;
 
+		case PSP_ME_SOUND_WORKER_COMMAND_RECOVERY_SNAPSHOT:
+			if (command.generation != context->progress->generation ||
+				!z80_runtime.initialized)
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_GENERATION);
+				return;
+			}
+			if (!me_ym_process_due_timers(&z80_runtime) ||
+				!me_z80_publish_recovery(context, &z80_runtime))
+			{
+				me_fail(context, context->progress->generation, command.token,
+					PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
+				return;
+			}
+			event.type = PSP_ME_SOUND_WORKER_EVENT_RECOVERY_SNAPSHOT_ACK;
+			event.emulated_time = context->progress->emulated_time;
+			break;
+
 		case PSP_ME_SOUND_WORKER_COMMAND_SHUTDOWN:
 			if (command.generation != context->progress->generation)
 			{
@@ -1542,6 +1600,7 @@ static void free_shared_state(psp_me_sound_worker_t *worker)
 	free(worker->ym_context);
 	free(worker->z80_snapshot);
 	free(worker->status_snapshot);
+	free(worker->recovery_snapshot);
 	free(worker->z80_memory);
 	free(worker->ym_render_job);
 	worker->commands = NULL;
@@ -1554,6 +1613,7 @@ static void free_shared_state(psp_me_sound_worker_t *worker)
 	worker->ym_context = NULL;
 	worker->z80_snapshot = NULL;
 	worker->status_snapshot = NULL;
+	worker->recovery_snapshot = NULL;
 	worker->z80_memory = NULL;
 	worker->ym_render_job = NULL;
 	worker->ring_size = 0;
@@ -1779,6 +1839,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_z80_snapshot_t)));
 	worker->status_snapshot = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_status_snapshot_t)));
+	worker->recovery_snapshot = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_recovery_snapshot_t)));
 	worker->z80_memory = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
 		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
 	worker->ym_render_job = memalign(PSP_ME_SOUND_WORKER_CACHE_LINE,
@@ -1786,7 +1848,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 	if (!worker->commands || !worker->events || !worker->z80_batches ||
 		!worker->shared_context || !worker->main_control || !worker->progress ||
 		!worker->z80_progress || !worker->ym_context || !worker->z80_snapshot ||
-		!worker->status_snapshot || !worker->z80_memory || !worker->ym_render_job)
+		!worker->status_snapshot || !worker->recovery_snapshot ||
+		!worker->z80_memory || !worker->ym_render_job)
 	{
 		worker->last_stats.fatal_error = PSP_ME_SOUND_WORKER_ERROR_ALLOCATION;
 		free_shared_state(worker);
@@ -1818,6 +1881,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->z80_snapshot)));
 	memset(worker->status_snapshot, 0,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->status_snapshot)));
+	memset(worker->recovery_snapshot, 0,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->recovery_snapshot)));
 	memset(worker->z80_memory, 0, PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
 	memset(worker->ym_render_job, 0,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(psp_me_sound_ym_render_job_t)));
@@ -1831,6 +1896,7 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 	context->ym_context = worker->ym_context;
 	context->z80_snapshot = worker->z80_snapshot;
 	context->status_snapshot = worker->status_snapshot;
+	context->recovery_snapshot = worker->recovery_snapshot;
 	context->z80_memory = worker->z80_memory;
 	context->ym_render_job = worker->ym_render_job;
 
@@ -1846,6 +1912,8 @@ bool psp_me_sound_worker_start(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->z80_snapshot)));
 	sceKernelDcacheWritebackInvalidateRange(worker->status_snapshot,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->status_snapshot)));
+	sceKernelDcacheWritebackInvalidateRange(worker->recovery_snapshot,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*worker->recovery_snapshot)));
 	sceKernelDcacheWritebackInvalidateRange(worker->z80_memory,
 		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
 	sceKernelDcacheWritebackInvalidateRange(worker->ym_render_job,
@@ -2019,6 +2087,48 @@ bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*shared)));
 	*status = *shared;
 	return status->generation == worker->generation && status->initialized != 0;
+}
+
+bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
+	psp_me_sound_recovery_snapshot_t *snapshot, uint8_t *ram,
+	ym2610_context_t *ym_context, uint64_t timeout_us)
+{
+	psp_me_sound_worker_message_t command;
+	psp_me_sound_worker_message_t event;
+	psp_me_sound_recovery_snapshot_t *shared;
+
+	if (!worker || !worker->running || worker->generation == 0 || !snapshot ||
+		!ram || !ym_context || !worker->recovery_snapshot ||
+		!worker->z80_memory || !worker->ym_context || worker->ym_render_in_flight)
+		return false;
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_RECOVERY_SNAPSHOT;
+	command.generation = worker->generation;
+	command.token = worker->next_token++;
+	if (!send_command(worker, &command, timeout_us) ||
+		!wait_event(worker, PSP_ME_SOUND_WORKER_EVENT_RECOVERY_SNAPSHOT_ACK,
+			worker->generation, command.token, timeout_us, &event))
+		return false;
+
+	shared = worker->recovery_snapshot;
+	sceKernelDcacheInvalidateRange(shared,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*shared)));
+	sceKernelDcacheInvalidateRange(worker->z80_memory,
+		PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE);
+	sceKernelDcacheInvalidateRange(worker->ym_context,
+		PSP_ME_SOUND_WORKER_CACHE_SIZE(YM2610ContextSize()));
+	if (shared->generation != worker->generation || shared->initialized == 0 ||
+		shared->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
+		shared->ym_timer_arm_elapsed[0] != 0 ||
+		shared->ym_timer_arm_elapsed[1] != 0 ||
+		shared->irq_state != (uint8_t)shared->state.IRQState ||
+		event.emulated_time != shared->emulated_time ||
+		!YM2610ContextCloneForPcmWindow(ym_context, worker->ym_context))
+		return false;
+	*snapshot = *shared;
+	memcpy(ram, worker->z80_memory + PSP_ME_SOUND_Z80_RAM_OFFSET,
+		PSP_ME_SOUND_Z80_RAM_SIZE);
+	return true;
 }
 
 psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(

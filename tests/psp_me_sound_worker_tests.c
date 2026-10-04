@@ -793,6 +793,159 @@ static int test_sound_status_fence_ordering(void)
 	return 1;
 }
 
+static int test_sound_recovery_snapshot(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_recovery_snapshot_t recovery;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	cz80_state_t restored_state;
+	static uint8_t recovered_ram[PSP_ME_SOUND_Z80_RAM_SIZE];
+	static uint8_t pcm_a[0x1000];
+	static uint8_t pcm_b[0x1000];
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	void *ym_storage = NULL;
+	void *restored_ym_storage = NULL;
+	ym2610_context_t *recovered_ym = alloc_ym_context(&ym_storage);
+	ym2610_context_t *restored_ym = alloc_ym_context(&restored_ym_storage);
+	uint32_t restored_banks[4] = { 0, 0, 0, 0 };
+	uint8_t restored_sound_code = 0;
+	uint8_t restored_pending_command = 0;
+	uint8_t restored_result_code = 0;
+	const uint8_t program[] = {
+		0x3e, 0x08, 0xd3, 0x04, /* Select SSG amplitude register. */
+		0x3e, 0x0f, 0xd3, 0x05, /* Make YM state observably non-zero. */
+		0xdb, 0x00,             /* Consume sound command into A. */
+		0x32, 0x00, 0xf8,       /* Persist it in Z80 RAM. */
+		0xd3, 0x0c,             /* Publish result byte. */
+		0x76,                   /* Halt at a stable checkpoint. */
+	};
+
+	if (!recovered_ym || !restored_ym)
+	{
+		fprintf(stderr, "Recovery YM context allocation failed\n");
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+	memset(pcm_a, 0, sizeof(pcm_a));
+	memset(pcm_b, 0, sizeof(pcm_b));
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, program, sizeof(program));
+	memset(recovered_ram, 0xa5, sizeof(recovered_ram));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	reference_port_read_value = 0x5au;
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0x5au, 1u, 0x22u,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 25u, 1000u))
+	{
+		fprintf(stderr, "Recovery snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+
+	(void)Cz80_Exec(&reference_cpu, 100);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (!psp_me_sound_worker_read_recovery_snapshot(&worker, &recovery,
+			recovered_ram, recovered_ym, TEST_TIMEOUT_US) ||
+		recovery.generation != 1u || recovery.emulated_time != 25u ||
+		recovery.z80_time != 25u || recovery.sound_code != 0x5au ||
+		recovery.pending_command != 0u || recovery.result_code != 0x5au ||
+		memcmp(&recovery.state, &expected_state, sizeof(expected_state)) != 0 ||
+		memcmp(recovery.banks, banks, sizeof(banks)) != 0 ||
+		recovered_ram[0] != 0x5au ||
+		(YM2610ContextWrite(recovered_ym, 0, 0x08),
+			YM2610ContextRead(recovered_ym, 1)) != 0x0fu ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr,
+			"Recovery snapshot mismatch: gen=%u time=%llu z80=%llu code=%u pending=%u result=%u ram=%u\n",
+			recovery.generation, (unsigned long long)recovery.emulated_time,
+			(unsigned long long)recovery.z80_time, recovery.sound_code,
+			recovery.pending_command, recovery.result_code,
+			recovered_ram[0]);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+
+	/* Deliberately corrupt every CPU-side component, then rebuild it solely
+	 * from the recovery payload. This models the future failback fence without
+	 * depending on MVS globals in the host worker oracle. */
+	Cz80_Set_Reg(&reference_cpu, CZ80_PC, 0x1234u);
+	reference_memory[PSP_ME_SOUND_Z80_RAM_OFFSET] = 0xa5u;
+	restored_sound_code = 0x11u;
+	restored_pending_command = 1u;
+	restored_result_code = 0x22u;
+	YM2610ContextInit(restored_ym, 8000000, 44100,
+		pcm_a, sizeof(pcm_a), pcm_b, sizeof(pcm_b), NULL, NULL, NULL);
+	YM2610ContextWrite(restored_ym, 0, 0x08);
+	YM2610ContextWrite(restored_ym, 1, 0x01);
+
+	Cz80_Set_State(&reference_cpu, &recovery.state);
+	memcpy(reference_memory + PSP_ME_SOUND_Z80_RAM_OFFSET, recovered_ram,
+		PSP_ME_SOUND_Z80_RAM_SIZE);
+	memcpy(restored_banks, recovery.banks, sizeof(restored_banks));
+	restored_sound_code = recovery.sound_code;
+	restored_pending_command = recovery.pending_command;
+	restored_result_code = recovery.result_code;
+	if (!YM2610ContextRestoreFromPcmWindow(restored_ym, recovered_ym))
+	{
+		fprintf(stderr, "Recovery YM round-trip restore failed\n");
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+	Cz80_Get_State(&reference_cpu, &restored_state);
+	if (memcmp(&restored_state, &recovery.state, sizeof(restored_state)) != 0 ||
+		memcmp(restored_banks, recovery.banks, sizeof(restored_banks)) != 0 ||
+		reference_memory[PSP_ME_SOUND_Z80_RAM_OFFSET] != recovered_ram[0] ||
+		restored_sound_code != recovery.sound_code ||
+		restored_pending_command != recovery.pending_command ||
+		restored_result_code != recovery.result_code ||
+		(YM2610ContextWrite(restored_ym, 0, 0x08),
+			YM2610ContextRead(restored_ym, 1)) != 0x0fu)
+	{
+		fprintf(stderr, "Recovery sound-island round-trip diverged\n");
+		free(restored_ym_storage);
+		free(ym_storage);
+		return 0;
+	}
+
+	free(restored_ym_storage);
+	free(ym_storage);
+	return 1;
+}
+
 static int test_ym_shadow_timer_irq_and_status(void)
 {
 	host_dispatch_t host = { 0 };
@@ -1702,6 +1855,7 @@ int main(void)
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
 		!test_sound_status_snapshot() || !test_sound_status_fence_ordering() ||
+		!test_sound_recovery_snapshot() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_overflow_schedule() ||

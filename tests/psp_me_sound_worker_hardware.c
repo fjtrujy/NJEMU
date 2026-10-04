@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pspkernel.h>
@@ -109,6 +110,20 @@ static uint32_t z80_reference_ram_hash(void)
 		hash *= 16777619u;
 	}
 	return hash;
+}
+
+static ym2610_context_t *alloc_ym_context(void **storage_out)
+{
+	size_t size = YM2610ContextSize();
+	size_t alignment = YM2610ContextAlignment();
+	uint8_t *storage = malloc(size + alignment - 1u);
+	uintptr_t aligned;
+
+	if (!storage)
+		return NULL;
+	aligned = ((uintptr_t)storage + alignment - 1u) & ~(uintptr_t)(alignment - 1u);
+	*storage_out = storage;
+	return (ym2610_context_t *)aligned;
 }
 
 typedef struct psp_me_sound_worker_hw_job
@@ -289,6 +304,73 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 			128u, 0u, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US);
 }
 
+static bool run_recovery_snapshot_sequence(psp_me_sound_worker_t *worker,
+	uint64_t emulated_time)
+{
+	static const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	static uint8_t recovered_ram[PSP_ME_SOUND_Z80_RAM_SIZE];
+	const uint8_t program[] = {
+		0x3e, 0x08, 0xd3, 0x04,
+		0x3e, 0x0f, 0xd3, 0x05,
+		0x3e, 0x3c, 0x32, 0x00, 0xf8,
+		0x76,
+	};
+	psp_me_sound_recovery_snapshot_t recovery;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	void *ym_storage = NULL;
+	ym2610_context_t *recovered_ym = alloc_ym_context(&ym_storage);
+	bool result = false;
+
+	if (!recovered_ym)
+		return false;
+	memset(z80_reference_memory, 0, sizeof(z80_reference_memory));
+	memcpy(z80_reference_memory, program, sizeof(program));
+	memset(z80_reference_io, 0, sizeof(z80_reference_io));
+	z80_reference_io_count = 0;
+	z80_reference_port_read_value = 0;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)z80_reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)z80_reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, z80_reference_read);
+	Cz80_Set_WriteB(&reference_cpu, z80_reference_write);
+	Cz80_Set_INPort(&reference_cpu, z80_reference_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, z80_reference_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
+			z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
+			banks, 0, 0, 0, 44100u, 0x1000u, 0x1000u,
+			false, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS,
+			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance_horizon(worker, emulated_time + 25u, 1000u))
+		goto done;
+
+	(void)Cz80_Exec(&reference_cpu, 100);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (!psp_me_sound_worker_read_recovery_snapshot(worker, &recovery,
+			recovered_ram, recovered_ym, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US) ||
+		recovery.generation != worker->generation ||
+		recovery.emulated_time != emulated_time + 25u ||
+		recovery.z80_time != emulated_time + 25u ||
+		memcmp(&recovery.state, &expected_state, sizeof(expected_state)) != 0 ||
+		memcmp(recovery.banks, banks, sizeof(banks)) != 0 ||
+		recovered_ram[0] != 0x3cu)
+		goto done;
+	YM2610ContextWrite(recovered_ym, 0, 0x08);
+	if (YM2610ContextRead(recovered_ym, 1) != 0x0fu)
+		goto done;
+	result = true;
+
+done:
+	free(ym_storage);
+	return result;
+}
+
 static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	uint32_t generation, uint64_t first_time, uint64_t second_time,
 	psp_me_sound_worker_stats_t *stats)
@@ -315,6 +397,7 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 		status.generation != generation || status.emulated_time != second_time ||
 		status.sound_code != 0u || status.pending_command != 0u ||
 		status.result_code != 0u || status.initialized == 0u ||
+		!run_recovery_snapshot_sequence(&worker, second_time) ||
 		!psp_me_sound_worker_shutdown(&worker,
 			PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 	{
@@ -325,20 +408,21 @@ static bool run_cycle(const psp_me_sound_worker_dispatch_t *dispatch,
 	}
 	psp_me_sound_worker_get_stats(&worker, stats);
 	return stats->generation == generation &&
-			stats->commands_processed == 12u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
+			stats->commands_processed == 15u + PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->resets == 1u && stats->syncs == 2u && stats->shutdowns == 1u &&
 		stats->shadow_commands == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_sent == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_matched == PSP_ME_SOUND_WORKER_HW_SHADOW_MESSAGES &&
 		stats->shadow_mismatches == 0u && stats->shadow_send_failures == 0u &&
 		stats->shadow_pending == 0u &&
-			stats->z80_snapshots == 1u && stats->z80_irqs == 1u &&
-			stats->z80_slices == 2u && stats->z80_io_events == 7u &&
+			stats->z80_snapshots == 2u && stats->z80_irqs == 1u &&
+			stats->z80_slices == 3u && stats->z80_autonomous_slices == 1u &&
+			stats->z80_io_events == 7u &&
 		stats->z80_state_mismatches == 0u && stats->z80_ram_mismatches == 0u &&
 		stats->z80_bank_mismatches == 0u && stats->z80_io_mismatches == 0u &&
 		stats->z80_send_failures == 0u &&
 		stats->fatal_error == PSP_ME_SOUND_WORKER_ERROR_NONE &&
-		stats->emulated_time == second_time &&
+		stats->emulated_time == second_time + 25u &&
 		stats->command_overflow == 0u && stats->event_overflow == 0u;
 }
 

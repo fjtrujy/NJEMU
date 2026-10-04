@@ -42,7 +42,8 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON,
-	PSP_ME_SOUND_WORKER_COMMAND_FENCE
+	PSP_ME_SOUND_WORKER_COMMAND_FENCE,
+	PSP_ME_SOUND_WORKER_COMMAND_RECOVERY_SNAPSHOT
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -57,7 +58,8 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_ERROR,
 	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_Z80_CHECKPOINT_ACK,
-	PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK
+	PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_RECOVERY_SNAPSHOT_ACK
 } psp_me_sound_worker_event_type_t;
 
 typedef enum psp_me_sound_worker_error
@@ -148,6 +150,29 @@ typedef struct psp_me_sound_status_snapshot
 
 _Static_assert(sizeof(psp_me_sound_status_snapshot_t) == 64,
 	"sound status snapshot must occupy exactly one cache line");
+
+typedef struct psp_me_sound_recovery_snapshot
+{
+	cz80_state_t state;
+	uint64_t emulated_time;
+	uint64_t z80_time;
+	uint64_t ym_timer_remaining[2];
+	uint32_t banks[4];
+	uint32_t generation;
+	uint32_t sequence;
+	uint32_t ym_timer_arm_elapsed[2];
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+	uint8_t irq_state;
+	uint8_t ym_timer_enabled[2];
+	uint8_t initialized;
+	uint8_t mode;
+	uint32_t reserved[2];
+} psp_me_sound_recovery_snapshot_t;
+
+_Static_assert(sizeof(psp_me_sound_recovery_snapshot_t) == 128,
+	"sound recovery snapshot must occupy exactly two cache lines");
 
 typedef enum psp_me_sound_status_validation
 {
@@ -266,6 +291,7 @@ typedef struct psp_me_sound_worker
 	void *ym_context;
 	psp_me_sound_z80_snapshot_t *z80_snapshot;
 	psp_me_sound_status_snapshot_t *status_snapshot;
+	psp_me_sound_recovery_snapshot_t *recovery_snapshot;
 	uint8_t *z80_memory;
 	void *ym_render_job;
 	size_t ring_size;
@@ -315,6 +341,9 @@ bool psp_me_sound_worker_fence(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us);
 bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 	psp_me_sound_status_snapshot_t *status);
+bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
+	psp_me_sound_recovery_snapshot_t *snapshot, uint8_t *ram,
+	ym2610_context_t *ym_context, uint64_t timeout_us);
 psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
 	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
 	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,

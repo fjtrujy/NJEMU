@@ -11,6 +11,7 @@
 
 #include "emucfg.h"
 #include "common/state.h"
+#include "cpu/z80/cz80.h"
 #include "include/memory.h"
 
 #define NEOGEO_MASTER_CLOCK					(24000000)
@@ -334,6 +335,9 @@ void neogeo_driver_reset(void);
 void neogeo_reset_driver_type(void);
 void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code,
 	uint8_t *pending_command, uint8_t *result_code);
+bool neogeo_restore_z80_shadow_state(const cz80_state_t *state,
+	const uint32_t banks[4], const uint8_t *ram, uint8_t sound_code,
+	uint8_t pending_command, uint8_t result_code);
 
 void neogeo_vblank_interrupt(void);
 void neogeo_raster_interrupt(int line);

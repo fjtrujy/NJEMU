@@ -17,6 +17,10 @@
 void YM2610_sh_start(void);
 void YM2610_sh_stop(void);
 void YM2610_sh_reset(void);
+#if (EMU_SYSTEM == MVS)
+bool YM2610_restore_from_pcm_window_context(const ym2610_context_t *source,
+	const uint64_t timer_remaining[2], const uint8_t timer_enabled[2]);
+#endif
 void timer_callback_2610(int param);
 
 READ8_HANDLER( YM2610_status_port_A_r );

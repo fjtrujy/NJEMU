@@ -3324,7 +3324,7 @@ bool YM2610DefaultFillPcmWindow(ym2610_pcm_window_t *window)
 	return true;
 }
 
-bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
+static bool ym2610_context_copy_rebind(ym2610_context_t *destination,
 	const ym2610_context_t *source)
 {
 	uint32_t channel;
@@ -3336,9 +3336,6 @@ bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 	*destination = *source;
 
 	CTX_YM2610(destination).OPN.P_CH = CTX_YM2610(destination).CH;
-	CTX_YM2610(destination).OPN.ST.Timer_Handler = ym2610_context_timer_noop;
-	CTX_YM2610(destination).OPN.ST.IRQ_Handler = ym2610_context_irq_noop;
-	CTX_YM2610(destination).OPN.ST.Handler_Opaque = NULL;
 	for (channel = 0; channel < 6; channel++)
 	{
 		for (slot = 0; slot < 4; slot++)
@@ -3374,8 +3371,6 @@ bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 		}
 		if (index == 4)
 			return false;
-		CTX_YM2610(destination).adpcma[channel].buf = NULL;
-		CTX_YM2610(destination).adpcma[channel].block = 0xffff;
 	}
 
 	for (index = 0; index < 4; index++)
@@ -3388,6 +3383,24 @@ bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 	}
 	if (index == 4)
 		return false;
+	return true;
+}
+
+bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+	uint32_t channel;
+
+	if (!ym2610_context_copy_rebind(destination, source))
+		return false;
+	CTX_YM2610(destination).OPN.ST.Timer_Handler = ym2610_context_timer_noop;
+	CTX_YM2610(destination).OPN.ST.IRQ_Handler = ym2610_context_irq_noop;
+	CTX_YM2610(destination).OPN.ST.Handler_Opaque = NULL;
+	for (channel = 0; channel < 6; channel++)
+	{
+		CTX_YM2610(destination).adpcma[channel].buf = NULL;
+		CTX_YM2610(destination).adpcma[channel].block = 0xffff;
+	}
 	CTX_YM2610(destination).adpcmb.buf = NULL;
 	CTX_YM2610(destination).adpcmb.block = 0xffff;
 
@@ -3405,6 +3418,79 @@ bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 	destination->legacy_timer_handler = NULL;
 	destination->legacy_irq_handler = NULL;
 	return true;
+}
+
+bool YM2610ContextRestoreFromPcmWindow(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+	YM2610_CONTEXT_TIMERHANDLER timer_handler;
+	YM2610_CONTEXT_IRQHANDLER irq_handler;
+	void *handler_opaque;
+	FM_TIMERHANDLER legacy_timer_handler;
+	FM_IRQHANDLER legacy_irq_handler;
+	uint8_t *pcm_a;
+	uint8_t *pcm_b;
+	uint32_t pcm_a_size;
+	uint32_t pcm_b_size;
+	uint8_t pcm_cache_enabled;
+	void (*adpcma_calc_chan)(ym2610_context_t *, int, ADPCMA *);
+	void (*adpcmb_calc)(ym2610_context_t *, ADPCMB *);
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	ym2610_adpcma_job_t *adpcma_job_state;
+#endif
+	uint32_t channel;
+
+	if (!destination || !source || destination == source)
+		return false;
+	timer_handler = CTX_YM2610(destination).OPN.ST.Timer_Handler;
+	irq_handler = CTX_YM2610(destination).OPN.ST.IRQ_Handler;
+	handler_opaque = CTX_YM2610(destination).OPN.ST.Handler_Opaque;
+	legacy_timer_handler = destination->legacy_timer_handler;
+	legacy_irq_handler = destination->legacy_irq_handler;
+	pcm_a = CTX_pcmbufA(destination);
+	pcm_b = CTX_pcmbufB(destination);
+	pcm_a_size = CTX_pcmsizeA(destination);
+	pcm_b_size = CTX_pcmsizeB(destination);
+	pcm_cache_enabled = CTX_pcm_cache_enabled(destination);
+	adpcma_calc_chan = CTX_ADPCMA_calc_chan(destination);
+	adpcmb_calc = CTX_ADPCMB_calc(destination);
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	adpcma_job_state = CTX_adpcma_job(destination);
+#endif
+
+	if (!ym2610_context_copy_rebind(destination, source))
+		return false;
+	CTX_YM2610(destination).OPN.ST.Timer_Handler = timer_handler;
+	CTX_YM2610(destination).OPN.ST.IRQ_Handler = irq_handler;
+	CTX_YM2610(destination).OPN.ST.Handler_Opaque = handler_opaque;
+	destination->legacy_timer_handler = legacy_timer_handler;
+	destination->legacy_irq_handler = legacy_irq_handler;
+	CTX_pcmbufA(destination) = pcm_a;
+	CTX_pcmbufB(destination) = pcm_b;
+	CTX_pcmsizeA(destination) = pcm_a_size;
+	CTX_pcmsizeB(destination) = pcm_b_size;
+	CTX_pcm_cache_enabled(destination) = pcm_cache_enabled;
+	CTX_ADPCMA_calc_chan(destination) = adpcma_calc_chan;
+	CTX_ADPCMB_calc(destination) = adpcmb_calc;
+#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	CTX_adpcma_job(destination) = adpcma_job_state;
+#endif
+	for (channel = 0; channel < 6; channel++)
+	{
+		CTX_YM2610(destination).adpcma[channel].buf = NULL;
+		CTX_YM2610(destination).adpcma[channel].block = 0xffff;
+	}
+	CTX_YM2610(destination).adpcmb.buf = NULL;
+	CTX_YM2610(destination).adpcmb.block = 0xffff;
+	destination->active_pcm_window = NULL;
+	destination->pcm_window_source_enabled = 0;
+	destination->pcm_window_error = 0;
+	return true;
+}
+
+bool YM2610DefaultRestoreFromPcmWindow(const ym2610_context_t *source)
+{
+	return YM2610ContextRestoreFromPcmWindow(&ym2610_default_context, source);
 }
 
 bool YM2610DefaultCloneForPcmWindow(ym2610_context_t *destination)

@@ -138,6 +138,36 @@ void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code_out,
 		*result_code_out = (uint8_t)result_code;
 }
 
+bool neogeo_restore_z80_shadow_state(const cz80_state_t *state,
+	const uint32_t banks[4], const uint8_t *ram,
+	uint8_t sound_code_in, uint8_t pending_command_in, uint8_t result_code_in)
+{
+	static const uint32_t bank_size[4] = { 0x4000u, 0x2000u, 0x1000u, 0x0800u };
+	enum { Z80_VISIBLE_RAM_OFFSET = 0xf800u, Z80_VISIBLE_RAM_SIZE = 0x0800u };
+	uint32_t bank;
+
+	if (!state || !banks || !ram || !memory_region_cpu2)
+		return false;
+	for (bank = 0; bank < 4u; bank++)
+	{
+		if (banks[bank] > UINT32_MAX - 0x10000u)
+			return false;
+		uint32_t source = 0x10000u + banks[bank];
+
+		if (source > memory_length_cpu2 ||
+			bank_size[bank] > memory_length_cpu2 - source)
+			return false;
+	}
+	for (bank = 0; bank < 4u; bank++)
+		neogeo_set_cpu2_bank((int)bank, banks[bank]);
+	memcpy(&memory_region_cpu2[Z80_VISIBLE_RAM_OFFSET], ram, Z80_VISIBLE_RAM_SIZE);
+	Cz80_Set_State(&CZ80, state);
+	sound_code = sound_code_in;
+	pending_command = pending_command_in;
+	result_code = result_code_in;
+	return true;
+}
+
 
 /*------------------------------------------------------
 	Inisialize driver

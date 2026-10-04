@@ -106,18 +106,22 @@ int main(void)
 	int32_t *b_buffer[2] = { b_left, b_right };
 	callback_state_t a_state = { 0 };
 	callback_state_t b_state = { 0 };
+	callback_state_t c_state = { 0 };
 	void *a_storage = NULL;
 	void *b_storage = NULL;
+	void *c_storage = NULL;
 	ym2610_context_t *a = alloc_context(&a_storage);
 	ym2610_context_t *b = alloc_context(&b_storage);
+	ym2610_context_t *c = alloc_context(&c_storage);
 	int ok = 1;
 	uint32_t i;
 
-	if (!a || !b)
+	if (!a || !b || !c)
 	{
 		fprintf(stderr, "YM2610 context allocation failed\n");
 		free(a_storage);
 		free(b_storage);
+		free(c_storage);
 		return 1;
 	}
 	for (i = 0; i < sizeof(pcm_a); i++)
@@ -327,12 +331,71 @@ int main(void)
 					ok = 0;
 				}
 			}
+
+			/* Recovery takes a live window-backed ME context and restores its
+			 * semantic state into a native CPU context without importing ME-local
+			 * source pointers or callbacks. */
+			YM2610ContextInit(c, 8000000, 44100, pcm_a, sizeof(pcm_a),
+				pcm_b, sizeof(pcm_b), test_timer, test_irq, &c_state);
+			write_reg(c, 0x08, 0x07); /* Deliberately diverge before restore. */
+			if (!YM2610ContextRestoreFromPcmWindow(c, b) ||
+				!YM2610ContextPreparePcmWindow(b, 128, &window))
+			{
+				fprintf(stderr, "YM2610 recovery restore failed\n");
+				ok = 0;
+			}
+			else
+			{
+				for (channel = 0; channel < YM2610_PCM_WINDOW_ADPCMA_CHANNELS;
+					channel++)
+				{
+					ym2610_pcm_window_segment_t *part = &window.adpcma[channel];
+					if (part->size != 0)
+						memcpy(part->data, pcm_a + part->base_byte, part->size);
+				}
+				for (segment = 0; segment < window.adpcmb_segment_count; segment++)
+				{
+					ym2610_pcm_window_segment_t *part = &window.adpcmb[segment];
+					if (part->size != 0)
+						memcpy(part->data, pcm_b + part->base_byte, part->size);
+				}
+				if (!YM2610ContextUpdatePcmWindow(b, b_buffer, 128, &window))
+				{
+					fprintf(stderr, "YM2610 recovered source render failed\n");
+					ok = 0;
+				}
+				else
+				{
+					YM2610ContextUpdate(c, a_buffer, 128);
+					if (memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+						memcmp(a_right, b_right, sizeof(a_right)) != 0 ||
+						YM2610ContextRead(c, 2) != YM2610ContextRead(b, 2))
+					{
+						fprintf(stderr,
+							"YM2610 restored native context diverged from ME state\n");
+						ok = 0;
+					}
+				}
+			}
+			{
+				uint32_t timer_calls = c_state.timer_calls;
+
+				write_reg(c, 0x24, 0xff);
+				write_reg(c, 0x25, 0x03);
+				write_reg(c, 0x27, 0x05);
+				if (c_state.timer_calls <= timer_calls)
+				{
+					fprintf(stderr, "YM2610 restore lost CPU timer callback binding\n");
+					ok = 0;
+				}
+			}
 		}
 	}
 #endif
 
 	free(a_storage);
 	free(b_storage);
+	free(c_storage);
 	if (!ok)
 		return 1;
 

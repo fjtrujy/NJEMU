@@ -77,6 +77,9 @@ bool YM2610DefaultPreparePcmWindow(uint32_t length, ym2610_pcm_window_t *window)
 bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 	const ym2610_context_t *source);
 bool YM2610DefaultCloneForPcmWindow(ym2610_context_t *destination);
+bool YM2610ContextRestoreFromPcmWindow(ym2610_context_t *destination,
+	const ym2610_context_t *source);
+bool YM2610DefaultRestoreFromPcmWindow(const ym2610_context_t *source);
 bool YM2610ContextUpdatePcmWindow(ym2610_context_t *context, int32_t **buffer,
 	int length, const ym2610_pcm_window_t *window);
 #endif

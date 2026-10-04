@@ -9,6 +9,7 @@
 #include "sound/2610intf.h"
 #include "common/sound.h"
 #include "common/neogeo_sound_io.h"
+#include <limits.h>
 
 #if (EMU_SYSTEM == MVS)
 #include "mvs/me_sound_profile.h"
@@ -93,6 +94,35 @@ void YM2610_sh_reset(void)
 {
 	YM2610Reset();
 }
+
+#if (EMU_SYSTEM == MVS)
+bool YM2610_restore_from_pcm_window_context(const ym2610_context_t *source,
+	const uint64_t timer_remaining[2], const uint8_t timer_enabled[2])
+{
+	uint32_t channel;
+
+	if (!source || !timer_remaining || !timer_enabled)
+		return false;
+	for (channel = 0; channel < 2u; channel++)
+	{
+		if (timer_enabled[channel] && timer_remaining[channel] > (uint64_t)INT_MAX)
+			return false;
+	}
+	if (!YM2610DefaultRestoreFromPcmWindow(source))
+		return false;
+	for (channel = 0; channel < 2u; channel++)
+	{
+		(void)timer_enable((int)channel, 0);
+		if (timer_enabled[channel])
+		{
+			(void)timer_enable((int)channel, 1);
+			timer_adjust((int)channel, (int)timer_remaining[channel],
+				(int)channel, timer_callback_2610);
+		}
+	}
+	return true;
+}
+#endif
 
 
 /*------------------------------------------------------
