@@ -592,13 +592,11 @@ bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command
 		goto done;
 
 	required_time = me_sound_status_required_time;
-	validation = psp_me_sound_worker_validate_status(&status,
+	validation = psp_me_sound_worker_present_status(&status,
 		me_sound_worker.generation, required_time, sound_code, pending_command,
-		result_code);
+		result_code, presented_pending, presented_result);
 	if (validation == PSP_ME_SOUND_STATUS_MATCH)
 	{
-		*presented_pending = status.pending_command;
-		*presented_result = status.result_code;
 		me_sound_status_presented_reads++;
 		result = true;
 	}
@@ -627,14 +625,13 @@ bool mvs_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command
 					me_sound_status_fence_failures++;
 					goto stale_fallback;
 				}
-				validation = psp_me_sound_worker_validate_status(&status,
+				validation = psp_me_sound_worker_present_status(&status,
 					me_sound_worker.generation, required_time, sound_code,
-					pending_command, result_code);
+					pending_command, result_code, presented_pending,
+					presented_result);
 				if (validation == PSP_ME_SOUND_STATUS_MATCH)
 				{
 					psp_me_sound_status_record_fence_wait(fence_wait);
-					*presented_pending = status.pending_command;
-					*presented_result = status.result_code;
 					me_sound_status_presented_reads++;
 					me_sound_status_fence_matches++;
 					result = true;

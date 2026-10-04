@@ -543,6 +543,8 @@ static int test_sound_status_snapshot(void)
 	psp_me_sound_worker_stats_t stats;
 	psp_me_sound_status_snapshot_t initial_status;
 	psp_me_sound_status_snapshot_t final_status;
+	uint8_t presented_pending = 0xaau;
+	uint8_t presented_result = 0xbbu;
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	cz80_state_t expected_state;
@@ -637,6 +639,29 @@ static int test_sound_status_snapshot(void)
 			0x5au, 0u, 0x5au) != PSP_ME_SOUND_STATUS_UNAVAILABLE)
 	{
 		fprintf(stderr, "Sound status presentation validation failed\n");
+		return 0;
+	}
+	if (psp_me_sound_worker_present_status(&final_status, 1u, 102u,
+			0x5au, 0u, 0x5au, &presented_pending, &presented_result) !=
+			PSP_ME_SOUND_STATUS_MATCH ||
+		presented_pending != 0u || presented_result != 0x5au)
+	{
+		fprintf(stderr, "Sound status ME presentation failed: pending=%u result=%u\n",
+			presented_pending, presented_result);
+		return 0;
+	}
+	presented_pending = 0xaau;
+	presented_result = 0xbbu;
+	if (psp_me_sound_worker_present_status(&final_status, 1u, 103u,
+			0x5au, 0u, 0x5au, &presented_pending, &presented_result) !=
+			PSP_ME_SOUND_STATUS_STALE ||
+		presented_pending != 0xaau || presented_result != 0xbbu ||
+		psp_me_sound_worker_present_status(&final_status, 1u, 102u,
+			0x5au, 0u, 0x22u, &presented_pending, &presented_result) !=
+			PSP_ME_SOUND_STATUS_MISMATCH ||
+		presented_pending != 0xaau || presented_result != 0xbbu)
+	{
+		fprintf(stderr, "Sound status fail-closed presentation mutated fallback values\n");
 		return 0;
 	}
 	psp_me_sound_worker_get_stats(&worker, &stats);

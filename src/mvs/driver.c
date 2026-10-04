@@ -723,14 +723,18 @@ READ16_HANDLER( neogeo_controller1and4_r )
 READ16_HANDLER( neogeo_timer_r )
 {
 	uint16_t res;
-	uint8_t visible_pending = (uint8_t)pending_command;
-	uint8_t visible_result = (uint8_t)result_code;
+	uint8_t visible_pending;
+	uint8_t visible_result;
 	int coinflip = pd4990a_testbit_r(0);
 	int databit = pd4990a_databit_r(0);
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_MAIN_STATUS_READ);
-	(void)mvs_me_sound_shadow_main_status((uint8_t)sound_code,
-		(uint8_t)pending_command, (uint8_t)result_code,
-		&visible_pending, &visible_result);
+	if (!mvs_me_sound_shadow_main_status((uint8_t)sound_code,
+			(uint8_t)pending_command, (uint8_t)result_code,
+			&visible_pending, &visible_result))
+	{
+		visible_pending = (uint8_t)pending_command;
+		visible_result = (uint8_t)result_code;
+	}
 
 	res = (neogeo_ngh == NGH_vliner) ? 0x3f : neogeo_port_value[4];
 	res ^= (coinflip << 6) ^ (databit << 7);

@@ -319,6 +319,11 @@ psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
 	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
 	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
 	uint8_t result_code);
+psp_me_sound_status_validation_t psp_me_sound_worker_present_status(
+	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
+	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
+	uint8_t result_code, uint8_t *presented_pending,
+	uint8_t *presented_result);
 bool psp_me_sound_worker_shadow_sound(psp_me_sound_worker_t *worker,
 	uint8_t command, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,

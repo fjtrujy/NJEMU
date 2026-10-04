@@ -1781,6 +1781,57 @@ The next ownership step can stop mirroring command application into the CPU only
 after the ME command/status path is active in integrated hardware and the bounded
 fallback semantics are proven there.
 
+#### C6 readiness: ME-first M68000 status ownership dry-run (2026-10-04) [host/build complete]
+
+The `$320001` M68000-visible status read now has an explicit ownership boundary.
+`neogeo_timer_r()` no longer initializes the visible pending/result bytes from the
+CPU globals before consulting the coprocessor.  When the ME status path succeeds,
+the values consumed by the M68000 are written only from the validated ME snapshot.
+The CPU `pending_command` / `result_code` values are read only in the explicit
+fallback branch.
+
+The worker-side presentation helper is deliberately fail-closed.  It first applies
+the existing generation/time/value validation against the still-live CPU oracle and
+writes the caller's output bytes only for `PSP_ME_SOUND_STATUS_MATCH`.  `STALE`,
+`MISMATCH` and `UNAVAILABLE` leave the caller's outputs untouched.  The producer
+therefore retains the previous bounded FIFO-fence behavior without allowing stale
+or mismatched ME state to leak into the M68000-visible register.
+
+This makes the successful read path ME-owned while preserving the current safety
+model:
+
+- an immediately valid snapshot is presented directly from the ME;
+- an equal-time command race can use the existing bounded **250 us** FIFO fence and
+  then present the newly covered ME snapshot;
+- a busy worker, stale fence, unavailable snapshot or fence timeout returns false
+  and `neogeo_timer_r()` explicitly falls back to the CPU values;
+- a completed fence that proves coverage but still disagrees with the CPU oracle is
+  treated as a real divergence, disables the experimental sound path, and falls
+  back to CPU authority.
+
+Host coverage now verifies the ownership property directly.  On an exact snapshot
+match, the presentation helper replaces sentinel output bytes with the ME
+`pending_command` / `result_code`.  Repeating the call with a future required time
+or deliberately mismatched result returns `STALE` / `MISMATCH` and leaves those
+sentinels unchanged.  The existing fence oracle continues to cover same-timestamp
+FIFO ordering, old-fence coverage and bounded recovery.
+
+The regression matrix is unchanged and clean: Desktop MVS **31/31 CTest**, Desktop
+NCDZ, PSP CPU-only, PSP ADPCM-A-only ME and PSP full sound-coprocessor + hardware
+harness builds all pass.
+
+The current real-PSP integration environment still does not provide evidence for
+this ownership boundary.  A short run using the exact current PRX again loaded MVS
+but produced no ME shadow log, so the ME status path never became active.  This run
+is therefore recorded as startup/bootstrap fallback, not as either passing or
+failing status-ownership evidence.
+
+CPU communication state remains alive as the oracle and restart fallback in this
+subphase, and CPU Z80/YM execution is still retained.  What changes is the source
+of the value visible to the M68000 on the successful experimental path: it is now
+unambiguously the ME status snapshot rather than a CPU value optionally overwritten
+after the fact.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;
