@@ -601,9 +601,11 @@ done:
 	return result;
 }
 
-void mvs_me_sound_shadow_z80_slice_begin(void)
+void mvs_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
+	uint32_t scheduler_time_left)
 {
 	bool active = __atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
+	bool result = true;
 
 	me_sound_z80_slice_gate_locked = false;
 	if (active)
@@ -621,6 +623,26 @@ void mvs_me_sound_shadow_z80_slice_begin(void)
 	me_sound_z80_io_overflow = false;
 	__atomic_store_n(&me_sound_z80_collecting,
 		active && !me_sound_z80_autonomous, __ATOMIC_RELEASE);
+	if (!active || !me_sound_z80_autonomous)
+		return;
+
+	me_sound_z80_slice_count++;
+	if (!psp_me_sound_worker_lock())
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_SLICE_LOCK;
+		psp_me_sound_z80_mark_failed("advance horizon lock");
+		return;
+	}
+	if (me_available && me_sound_worker.running &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+		result = psp_me_sound_worker_z80_advance_horizon(&me_sound_worker,
+			horizon_time, scheduler_time_left);
+	psp_me_sound_worker_unlock();
+	if (!result)
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_ADVANCE_SEND;
+		psp_me_sound_z80_mark_failed("autonomous horizon send");
+	}
 }
 
 static void psp_me_sound_z80_record_io(uint16_t port, uint8_t type, uint8_t value)
@@ -863,44 +885,12 @@ done:
 	}
 }
 
-void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint64_t emulated_time)
+void mvs_me_sound_shadow_z80_slice_completed(uint64_t emulated_time)
 {
-	bool result = true;
-
 	__atomic_store_n(&me_sound_z80_collecting, false, __ATOMIC_RELEASE);
-	if (!__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
-		goto done;
-	if (!me_sound_z80_autonomous)
-	{
-		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_INVALID_SLICE;
-		psp_me_sound_z80_mark_failed("non-autonomous production slice");
-		goto done;
-	}
-
-	me_sound_z80_slice_count++;
-	if (!psp_me_sound_worker_lock())
-	{
-		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_SLICE_LOCK;
-		psp_me_sound_z80_mark_failed("advance lock");
-		goto done;
-	}
-	if (me_available && me_sound_worker.running &&
-		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
-	{
-		result = psp_me_sound_worker_z80_advance(&me_sound_worker, cycles,
-			scheduler_time_left, emulated_time);
-		if (result)
-			me_sound_status_required_time = emulated_time;
-	}
-	psp_me_sound_worker_unlock();
-	if (!result)
-	{
-		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_ADVANCE_SEND;
-		psp_me_sound_z80_mark_failed("autonomous advance send");
-	}
-
-done:
+	if (__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE) &&
+		me_sound_z80_autonomous)
+		me_sound_status_required_time = emulated_time;
 	__atomic_store_n(&me_sound_z80_collecting, false, __ATOMIC_RELEASE);
 	if (me_sound_z80_slice_gate_locked)
 	{

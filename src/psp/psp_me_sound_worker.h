@@ -40,7 +40,8 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER,
 	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE,
-	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -333,6 +334,8 @@ bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const uint32_t banks[4], uint32_t ram_hash, bool check_ram);
 bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
 	uint32_t cycles, uint32_t scheduler_time_left, uint64_t emulated_time);
+bool psp_me_sound_worker_z80_advance_horizon(psp_me_sound_worker_t *worker,
+	uint64_t horizon_time, uint32_t scheduler_time_left);
 bool psp_me_sound_worker_z80_checkpoint(psp_me_sound_worker_t *worker,
 	const cz80_state_t *expected_state, const uint32_t banks[4],
 	uint32_t ram_hash, uint64_t emulated_time, uint64_t timeout_us);

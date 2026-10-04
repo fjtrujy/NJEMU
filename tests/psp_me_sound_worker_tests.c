@@ -1062,6 +1062,226 @@ static int test_autonomous_ym_timer_overflow_schedule(void)
 	return 1;
 }
 
+static int test_autonomous_advance_horizon_timer_boundary(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint8_t timer_program[] = {
+		0x3e, 0x24, 0xd3, 0x04,
+		0x3e, 0xff, 0xd3, 0x05,
+		0x3e, 0x25, 0xd3, 0x04,
+		0x3e, 0x03, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04,
+		0x3e, 0x05, 0xd3, 0x05,
+		0x00, 0x00, 0x00, 0x00,
+	};
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, timer_program, sizeof(timer_program));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 50u, 1000u) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 42u, 976u) ||
+		!psp_me_sound_worker_sync(&worker, 42u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status))
+	{
+		fprintf(stderr, "Autonomous advance-horizon first timer setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.emulated_time != 42u || status.ym_timer_overflows != 1u ||
+		status.ym_timer_callbacks < 2u || status.irq_state != ASSERT_LINE)
+	{
+		fprintf(stderr,
+			"Autonomous advance-horizon first timer mismatch: time=%llu callbacks=%u overflows=%u irq=%u\n",
+			(unsigned long long)status.emulated_time, status.ym_timer_callbacks,
+			status.ym_timer_overflows, status.irq_state);
+		psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_z80_advance_horizon(&worker, 60u, 958u) ||
+		!psp_me_sound_worker_sync(&worker, 60u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Autonomous advance-horizon reload failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (status.emulated_time != 60u || status.ym_timer_overflows != 2u ||
+		status.ym_timer_callbacks < 3u || status.irq_state != ASSERT_LINE)
+	{
+		fprintf(stderr,
+			"Autonomous advance-horizon reload mismatch: time=%llu callbacks=%u overflows=%u irq=%u\n",
+			(unsigned long long)status.emulated_time, status.ym_timer_callbacks,
+			status.ym_timer_overflows, status.irq_state);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_autonomous_advance_horizon_uses_z80_clock(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shadow_sound(&worker, 0x77u, 20u) ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 40u, 40u))
+	{
+		fprintf(stderr, "Autonomous horizon Z80 clock setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	Cz80_Set_IRQ(&reference_cpu, IRQ_LINE_NMI, PULSE_LINE);
+	(void)Cz80_Exec(&reference_cpu, 40 * 4);
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
+			reference_ram_hash(), 40u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Autonomous Z80 clock checkpoint failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_autonomous_advance_horizon_long_timer_preemption(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint8_t timer_program[] = {
+		0x3e, 0x24, 0xd3, 0x04,
+		0x3e, 0xfc, 0xd3, 0x05, /* TA = 1008 -> 16 * 18 us = 288 us. */
+		0x3e, 0x25, 0xd3, 0x04,
+		0x3e, 0x00, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04,
+		0x3e, 0x05, 0xd3, 0x05,
+		0xdb, 0x04,
+		0x32, 0x00, 0xf8,
+	};
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, timer_program, sizeof(timer_program));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	reference_port_read_value = 0;
+	reference_preempt_cpu = NULL;
+	reference_preempt_on_timer_start = false;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Long-timer advance-horizon snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	reference_preempt_cpu = &reference_cpu;
+	reference_preempt_on_timer_start = true;
+	(void)Cz80_Exec(&reference_cpu, 200);
+	reference_preempt_cpu = NULL;
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (reference_preempt_on_timer_start ||
+		!psp_me_sound_worker_z80_advance_horizon(&worker, 50u, 1000u) ||
+		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
+			reference_ram_hash(), 24u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr,
+			"Long-timer advance-horizon preemption mismatch: pc=%u io=%u\n",
+			Cz80_Get_Reg(&reference_cpu, CZ80_PC), reference_io_count);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_autonomous_ym_timer_b_stop_restart(void)
 {
 	host_dispatch_t host = { 0 };
@@ -1346,6 +1566,9 @@ int main(void)
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_preemption_boundary() ||
 		!test_autonomous_ym_timer_overflow_schedule() ||
+		!test_autonomous_advance_horizon_timer_boundary() ||
+		!test_autonomous_advance_horizon_uses_z80_clock() ||
+		!test_autonomous_advance_horizon_long_timer_preemption() ||
 		!test_autonomous_ym_timer_b_stop_restart() ||
 		!test_ym_shadow_pcm_render())
 		return 1;

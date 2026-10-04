@@ -97,11 +97,17 @@ static void cpu_execute(int cpunum)
 	if (!cpu[cpunum].suspended)
 	{
 		uint64_t start = mvs_me_sound_profile_now_us();
+		uint64_t z80_start_time = 0;
 		uint64_t z80_end_time = 0;
 		int requested_cycles;
 
 		if (cpunum == CPU_Z80)
-			mvs_me_sound_shadow_z80_slice_begin();
+		{
+			z80_start_time = timer_get_time_us();
+			mvs_me_sound_shadow_z80_slice_begin(
+				z80_start_time + (uint64_t)(uint32_t)timer_ticks,
+				(uint32_t)timer_left);
+		}
 
 		if (cpunum == CPU_M68000)
 		{
@@ -122,8 +128,7 @@ static void cpu_execute(int cpunum)
 			mvs_me_sound_profile_now_us() - start);
 
 		if (cpunum == CPU_Z80)
-			mvs_me_sound_shadow_z80_slice_completed((uint32_t)requested_cycles,
-				(uint32_t)timer_left, z80_end_time);
+			mvs_me_sound_shadow_z80_slice_completed(z80_end_time);
 	}
 }
 

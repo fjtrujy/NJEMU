@@ -16,7 +16,8 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
 	uint8_t pending_command, uint8_t result_code, uint32_t pcm_a_size,
 	uint32_t pcm_b_size);
-void mvs_me_sound_shadow_z80_slice_begin(void);
+void mvs_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
+	uint32_t scheduler_time_left);
 void mvs_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value);
 void mvs_me_sound_shadow_z80_preempt(uint32_t timer_channel);
@@ -26,8 +27,7 @@ void mvs_me_sound_shadow_ym_timer_completed(void);
 bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time);
 void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	uint8_t status_b);
-void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint64_t emulated_time);
+void mvs_me_sound_shadow_z80_slice_completed(uint64_t emulated_time);
 bool mvs_me_sound_shadow_checkpoint_due(void);
 void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
@@ -61,8 +61,11 @@ static inline bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	return true;
 }
 
-static inline void mvs_me_sound_shadow_z80_slice_begin(void)
+static inline void mvs_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
+	uint32_t scheduler_time_left)
 {
+	(void)horizon_time;
+	(void)scheduler_time_left;
 }
 
 static inline void mvs_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value)
@@ -131,11 +134,8 @@ static inline void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer,
 	(void)status_b;
 }
 
-static inline void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint32_t scheduler_time_left, uint64_t emulated_time)
+static inline void mvs_me_sound_shadow_z80_slice_completed(uint64_t emulated_time)
 {
-	(void)cycles;
-	(void)scheduler_time_left;
 	(void)emulated_time;
 }
 

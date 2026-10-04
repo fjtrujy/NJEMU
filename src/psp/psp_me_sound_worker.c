@@ -114,6 +114,7 @@ typedef struct psp_me_sound_z80_runtime
 	uint32_t scheduler_time_left;
 	uint32_t advance_cycles;
 	uint32_t advance_elapsed_us;
+	uint64_t z80_time;
 	uint64_t ym_timer_remaining[2];
 	uint32_t ym_timer_arm_elapsed[2];
 	uint8_t ym_timer_enabled[2];
@@ -684,6 +685,7 @@ static void me_z80_apply_snapshot(psp_me_sound_worker_shared_context_t *context,
 	runtime->pending_command = snapshot->pending_command;
 	runtime->result_code = snapshot->result_code;
 	runtime->mode = snapshot->mode;
+	runtime->z80_time = context->progress->emulated_time;
 	runtime->ym_context = context->ym_context;
 	me_z80_runtime = runtime;
 	YM2610ContextSetCallbacks(runtime->ym_context, me_ym_timer_callback,
@@ -797,6 +799,33 @@ static bool me_z80_advance_autonomous(psp_me_sound_z80_runtime_t *runtime,
 		progress->last_mismatch = runtime->mismatch;
 		return false;
 	}
+	return true;
+}
+
+static bool me_z80_advance_horizon(psp_me_sound_z80_runtime_t *runtime,
+	psp_me_sound_z80_progress_t *progress, uint64_t horizon_time,
+	uint32_t scheduler_time_left)
+{
+	uint64_t requested_us;
+	uint32_t cycles;
+	uint32_t elapsed_us;
+
+	if (!runtime || !progress || runtime->mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
+		horizon_time < runtime->z80_time)
+		return false;
+	requested_us = horizon_time - runtime->z80_time;
+	if (requested_us == 0)
+		return me_ym_process_due_timers(runtime);
+	if (requested_us > (uint64_t)INT32_MAX / PSP_ME_SOUND_Z80_CYCLES_PER_USEC)
+		return false;
+	cycles = (uint32_t)requested_us * PSP_ME_SOUND_Z80_CYCLES_PER_USEC;
+	if (!me_z80_advance_autonomous(runtime, progress, cycles,
+			scheduler_time_left))
+		return false;
+	elapsed_us = runtime->advance_elapsed_us;
+	if ((uint64_t)elapsed_us > requested_us)
+		return false;
+	runtime->z80_time += elapsed_us;
 	return true;
 }
 
@@ -1296,6 +1325,40 @@ static void psp_me_sound_worker_entry(void *param)
 					return;
 				}
 				context->progress->emulated_time = command.emulated_time;
+				if (z80_runtime.mode == PSP_ME_SOUND_Z80_MODE_AUTONOMOUS)
+					z80_runtime.z80_time = command.emulated_time;
+				me_z80_publish_status(context, &z80_runtime,
+					context->progress->emulated_time);
+				meCoreDcacheWritebackRange(context->z80_progress,
+					sizeof(*context->z80_progress));
+				send_response = false;
+				break;
+
+			case PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON:
+				if (command.generation != context->progress->generation ||
+					!z80_runtime.initialized)
+				{
+					me_fail(context, context->progress->generation, command.token,
+						PSP_ME_SOUND_WORKER_ERROR_GENERATION);
+					return;
+				}
+				if (command.emulated_time < context->progress->emulated_time)
+				{
+					me_fail_time_regression(context, &command);
+					return;
+				}
+				if (!me_z80_advance_horizon(&z80_runtime,
+						context->z80_progress, command.emulated_time,
+						command.reserved))
+				{
+					meCoreDcacheWritebackRange(context->z80_progress,
+						sizeof(*context->z80_progress));
+					me_fail(context, context->progress->generation, command.token,
+						PSP_ME_SOUND_WORKER_ERROR_Z80_STATE);
+					return;
+				}
+				if (z80_runtime.z80_time > context->progress->emulated_time)
+					context->progress->emulated_time = z80_runtime.z80_time;
 				me_z80_publish_status(context, &z80_runtime,
 					context->progress->emulated_time);
 				meCoreDcacheWritebackRange(context->z80_progress,
@@ -2286,6 +2349,31 @@ bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
 	command.token = worker->next_token;
 	command.emulated_time = emulated_time;
 	command.value = cycles;
+	command.reserved = scheduler_time_left;
+	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
+		&command, NULL);
+	if (result != PSP_ME_SPSC_RING_OK)
+	{
+		worker->z80_send_failures++;
+		return false;
+	}
+	worker->next_token++;
+	return true;
+}
+
+bool psp_me_sound_worker_z80_advance_horizon(psp_me_sound_worker_t *worker,
+	uint64_t horizon_time, uint32_t scheduler_time_left)
+{
+	psp_me_sound_worker_message_t command;
+	psp_me_spsc_ring_result_t result;
+
+	if (!worker || !worker->running || worker->generation == 0)
+		return false;
+	memset(&command, 0, sizeof(command));
+	command.type = PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON;
+	command.generation = worker->generation;
+	command.token = worker->next_token;
+	command.emulated_time = horizon_time;
 	command.reserved = scheduler_time_left;
 	result = psp_me_spsc_ring_try_push(worker->commands, &allegrex_cache_ops,
 		&command, NULL);

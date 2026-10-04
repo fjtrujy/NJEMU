@@ -1364,8 +1364,8 @@ This proves the future **ME -> Allegrex status/result channel and
 `sound_time_completed` representation**, but it does not yet prove autonomous ME
 scheduling.  In this dry-run the ME still advances because Allegrex supplies the
 C5 CPU-oracle `Z80_SLICE` stream, and `SYNC` merely confirms the time reached by
-that already-replayed work.  True C6 still needs a timestamp/event-driven
-`ADVANCE_TO_TIME` implementation that can execute Z80/YM without CPU Z80 slices.
+that already-replayed work.  Later C6 subphases replace this with scheduler-horizon
+messages that let the ME execute Z80/YM without CPU I/O/state replay.
 
 #### C6 readiness: autonomous Z80 advance + checkpoint oracle (2026-10-04) [complete subphase]
 
@@ -1621,6 +1621,52 @@ This removes another CPU oracle from each Z80 slice, but Allegrex still owns the
 outer scheduler boundaries and supplies `timer_left`.  Full C6 ownership still
 requires replacing those boundaries with ME-driven progress/deadlines before CPU
 Z80/YM execution can be stopped.
+
+#### C6 readiness: pre-dispatch Z80 scheduler horizon (2026-10-04) [host/build complete]
+
+The integrated autonomous path no longer waits for the authoritative CPU Z80 to
+finish before deciding how far the ME should execute.  Immediately before each
+CPU Z80 slice, the MVS scheduler now publishes only information it already owns:
+
+- the slice **horizon time**, computed as current scheduler time + `timer_ticks`;
+- the semantic outer `timer_left` value used by `timer_adjust()`.
+
+The worker derives the original Z80 cycle budget from its own `z80_time` and the
+horizon (`delta_us * 4` for the fixed 4 MHz MVS Z80).  If a local YM timer start
+preempts that execution, the ME advances its private `z80_time` only by the
+locally-derived elapsed time rather than pretending it reached the horizon.  The
+next scheduler iteration then supplies the next horizon.  `z80_time` is separate
+from the worker protocol's `progress->emulated_time`, so timestamped sound commands,
+PCM work or sync messages cannot accidentally make the Z80 skip execution time.
+
+A post-CPU **timestamp-only** prototype was deliberately rejected by a focused
+oracle.  With a 200-cycle CPU slice, Timer A programmed for a 288 us deadline and
+an outer `timer_left` of 1000 us, MVS preempts the Z80 at 24 us even though that
+timer expires beyond the short executed interval.  Replaying only the final 24 us
+timestamp reached the same PC but diverged in CZ80 state because the core's
+preemption path still observes the original requested cycle budget.  Publishing
+the pre-dispatch horizon + `timer_left` reproduces the authoritative state exactly
+without using any CPU Z80 result.
+
+Host coverage now checks all of the relevant edges:
+
+- Timer A preemption/reload across consecutive scheduler horizons;
+- a timestamped sound command that advances protocol time while the independent
+  Z80 clock still executes the full interval owed to the next horizon;
+- the long-timer preemption case above, including a full CZ80/bank/RAM checkpoint.
+
+The regression matrix remains clean: Desktop MVS is **31/31 CTest green**, Desktop
+NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations, including the standalone hardware harness.
+The current PSPLink/MIST session loads the new harness but does not reach a usable
+worker log, so no new physical-runtime claim is made for this exact build.  This
+does not block continued C6 work under the current hardware-check waiver.
+
+CPU Z80 execution is still retained as the bounded checkpoint oracle in this
+subphase.  The important ownership change is that the ME's requested work is now
+known **before** CPU Z80 execution and is derived entirely from scheduler state;
+this makes a later CPU-Z80 skip possible without inventing a replacement cycle
+budget from CPU results.
 
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
