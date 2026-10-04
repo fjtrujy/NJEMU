@@ -857,7 +857,12 @@ void state_make_thumbnail(void)
 		machine_screen_type ? 152 : 112,
 		machine_screen_type != 0);
 #elif (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
-	RECT clip1 = { 24, 16, 336, 240 };
+	RECT clip1 = {
+		NEOGEO_VISIBLE_X,
+		NEOGEO_VISIBLE_Y,
+		NEOGEO_VISIBLE_X + NEOGEO_VISIBLE_WIDTH,
+		NEOGEO_VISIBLE_Y + NEOGEO_VISIBLE_HEIGHT
+	};
 
 	captured = capture_thumbnail_cpu(COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP, &clip1,
 		152, 112, 0);

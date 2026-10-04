@@ -12,6 +12,13 @@
 #define FIRST_VISIBLE_LINE		NEOGEO_VBEND
 #define LAST_VISIBLE_LINE		(NEOGEO_VBSTART - 1)
 
+/* Source rectangle actually presented by the renderer.  Keep thumbnail
+ * capture tied to the same geometry so save-state previews match gameplay. */
+#define NEOGEO_VISIBLE_X		24
+#define NEOGEO_VISIBLE_Y		16
+#define NEOGEO_VISIBLE_WIDTH	304
+#define NEOGEO_VISIBLE_HEIGHT	224
+
 #define MAX_SPRITES_PER_SCREEN	(381)
 #define MAX_SPRITES_PER_LINE	(96)
 

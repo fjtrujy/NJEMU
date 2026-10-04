@@ -17,7 +17,12 @@
 	Renderer state
 ******************************************************************************/
 
-static const RECT ncdz_src_clip = { 24, 16, 24 + 304, 16 + 224 };
+static const RECT ncdz_src_clip = {
+	NEOGEO_VISIBLE_X,
+	NEOGEO_VISIBLE_Y,
+	NEOGEO_VISIBLE_X + NEOGEO_VISIBLE_WIDTH,
+	NEOGEO_VISIBLE_Y + NEOGEO_VISIBLE_HEIGHT
+};
 
 static bool tex_fix_changed;
 static video_sprite_vertex_t __attribute__((aligned(64)))
@@ -120,7 +125,7 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
-	RECT dst_clip = ncdz_presentation_rect(304, 224);
+	RECT dst_clip = ncdz_presentation_rect(NEOGEO_VISIBLE_WIDTH, NEOGEO_VISIBLE_HEIGHT);
 	video_driver->transferWorkFrame(video_data, (RECT *)&ncdz_src_clip, &dst_clip);
 	video_driver->endFrame(video_data);
 }
