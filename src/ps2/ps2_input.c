@@ -24,6 +24,7 @@ struct JoyInfo
     uint8_t analog_state[PS2_TOTAL_AXIS];
     uint8_t port;
     uint8_t slot;
+    uint8_t analog_mode_configured;
     int8_t rumble_ready;
     int8_t opened;
 } __attribute__((aligned(64)));
@@ -46,6 +47,7 @@ static void closeJoyInfo(struct JoyInfo *info)
 		return;
 
 	padPortClose(info->port, info->slot);
+	info->analog_mode_configured = 0;
 	info->opened = 0;
 }
 
@@ -85,7 +87,7 @@ static void refreshJoyInfo(ps2_input_t *ps2)
 	}
 }
 
-static bool joyInfoReady(const struct JoyInfo *info)
+static bool joyInfoReady(struct JoyInfo *info)
 {
 	int32_t state;
 
@@ -93,7 +95,54 @@ static bool joyInfoReady(const struct JoyInfo *info)
 		return false;
 
 	state = padGetState(info->port, info->slot);
+	if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR)
+		info->analog_mode_configured = 0;
 	return state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1;
+}
+
+static bool configureJoyInfoAnalogMode(struct JoyInfo *info)
+{
+	int modes;
+	int mode;
+	int32_t state;
+
+	if (info->analog_mode_configured)
+		return true;
+	if (!joyInfoReady(info))
+		return false;
+	state = padGetState(info->port, info->slot);
+
+	/* A DualShock can power up in digital mode independently on every port
+	 * (and multitap slot). Explicitly enable analog mode for each physical pad
+	 * instead of relying on the controller's previous/default mode. */
+	modes = padInfoMode(info->port, info->slot, PAD_MODETABLE, -1);
+	for (mode = 0; mode < modes; mode++) {
+		if (padInfoMode(info->port, info->slot, PAD_MODETABLE, mode) ==
+			PAD_TYPE_DUALSHOCK) {
+			if (padInfoMode(info->port, info->slot, PAD_MODECURID, 0) ==
+				PAD_TYPE_DUALSHOCK) {
+				info->analog_mode_configured = 1;
+				return true;
+			}
+
+			/* A successful mode request is asynchronous. Skip this sample and
+			 * wait for PADMAN to become stable again before reading axes. */
+			if (padSetMainMode(info->port, info->slot,
+				PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK) == 1)
+				return false;
+
+			/* Keep buttons usable if the request fails, but leave the mode
+			 * unconfigured so a later sample can retry the analog transition. */
+			return true;
+		}
+	}
+
+	/* A newly connected pad can report FINDCTP1 before its mode table is
+	 * populated. Retry after it becomes stable instead of caching it as a
+	 * digital-only controller too early. */
+	if (state == PAD_STATE_STABLE)
+		info->analog_mode_configured = 1;
+	return true;
 }
 
 static uint32_t activeJoyInfoCount(void)
@@ -252,6 +301,8 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 
 	info = getActiveJoyInfo(ps2, controller);
 	if (info == NULL)
+		return false;
+	if (!configureJoyInfoAnalogMode(info))
 		return false;
 
 	ret = padRead(info->port, info->slot, &paddata);
