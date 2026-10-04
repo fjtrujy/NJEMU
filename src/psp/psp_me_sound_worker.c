@@ -1535,6 +1535,8 @@ static void snapshot_stats(psp_me_sound_worker_t *worker)
 	worker->last_stats.ym_renders = z80_progress->ym_renders;
 	worker->last_stats.ym_render_samples = z80_progress->ym_render_samples;
 	worker->last_stats.ym_render_errors = z80_progress->ym_render_errors;
+	worker->last_stats.ym_presented_renders = worker->ym_presented_renders;
+	worker->last_stats.ym_presented_samples = worker->ym_presented_samples;
 	worker->last_stats.ym_pcm_mismatches = worker->ym_pcm_mismatches;
 	worker->last_stats.ym_status_mismatches = worker->ym_status_mismatches;
 	worker->last_stats.ym_send_failures = worker->ym_send_failures;
@@ -2060,8 +2062,9 @@ bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
 	return true;
 }
 
-bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
+static bool psp_me_sound_worker_ym_render_finish_internal(psp_me_sound_worker_t *worker,
 	const int32_t *expected_left, const int32_t *expected_right,
+	int32_t *present_left, int32_t *present_right,
 	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us)
 {
 	psp_me_sound_ym_render_job_t *job;
@@ -2125,7 +2128,35 @@ bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
 	}
 	if (!status_matches)
 		worker->ym_status_mismatches++;
+	if (pcm_matches && status_matches && present_left && present_right)
+	{
+		memcpy(present_left, job->left, samples * sizeof(*present_left));
+		memcpy(present_right, job->right, samples * sizeof(*present_right));
+		worker->ym_presented_renders++;
+		worker->ym_presented_samples += samples;
+	}
 	return pcm_matches && status_matches;
+}
+
+bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
+	const int32_t *expected_left, const int32_t *expected_right,
+	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us)
+{
+	return psp_me_sound_worker_ym_render_finish_internal(worker,
+		expected_left, expected_right, NULL, NULL, samples,
+		expected_status_b, timeout_us);
+}
+
+bool psp_me_sound_worker_ym_render_finish_present(psp_me_sound_worker_t *worker,
+	const int32_t *expected_left, const int32_t *expected_right,
+	int32_t *present_left, int32_t *present_right,
+	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us)
+{
+	if (!present_left || !present_right)
+		return false;
+	return psp_me_sound_worker_ym_render_finish_internal(worker,
+		expected_left, expected_right, present_left, present_right, samples,
+		expected_status_b, timeout_us);
 }
 
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,

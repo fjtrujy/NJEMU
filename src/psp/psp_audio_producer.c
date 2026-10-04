@@ -300,6 +300,8 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
+	uint32_t ym_presented_renders;
+	uint32_t ym_presented_samples;
 	uint32_t ym_pcm_mismatches;
 	uint32_t ym_status_mismatches;
 	uint32_t ym_send_failures;
@@ -343,6 +345,10 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 		me_sound_shadow_window_base.ym_render_samples;
 	ym_render_errors = stats.ym_render_errors -
 		me_sound_shadow_window_base.ym_render_errors;
+	ym_presented_renders = stats.ym_presented_renders -
+		me_sound_shadow_window_base.ym_presented_renders;
+	ym_presented_samples = stats.ym_presented_samples -
+		me_sound_shadow_window_base.ym_presented_samples;
 	ym_pcm_mismatches = stats.ym_pcm_mismatches -
 		me_sound_shadow_window_base.ym_pcm_mismatches;
 	ym_status_mismatches = stats.ym_status_mismatches -
@@ -362,6 +368,7 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			"ym_timer_callbacks=%lu ym_timer_overflows=%lu "
 			"status_checks=%lu status_mismatches=%lu "
 			"ym_renders=%lu ym_samples=%lu ym_render_errors=%lu "
+			"ym_presented_renders=%lu ym_presented_samples=%lu "
 			"ym_pcm_mismatches=%lu ym_status_mismatches=%lu ym_send_failures=%lu "
 			"ym_first_sample=%lu ym_first_channel=%lu ym_first_expected=%ld "
 			"ym_first_actual=%ld "
@@ -405,6 +412,8 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 			(unsigned long)ym_renders,
 			(unsigned long)ym_render_samples,
 			(unsigned long)ym_render_errors,
+			(unsigned long)ym_presented_renders,
+			(unsigned long)ym_presented_samples,
 			(unsigned long)ym_pcm_mismatches,
 			(unsigned long)ym_status_mismatches,
 			(unsigned long)ym_send_failures,
@@ -744,8 +753,8 @@ void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	}
 	if (me_available && me_sound_worker.running)
 	{
-		result = psp_me_sound_worker_ym_render_finish(&me_sound_worker,
-			buffer[0], buffer[1], samples, status_b,
+		result = psp_me_sound_worker_ym_render_finish_present(&me_sound_worker,
+			buffer[0], buffer[1], buffer[0], buffer[1], samples, status_b,
 			PSP_ME_SOUND_WORKER_TIMEOUT_US);
 	}
 	psp_me_sound_worker_unlock();

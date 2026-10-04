@@ -1128,6 +1128,8 @@ static int test_ym_shadow_pcm_render(void)
 	static uint8_t pcm_b[0x1000];
 	ym2610_pcm_window_t window;
 	int32_t left[128], right[128];
+	int32_t presented_left[128], presented_right[128];
+	int32_t rejected_left[128], rejected_right[128];
 	int32_t *buffers[2] = { left, right };
 	void *ym_storage = NULL;
 	ym2610_context_t *reference_ym = alloc_ym_context(&ym_storage);
@@ -1234,11 +1236,63 @@ static int test_ym_shadow_pcm_render(void)
 		return 0;
 	}
 	YM2610ContextUpdate(reference_ym, buffers, 128);
-	if (!psp_me_sound_worker_ym_render_finish(&worker, left, right, 128,
+	memset(presented_left, 0x5a, sizeof(presented_left));
+	memset(presented_right, 0x5a, sizeof(presented_right));
+	if (!psp_me_sound_worker_ym_render_finish_present(&worker, left, right,
+			presented_left, presented_right, 128,
 			YM2610ContextRead(reference_ym, 2), TEST_TIMEOUT_US) ||
+		memcmp(presented_left, left, sizeof(left)) != 0 ||
+		memcmp(presented_right, right, sizeof(right)) != 0)
+	{
+		fprintf(stderr, "YM PCM validated presentation failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+
+	if (!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 201u, &window,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM mismatch render prepare failed\n");
+		psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+	for (i = 0; i < YM2610_PCM_WINDOW_ADPCMA_CHANNELS; i++)
+	{
+		if (window.adpcma[i].size != 0)
+			memcpy(window.adpcma[i].data, pcm_a + window.adpcma[i].base_byte,
+				window.adpcma[i].size);
+	}
+	for (i = 0; i < window.adpcmb_segment_count; i++)
+	{
+		if (window.adpcmb[i].size != 0)
+			memcpy(window.adpcmb[i].data, pcm_b + window.adpcmb[i].base_byte,
+				window.adpcmb[i].size);
+	}
+	if (!psp_me_sound_worker_ym_render_begin(&worker, &window, 201u,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "YM PCM mismatch render submission failed\n");
+		psp_me_sound_worker_abort(&worker);
+		free(ym_storage);
+		return 0;
+	}
+	YM2610ContextUpdate(reference_ym, buffers, 128);
+	left[0] ^= 1;
+	memset(rejected_left, 0x33, sizeof(rejected_left));
+	memset(rejected_right, 0x44, sizeof(rejected_right));
+	memcpy(presented_left, rejected_left, sizeof(rejected_left));
+	memcpy(presented_right, rejected_right, sizeof(rejected_right));
+	if (psp_me_sound_worker_ym_render_finish_present(&worker, left, right,
+			presented_left, presented_right, 128,
+			YM2610ContextRead(reference_ym, 2), TEST_TIMEOUT_US) ||
+		memcmp(presented_left, rejected_left, sizeof(rejected_left)) != 0 ||
+		memcmp(presented_right, rejected_right, sizeof(rejected_right)) != 0 ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
 	{
-		fprintf(stderr, "YM PCM render comparison failed\n");
+		fprintf(stderr, "YM PCM mismatch fail-closed presentation failed\n");
 		if (worker.running)
 			psp_me_sound_worker_abort(&worker);
 		free(ym_storage);
@@ -1247,14 +1301,16 @@ static int test_ym_shadow_pcm_render(void)
 
 	psp_me_sound_worker_get_stats(&worker, &stats);
 	free(ym_storage);
-	if (stats.ym_renders != 1u || stats.ym_render_samples != 128u ||
-		stats.ym_render_errors != 0u || stats.ym_pcm_mismatches != 0u ||
+	if (stats.ym_renders != 2u || stats.ym_render_samples != 256u ||
+		stats.ym_render_errors != 0u || stats.ym_presented_renders != 1u ||
+		stats.ym_presented_samples != 128u || stats.ym_pcm_mismatches != 1u ||
 		stats.ym_status_mismatches != 0u || stats.ym_send_failures != 0u ||
 		stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
 	{
 		fprintf(stderr,
-			"YM PCM stats mismatch: renders=%u samples=%u errors=%u pcm=%u status=%u send=%u fatal=%u\n",
+			"YM PCM stats mismatch: renders=%u samples=%u errors=%u presented=%u/%u pcm=%u status=%u send=%u fatal=%u\n",
 			stats.ym_renders, stats.ym_render_samples, stats.ym_render_errors,
+			stats.ym_presented_renders, stats.ym_presented_samples,
 			stats.ym_pcm_mismatches, stats.ym_status_mismatches,
 			stats.ym_send_failures, stats.fatal_error);
 		return 0;

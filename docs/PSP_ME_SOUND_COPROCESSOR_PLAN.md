@@ -1485,6 +1485,55 @@ validation, but C6 development must not wait on that physical power-cycle oracle
 No production-default ownership transfer has happened yet.  The CPU path remains
 authoritative while the remaining C6 ownership pieces are implemented and compared.
 
+#### C6 readiness: validated ME PCM presentation dry-run (2026-10-04) [host/build complete]
+
+The audio callback now exercises the first output-ownership step without removing
+the CPU oracle.  Allegrex still renders the authoritative YM2610 period first, but
+after the ME render completes the worker compares:
+
+- left/right 32-bit PCM sample-for-sample;
+- YM status B;
+- generation/token/sample-count protocol metadata.
+
+Only when that comparison is exact does Allegrex copy the already-produced ME PCM
+over the callback's `stream_buffer`.  The normal `clip_stream()` / `resample_stream()`
+path therefore consumes ME-produced samples for that validated period.  On timeout,
+protocol failure, PCM mismatch or status mismatch no presentation copy occurs, so
+the CPU-rendered buffer remains intact and the existing fail-closed worker fallback
+continues to apply.
+
+The validation-only worker API remains available for standalone/oracle tests.  The
+integrated PSP producer uses a separate explicit `finish_present` path so ownership
+intent is visible at the call site.  New counters record the number of ME-rendered
+periods/samples that actually crossed this presentation boundary rather than merely
+passing the shadow oracle.
+
+The host oracle covers both directions explicitly:
+
+- a matching ME/CPU render copies ME PCM into a separate sentinel output buffer and
+  increments the presentation counters;
+- a deliberately corrupted CPU oracle sample makes the validation fail, increments
+  the PCM mismatch counter and leaves the sentinel output buffer byte-for-byte
+  untouched.
+
+Regression coverage after this change remains clean: Desktop MVS is **31/31 CTest
+green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and
+full sound-coprocessor configurations; the standalone PSP worker harness also
+builds successfully.
+
+Real-PSP execution is not claimed for this exact presentation build yet because the
+current PSPLink/MIST environment still fails before worker startup with
+`meSafeTaskMistInit() == -4`.  This is the same environment-level failure observed
+before this change and is outside the PCM presentation path.  Per the current
+development decision, neither this temporary MIST state nor the deferred physical
+sleep/resume oracle blocks further C6 implementation.
+
+This is still a dry-run rather than full sound ownership: CPU YM2610 execution is
+required to produce the comparison oracle, and Allegrex still owns scheduler slice
+boundaries and the final 16-bit PSP audio submission.  The next ownership step can
+remove CPU YM/Z80 execution only after the remaining ME status/scheduler handoff is
+able to fail back deterministically.
+
 - switch normal sound commands to the shared event ring;
 - stop executing authoritative Z80/YM2610 on Allegrex;
 - consume ME status/result snapshots at explicit synchronization points;

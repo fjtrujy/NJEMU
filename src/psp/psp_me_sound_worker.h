@@ -207,6 +207,8 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
+	uint32_t ym_presented_renders;
+	uint32_t ym_presented_samples;
 	uint32_t ym_pcm_mismatches;
 	uint32_t ym_status_mismatches;
 	uint32_t ym_send_failures;
@@ -264,6 +266,8 @@ typedef struct psp_me_sound_worker
 	uint32_t z80_next_sequence;
 	uint32_t z80_send_failures;
 	uint32_t ym_render_token;
+	uint32_t ym_presented_renders;
+	uint32_t ym_presented_samples;
 	uint32_t ym_pcm_mismatches;
 	uint32_t ym_status_mismatches;
 	uint32_t ym_send_failures;
@@ -305,6 +309,10 @@ bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
 	const int32_t *expected_left, const int32_t *expected_right,
+	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);
+bool psp_me_sound_worker_ym_render_finish_present(psp_me_sound_worker_t *worker,
+	const int32_t *expected_left, const int32_t *expected_right,
+	int32_t *present_left, int32_t *present_right,
 	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
