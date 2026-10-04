@@ -390,7 +390,8 @@ static int test_z80_shadow_slice_matches_reference(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_ORACLE,
+			TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "Z80 shadow snapshot setup failed\n");
 		if (worker.running)
@@ -487,7 +488,8 @@ static int test_z80_shadow_large_io_trace(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_ORACLE,
+			TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "Large Z80 trace snapshot setup failed\n");
 		if (worker.running)
@@ -538,6 +540,7 @@ static int test_sound_status_snapshot(void)
 		&host,
 	};
 	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
 	psp_me_sound_status_snapshot_t initial_status;
 	psp_me_sound_status_snapshot_t final_status;
 	cz80_struc reference_cpu;
@@ -574,7 +577,8 @@ static int test_sound_status_snapshot(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0x5au, 1u, 0x22u,
-			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US) ||
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS,
+			TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &initial_status))
 	{
 		fprintf(stderr, "Sound status snapshot setup failed\n");
@@ -597,8 +601,9 @@ static int test_sound_status_snapshot(void)
 	(void)Cz80_Exec(&reference_cpu, (int32_t)cycles);
 	Cz80_Get_State(&reference_cpu, &expected_state);
 	if (reference_io_count != 2u ||
-		!psp_me_sound_worker_z80_slice(&worker, reference_io, reference_io_count,
-			cycles, 101u, &expected_state, banks, reference_ram_hash(), true) ||
+		!psp_me_sound_worker_z80_advance(&worker, cycles, 1000u, 101u) ||
+		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
+			reference_ram_hash(), 101u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_sync(&worker, 102u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_read_status(&worker, &final_status) ||
 		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
@@ -619,6 +624,18 @@ static int test_sound_status_snapshot(void)
 			final_status.generation, final_status.sequence,
 			(unsigned long long)final_status.emulated_time, final_status.sound_code,
 			final_status.pending_command, final_status.result_code);
+		return 0;
+	}
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (stats.z80_autonomous_slices != 1u || stats.z80_checkpoints != 1u ||
+		stats.z80_io_events != 0u || stats.z80_state_mismatches != 0u ||
+		stats.z80_ram_mismatches != 0u || stats.z80_bank_mismatches != 0u)
+	{
+		fprintf(stderr,
+			"Autonomous status stats mismatch: slices=%u checkpoints=%u io=%u state=%u ram=%u bank=%u\n",
+			stats.z80_autonomous_slices, stats.z80_checkpoints,
+			stats.z80_io_events, stats.z80_state_mismatches,
+			stats.z80_ram_mismatches, stats.z80_bank_mismatches);
 		return 0;
 	}
 	return 1;
@@ -674,7 +691,8 @@ static int test_ym_shadow_timer_irq_and_status(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_ORACLE,
+			TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "YM shadow timer snapshot setup failed\n");
 		if (worker.running)
@@ -787,7 +805,8 @@ static int test_ym_timer_preemption_boundary(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, 0x1000u, 0x1000u, false, TEST_TIMEOUT_US))
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_ORACLE,
+			TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "YM preemption snapshot setup failed\n");
 		if (worker.running)
@@ -829,6 +848,102 @@ static int test_ym_timer_preemption_boundary(void)
 			stats.z80_slices, stats.z80_io_events, stats.z80_state_mismatches,
 			stats.z80_ram_mismatches, stats.z80_bank_mismatches,
 			stats.z80_io_mismatches, stats.z80_send_failures, stats.fatal_error);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_autonomous_ym_timer_preemption_boundary(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	cz80_state_t expected_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	const uint32_t requested_cycles = 200u;
+	const uint8_t timer_program[] = {
+		0x3e, 0x24, 0xd3, 0x04,
+		0x3e, 0xff, 0xd3, 0x05,
+		0x3e, 0x25, 0xd3, 0x04,
+		0x3e, 0x03, 0xd3, 0x05,
+		0x3e, 0x27, 0xd3, 0x04,
+		0x3e, 0x05, 0xd3, 0x05,
+		0xdb, 0x04,
+		0x32, 0x00, 0xf8,
+	};
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	memcpy(reference_memory, timer_program, sizeof(timer_program));
+	memset(reference_io, 0, sizeof(reference_io));
+	reference_io_count = 0;
+	reference_port_read_value = 0;
+	reference_preempt_cpu = NULL;
+	reference_preempt_on_timer_start = false;
+
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Set_ReadB(&reference_cpu, reference_z80_read);
+	Cz80_Set_WriteB(&reference_cpu, reference_z80_write);
+	Cz80_Set_INPort(&reference_cpu, reference_z80_port_read);
+	Cz80_Set_OUTPort(&reference_cpu, reference_z80_port_write);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, 0x1000u, 0x1000u, false,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Autonomous YM preemption snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	reference_preempt_cpu = &reference_cpu;
+	reference_preempt_on_timer_start = true;
+	(void)Cz80_Exec(&reference_cpu, (int32_t)requested_cycles);
+	reference_preempt_cpu = NULL;
+	Cz80_Get_State(&reference_cpu, &expected_state);
+	if (reference_preempt_on_timer_start || Cz80_Get_Reg(&reference_cpu, CZ80_PC) != 24u ||
+		!psp_me_sound_worker_z80_advance(&worker, requested_cycles, 1000u, 100u) ||
+		!psp_me_sound_worker_z80_checkpoint(&worker, &expected_state, banks,
+			reference_ram_hash(), 100u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr,
+			"Autonomous YM timer preemption failed: pc=%u io=%u pending=%d\n",
+			Cz80_Get_Reg(&reference_cpu, CZ80_PC), reference_io_count,
+			reference_preempt_on_timer_start ? 1 : 0);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	psp_me_sound_worker_get_stats(&worker, &stats);
+	if (stats.z80_autonomous_slices != 1u || stats.z80_checkpoints != 1u ||
+		stats.z80_io_events != 0u || stats.z80_state_mismatches != 0u ||
+		stats.z80_ram_mismatches != 0u || stats.z80_bank_mismatches != 0u ||
+		stats.z80_io_mismatches != 0u || stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		fprintf(stderr,
+			"Autonomous YM preemption stats mismatch: slices=%u checkpoints=%u io=%u state=%u ram=%u bank=%u io_mismatch=%u fatal=%u\n",
+			stats.z80_autonomous_slices, stats.z80_checkpoints,
+			stats.z80_io_events, stats.z80_state_mismatches,
+			stats.z80_ram_mismatches, stats.z80_bank_mismatches,
+			stats.z80_io_mismatches, stats.fatal_error);
 		return 0;
 	}
 	return 1;
@@ -904,7 +1019,8 @@ static int test_ym_shadow_pcm_render(void)
 		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
 		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
-			44100u, sizeof(pcm_a), sizeof(pcm_b), false, TEST_TIMEOUT_US))
+			44100u, sizeof(pcm_a), sizeof(pcm_b), false,
+			PSP_ME_SOUND_Z80_MODE_ORACLE, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "YM PCM shadow snapshot setup failed\n");
 		if (worker.running)
@@ -991,9 +1107,10 @@ int main(void)
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
 		!test_sound_status_snapshot() ||
 		!test_ym_shadow_timer_irq_and_status() || !test_ym_timer_preemption_boundary() ||
+		!test_autonomous_ym_timer_preemption_boundary() ||
 		!test_ym_shadow_pcm_render())
 		return 1;
 
-	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 status snapshot dry-run passed\n");
+	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 autonomous status/checkpoint passed\n");
 	return 0;
 }

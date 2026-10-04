@@ -1366,6 +1366,72 @@ C5 CPU-oracle `Z80_SLICE` stream, and `SYNC` merely confirms the time reached by
 that already-replayed work.  True C6 still needs a timestamp/event-driven
 `ADVANCE_TO_TIME` implementation that can execute Z80/YM without CPU Z80 slices.
 
+#### C6 readiness: autonomous Z80 advance + checkpoint oracle (2026-10-04) [complete subphase]
+
+The next C6 dry-run now removes the per-slice CPU oracle from the production path.
+After the initial Z80/YM snapshot, Allegrex sends an asynchronous `Z80_ADVANCE`
+message containing only the requested Z80 cycle budget, the scheduler's current
+`timer_left` value and the resulting emulated timestamp.  It no longer sends the
+slice's I/O trace, expected CZ80 state, banks, RAM hash, YM IRQ trace or explicit
+timer-preemption markers.  The existing C5 `Z80_SLICE` replay remains available to
+the host/hardware oracle tests, but it is not used by the integrated autonomous
+path.
+
+The ME Z80 port handlers now consume the ME-owned `sound_code`, YM2610 context,
+bank state and result byte directly.  YM IRQ transitions are applied directly to
+the ME CZ80.  A timer started/reprogrammed by a Z80 `OUT` also reproduces the MVS
+scheduler's exact preemption rule locally: `timer_adjust()` compares the new timer
+duration against the scheduler's **`timer_left`**, not merely against CZ80's current
+`ICount` remainder.  This distinction was exposed immediately by `wjammers`: the
+first implementation used the latter approximation and the first 300-frame oracle
+checkpoint diverged in `HL`.  Passing the semantic scheduler `timer_left` value to
+the autonomous advance removed that divergence without reintroducing any CPU I/O
+or CPU-state replay.  A focused host oracle covers the autonomous timer-start
+preemption boundary directly.
+
+CPU Z80/YM/audio are still authoritative in this subphase.  The CPU executes its
+normal Z80 slice and produces the real audio output, while the ME executes the same
+slice independently.  Allegrex captures CZ80 state, bank offsets and Z80 RAM hash
+only at the existing **300-frame checkpoint** and submits a `Z80_CHECKPOINT` oracle.
+The ME validates that checkpoint after all prior autonomous advances have completed.
+The main-visible sound status snapshot is then compared at the same boundary.  This
+reduces the production oracle from per-I/O/per-slice state replay to one bounded
+checkpoint every 300 frames.
+
+The same deterministic real-PSP workload used for C5 was rerun from clean PSPLink
+state with the autonomous path:
+
+| game | autonomous Z80 slices | CPU I/O/IRQ oracle events | checkpoints | YM renders | sample frames | result |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `mslug3` | 22,494 | 0 | 19/19 | 2,241 | 1,669,799 | clean through `reason=stop` |
+| `wjammers` | 14,041 | 0 | 19/19 | 1,527 | 1,137,788 | clean through `reason=stop` |
+| `fatfury1` | 16,795 | 0 | 19/19 | 1,739 | 1,295,752 | clean through `reason=stop` |
+
+Across all three runs:
+
+- `z80_io=0` and `z80_irqs=0`, proving the integrated path is no longer replaying
+  CPU Z80 I/O/IRQ events;
+- all 57 CZ80/bank/RAM checkpoints matched exactly;
+- all 57 ME status snapshots matched `sound_code`, `pending_command`, `result_code`
+  and completed emulated time;
+- PCM/status comparison remained exact, with zero YM render errors or mismatches;
+- worker/local failures, send failures and command/event/batch overflows remained
+  zero;
+- the Z80 batch ring is now used only for checkpoints and had high-water **1/4** in
+  the representative runs, eliminating the previous C5 `wjammers` 3/4 pressure.
+
+The host autonomous status/result and timer-preemption oracles pass, and PSP MVS
+continues to build with the same `-Wall -Wextra -Werror` configuration used by the
+hardware workload.  The standalone real-PSP C5/oracle worker harness also remains
+green after introducing the dual execution modes: 4/4 lifecycles, **256/256**
+shadow commands, 2 replay slices / 7 I/O events in the final lifecycle, and zero
+state/RAM/bank/I/O/protocol failures.
+
+This closes **autonomous shadow scheduling**, not C6 ownership transfer.  External
+MVS timer-overflow scheduling is still driven by Allegrex, the CPU Z80/YM path still
+executes authoritatively, and ME-generated PCM is still only an oracle.  Those are
+intentional safety boundaries for the next C6 step.
+
 No ownership transfer is permitted yet.  The physical C2 post-wake
 `RESUME_COMPLETE` fresh-worker rebootstrap evidence remains deferred and is still
 a hard gate before Allegrex stops executing the authoritative Z80/YM2610 path.

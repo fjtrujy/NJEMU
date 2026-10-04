@@ -122,15 +122,8 @@ static void cpu_execute(int cpunum)
 			mvs_me_sound_profile_now_us() - start);
 
 		if (cpunum == CPU_Z80)
-		{
-			cz80_state_t state;
-			uint32_t banks[4];
-
-			Cz80_Get_State(&CZ80, &state);
-			neogeo_get_z80_shadow_state(banks, NULL, NULL, NULL);
 			mvs_me_sound_shadow_z80_slice_completed((uint32_t)requested_cycles,
-				z80_end_time, &state, banks, memory_region_cpu2);
-		}
+				(uint32_t)timer_left, z80_end_time);
 	}
 }
 
@@ -426,10 +419,22 @@ static void timer_update_cpu_normal(void)
 		uint8_t sound_code;
 		uint8_t pending_command;
 		uint8_t result_code;
+		cz80_state_t checkpoint_state;
+		uint32_t checkpoint_banks[4];
+		const cz80_state_t *state = NULL;
+		const uint32_t *banks = NULL;
+
+		if (mvs_me_sound_shadow_checkpoint_due())
+		{
+			Cz80_Get_State(&CZ80, &checkpoint_state);
+			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
+			state = &checkpoint_state;
+			banks = checkpoint_banks;
+		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
 		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
-			pending_command, result_code);
+			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
 	mvs_me_sound_profile_frame_completed();
 }
@@ -516,10 +521,22 @@ static void timer_update_cpu_raster(void)
 		uint8_t sound_code;
 		uint8_t pending_command;
 		uint8_t result_code;
+		cz80_state_t checkpoint_state;
+		uint32_t checkpoint_banks[4];
+		const cz80_state_t *state = NULL;
+		const uint32_t *banks = NULL;
+
+		if (mvs_me_sound_shadow_checkpoint_due())
+		{
+			Cz80_Get_State(&CZ80, &checkpoint_state);
+			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
+			state = &checkpoint_state;
+			banks = checkpoint_banks;
+		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
 		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
-			pending_command, result_code);
+			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
 	mvs_me_sound_profile_frame_completed();
 }

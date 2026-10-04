@@ -249,7 +249,7 @@ static bool run_z80_shadow_sequence(psp_me_sound_worker_t *worker,
 	if (!psp_me_sound_worker_z80_snapshot(worker, &initial_state,
 		z80_reference_memory, z80_reference_memory, sizeof(z80_reference_memory),
 		banks, 0, 0, 0, 44100u, 0x1000u, 0x1000u,
-		false, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
+		false, PSP_ME_SOUND_Z80_MODE_ORACLE, PSP_ME_SOUND_WORKER_HW_TIMEOUT_US))
 		return false;
 
 	(void)Cz80_Exec(&reference_cpu, (int32_t)timer_program_cycles);

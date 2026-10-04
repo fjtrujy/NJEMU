@@ -24,10 +24,12 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	uint8_t status_b);
 void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint64_t emulated_time, const cz80_state_t *expected_state,
-	const uint32_t banks[4], const uint8_t *visible_memory);
+	uint32_t scheduler_time_left, uint64_t emulated_time);
+bool mvs_me_sound_shadow_checkpoint_due(void);
 void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
-	uint8_t sound_code, uint8_t pending_command, uint8_t result_code);
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
+	const cz80_state_t *expected_state, const uint32_t banks[4],
+	const uint8_t *visible_memory);
 #else
 static inline bool mvs_me_sound_shadow_command(uint8_t command,
 	uint64_t emulated_time)
@@ -111,23 +113,30 @@ static inline void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer,
 }
 
 static inline void mvs_me_sound_shadow_z80_slice_completed(uint32_t cycles,
-	uint64_t emulated_time, const cz80_state_t *expected_state,
-	const uint32_t banks[4], const uint8_t *visible_memory)
+	uint32_t scheduler_time_left, uint64_t emulated_time)
 {
 	(void)cycles;
+	(void)scheduler_time_left;
 	(void)emulated_time;
-	(void)expected_state;
-	(void)banks;
-	(void)visible_memory;
+}
+
+static inline bool mvs_me_sound_shadow_checkpoint_due(void)
+{
+	return false;
 }
 
 static inline void mvs_me_sound_shadow_frame_completed(uint64_t emulated_time,
-	uint8_t sound_code, uint8_t pending_command, uint8_t result_code)
+	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
+	const cz80_state_t *expected_state, const uint32_t banks[4],
+	const uint8_t *visible_memory)
 {
 	(void)emulated_time;
 	(void)sound_code;
 	(void)pending_command;
 	(void)result_code;
+	(void)expected_state;
+	(void)banks;
+	(void)visible_memory;
 }
 #endif
 

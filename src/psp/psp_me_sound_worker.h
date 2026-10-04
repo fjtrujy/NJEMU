@@ -38,7 +38,9 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_SLICE,
 	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER,
 	PSP_ME_SOUND_WORKER_COMMAND_YM_TIMER,
-	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE
+	PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -51,7 +53,8 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_Z80_SNAPSHOT_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_ERROR,
-	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK
+	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_Z80_CHECKPOINT_ACK
 } psp_me_sound_worker_event_type_t;
 
 typedef enum psp_me_sound_worker_error
@@ -101,6 +104,12 @@ typedef struct psp_me_sound_z80_io
 _Static_assert(sizeof(psp_me_sound_z80_io_t) == 4,
 	"Z80 I/O oracle entry must remain compact");
 
+typedef enum psp_me_sound_z80_mode
+{
+	PSP_ME_SOUND_Z80_MODE_ORACLE = 0,
+	PSP_ME_SOUND_Z80_MODE_AUTONOMOUS = 1
+} psp_me_sound_z80_mode_t;
+
 typedef struct psp_me_sound_z80_snapshot
 {
 	cz80_state_t state;
@@ -111,7 +120,7 @@ typedef struct psp_me_sound_z80_snapshot
 	uint8_t sound_code;
 	uint8_t pending_command;
 	uint8_t result_code;
-	uint8_t reserved;
+	uint8_t mode;
 	uint32_t ym_sample_rate;
 	uint32_t ym_pcm_a_size;
 	uint32_t ym_pcm_b_size;
@@ -189,6 +198,8 @@ typedef struct psp_me_sound_worker_stats
 	uint32_t z80_batch_high_water;
 	uint32_t z80_batch_overflow;
 	uint32_t z80_batch_underflow;
+	uint32_t z80_autonomous_slices;
+	uint32_t z80_checkpoints;
 	uint32_t ym_renders;
 	uint32_t ym_render_samples;
 	uint32_t ym_render_errors;
@@ -277,7 +288,7 @@ bool psp_me_sound_worker_z80_snapshot(psp_me_sound_worker_t *worker,
 	const uint8_t *source_rom, uint32_t source_length, const uint32_t banks[4],
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
 	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
-	bool clone_default_ym, uint64_t timeout_us);
+	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
 	int32_t state, uint64_t emulated_time);
 bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
@@ -295,6 +306,11 @@ bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,
 	const uint32_t banks[4], uint32_t ram_hash, bool check_ram);
+bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
+	uint32_t cycles, uint32_t scheduler_time_left, uint64_t emulated_time);
+bool psp_me_sound_worker_z80_checkpoint(psp_me_sound_worker_t *worker,
+	const cz80_state_t *expected_state, const uint32_t banks[4],
+	uint32_t ram_hash, uint64_t emulated_time, uint64_t timeout_us);
 bool psp_me_sound_worker_poll(psp_me_sound_worker_t *worker);
 bool psp_me_sound_worker_shutdown(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us);
