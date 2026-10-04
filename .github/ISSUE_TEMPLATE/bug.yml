@@ -1,0 +1,104 @@
+name: Bug report
+description: Report incorrect emulation, crashes, UI problems, or other reproducible defects.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve NJEMU. If the problem happens after a game has started, **attach a save state captured as close as possible to the problem** so maintainers can load the exact scene.
+  - type: dropdown
+    id: core
+    attributes:
+      label: Emulator core
+      options: [CPS1, CPS2, MVS/AES, NCDZ]
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      placeholder: e.g. Street Fighter II, Metal Slug 3
+    validations:
+      required: true
+  - type: input
+    id: set
+    attributes:
+      label: ROM / set name
+      description: Use the set/archive name where applicable.
+      placeholder: e.g. sf2, mslug3
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [PSP, PlayStation 2, PlayStation Vita, Desktop]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NJEMU version
+      description: Copy the exact version shown by NJEMU/log output, including the Git suffix on development builds.
+      placeholder: e.g. 2.4.0 or 2.4.0+12.gabcdef0
+    validations:
+      required: true
+  - type: dropdown
+    id: after_start
+    attributes:
+      label: Does the problem happen after the game has started?
+      options:
+        - Yes
+        - No, it happens before gameplay starts
+    validations:
+      required: true
+  - type: textarea
+    id: save_state
+    attributes:
+      label: Save state attachment
+      description: If the problem happens after gameplay starts, drag a save-state file here. Capture it as close as possible to the broken scene. If the issue happens before gameplay starts, write "Not applicable - before gameplay".
+      placeholder: Drag the save state here, or explain why it is not applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Launch ...
+        2. Load ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Relevant configuration
+      description: Include video backend/mode, cache settings, GUI/no-GUI, and any option that may affect the problem.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots / video / logs
+      description: Attach visual evidence or logs when useful.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am using a build from the current project/release workflow rather than an unknown third-party binary.
+          required: true
+        - label: I have included a save state when the problem happens after gameplay starts.
+          required: true

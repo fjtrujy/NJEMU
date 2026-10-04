@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: NJEMU documentation
+    url: https://github.com/fjtrujy/NJEMU/tree/master/docs
+    about: Check build, platform, runtime-file, and usage documentation before filing an issue.

@@ -4,7 +4,7 @@ This document describes the current extension boundary for adding a new host
 platform to NJEMU. It reflects the post-`PLATFORM_DRIVER_REFACTOR_PLAN` design;
 older PSP-first porting notes should not be used as an architectural template.
 
-A new backend such as PS Vita should reuse the emulator cores, target renderers,
+A future host backend should reuse the emulator cores, target renderers,
 GUI logic, configuration, file browser, memory policy, and input policy from
 common/target code. Platform code should contain only OS, SDK, audio, input,
 threading, timing, power/capability, video, PNG/readback, and presentation

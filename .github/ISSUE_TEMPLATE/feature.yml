@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a new capability, workflow, platform improvement, or user-facing enhancement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What problem would this solve, or what workflow would it improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed feature
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: checkboxes
+    id: cores
+    attributes:
+      label: Relevant emulator cores
+      options:
+        - label: CPS1
+        - label: CPS2
+        - label: MVS/AES
+        - label: NCDZ
+        - label: Common / all cores
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Relevant platforms
+      options:
+        - label: PSP
+        - label: PlayStation 2
+        - label: PlayStation Vita
+        - label: Desktop
+        - label: Platform-independent
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Describe workarounds or alternate designs you have considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add mockups, references, compatibility constraints, or implementation ideas if useful.

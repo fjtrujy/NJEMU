@@ -1,0 +1,129 @@
+name: Performance issue
+description: Report scene-specific or sustained slowdowns, audio underruns, or frame-rate problems.
+title: "[Performance]: "
+labels: [performance]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Performance reports are most useful when maintainers can load the exact scene. If the slowdown happens after a game has started, **attach a save state captured at the problematic location**.
+  - type: dropdown
+    id: core
+    attributes:
+      label: Emulator core
+      options: [CPS1, CPS2, MVS/AES, NCDZ]
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game
+    validations:
+      required: true
+  - type: input
+    id: set
+    attributes:
+      label: ROM / set name
+      placeholder: e.g. mslug3, avsp
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [PSP, PlayStation 2, PlayStation Vita, Desktop]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NJEMU version
+      description: Copy the exact build version, including the Git suffix on development builds.
+      placeholder: e.g. 2.4.0+12.gabcdef0
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Where does the slowdown happen?
+      description: Describe the level/scene/menu/event and whether the problem is constant or scene-specific.
+    validations:
+      required: true
+  - type: input
+    id: fps
+    attributes:
+      label: Approximate FPS
+      description: Give the observed FPS if the overlay/log is available.
+  - type: dropdown
+    id: audio
+    attributes:
+      label: Is audio affected?
+      options: [Yes, No, Not sure]
+    validations:
+      required: true
+  - type: textarea
+    id: rendering
+    attributes:
+      label: Rendering / backend mode
+      description: Include selected video backend, PS2 output mode, frame-sync mode, or other rendering settings that may matter.
+    validations:
+      required: true
+  - type: textarea
+    id: cache
+    attributes:
+      label: Cache settings
+      description: Include whether streaming cache is enabled/active and the configured cache read size when relevant. Write "Not applicable" for cores/builds that do not use cache.
+    validations:
+      required: true
+  - type: textarea
+    id: save_state
+    attributes:
+      label: Save state attachment
+      description: Drag a save-state file captured at the slow scene here. If the issue occurs before gameplay starts, write "Not applicable - before gameplay".
+      placeholder: Drag the save state here, or explain why it is not applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe the frame pacing/audio behavior or performance level you expect in this scene.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Describe the slowdown, stutter, audio problem, or other observed performance failure.
+    validations:
+      required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Expected / comparison behavior
+      description: Describe normal behavior, another NJEMU build, another backend, or hardware/emulator behavior used for comparison.
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Other relevant configuration
+      description: Include GUI/no-GUI, VSync/frame limiting, audio settings, or other options not covered above.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs / screenshots / video
+      description: Attach timing logs, FPS captures, or video when available.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have included a save state when the slowdown happens after gameplay starts.
+          required: true
+        - label: I have described whether the slowdown is constant or scene-specific.
+          required: true
