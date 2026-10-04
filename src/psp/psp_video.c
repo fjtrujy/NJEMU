@@ -1333,4 +1333,6 @@ video_driver_t video_psp = {
 	psp_fillUIRectGradient,
 	psp_setUIScissor,
 	psp_prepareSpriteVertices,
+	NULL,
+	NULL,
 };

@@ -4,6 +4,32 @@
 #include "common/ui_layout.h"
 #include "common/video_driver.h"
 
+static void test_get_output_size(void *data, int *width, int *height)
+{
+	(void)data;
+	if (width) *width = 704;
+	if (height) *height = 480;
+}
+
+static void test_get_presentation_viewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	(void)data;
+	assert(output_width == 704);
+	assert(output_height == 480);
+	if (x) *x = 32;
+	if (y) *y = 16;
+	if (width) *width = 640;
+	if (height) *height = 448;
+}
+
+static video_driver_t test_video_driver = {
+	.getOutputSize = test_get_output_size,
+	.getPresentationViewport = test_get_presentation_viewport,
+};
+video_driver_t *video_driver = &test_video_driver;
+
 static void test_responsive_layout(int width, int height,
 	int expected_logical_width, int expected_logical_height,
 	int expected_rows)
@@ -122,6 +148,33 @@ static void test_non_square_pixel_display_mode(void)
 	assert(height == 240);
 }
 
+static void test_display_mode_presentation_viewport(void)
+{
+	RECT rect;
+
+	video_set_pixel_aspect_ratio(10, 11);
+	rect = display_mode_presentation_rect(DISPLAY_MODE_FULLSCREEN, 304, 224);
+	assert(rect.left == 32);
+	assert(rect.top == 16);
+	assert(rect.right == 672);
+	assert(rect.bottom == 464);
+
+	rect = display_mode_presentation_rect(DISPLAY_MODE_4_3, 304, 224);
+	assert(rect.left == 32);
+	assert(rect.top == 22);
+	assert(rect.right == 672);
+	assert(rect.bottom == 458);
+
+	/* Backends without a safe-area override retain the full physical output. */
+	test_video_driver.getPresentationViewport = NULL;
+	rect = display_mode_presentation_rect(DISPLAY_MODE_FULLSCREEN, 304, 224);
+	assert(rect.left == 0);
+	assert(rect.top == 0);
+	assert(rect.right == 704);
+	assert(rect.bottom == 480);
+	test_video_driver.getPresentationViewport = test_get_presentation_viewport;
+}
+
 static void test_non_square_pixel_safe_viewport(int output_width, int output_height,
 	int safe_x, int safe_y, int safe_width, int safe_height,
 	int pixel_aspect_num, int pixel_aspect_den)
@@ -179,6 +232,7 @@ int main(void)
 	test_non_square_pixel_layout(704, 480, 10, 11);
 	test_non_square_pixel_layout(704, 240, 10, 22);
 	test_non_square_pixel_display_mode();
+	test_display_mode_presentation_viewport();
 	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
 	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);
 	video_set_pixel_aspect_ratio(1, 1);

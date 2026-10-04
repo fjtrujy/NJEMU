@@ -192,6 +192,17 @@ typedef struct video_driver
 	void (*prepareSpriteVertices)(void *data, uint32_t vertices_count,
 		const video_sprite_vertex_t *vertices);
 
+	/* Optional visible area intended for game presentation. This can be
+	 * smaller than the physical framebuffer on outputs with conventional
+	 * overscan. Coordinates are expressed in physical output pixels. */
+	void (*getPresentationViewport)(void *data,
+		int output_width, int output_height,
+		int *x, int *y, int *width, int *height);
+
+	/* Optional physical display-position adjustment. Offsets are expressed in
+	 * output pixels; the backend converts them to native display timing units. */
+	void (*setOutputOffset)(void *data, int x, int y);
+
 } video_driver_t;
 
 typedef struct video_backend_choice

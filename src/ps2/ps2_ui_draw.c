@@ -355,26 +355,17 @@ static void ps2_ui_draw_getOutputViewport(void *data,
 	int output_width, int output_height,
 	int *x, int *y, int *width, int *height)
 {
-	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	int viewport_width = output_width;
 	int viewport_height = output_height;
 	int viewport_x = 0;
 	int viewport_y = 0;
+	(void)data;
 
-	/* NTSC's full 704x480/240 raster includes the conventional overscan area.
-	 * Keep gameplay on that full raster, but place menus in the 640x448/224
-	 * center that PCSX2 exposes by default and that analog TVs are expected to
-	 * keep visible. Progressive 480p uses the complete 704x480 raster. */
-	if (d && d->gsGlobal && d->gsGlobal->Mode == GS_MODE_NTSC &&
-		output_width >= 704) {
-		viewport_width = 640;
-		viewport_height =
-			d->gsGlobal->Interlace == GS_NONINTERLACED ? 224 : 448;
-		if (viewport_height > output_height)
-			viewport_height = output_height;
-		viewport_x = (output_width - viewport_width) / 2;
-		viewport_y = (output_height - viewport_height) / 2;
-	}
+	/* UI and gameplay share one backend-owned visible-area policy. */
+	if (video_driver && video_driver->getPresentationViewport)
+		video_driver->getPresentationViewport(video_data,
+			output_width, output_height,
+			&viewport_x, &viewport_y, &viewport_width, &viewport_height);
 
 	if (x) *x = viewport_x;
 	if (y) *y = viewport_y;

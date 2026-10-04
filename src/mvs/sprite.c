@@ -39,25 +39,8 @@ static uint16_t *clut;
 
 static RECT mvs_presentation_rect(int native_width, int native_height)
 {
-	int output_width = SCR_WIDTH;
-	int output_height = SCR_HEIGHT;
-	int width;
-	int height;
-	RECT rect;
-	int mode = option_display_mode;
-
-	if (mode < DISPLAY_MODE_ORIGINAL_SIZE || mode >= DISPLAY_MODE_COUNT)
-		mode = DISPLAY_MODE_ORIGINAL_ASPECT;
-	if (video_driver->getOutputSize)
-		video_driver->getOutputSize(video_data, &output_width, &output_height);
-	display_mode_size((display_mode_t)mode, output_width, output_height,
-		native_width, native_height, &width, &height);
-
-	rect.left = (int16_t)((output_width - width) / 2);
-	rect.top = (int16_t)((output_height - height) / 2);
-	rect.right = (int16_t)(rect.left + width);
-	rect.bottom = (int16_t)(rect.top + height);
-	return rect;
+	return display_mode_presentation_rect(option_display_mode,
+		native_width, native_height);
 }
 
 static void mvs_decode_fix_tile(uint8_t pixels[8 * 8], uint32_t code,

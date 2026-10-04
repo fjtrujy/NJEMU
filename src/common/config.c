@@ -77,6 +77,7 @@ enum
 {
 	CFG_NONE = 0,
 	CFG_INT,
+	CFG_SIGNED_INT,
 	CFG_BOOL,
 	CFG_PAD,
 	CFG_STR,
@@ -161,6 +162,8 @@ static cfg_type default_options[] =
 #ifdef PS2
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"VideoOutputMode",	&option_video_output_mode,	DEFAULT_VIDEO_OUTPUT_MODE,	VIDEO_OUTPUT_MODE_COUNT - 1, 0},
+	{ CFG_SIGNED_INT,	"VideoOffsetX",	&option_video_offset_x,	0,	VIDEO_OUTPUT_OFFSET_MAX, 0},
+	{ CFG_SIGNED_INT,	"VideoOffsetY",	&option_video_offset_y,	0,	VIDEO_OUTPUT_OFFSET_MAX, 0},
 #endif
 #if (EMU_SYSTEM == MVS)
 	{ CFG_NONE,	"[Emulation Settings]", 0, 0, 0, 0},
@@ -252,6 +255,15 @@ static int get_config_int(char *str, int maxval)
 	return value;
 }
 
+static int get_config_signed_int(char *str, int max_abs)
+{
+	int value = atoi(str);
+
+	if (value < -max_abs) value = -max_abs;
+	if (value > max_abs) value = max_abs;
+	return value;
+}
+
 static int get_config_performance_level(char *str)
 {
 	int value = atoi(str);
@@ -315,6 +327,16 @@ static char *set_config_int(int value, int maxval)
 
 	sprintf(buf, "%d", value);
 
+	return buf;
+}
+
+static char *set_config_signed_int(int value, int max_abs)
+{
+	static char buf[16];
+
+	if (value < -max_abs) value = -max_abs;
+	if (value > max_abs) value = max_abs;
+	sprintf(buf, "%d", value);
 	return buf;
 }
 
@@ -382,6 +404,7 @@ static int load_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 					switch (cfg[i].type)
 					{
 					case CFG_INT:   *cfg[i].value = get_config_int(value, cfg[i].max); break;
+					case CFG_SIGNED_INT: *cfg[i].value = get_config_signed_int(value, cfg[i].max); break;
 					case CFG_BOOL:  *cfg[i].value = get_config_bool(value); break;
 					case CFG_VSYNC: *cfg[i].value = get_config_vsync(value); break;
 					case CFG_PAD:   *cfg[i].value = get_config_pad(value); break;
@@ -480,6 +503,7 @@ static int save_inifile(const char *path, cfg_type *cfg, cfg2_type *cfg2)
 			{
 			case CFG_NONE: if (cfg[i].name) fd_printf(fd, "\r\n%s\r\n", cfg[i].name); break;
 			case CFG_INT:   fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_int(*cfg[i].value, cfg[i].max)); break;
+			case CFG_SIGNED_INT: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_signed_int(*cfg[i].value, cfg[i].max)); break;
 			case CFG_BOOL:  fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_bool(*cfg[i].value)); break;
 			case CFG_VSYNC: fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_vsync(*cfg[i].value)); break;
 			case CFG_PAD:   fd_printf(fd, "%s = %s\r\n", cfg[i].name, set_config_pad(*cfg[i].value)); break;

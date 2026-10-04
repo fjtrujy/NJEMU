@@ -597,6 +597,49 @@ static void ps2_getOutputSize(void *data, int *width, int *height)
 	if (height) *height = h;
 }
 
+static void ps2_getPresentationViewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	int viewport_width = output_width;
+	int viewport_height = output_height;
+	int viewport_x = 0;
+	int viewport_y = 0;
+
+	/* Keep gameplay inside the same conventional NTSC safe area used by the
+	 * common UI. The 704-pixel framebuffer remains intact for GS timing/FBW,
+	 * while content no longer depends on emulator/TV overscan settings. */
+	if (ps2 && ps2->gsGlobal && ps2->gsGlobal->Mode == GS_MODE_NTSC &&
+		output_width >= 704) {
+		viewport_width = 640;
+		viewport_height =
+			ps2->gsGlobal->Interlace == GS_NONINTERLACED ? 224 : 448;
+		if (viewport_height > output_height)
+			viewport_height = output_height;
+		viewport_x = (output_width - viewport_width) / 2;
+		viewport_y = (output_height - viewport_height) / 2;
+	}
+
+	if (x) *x = viewport_x;
+	if (y) *y = viewport_y;
+	if (width) *width = viewport_width;
+	if (height) *height = viewport_height;
+}
+
+static void ps2_setOutputOffset(void *data, int x, int y)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+
+	if (!ps2 || !ps2->gsGlobal)
+		return;
+
+	/* DISPLAY.DX uses video-clock units, while the setting is intentionally
+	 * exposed in output pixels. gsKit derives MagH from the selected timing. */
+	gsKit_set_display_offset(ps2->gsGlobal,
+		x * (ps2->gsGlobal->MagH + 1), y);
+}
+
 static void ps2_flipScreen(void *data, bool vsync);
 
 static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textures_count, clut_info_t *clut_info)
@@ -666,6 +709,8 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	gsKit_vram_clear(gsGlobal);
 
 	gsKit_init_screen(gsGlobal);
+	ps2->gsGlobal = gsGlobal;
+	ps2_setOutputOffset(ps2, option_video_offset_x, option_video_offset_y);
 
 	#if (EMU_SYSTEM == CPS2)
 	{
@@ -679,7 +724,6 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 			gsGlobal->PSMZ);
 		z_buffer = gsKit_vram_alloc(gsGlobal, z_size, GSKIT_ALLOC_SYSBUFFER);
 		if (z_buffer == GSKIT_ALLOC_ERROR) {
-			ps2->gsGlobal = gsGlobal;
 			ps2_cleanup_failed_init(ps2);
 			return NULL;
 		}
@@ -694,7 +738,6 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
     gsKit_clear(gsGlobal, GS_BLACK);
-	ps2->gsGlobal = gsGlobal;
 
 	// Original buffers containing clut indexes
 	size_t totalTextureSize = 0;
@@ -2052,4 +2095,6 @@ video_driver_t video_ps2 = {
 	ps2_fillUIRectGradient,
 	ps2_setUIScissor,
 	NULL,
+	ps2_getPresentationViewport,
+	ps2_setOutputOffset,
 };

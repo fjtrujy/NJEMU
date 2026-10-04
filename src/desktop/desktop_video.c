@@ -998,4 +998,6 @@ video_driver_t video_desktop_sdl = {
 	desktop_fillUIRectGradient,
 	desktop_setUIScissor,
 	NULL, // prepareSpriteVertices
+	NULL, // getPresentationViewport
+	NULL, // setOutputOffset
 };

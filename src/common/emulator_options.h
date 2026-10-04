@@ -10,11 +10,14 @@ extern int option_speedlimit;
 extern int option_vsync;
 extern int option_display_mode;
 extern int option_video_output_mode;
+extern int option_video_offset_x;
+extern int option_video_offset_y;
 extern int option_video_backend;
 extern int option_cache_read_size;
 extern int option_audio_processor;
 
 #define FPS_OVERLAY_OFFSET_MAX 96
+#define VIDEO_OUTPUT_OFFSET_MAX 64
 
 enum
 {

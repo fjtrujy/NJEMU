@@ -89,6 +89,8 @@ int option_display_mode;
 #define DEFAULT_VIDEO_OUTPUT_MODE VIDEO_OUTPUT_480I
 #endif
 int option_video_output_mode = DEFAULT_VIDEO_OUTPUT_MODE;
+int option_video_offset_x;
+int option_video_offset_y;
 int option_video_backend = VIDEO_BACKEND_AUTO;
 int option_cache_read_size = CACHE_READ_SIZE_AUTO;
 int option_audio_processor = AUDIO_PROCESSOR_AUTO;

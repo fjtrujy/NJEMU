@@ -701,8 +701,16 @@ static int menu_system_video_settings(void)
 		VIDEO_OUTPUT_480I_LABEL,
 		VIDEO_OUTPUT_480P_LABEL
 	};
+	static const int row_labels[] = {
+		VIDEO_OUTPUT_MODE,
+		VIDEO_X_OFFSET,
+		VIDEO_Y_OFFSET
+	};
 	int update = 1;
 	int original_mode = option_video_output_mode;
+	int original_x = option_video_offset_x;
+	int original_y = option_video_offset_y;
+	int selected = 0;
 
 	pad_wait_clear();
 	load_background(WP_GAMECFG);
@@ -712,24 +720,49 @@ static int menu_system_video_settings(void)
 	{
 		if (update)
 		{
-			int arrowl = option_video_output_mode > VIDEO_OUTPUT_240P;
-			int arrowr = option_video_output_mode < VIDEO_OUTPUT_480P;
-			const char *value = TEXT(value_labels[option_video_output_mode]);
-			int width = uifont_get_string_width(value);
-
 			video_driver->beginFrame(video_data);
 			show_background();
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
 				TEXT(SYSTEM_VIDEO_SETTINGS_MENU));
-			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT),
-				TEXT(VIDEO_OUTPUT_MODE));
-			if (arrowl)
-				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
-			if (arrowr)
-				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT),
-					FONT_RIGHTTRIANGLE);
+
+			for (int i = 0; i < 3; i++)
+			{
+				char numeric_value[16];
+				const char *value;
+				int current;
+				int min_value;
+				int max_value;
+				int y = 40 + i * 17;
+				int active = i == selected;
+				int width;
+
+				if (i == 0) {
+					current = option_video_output_mode;
+					min_value = VIDEO_OUTPUT_240P;
+					max_value = VIDEO_OUTPUT_480P;
+					value = TEXT(value_labels[current]);
+				} else {
+					current = i == 1 ? option_video_offset_x : option_video_offset_y;
+					min_value = -VIDEO_OUTPUT_OFFSET_MAX;
+					max_value = VIDEO_OUTPUT_OFFSET_MAX;
+					snprintf(numeric_value, sizeof(numeric_value), "%+d px", current);
+					value = numeric_value;
+				}
+				width = uifont_get_string_width(value);
+
+				if (active) {
+					uifont_print_shadow(16, y, UI_COLOR(UI_PAL_SELECT), TEXT(row_labels[i]));
+					if (current > min_value)
+						uifont_print_shadow(190, y, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
+					uifont_print_shadow(210, y, UI_COLOR(UI_PAL_SELECT), value);
+					if (current < max_value)
+						uifont_print_shadow(214 + width, y, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
+				} else {
+					uifont_print(16, y, UI_COLOR(UI_PAL_NORMAL), TEXT(row_labels[i]));
+					uifont_print(210, y, UI_COLOR(UI_PAL_NORMAL), value);
+				}
+			}
 			video_driver->endFrame(video_data);
 			video_driver->flipScreen(video_data, 1);
 		}
@@ -740,24 +773,55 @@ static int menu_system_video_settings(void)
 
 		pad_update();
 		update = 0;
-		if (pad_pressed(PLATFORM_PAD_LEFT) &&
-			option_video_output_mode > VIDEO_OUTPUT_240P)
+		if (pad_pressed(PLATFORM_PAD_UP))
 		{
-			option_video_output_mode--;
+			selected--;
+			if (selected < 0) selected = 2;
 			update = 1;
 		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
-			option_video_output_mode < VIDEO_OUTPUT_480P)
+		else if (pad_pressed(PLATFORM_PAD_DOWN))
 		{
-			option_video_output_mode++;
+			selected++;
+			if (selected > 2) selected = 0;
 			update = 1;
 		}
+		else if (pad_pressed(PLATFORM_PAD_LEFT))
+		{
+			if (selected == 0 && option_video_output_mode > VIDEO_OUTPUT_240P) {
+				option_video_output_mode--;
+				update = 1;
+			} else if (selected == 1 && option_video_offset_x > -VIDEO_OUTPUT_OFFSET_MAX) {
+				option_video_offset_x--;
+				update = 1;
+			} else if (selected == 2 && option_video_offset_y > -VIDEO_OUTPUT_OFFSET_MAX) {
+				option_video_offset_y--;
+				update = 1;
+			}
+		}
+		else if (pad_pressed(PLATFORM_PAD_RIGHT))
+		{
+			if (selected == 0 && option_video_output_mode < VIDEO_OUTPUT_480P) {
+				option_video_output_mode++;
+				update = 1;
+			} else if (selected == 1 && option_video_offset_x < VIDEO_OUTPUT_OFFSET_MAX) {
+				option_video_offset_x++;
+				update = 1;
+			} else if (selected == 2 && option_video_offset_y < VIDEO_OUTPUT_OFFSET_MAX) {
+				option_video_offset_y++;
+				update = 1;
+			}
+		}
+
+		if (update && selected != 0 && video_driver->setOutputOffset)
+			video_driver->setOutputOffset(video_data,
+				option_video_offset_x, option_video_offset_y);
 
 		if (Loop == LOOP_EXIT)
 			break;
 	} while (!pad_pressed(PLATFORM_PAD_B2));
 
-	if (option_video_output_mode != original_mode)
+	if (option_video_output_mode != original_mode ||
+		option_video_offset_x != original_x || option_video_offset_y != original_y)
 		save_settings();
 	return 0;
 }
