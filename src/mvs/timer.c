@@ -98,6 +98,7 @@ static void cpu_execute(int cpunum)
 	{
 		uint64_t start = mvs_me_sound_profile_now_us();
 		uint64_t z80_end_time = 0;
+		int requested_cycles;
 
 		if (cpunum == CPU_Z80)
 			mvs_me_sound_shadow_z80_slice_begin();
@@ -110,7 +111,8 @@ static void cpu_execute(int cpunum)
 			sound_poll_slice_ended = 0;
 		}
 		active_cpu = cpunum;
-		cpu[cpunum].cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
+		requested_cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
+		cpu[cpunum].cycles = requested_cycles;
 		cpu[cpunum].execute(cpu[cpunum].cycles);
 		if (cpunum == CPU_Z80)
 			z80_end_time = timer_get_time_us();
@@ -126,7 +128,7 @@ static void cpu_execute(int cpunum)
 
 			Cz80_Get_State(&CZ80, &state);
 			neogeo_get_z80_shadow_state(banks, NULL, NULL, NULL);
-			mvs_me_sound_shadow_z80_slice_completed((uint32_t)cpu[cpunum].cycles,
+			mvs_me_sound_shadow_z80_slice_completed((uint32_t)requested_cycles,
 				z80_end_time, &state, banks, memory_region_cpu2);
 		}
 	}
@@ -280,6 +282,9 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 		{
 			if (which == YM2610_TIMERA || which == YM2610_TIMERB)
 				mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_TIMER_PREEMPT);
+			if (active_cpu == CPU_Z80 &&
+				(which == YM2610_TIMERA || which == YM2610_TIMERB))
+				mvs_me_sound_shadow_z80_preempt((uint32_t)which);
 			timer_ticks -= time_left;
 			cpu[active_cpu].cycles -= cycles_left;
 			*cpu[active_cpu].icount = 0;

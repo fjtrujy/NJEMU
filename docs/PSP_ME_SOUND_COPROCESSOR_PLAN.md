@@ -1090,7 +1090,7 @@ transition must revisit that deferred lifecycle evidence first.
 
 **Gate:** repeated long hardware windows match the CPU oracle.
 
-### C5 - ME shadow complete sound island
+### C5 - ME shadow complete sound island [complete]
 
 #### C5 control/timer shadow status (2026-10-03) [complete subphase]
 
@@ -1252,10 +1252,61 @@ that behavior, while direct launch restored MIST immediately.  This is test-envi
 state, not a C5 PCM failure.
 
 The PCM/render subphase is therefore closed for the long `mslug3` hardware oracle.
-The complete C5 milestone remains **in progress** until the same bit-exact/state-
-equivalent shadow is exercised across additional representative MVS games, as required
-by the milestone gate.  C6 remains blocked independently by the deferred physical C2
-post-`RESUME_COMPLETE` evidence.
+
+#### C5 representative-game hardware closure (2026-10-04) [complete]
+
+The representative-game gate exposed two C4/C5 assumptions that the original
+`mslug3` workload did not stress enough, and both are now represented explicitly in
+the shadow protocol rather than hidden by tolerance:
+
+- `wjammers` can start/reprogram a YM2610 timer from inside the currently executing
+  Z80 `OUT` instruction such that the authoritative `timer_adjust()` forces CZ80's
+  `ICount` to zero before that instruction charges its cycles.  Allegrex now records a
+  `PREEMPT` trace event at that exact callback boundary and sends the slice's original
+  requested cycle budget.  The ME YM timer callback consumes the marker and zeroes its
+  own CZ80 `ICount` at the same semantic point.  A host oracle reproduces this case
+  directly.
+- the previous 256-entry per-slice I/O trace was intentionally fail-closed and
+  `wjammers` exceeded it.  The final layout uses **512 I/O entries per slice and 4
+  batch slots** instead of 256 x 8.  Both layouts reserve 2,048 I/O-entry slots across
+  the batch ring, so the larger single-slice headroom does not increase the dominant
+  ring payload budget.  A host oracle now replays one **300-I/O-event** slice to keep
+  this requirement covered.
+
+The final exact scripted PSP binary was then run from a clean PSPLink state across
+three materially different MVS titles.  CPU Z80/YM2610/audio remained authoritative
+for every run:
+
+| game | Z80 slices | Z80 I/O events | YM renders | sample frames | timer preempts | max I/O / slice | result |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `mslug3` | 22,494 | 501,814 | 2,289 | 1,705,564 | 1 | 187 / 512 | clean through `reason=stop` |
+| `wjammers` | 14,041 | 550,685 | 1,717 | 1,279,360 | 3 | 367 / 512 | clean through `reason=stop` |
+| `fatfury1` | 16,823 | 144,212 | 1,973 | 1,470,109 | 0 | 284 / 512 | clean through `reason=stop` |
+
+Across all three runs:
+
+- every command-shadow send matched in order;
+- `z80_active=1` remained true through the final stop record;
+- PCM and ADPCM status remained bit-exact/state-equivalent to the CPU oracle;
+- Z80 register, RAM, bank and I/O comparisons remained exact;
+- YM render errors, local failures, send failures and worker fatal errors were zero;
+- command, event and Z80-batch ring overflows were zero.
+
+`wjammers` was the tightest observed transport case after the final sizing:
+command-ring high-water **7/16**, event-ring high-water **4**, Z80 batch-ring
+high-water **3/4**, and I/O peak **367/512**.  The 3/4 batch high-water is acceptable
+for the shadow-only C5 gate but must be reconsidered before an authoritative C6 path
+can rely on the worker without fail-closed CPU fallback.
+
+The final regression matrix after these fixes is also clean: Desktop MVS is
+**26/26 CTest green**, Desktop NCDZ builds, and PSP MVS builds in CPU-only,
+ADPCM-A-only ME and full sound-coprocessor configurations.
+
+**C5 gate is closed successfully:** the complete ME sound island now matches the CPU
+oracle across representative real-PSP workloads while the CPU path remains fully
+authoritative.  C6 does **not** start yet: the deferred C2 physical
+post-`RESUME_COMPLETE` worker rebootstrap evidence is still mandatory before any
+authoritative ownership transfer.
 
 - move a shadow copy of YM2610 and its sound-side timers into the ME worker;
 - execute shadow Z80 -> YM2610 port writes locally on ME;

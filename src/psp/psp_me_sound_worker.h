@@ -12,8 +12,8 @@
 #define PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE 0x10000u
 #define PSP_ME_SOUND_Z80_RAM_OFFSET 0xf800u
 #define PSP_ME_SOUND_Z80_RAM_SIZE 0x0800u
-#define PSP_ME_SOUND_Z80_IO_CAPACITY 256u
-#define PSP_ME_SOUND_Z80_BATCH_CAPACITY 8u
+#define PSP_ME_SOUND_Z80_IO_CAPACITY 512u
+#define PSP_ME_SOUND_Z80_BATCH_CAPACITY 4u
 #define PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES 1472u
 
 typedef bool (*psp_me_sound_worker_start_fn)(void (*task)(void *), void *data,
@@ -87,7 +87,8 @@ typedef enum psp_me_sound_z80_io_type
 {
 	PSP_ME_SOUND_Z80_IO_READ = 1,
 	PSP_ME_SOUND_Z80_IO_WRITE,
-	PSP_ME_SOUND_Z80_IO_IRQ
+	PSP_ME_SOUND_Z80_IO_IRQ,
+	PSP_ME_SOUND_Z80_IO_PREEMPT
 } psp_me_sound_z80_io_type_t;
 
 typedef struct psp_me_sound_z80_io

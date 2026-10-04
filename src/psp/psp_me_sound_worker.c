@@ -214,12 +214,29 @@ static void me_ym_timer_callback(void *opaque, int channel, int count,
 	double step_time)
 {
 	psp_me_sound_z80_runtime_t *runtime = me_z80_runtime;
+	const psp_me_sound_z80_io_t *event;
 	(void)opaque;
-	(void)channel;
 	(void)count;
 	(void)step_time;
-	if (runtime)
-		runtime->ym_timer_callbacks++;
+	if (!runtime)
+		return;
+	runtime->ym_timer_callbacks++;
+	if (!runtime->slice || runtime->io_cursor >= runtime->slice->io_count)
+		return;
+	event = &runtime->slice->io[runtime->io_cursor];
+	if (event->type != PSP_ME_SOUND_Z80_IO_PREEMPT)
+		return;
+	if (event->port != (uint16_t)channel || event->value != 0)
+	{
+		runtime->mismatch = PSP_ME_SOUND_Z80_MISMATCH_IO_VALUE;
+		return;
+	}
+	runtime->io_cursor++;
+	/* Allegrex's timer_adjust() forces CZ80 ICount to zero inside this exact
+	 * YM timer callback, before the current OUT instruction charges its cycles.
+	 * Mirror that boundary so the current instruction completes and the ME exits
+	 * the slice at the same semantic point. */
+	runtime->cpu.ICount = 0;
 }
 
 static void me_ym_irq_callback(void *opaque, int irq)

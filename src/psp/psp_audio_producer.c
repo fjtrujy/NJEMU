@@ -521,6 +521,17 @@ void mvs_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value)
 	psp_me_sound_z80_record_io(port, PSP_ME_SOUND_Z80_IO_WRITE, value);
 }
 
+void mvs_me_sound_shadow_z80_preempt(uint32_t timer_channel)
+{
+	if (timer_channel > UINT16_MAX)
+	{
+		me_sound_z80_io_overflow = true;
+		return;
+	}
+	psp_me_sound_z80_record_io((uint16_t)timer_channel,
+		PSP_ME_SOUND_Z80_IO_PREEMPT, 0);
+}
+
 void mvs_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time)
 {
 	bool result = true;
