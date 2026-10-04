@@ -551,13 +551,19 @@ for the `ssf2t` family and `mpangj`. It now generates and loads the same
 `cache_parent_override` / `cache_independent`. The converter and emulator blobs
 compare byte-for-byte identical.
 
-This cleanup is an ownership/correctness win rather than a converter-size win:
+This cleanup is an ownership/correctness win rather than an emulator-size win:
 the shared validated reader is larger than the small exception chain it
-replaces. The separate `CPS2_cacheinfo[]` table is intentionally retained: its
-roughly forty entries describe converter-specific graphics cache geometry rather
-than emulator identity or runtime behavior. Externalizing it would introduce a
-second converter-only format/lookup for only a few KiB and would not reduce the
-emulator executable.
+replaces.
+
+A later ROMCNV simplification also externalized the converter-specific graphics
+cache geometry that previously lived in `CPS2_cacheinfo[]`. The 41 layouts now
+live in `romcnv/data/cps2_cache_layouts.tsv`; ROMCNV loads them at startup into a
+small fixed-capacity array. The build validates names and ranges against the
+canonical CPS2 metadata before copying the file beside the native converter, and
+the WebAssembly build preloads the same file. This data intentionally remains
+separate from `game_database.cps2`: the emulator does not consume these object /
+scroll geometry ranges, so the runtime database should not carry converter-only
+fields.
 
 #### Intentionally retained compiled data/conditions
 

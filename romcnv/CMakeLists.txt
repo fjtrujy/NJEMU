@@ -161,6 +161,7 @@ if (${TARGET} STREQUAL "CPS2")
     )
 
     set(TARGET_SRC ${TARGET_SRC}
+        cps2/cache_layouts.c
         cps2/romcnv.c
     )
 endif()
@@ -239,6 +240,26 @@ if(${TARGET} STREQUAL "MVS")
 elseif(${TARGET} STREQUAL "CPS2")
     set(GAME_DATABASE_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/cps2.tsv")
     set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
+    set(CPS2_CACHE_LAYOUT_SOURCE "${CMAKE_SOURCE_DIR}/data/cps2_cache_layouts.tsv")
+    set(CPS2_CACHE_LAYOUT_OUTPUT "${CMAKE_BINARY_DIR}/cps2_cache_layouts.tsv")
+    set(CPS2_CACHE_LAYOUT_VALIDATOR "${CMAKE_SOURCE_DIR}/../tools/validate_cps2_cache_layouts.py")
+    add_custom_command(
+        OUTPUT "${CPS2_CACHE_LAYOUT_OUTPUT}"
+        COMMAND ${Python3_EXECUTABLE}
+            "${CPS2_CACHE_LAYOUT_VALIDATOR}"
+            --layouts "${CPS2_CACHE_LAYOUT_SOURCE}"
+            --metadata "${GAME_DATABASE_SOURCE}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CPS2_CACHE_LAYOUT_SOURCE}"
+            "${CPS2_CACHE_LAYOUT_OUTPUT}"
+        DEPENDS
+            "${CPS2_CACHE_LAYOUT_VALIDATOR}"
+            "${CPS2_CACHE_LAYOUT_SOURCE}"
+            "${GAME_DATABASE_SOURCE}"
+        VERBATIM
+    )
+    add_custom_target(cps2_cache_layouts ALL DEPENDS "${CPS2_CACHE_LAYOUT_OUTPUT}")
+    add_dependencies(${BINARY_TARGET} cps2_cache_layouts)
     add_custom_command(
         OUTPUT "${GAME_DATABASE_OUTPUT}"
         COMMAND ${Python3_EXECUTABLE}
@@ -291,6 +312,7 @@ if(EMSCRIPTEN)
     elseif(${TARGET} STREQUAL "CPS2")
         target_link_options(${BINARY_TARGET} PUBLIC
             "SHELL:--preload-file ${GAME_DATABASE_OUTPUT}@/game_database.cps2"
+            "SHELL:--preload-file ${CPS2_CACHE_LAYOUT_OUTPUT}@/cps2_cache_layouts.tsv"
         )
     endif()
 else()

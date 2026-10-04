@@ -41,3 +41,5 @@ MVS_PROCESSED_FOLDER_NAME=缓存文件夹名: processed%c%s_cache\n
 MVS_COPY_ZIP=请将"processed%c%s_cache.zip"复制到NJEMU的processed目录.\n
 MVS_COPY_FOLDER=请将"processed%c%s_cache"文件夹复制到NJEMU的processed目录.\n
 ERROR_UNKNOWN_OPTION=错误: 未知选项: %s\n
+ERROR_CPS2_LAYOUTS_NOT_FOUND=错误: 没有找到cps2_cache_layouts.tsv.\n
+ERROR_CPS2_LAYOUTS_INVALID=错误: cps2_cache_layouts.tsv无效.\n

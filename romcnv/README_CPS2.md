@@ -139,7 +139,8 @@ emmake make
 ## Notes
 
 - Parent ROM sets must be in the same directory as the game ROM
-- The build generates `game_database.cps2`; keep that file in the same directory as the converter executable
+- The build generates `game_database.cps2` and copies `cps2_cache_layouts.tsv`; keep both files in the same directory as the converter executable
+- `cps2_cache_layouts.tsv` owns converter-only graphics cache geometry. The build validates its game names and ranges against canonical CPS2 metadata; it is bundled automatically into the WebAssembly converter.
 - `rominfo.cps2` remains a build-time source for the generator but is no longer a converter runtime dependency
 - Converter language is selected at runtime. `NJEMU_LANG`, `LC_ALL`, `LC_MESSAGES`, and `LANG` are used when `-lang` is omitted; unsupported languages fall back to English.
 - Cache files are version-specific - regenerate if you update the emulator

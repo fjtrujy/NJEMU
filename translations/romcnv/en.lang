@@ -41,3 +41,5 @@ MVS_PROCESSED_FOLDER_NAME=processed folder name: processed%c%s_cache\n
 MVS_COPY_ZIP=Copy "processed%c%s_cache.zip" to NJEMU's processed directory.\n
 MVS_COPY_FOLDER=Copy the "processed%c%s_cache" folder to NJEMU's processed directory.\n
 ERROR_UNKNOWN_OPTION=ERROR: Unknown option: %s\n
+ERROR_CPS2_LAYOUTS_NOT_FOUND=ERROR: cps2_cache_layouts.tsv not found.\n
+ERROR_CPS2_LAYOUTS_INVALID=ERROR: cps2_cache_layouts.tsv is invalid.\n

@@ -993,6 +993,8 @@ The `romcnv` tools create derived assets for the runtime paths that need them.
 `romcnv_cps2` can generate streaming cache data when decoded CPS2 graphics do
 not fit fully in RAM. `romcnv_mvs` generates canonical `processed/` assets for
 sets that require offline C/S/V-ROM processing and for MVS streaming paths.
+The CPS2 converter keeps its converter-only graphics layout metadata in
+`cps2_cache_layouts.tsv`, separate from the emulator's `game_database.cps2`.
 
 ### Web Interface
 

@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "common/game_database.h"
+#include "cache_layouts.h"
 #include "romcnv.h"
 #include "translation.h"
 #include "zip_writer.h"
@@ -124,70 +125,7 @@ static uint8_t blank_tile[128] =
 };
 
 
-struct cacheinfo_t
-{
-	const char *name;
-	uint32_t  object_start;
-	uint32_t  object_end;
-	uint32_t  scroll1_start;
-	uint32_t  scroll1_end;
-	uint32_t  scroll2_start;
-	uint32_t  scroll2_end;
-	uint32_t  scroll3_start;
-	uint32_t  scroll3_end;
-	uint32_t  object2_start;
-	uint32_t  object2_end;
-};
-
-struct cacheinfo_t *cacheinfo;
-
-struct cacheinfo_t CPS2_cacheinfo[] =
-{
-//    name           object              scroll1             scroll2             scroll3             object/scroll2
-	{ "ssf2", 0x000000, 0x7fffff, 0x800000, 0x88ffff, 0x900000, 0xabffff, 0xac0000, 0xbbffff, 0,         0         },
-	{ "ddtod", 0x000000, 0x7fffff, 0x800000, 0x8fffff, 0x900000, 0xafffff, 0xac0000, 0xbfffff, 0,         0         },
-	{ "ecofghtr", 0x000000, 0x7fffff, 0x800000, 0x83ffff, 0x880000, 0x99ffff, 0xa00000, 0xabffff, 0,         0         },
-	{ "ssf2t", 0x000000, 0x7fffff, 0x800000, 0x88ffff, 0x900000, 0xabffff, 0xac0000, 0xffffff, 0,         0         },
-	{ "xmcota", 0x000000, 0x7dffff, 0x800000, 0x8dffff, 0xb00000, 0xfdffff, 0x8e0000, 0xafffff, 0x1000000, 0x1ffffff },
-	{ "armwar", 0x000000, 0x7fffff, 0x800000, 0x85ffff, 0x860000, 0x9bffff, 0x9c0000, 0xa5ffff, 0xa60000,  0x12fffff },
-	{ "avsp", 0x000000, 0x7fffff, 0x800000, 0x87ffff, 0x880000, 0x9fffff, 0xa00000, 0xafffff, 0,         0         },
-	{ "dstlk", 0x000000, 0x7cffff, 0x800000, 0x87ffff, 0x880000, 0x9bffff, 0x9c0000, 0xabffff, 0xac0000,  0x13fffff },
-	{ "ringdest", 0x000000, 0x7fffff, 0x800000, 0x87ffff, 0x880000, 0x9fffff, 0xac0000, 0xcfffff, 0xd40000,  0x11fffff },
-	{ "cybots", 0x000000, 0x7dffff, 0x800000, 0x8bffff, 0x8c0000, 0xb3ffff, 0xb40000, 0xcbffff, 0xcc0000,  0x1ffffff },
-	{ "msh", 0x000000, 0x7fffff, 0x800000, 0x8cffff, 0xb00000, 0xffffff, 0x8e0000, 0xafffff, 0x1000000, 0x1ffffff },
-	{ "nwarr", 0x000000, 0x7cffff, 0x800000, 0x87ffff, 0x880000, 0x9bffff, 0x9c0000, 0xabffff, 0xac0000,  0x1f8ffff },
-	{ "sfa", 0x000000, 0x000000, 0x800000, 0x81ffff, 0x820000, 0xf8ffff, 0xfa0000, 0xfeffff, 0,         0         },
-	{ "mmancp2u", 0x000000, 0x000000, 0x800000, 0x85ffff, 0x860000, 0xe6ffff, 0xe80000, 0xfeffff, 0,         0         },
-	{ "19xx", 0x000000, 0x16ffff, 0x800000, 0x83ffff, 0x840000, 0x9bffff, 0x9c0000, 0xafffff, 0xb00000,  0xffffff  },
-	{ "ddsom", 0x000000, 0x7dffff, 0x800000, 0x8bffff, 0x8c0000, 0xbdffff, 0xbe0000, 0xdbffff, 0xde0000,  0x179ffff },
-	{ "megaman2", 0x000000, 0x000000, 0x800000, 0x85ffff, 0x860000, 0xecffff, 0xee0000, 0xffffff, 0,         0         },
-	{ "qndream", 0x000000, 0x000000, 0x800000, 0x81ffff, 0x840000, 0xefffff, 0x820000, 0x83ffff, 0,         0         },
-	{ "sfa2", 0x000000, 0x79ffff, 0x800000, 0x91ffff, 0xa40000, 0xccffff, 0x920000, 0xa3ffff, 0xd20000,  0x138ffff },
-	{ "spf2t", 0x000000, 0x000000, 0x800000, 0x82ffff, 0x840000, 0xb8ffff, 0xb90000, 0xbcffff, 0,         0         },
-	{ "xmvsf", 0x000000, 0x7effff, 0x800000, 0x8fffff, 0xaa0000, 0xffffff, 0x900000, 0xa7ffff, 0x1000000, 0x1ffffff },
-	{ "batcir", 0x000000, 0x7dffff, 0x800000, 0x817fff, 0x818000, 0x937fff, 0x938000, 0xa3ffff, 0xa48000,  0xd8ffff  },
-	{ "csclub", 0x000000, 0x000000, 0x8c0000, 0x8fffff, 0x900000, 0xffffff, 0x800000, 0x8bffff, 0,         0         },
-	{ "mshvsf", 0x000000, 0x7fffff, 0x800000, 0x8dffff, 0xa80000, 0xfeffff, 0x8e0000, 0xa6ffff, 0x1000000, 0x1feffff },
-	{ "sgemf", 0x000000, 0x7fffff, 0x800000, 0x8d1fff, 0xa22000, 0xfdffff, 0x8d2000, 0xa21fff, 0x1000000, 0x13fffff },
-	{ "vhunt2", 0x000000, 0x7affff, 0x800000, 0x8affff, 0xa10000, 0xfdffff, 0x8c0000, 0xa0ffff, 0x1000000, 0x1fdffff },
-	{ "vsav", 0x000000, 0x7fffff, 0x800000, 0x8bffff, 0x9c0000, 0xffffff, 0x8c0000, 0x9bffff, 0x1000000, 0x1feffff },
-	{ "vsav2", 0x000000, 0x7fffff, 0x800000, 0x8affff, 0xa10000, 0xfdffff, 0x8c0000, 0xa0ffff, 0x1000000, 0x1fdffff },
-	{ "mvsc", 0x000000, 0x7cffff, 0x800000, 0x91ffff, 0xb40000, 0xd0ffff, 0x920000, 0xb2ffff, 0xd20000,  0x1feffff },
-	{ "sfa3", 0x000000, 0x7dffff, 0x800000, 0x95ffff, 0xb60000, 0xffffff, 0x960000, 0xb5ffff, 0x1000000, 0x1fcffff },
-	{ "jyangoku", 0x000000, 0x7fffff, 0x800000, 0xffffff, 0x800000, 0xffffff, 0x800000, 0xffffff, 0,         0         },
-	{ "hsf2", 0x000000, 0x7fffff, 0x800000, 0x1ffffff,0x800000, 0x1ffffff,0x800000, 0x1ffffff,0,         0         },
-	{ "gigawing", 0x000000, 0x7fffff, 0x800000, 0x87ffff, 0x880000, 0xa7ffff, 0xa80000, 0xdcffff, 0xe00000,  0xffffff  },
-	{ "mmatrix", 0x000000, 0x7fffff, 0x800000, 0x8fffff, 0x800000, 0xd677ff, 0x800000, 0xd677ff, 0x1000000, 0x1ffffff },
-	{ "mpangj", 0x000000, 0x000000, 0x800000, 0x82ffff, 0x840000, 0x9dffff, 0xa00000, 0xbdffff, 0xc00000,  0xffffff  },
-	{ "mpang", 0x000000, 0x000000, 0x800000, 0x82ffff, 0x840000, 0x9dffff, 0xa00000, 0xbdffff, 0xc00000,  0xffffff  },
-	{ "pzloop2", 0x000000, 0x81ffff, 0x800000, 0x97ffff, 0xa00000, 0xc8ffff, 0xd80000, 0xebffff, 0,         0         },
-	{ "choko", 0x000000, 0x000000, 0x800000, 0xffffff, 0x800000, 0xffffff, 0x800000, 0xffffff, 0,         0         },
-	{ "dimahoo", 0x000000, 0x7fffff, 0x800000, 0x8bffff, 0xb80000, 0xffffff, 0x8e0000, 0xb6ffff, 0,         0         },
-	{ "1944", 0x000000, 0x7fffff, 0x800000, 0x87ffff, 0x880000, 0xcdffff, 0xd00000, 0xfeffff, 0x1000000, 0x13bffff },
-	{ "progear", 0x000000, 0x7fffff, 0x800000, 0xa0afff, 0xa0b000, 0xd86fff, 0xd87000, 0xffffff, 0,         0         },
-	{ NULL }
-};
-
+static const cps2_cache_layout_t *cache_layout;
 
 /******************************************************************************
 	CPS2 Functions
@@ -268,12 +206,12 @@ static void clear_empty_blocks(void)
 			memset(&memory_region_gfx1[i], 0xff, 128);
 	}
 
-	if (!strcmp(cacheinfo->name, "avsp"))
+	if (!strcmp(cache_layout->name, "avsp"))
 	{
 		for (i = 0xb0; i <= 0xff; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "ddtod"))
+	else if (!strcmp(cache_layout->name, "ddtod"))
 	{
 		memcpy(temp, &memory_region_gfx1[0x5be800], 128);
 		for (i = 0; i < memory_length_gfx1; i += 128)
@@ -378,7 +316,7 @@ static void clear_empty_blocks(void)
 				memset(&memory_region_gfx1[i], 0xff, 512);
 		}
 	}
-	else if (!strcmp(cacheinfo->name, "dstlk") || !strcmp(cacheinfo->name, "nwarr"))
+	else if (!strcmp(cache_layout->name, "dstlk") || !strcmp(cache_layout->name, "nwarr"))
 	{
 		for (i = 0x7d; i <= 0x7f; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
@@ -392,14 +330,14 @@ static void clear_empty_blocks(void)
 				memset(&memory_region_gfx1[i], 0xff, 128);
 		}
 	}
-	else if (!strcmp(cacheinfo->name, "ringdest"))
+	else if (!strcmp(cache_layout->name, "ringdest"))
 	{
 		for (i = 0xa0; i <= 0xab; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 		for (i = 0xd0; i <= 0xd3; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "mpang") || !strcmp(cacheinfo->name, "mpangj"))
+	else if (!strcmp(cache_layout->name, "mpang") || !strcmp(cache_layout->name, "mpangj"))
 	{
 		memset(&memory_region_gfx1[0x820000 + 16*11*128], 0xff, 16*21*128);
 		memset(&memory_region_gfx1[0x830000], 0xff, 0x10000);
@@ -419,13 +357,13 @@ static void clear_empty_blocks(void)
 		memset(&memory_region_gfx1[0xfb0000 + (16*14)*128], 0xff, 0x10000-(16*14)*128);
 		memset(&memory_region_gfx1[0xff0000 + (16*12)*128], 0xff, 0x10000-(16*12)*128);
 	}
-	else if (!strcmp(cacheinfo->name, "mmatrix"))
+	else if (!strcmp(cache_layout->name, "mmatrix"))
 	{
 		memset(&memory_region_gfx1[0xd67600], 0xff, (16*17+4)*128);
 		for (i = 0xd7; i <= 0xff; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "pzloop2"))
+	else if (!strcmp(cache_layout->name, "pzloop2"))
 	{
 		memset(&memory_region_gfx1[0x170000 + 16*16*128], 0xff, 16*16*128);
 		memset(&memory_region_gfx1[0x1c0000 + 16* 9*128], 0xff, 16*23*128);
@@ -460,12 +398,12 @@ static void clear_empty_blocks(void)
 		for (i = 0xc9; i <= 0xd7; i++) memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 		for (i = 0xec; i <= 0xff; i++) memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "1944"))
+	else if (!strcmp(cache_layout->name, "1944"))
 	{
 		for (i = 0x140; i <= 0x1ff; i++)
 			memset(&memory_region_gfx1[i << 16], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "choko"))
+	else if (!strcmp(cache_layout->name, "choko"))
 	{
 		memcpy(temp, &memory_region_gfx1[0xa60000+128], 128);
 		for (i = 0; i < memory_length_gfx1; i += 128)
@@ -493,18 +431,18 @@ static void clear_empty_blocks(void)
 		memset(&memory_region_gfx1[0xfe0000], 0xff, 0x10000);
 		memset(&memory_region_gfx1[0xff0000], 0xff, 0x10000);
 	}
-	else if (!strcmp(cacheinfo->name, "jyangoku"))
+	else if (!strcmp(cache_layout->name, "jyangoku"))
 	{
 		memset(memory_region_gfx1, 0xff, 0x800000);
 	}
 
-	if (cacheinfo->object_end == 0)
+	if (cache_layout->object_end == 0)
 	{
 		memset(memory_region_gfx1, 0xff, 0x800000);
 	}
-	else if (cacheinfo->object_end != 0x7fffff)
+	else if (cache_layout->object_end != 0x7fffff)
 	{
-		for (i = cacheinfo->object_end + 1; i < 0x800000; i += 0x10000)
+		for (i = cache_layout->object_end + 1; i < 0x800000; i += 0x10000)
 		{
 			memset(&memory_region_gfx1[i], 0xff, 0x10000);
 		}
@@ -549,16 +487,16 @@ static int calc_pen_usage(void)
 {
 	int i, j, k, size;
 	uint32_t *tile, data;
-	uint32_t s0 = cacheinfo->object_start;
-	uint32_t e0 = cacheinfo->object_end;
-	uint32_t s1 = cacheinfo->scroll1_start;
-	uint32_t e1 = cacheinfo->scroll1_end;
-	uint32_t s2 = cacheinfo->scroll2_start;
-	uint32_t e2 = cacheinfo->scroll2_end;
-	uint32_t s3 = cacheinfo->scroll3_start;
-	uint32_t e3 = cacheinfo->scroll3_end;
-	uint32_t s4 = cacheinfo->object2_start;
-	uint32_t e4 = cacheinfo->object2_end;
+	uint32_t s0 = cache_layout->object_start;
+	uint32_t e0 = cache_layout->object_end;
+	uint32_t s1 = cache_layout->scroll1_start;
+	uint32_t e1 = cache_layout->scroll1_end;
+	uint32_t s2 = cache_layout->scroll2_start;
+	uint32_t e2 = cache_layout->scroll2_end;
+	uint32_t s3 = cache_layout->scroll3_start;
+	uint32_t e3 = cache_layout->scroll3_end;
+	uint32_t s4 = cache_layout->object2_start;
+	uint32_t e4 = cache_layout->object2_end;
 
 	gfx_total_elements[TILE08] = (memory_length_gfx1 - 0x800000) >> 6;
 	gfx_total_elements[TILE16] = memory_length_gfx1 >> 7;
@@ -588,7 +526,7 @@ static int calc_pen_usage(void)
 		int s5 = 0x000000;
 		int e5 = 0x000000;
 
-		if (!strcmp(cacheinfo->name, "pzloop2"))
+		if (!strcmp(cache_layout->name, "pzloop2"))
 		{
 			s5 = 0x802800;
 			e5 = 0x87ffff;
@@ -622,17 +560,17 @@ static int calc_pen_usage(void)
 		uint32_t e5 = 0;
 		uint32_t offset = i << 7;
 
-		if (!strcmp(cacheinfo->name, "ssf2t"))
+		if (!strcmp(cache_layout->name, "ssf2t"))
 		{
 			s5 = 0xc00000;
 			e5 = 0xfaffff;
 		}
-		else if (!strcmp(cacheinfo->name, "gigawing"))
+		else if (!strcmp(cache_layout->name, "gigawing"))
 		{
 			s5 = 0xc00000;
 			e5 = 0xc7ffff;
 		}
-		else if (!strcmp(cacheinfo->name, "progear"))
+		else if (!strcmp(cache_layout->name, "progear"))
 		{
 			s5 = 0xf27000;
 			e5 = 0xf86fff;
@@ -669,17 +607,17 @@ static int calc_pen_usage(void)
 		int count  = 0;
 		uint32_t offset = (0x4000 + i) << 9;
 
-		if (!strcmp(cacheinfo->name, "ssf2t"))
+		if (!strcmp(cache_layout->name, "ssf2t"))
 		{
 			if (offset >= 0xc00000 && offset <= 0xfaffff)
 				continue;
 		}
-		else if (!strcmp(cacheinfo->name, "gigawing"))
+		else if (!strcmp(cache_layout->name, "gigawing"))
 		{
 			if (offset >= 0xc00000 && offset <= 0xc7ffff)
 				continue;
 		}
-		else if (!strcmp(cacheinfo->name, "progear"))
+		else if (!strcmp(cache_layout->name, "progear"))
 		{
 			if (offset >= 0xf27000 && offset <= 0xf86fff)
 				continue;
@@ -819,7 +757,7 @@ static void free_memory(void)
 
 static int convert_rom(char *game_name)
 {
-	int i, res;
+	int res;
 	printf(ROMCNV_TEXT(CHECKING_ROM_FILE), game_name);
 
 	memory_region_gfx1 = NULL;
@@ -843,24 +781,9 @@ static int convert_rom(char *game_name)
 	if (strlen(parent_name))
 		printf(ROMCNV_TEXT(CLONE_SET_PARENT), parent_name);
 
-	i = 0;
-	cacheinfo = NULL;
-	while (CPS2_cacheinfo[i].name)
-	{
-		if (!strcmp(game_name, CPS2_cacheinfo[i].name))
-		{
-			cacheinfo = &CPS2_cacheinfo[i];
-			break;
-		}
-		if (!strcmp(cache_name, CPS2_cacheinfo[i].name))
-		{
-			cacheinfo = &CPS2_cacheinfo[i];
-			break;
-		}
-		i++;
-	}
+	cache_layout = cps2_cache_layout_find(game_name, cache_name);
 
-	if (cacheinfo)
+	if (cache_layout)
 	{
 		if (load_rom_gfx1())
 		{
@@ -1114,11 +1037,26 @@ int main(int argc, char *argv[])
 			&cps2_game_database, path, GAME_DATABASE_CORE_CPS2);
 		if (database_error != GAME_DATABASE_OK)
 		{
-			printf("ERROR: Could not load game_database.cps2: %s\n",
-				game_database_error_string(database_error));
-			res = 0;
-			goto error;
-		}
+				printf("ERROR: Could not load game_database.cps2: %s\n",
+					game_database_error_string(database_error));
+				res = 0;
+				goto error;
+			}
+	}
+	snprintf(path, sizeof(path), "%s%s", launchDir, CPS2_CACHE_LAYOUT_FILENAME);
+	switch (cps2_cache_layouts_load(path))
+	{
+	case CPS2_CACHE_LAYOUT_OK:
+		break;
+	case CPS2_CACHE_LAYOUT_NOT_FOUND:
+		fputs(ROMCNV_TEXT(ERROR_CPS2_LAYOUTS_NOT_FOUND), stdout);
+		res = 0;
+		goto error;
+	case CPS2_CACHE_LAYOUT_INVALID:
+	default:
+		fputs(ROMCNV_TEXT(ERROR_CPS2_LAYOUTS_INVALID), stdout);
+		res = 0;
+		goto error;
 	}
 
 	if (all)
@@ -1127,11 +1065,13 @@ int main(int argc, char *argv[])
 		strcpy(game_dir, zip_dir);
 		strcat(game_dir, "/");
 
-		for (i = 0; CPS2_cacheinfo[i].name; i++)
+		for (i = 0; i < cps2_cache_layout_count(); i++)
 		{
+			const cps2_cache_layout_t *layout = cps2_cache_layout_at(i);
+
 			res = 1;
 
-			strcpy(game_name, CPS2_cacheinfo[i].name);
+			strcpy(game_name, layout->name);
 
 			printf("\n-------------------------------------------\n");
 			printf("  ROM set: %s\n", game_name);
@@ -1142,12 +1082,12 @@ int main(int argc, char *argv[])
 			{
 				fputs(ROMCNV_TEXT(ERROR_CONVERT_FAILED_SKIP), stdout);
 			}
+			else
+			{
+				if (zip)
+					res = create_zip_cache(game_name);
 				else
-				{
-					if (zip)
-						res = create_zip_cache(game_name);
-					else
-						res = create_raw_cache(game_name);
+					res = create_raw_cache(game_name);
 
 				if (res) fputs(ROMCNV_TEXT(DONE), stdout);
 			}
@@ -1194,12 +1134,12 @@ int main(int argc, char *argv[])
 		{
 			res = 0;
 		}
+		else
+		{
+			if (zip)
+				res = create_zip_cache(game_name);
 			else
-			{
-				if (zip)
-					res = create_zip_cache(game_name);
-				else
-					res = create_raw_cache(game_name);
+				res = create_raw_cache(game_name);
 		}
 		if (res)
 		{

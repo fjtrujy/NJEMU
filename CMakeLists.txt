@@ -1766,27 +1766,31 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	)
 	add_test(NAME power_driver_tests COMMAND power_driver_tests)
 
-	if(Python3_Interpreter_FOUND)
-        add_test(
-            NAME translation_source_validation
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
-        )
-        add_test(
-            NAME romcnv_translation_source_validation
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_romcnv_translations.py
-        )
-        add_test(
-            NAME translation_pack_tests
-            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
-        )
-        add_test(
-            NAME font_asset_validation
-            COMMAND ${Python3_EXECUTABLE}
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_font_asset.py
-                --source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_s14.c
-                --table-source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_tbl.c
-        )
-    endif()
+		if(Python3_Interpreter_FOUND)
+			add_test(
+				NAME translation_source_validation
+				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
+			)
+			add_test(
+				NAME romcnv_translation_source_validation
+				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_romcnv_translations.py
+			)
+			add_test(
+				NAME cps2_romcnv_layout_validation
+				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_cps2_cache_layouts.py
+			)
+			add_test(
+				NAME translation_pack_tests
+				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/translation_pack_tests.py
+			)
+			add_test(
+				NAME font_asset_validation
+				COMMAND ${Python3_EXECUTABLE}
+					${CMAKE_CURRENT_SOURCE_DIR}/tools/build_font_asset.py
+					--source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_s14.c
+					--table-source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_tbl.c
+			)
+		endif()
 endif()
 
 # ==============================================================================
