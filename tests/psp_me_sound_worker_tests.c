@@ -2033,7 +2033,7 @@ static int test_ym_authoritative_render_and_cpu_fallback(void)
 	memset(me_left, 0x55, sizeof(me_left));
 	memset(me_right, 0x66, sizeof(me_right));
 	if (!psp_me_sound_worker_ym_render_finish_authoritative(&worker,
-			me_left, me_right, 128u, TEST_TIMEOUT_US) ||
+			me_left, me_right, 128u, true, TEST_TIMEOUT_US) ||
 		memcmp(me_left, reference_left, sizeof(me_left)) != 0 ||
 		memcmp(me_right, reference_right, sizeof(me_right)) != 0)
 	{
@@ -2056,7 +2056,7 @@ static int test_ym_authoritative_render_and_cpu_fallback(void)
 	memset(me_left, 0x33, sizeof(me_left));
 	memset(me_right, 0x44, sizeof(me_right));
 	if (psp_me_sound_worker_ym_render_finish_authoritative(&worker,
-			me_left, me_right, 127u, TEST_TIMEOUT_US))
+			me_left, me_right, 127u, true, TEST_TIMEOUT_US))
 	{
 		fprintf(stderr, "Authoritative YM invalid metadata unexpectedly passed\n");
 		goto done;
@@ -2104,6 +2104,109 @@ done:
 	return ok;
 }
 
+static int test_ym_authoritative_render_without_hot_cpu_sync(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	static uint8_t pcm_a[0x1000];
+	static uint8_t pcm_b[0x1000];
+	ym2610_pcm_window_t window;
+	int32_t me_left[128], me_right[128];
+	int32_t cpu_left[128], cpu_right[128];
+	int32_t reference_first_left[128], reference_first_right[128];
+	int32_t reference_second_left[128], reference_second_right[128];
+	int32_t *cpu_buffers[2] = { cpu_left, cpu_right };
+	int32_t *reference_first[2] = { reference_first_left, reference_first_right };
+	int32_t *reference_second[2] = { reference_second_left, reference_second_right };
+	void *reference_storage = NULL;
+	ym2610_context_t *reference_ym = alloc_ym_context(&reference_storage);
+	int old_samplerate = option_samplerate;
+	uint32_t i;
+	int ok = 0;
+
+	if (!reference_ym)
+		return 0;
+	option_samplerate = 2;
+	for (i = 0; i < sizeof(pcm_a); i++)
+		pcm_a[i] = (uint8_t)(i * 31u + 5u);
+	for (i = 0; i < sizeof(pcm_b); i++)
+		pcm_b[i] = (uint8_t)(i * 13u + 7u);
+	YM2610Init(8000000, pcm_a, sizeof(pcm_a), pcm_b, sizeof(pcm_b), NULL, NULL);
+	YM2610ContextInit(reference_ym, 8000000, 44100, pcm_a, sizeof(pcm_a),
+		pcm_b, sizeof(pcm_b), NULL, NULL, NULL);
+	configure_default_adpcma_zero();
+	configure_adpcma_zero(reference_ym);
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 64u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
+			44100u, sizeof(pcm_a), sizeof(pcm_b), true,
+			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 100u, &window,
+			TEST_TIMEOUT_US) || !YM2610DefaultFillPcmWindow(&window) ||
+		!psp_me_sound_worker_ym_render_begin(&worker, &window, 100u,
+			TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Authoritative YM no-sync render setup failed\n");
+		goto done;
+	}
+	YM2610ContextUpdate(reference_ym, reference_first, 128);
+	YM2610ContextUpdate(reference_ym, reference_second, 128);
+	if (memcmp(reference_first_left, reference_second_left,
+			sizeof(reference_first_left)) == 0 &&
+		memcmp(reference_first_right, reference_second_right,
+			sizeof(reference_first_right)) == 0)
+	{
+		fprintf(stderr, "Authoritative YM no-sync oracle blocks are identical\n");
+		goto done;
+	}
+	if (!psp_me_sound_worker_ym_render_finish_authoritative(&worker,
+			me_left, me_right, 128u, false, TEST_TIMEOUT_US) ||
+		memcmp(me_left, reference_first_left, sizeof(me_left)) != 0 ||
+		memcmp(me_right, reference_first_right, sizeof(me_right)) != 0)
+	{
+		fprintf(stderr, "Authoritative YM no-sync ME presentation failed\n");
+		goto done;
+	}
+
+	/* With no hot sync, the CPU singleton is still at the pre-render state and
+	 * must therefore reproduce block 1, not the already-advanced block 2. */
+	YM2610Update(cpu_buffers, 128);
+	if (memcmp(cpu_left, reference_first_left, sizeof(cpu_left)) != 0 ||
+		memcmp(cpu_right, reference_first_right, sizeof(cpu_right)) != 0 ||
+		!psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US))
+	{
+		fprintf(stderr, "Authoritative YM unexpectedly hot-synced CPU context\n");
+		goto done;
+	}
+	ok = 1;
+
+done:
+	if (worker.running)
+		psp_me_sound_worker_abort(&worker);
+	option_samplerate = old_samplerate;
+	free(reference_storage);
+	return ok;
+}
+
 int main(void)
 {
 	if (!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
@@ -2120,7 +2223,8 @@ int main(void)
 		!test_autonomous_advance_horizon_long_timer_preemption() ||
 		!test_autonomous_ym_timer_b_stop_restart() ||
 		!test_ym_shadow_pcm_render() ||
-		!test_ym_authoritative_render_and_cpu_fallback())
+		!test_ym_authoritative_render_and_cpu_fallback() ||
+		!test_ym_authoritative_render_without_hot_cpu_sync())
 		return 1;
 
 	printf("PSP ME sound worker host oracle: C3/C4/C5 plus C6 autonomous scheduling/timers passed\n");

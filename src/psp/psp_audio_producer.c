@@ -1218,6 +1218,7 @@ bool mvs_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 	{
 		result = psp_me_sound_worker_ym_render_finish_authoritative(
 			&me_sound_worker, buffer[0], buffer[1], samples,
+			!me_sound_z80_control_authoritative,
 			PSP_ME_SOUND_WORKER_TIMEOUT_US);
 	}
 	psp_me_sound_worker_unlock();

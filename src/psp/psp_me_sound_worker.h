@@ -396,7 +396,8 @@ bool psp_me_sound_worker_ym_render_finish_present(psp_me_sound_worker_t *worker,
 	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_finish_authoritative(
 	psp_me_sound_worker_t *worker, int32_t *present_left,
-	int32_t *present_right, uint32_t samples, uint64_t timeout_us);
+	int32_t *present_right, uint32_t samples, bool sync_cpu_context,
+	uint64_t timeout_us);
 bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,

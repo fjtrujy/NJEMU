@@ -2050,6 +2050,39 @@ and full sound-coprocessor configurations including the standalone hardware harn
 Real-PSP execution is still blocked by the previously documented MIST `init=-4`
 environment state, so no new physical performance claim is made for this batch.
 
+#### C7.2 - stop hot-syncing the CPU YM context under full ME control (2026-10-04) [host/build complete]
+
+The second C7 pass removes the largest remaining cache/state copy from the normal
+authoritative audio callback.  The previous C6 PCM ownership step restored the full
+ME YM2610 semantic context into the CPU singleton after every successful block so a
+CPU render fallback could be used immediately.  Once Z80/control/timers are also
+ME-authoritative, that hot CPU context is stale again as soon as the next ME-side
+write occurs, and C6 already has an explicit recovery-snapshot fence for exact
+failback.  Paying the restore on every audio block is therefore redundant.
+
+`psp_me_sound_worker_ym_render_finish_authoritative()` now makes CPU-context
+synchronization explicit.  PCM-only ownership passes `sync_cpu_context=true` and
+keeps the original behavior.  Full-control production passes `false`, so successful
+render completion validates only the render job metadata, copies the ME PCM into the
+existing stream buffer and leaves the CPU YM singleton untouched.  In this mode it
+also avoids invalidating the shared ME YM context cache range on every block.  If the
+ME path later fails, the already-established recovery command invalidates/fences the
+ME context and restores the complete CPU YM state at the scheduler boundary before
+CPU control resumes.
+
+Host coverage makes the distinction observable.  The existing authoritative PCM
+test still uses hot-sync mode and proves immediate CPU fallback continuity.  A new
+full-control oracle renders two deliberately different consecutive blocks: after a
+successful ME block with synchronization disabled, a CPU render must still reproduce
+**block 1** from its pre-render state; if an accidental per-block restore occurred it
+would instead produce block 2.  This test passes, proving the normal full-control
+path no longer clones ME YM state into CPU every period.
+
+The regression matrix remains clean: Desktop MVS is **31/31 CTest green**, Desktop
+NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations including the hardware harness.  No new physical
+runtime claim is made while the separate MIST `init=-4` bootstrap issue persists.
+
 - measure actual barriers and wait time;
 - reduce unnecessary end-of-slice synchronization while preserving timestamp
   semantics;

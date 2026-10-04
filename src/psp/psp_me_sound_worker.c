@@ -2581,7 +2581,8 @@ bool psp_me_sound_worker_ym_render_finish_present(psp_me_sound_worker_t *worker,
 
 bool psp_me_sound_worker_ym_render_finish_authoritative(
 	psp_me_sound_worker_t *worker, int32_t *present_left,
-	int32_t *present_right, uint32_t samples, uint64_t timeout_us)
+	int32_t *present_right, uint32_t samples, bool sync_cpu_context,
+	uint64_t timeout_us)
 {
 	psp_me_sound_ym_render_job_t *job;
 	psp_me_sound_worker_message_t event;
@@ -2601,8 +2602,6 @@ bool psp_me_sound_worker_ym_render_finish_authoritative(
 	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
 	sceKernelDcacheInvalidateRange(job,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
-	sceKernelDcacheInvalidateRange(worker->ym_context,
-		PSP_ME_SOUND_WORKER_CACHE_SIZE(YM2610ContextSize()));
 	worker->ym_render_in_flight = false;
 	if (event.value != 0 || job->error != 0 ||
 		job->generation != worker->generation ||
@@ -2611,13 +2610,18 @@ bool psp_me_sound_worker_ym_render_finish_authoritative(
 		worker->ym_send_failures++;
 		return false;
 	}
-	if (YM2610ContextRead((ym2610_context_t *)worker->ym_context, 2) !=
-		(uint8_t)job->status_b ||
-		!YM2610DefaultRestoreFromPcmWindow(
-			(const ym2610_context_t *)worker->ym_context))
+	if (sync_cpu_context)
 	{
-		worker->ym_context_sync_failures++;
-		return false;
+		sceKernelDcacheInvalidateRange(worker->ym_context,
+			PSP_ME_SOUND_WORKER_CACHE_SIZE(YM2610ContextSize()));
+		if (YM2610ContextRead((ym2610_context_t *)worker->ym_context, 2) !=
+			(uint8_t)job->status_b ||
+			!YM2610DefaultRestoreFromPcmWindow(
+				(const ym2610_context_t *)worker->ym_context))
+		{
+			worker->ym_context_sync_failures++;
+			return false;
+		}
 	}
 	memcpy(present_left, job->left, samples * sizeof(*present_left));
 	memcpy(present_right, job->right, samples * sizeof(*present_right));
