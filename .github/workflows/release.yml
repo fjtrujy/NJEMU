@@ -83,7 +83,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git python3 libbz2-dev libsdl2-dev libmad0-dev
+            build-essential cmake git libbz2-dev libsdl2-dev libmad0-dev
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
@@ -107,15 +107,16 @@ jobs:
             cmake --install "$build" --prefix "$install"
           done
 
-          python3 tools/package_release.py \
-            --source-dir . \
-            --platform "${{ matrix.slug }}" \
-            --version "${{ needs.version.outputs.version }}" \
-            --core-install CPS1=release-stage/CPS1 \
-            --core-install CPS2=release-stage/CPS2 \
-            --core-install MVS=release-stage/MVS \
-            --core-install NCDZ=release-stage/NCDZ \
-            --output-dir release-assets
+          cmake \
+            -DNJEMU_SOURCE_DIR="$PWD" \
+            -DNJEMU_RELEASE_PLATFORM="${{ matrix.slug }}" \
+            -DNJEMU_RELEASE_VERSION="${{ needs.version.outputs.version }}" \
+            -DNJEMU_INSTALL_CPS1="$PWD/release-stage/CPS1" \
+            -DNJEMU_INSTALL_CPS2="$PWD/release-stage/CPS2" \
+            -DNJEMU_INSTALL_MVS="$PWD/release-stage/MVS" \
+            -DNJEMU_INSTALL_NCDZ="$PWD/release-stage/NCDZ" \
+            -DNJEMU_RELEASE_OUTPUT_DIR="$PWD/release-assets" \
+            -P cmake/NJEMUReleasePackage.cmake
 
       - uses: actions/upload-artifact@v7
         with:
@@ -135,7 +136,7 @@ jobs:
           ref: ${{ needs.version.outputs.tag }}
 
       - name: Install dependencies
-        run: apk add build-base git bash python3
+        run: apk add build-base git bash
 
       - name: Build canonical PSP package
         shell: bash
@@ -156,15 +157,16 @@ jobs:
             cmake --install "$build" --prefix "$install"
           done
 
-          python3 tools/package_release.py \
-            --source-dir . \
-            --platform psp \
-            --version "${{ needs.version.outputs.version }}" \
-            --core-install CPS1=release-stage/CPS1 \
-            --core-install CPS2=release-stage/CPS2 \
-            --core-install MVS=release-stage/MVS \
-            --core-install NCDZ=release-stage/NCDZ \
-            --output-dir release-assets
+          cmake \
+            -DNJEMU_SOURCE_DIR="$PWD" \
+            -DNJEMU_RELEASE_PLATFORM=psp \
+            -DNJEMU_RELEASE_VERSION="${{ needs.version.outputs.version }}" \
+            -DNJEMU_INSTALL_CPS1="$PWD/release-stage/CPS1" \
+            -DNJEMU_INSTALL_CPS2="$PWD/release-stage/CPS2" \
+            -DNJEMU_INSTALL_MVS="$PWD/release-stage/MVS" \
+            -DNJEMU_INSTALL_NCDZ="$PWD/release-stage/NCDZ" \
+            -DNJEMU_RELEASE_OUTPUT_DIR="$PWD/release-assets" \
+            -P cmake/NJEMUReleasePackage.cmake
 
       - uses: actions/upload-artifact@v7
         with:
@@ -184,7 +186,7 @@ jobs:
           ref: ${{ needs.version.outputs.tag }}
 
       - name: Install dependencies
-        run: apk add build-base git bash cmake python3
+        run: apk add build-base git bash cmake
 
       - name: Checkout PS2SDK BDM cache fix
         uses: actions/checkout@v7
@@ -238,15 +240,16 @@ jobs:
             cmake --install "$build" --prefix "$install"
           done
 
-          python3 tools/package_release.py \
-            --source-dir . \
-            --platform ps2 \
-            --version "${{ needs.version.outputs.version }}" \
-            --core-install CPS1=release-stage/CPS1 \
-            --core-install CPS2=release-stage/CPS2 \
-            --core-install MVS=release-stage/MVS \
-            --core-install NCDZ=release-stage/NCDZ \
-            --output-dir release-assets
+          cmake \
+            -DNJEMU_SOURCE_DIR="$PWD" \
+            -DNJEMU_RELEASE_PLATFORM=ps2 \
+            -DNJEMU_RELEASE_VERSION="${{ needs.version.outputs.version }}" \
+            -DNJEMU_INSTALL_CPS1="$PWD/release-stage/CPS1" \
+            -DNJEMU_INSTALL_CPS2="$PWD/release-stage/CPS2" \
+            -DNJEMU_INSTALL_MVS="$PWD/release-stage/MVS" \
+            -DNJEMU_INSTALL_NCDZ="$PWD/release-stage/NCDZ" \
+            -DNJEMU_RELEASE_OUTPUT_DIR="$PWD/release-assets" \
+            -P cmake/NJEMUReleasePackage.cmake
 
       - uses: actions/upload-artifact@v7
         with:
@@ -268,7 +271,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential git cmake python3
+          apt-get install -y --no-install-recommends build-essential git cmake
 
       - name: Install miniz 3.1.2
         run: |
@@ -311,15 +314,16 @@ jobs:
             cmake --install "$build" --prefix "$install"
           done
 
-          python3 tools/package_release.py \
-            --source-dir . \
-            --platform psvita \
-            --version "${{ needs.version.outputs.version }}" \
-            --core-install CPS1=release-stage/CPS1 \
-            --core-install CPS2=release-stage/CPS2 \
-            --core-install MVS=release-stage/MVS \
-            --core-install NCDZ=release-stage/NCDZ \
-            --output-dir release-assets
+          cmake \
+            -DNJEMU_SOURCE_DIR="$PWD" \
+            -DNJEMU_RELEASE_PLATFORM=psvita \
+            -DNJEMU_RELEASE_VERSION="${{ needs.version.outputs.version }}" \
+            -DNJEMU_INSTALL_CPS1="$PWD/release-stage/CPS1" \
+            -DNJEMU_INSTALL_CPS2="$PWD/release-stage/CPS2" \
+            -DNJEMU_INSTALL_MVS="$PWD/release-stage/MVS" \
+            -DNJEMU_INSTALL_NCDZ="$PWD/release-stage/NCDZ" \
+            -DNJEMU_RELEASE_OUTPUT_DIR="$PWD/release-assets" \
+            -P cmake/NJEMUReleasePackage.cmake
 
       - uses: actions/upload-artifact@v7
         with:

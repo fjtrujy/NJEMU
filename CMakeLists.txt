@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.12)
 project(NJEMU)
 
 include(CTest)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUHostTools.cmake")
 njemu_enable_host_tools()
 
@@ -49,6 +48,13 @@ endif()
 
 # Get platform name lower case, used to include platform specific files
 string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
+
+# Python is no longer part of normal NJEMU builds. Keep it temporarily only
+# for the remaining Desktop-only legacy regression tests until those tests are
+# migrated later in this milestone.
+if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+endif()
 
 # ps2dev.cmake injects SDK/gsKit headers into CMAKE_C_FLAGS with -I. Treat
 # those third-party headers as system headers so -Werror remains strict for
@@ -1540,7 +1546,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME version_derivation_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/release_packaging_tests.py)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
     add_test(NAME game_metadata_generator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/game_metadata_generator_tests.py)
     if(NOT "${TARGET}" STREQUAL "CPS2")

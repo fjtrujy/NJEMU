@@ -89,7 +89,7 @@ Developers and CI may continue to build other supported combinations directly.
 
 ## Release artifacts
 
-`tools/package_release.py` combines the four per-core CMake install trees and refuses to package ROMs, BIOS files, cache data, save states, NVRAM, or other non-placeholder runtime data.
+`cmake/NJEMUReleasePackage.cmake` combines the four per-core CMake install trees and refuses to package ROMs, BIOS files, cache data, save states, NVRAM, or other non-placeholder runtime data.
 
 A stable release publishes:
 
@@ -104,6 +104,8 @@ njemu-<version>-desktop-macos.zip
 Desktop has two native archives because Linux and macOS executables are not interchangeable; both use the same canonical Desktop feature configuration.
 
 Each archive has a matching `.zip.json` sidecar containing the platform, version, size, and SHA-256 digest. The archive itself contains `release-manifest.json`, `version.txt`, the project README/license, and the relevant binaries/runtime install files. The Vita archive contains the four ready-to-install VPKs rather than duplicating each VPK's embedded runtime tree.
+
+Packaging fixes the archive entry order and ZIP modification timestamps and produces a deterministic `release-manifest.json`. CMake's libarchive backend may still emit host-dependent Unix access/change-time extra fields, so raw ZIP bytes are not promised to be identical across invocations or hosts. The `.zip.json` SHA-256 always identifies the exact produced archive.
 
 ## Automated release flow
 
@@ -152,7 +154,7 @@ At minimum validate:
 
 ```sh
 cmake -P cmake/NJEMUVersionTests.cmake
-python3 -m unittest tests.release_packaging_tests
+cmake -P cmake/NJEMUReleasePackageTests.cmake
 git diff --check
 ```
 

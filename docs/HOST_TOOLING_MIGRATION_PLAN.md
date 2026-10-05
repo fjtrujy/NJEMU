@@ -134,13 +134,15 @@ Status: **complete**
 
 ### Phase 4 - release packaging
 
-Status: **pending**
+Status: **complete**
 
-- [ ] implement CMake release packaging/validation script;
-- [ ] preserve archive structure, manifest, SHA-256 sidecar, and forbidden-data checks;
-- [ ] port package regression cases;
-- [ ] migrate release workflow;
-- [ ] remove `tools/package_release.py` after parity.
+- [x] implement CMake release packaging/validation script;
+- [x] preserve archive structure, manifest, SHA-256 sidecar, and forbidden-data checks;
+- [x] port package regression cases;
+- [x] migrate release workflow;
+- [x] remove `tools/package_release.py` after parity.
+
+`cmake -E tar` normalizes ZIP modification times and the packager fixes file ordering and manifest content. Its libarchive backend may add host-dependent Unix access/change-time extra fields, so raw ZIP bytes are not guaranteed identical between invocations; package contents, order, manifest semantics, and the per-build sidecar digest remain authoritative.
 
 ### Phase 5 - final Python removal and validation
 
