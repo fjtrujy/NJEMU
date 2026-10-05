@@ -2749,6 +2749,37 @@ reverted without spending additional hardware time on the representative titles.
 ADPCM-A activity mask is retained; further render work should target operations that
 can be removed outright rather than replaced with per-sample bookkeeping.
 
+#### Post-C9 ME render micro-optimization: reject block-local inactive EG scan [complete]
+
+A further experiment targeted the envelope-generator scan that still walks all four
+operators of each rendered FM channel whenever the EG timer advances.  The candidate
+computed a render-block-local mask of channels that already had all four operators in
+`EG_OFF`.  It deliberately kept the historical first EG tick for every channel so that
+lazy `vol_out` refresh after register writes occurred at the original boundary, then
+skipped later no-op EG scans only for channels that were already fully off at block
+entry.  No persistent activity state was added, and channels active at block entry
+continued to use the historical path for the whole render block.
+
+The host oracle forced the historical always-scan path and remained sample-for-sample
+bit-exact through reset silence, an off-state TL write, key-on, active synthesis and
+key-off/release.  The full validation matrix also remained clean: Desktop MVS was
+**31/31 CTest green**, Desktop NCDZ built, all three PSP MVS configurations built, and
+the standalone full-coprocessor worker harness built successfully.  The profiled
+hardware candidate had SHA-256
+`ef536e0b5d4248b84f3968335ed6e923013d90afff57aa67a93d77f38bc1a7e9`.
+
+Real-PSP results did not justify keeping the extra dispatch.  Two clean deterministic
+`mslug3` runs preserved the exact windows 8-11 `sound_cmd = 4, 5, 4, 3` sequence and
+measured **126.443 / 126.678 FPS**, but steady-state render-completion wait was
+**5.638 / 5.563 ms per buffer** versus the retained **5.610 ms** baseline.  That is a
+noise-level result rather than a repeatable render saving.  More decisively, on
+`fatfury1` the same candidate regressed steady-state render wait from **8.380 ms** to
+**8.909 ms per buffer** (**+6.3%**).  Both titles stayed ME-authoritative through their
+scripted stop with zero CPU recovery attempts, Z80/RAM/bank/I/O mismatches, YM render
+errors, PCM/status mismatches, context-sync failures, ring overflows or fatal worker
+errors.  Because the most render-bound representative title became materially slower,
+the experiment was fully reverted and no `wjammers` hardware run was spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
