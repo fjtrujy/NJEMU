@@ -100,14 +100,14 @@ Status: **complete**
 
 ### Phase 1 - build-time generators
 
-Status: **pending**
+Status: **in progress**
 
-- [ ] font asset;
+- [x] font asset (C output is byte-identical to the Python reference);
 - [ ] translations and Unicode glyph lookup;
 - [ ] ROM converter translations;
-- [ ] game metadata;
-- [ ] rominfo parser;
-- [ ] CPS2 unified game database;
+- [x] game metadata for CPS1/CPS2/MVS/NCDZ (binary and gamelist parity);
+- [x] rominfo parser (CPS2 topology regression: 286 games / 1387 regions / 5382 ROM records);
+- [x] CPS2 unified game database (byte-identical binary and gamelist parity);
 - [ ] DIP metadata;
 - [ ] migrate emulator and ROM converter CMake generators;
 - [ ] prove old/new output parity before deleting references.
@@ -116,10 +116,10 @@ Exit condition: a normal emulator or ROM converter build requires no Python and 
 
 ### Phase 2 - validation/developer tools
 
-Status: **pending**
+Status: **in progress**
 
-- [ ] CPS2 cache-layout validator;
-- [ ] frame comparator;
+- [x] CPS2 cache-layout validator (acceptance/output parity on canonical data);
+- [x] frame comparator (exit status and diff PPM parity on tie/real-difference fixtures);
 - [ ] migrate generator/format regression coverage to native tests/CTest;
 - [ ] migrate Python cache-reader test harnesses without weakening coverage.
 

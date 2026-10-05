@@ -15,6 +15,8 @@ void host_buffer_free(host_buffer_t *buffer);
 int host_buffer_reserve(host_buffer_t *buffer, size_t capacity);
 int host_buffer_append(host_buffer_t *buffer, const void *data, size_t size);
 int host_buffer_append_byte(host_buffer_t *buffer, uint8_t value);
+int host_buffer_append_string(host_buffer_t *buffer, const char *text);
+int host_buffer_append_format(host_buffer_t *buffer, const char *format, ...);
 
 int host_read_file(const char *path, host_buffer_t *buffer);
 int host_write_file(const char *path, const void *data, size_t size);

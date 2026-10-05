@@ -20,13 +20,50 @@ char *host_trim(char *text)
 
 int host_parse_u32(const char *text, uint32_t *value)
 {
+    const char *digits = text;
     char *end;
     unsigned long parsed;
+    int base = 10;
 
     if (text == NULL || *text == '\0' || *text == '-')
         return 0;
+    if (*digits == '+') {
+        ++digits;
+        if (*digits == '\0')
+            return 0;
+    }
+    if (digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X')) {
+        base = 16;
+        digits += 2;
+    } else if (digits[0] == '0' && (digits[1] == 'o' || digits[1] == 'O')) {
+        base = 8;
+        digits += 2;
+    } else if (digits[0] == '0' && (digits[1] == 'b' || digits[1] == 'B')) {
+        const char *p = digits + 2;
+        uint32_t binary = 0;
+        if (*p == '\0')
+            return 0;
+        while (*p != '\0') {
+            if (*p != '0' && *p != '1')
+                return 0;
+            if (binary > (0xffffffffu >> 1))
+                return 0;
+            binary = (binary << 1) | (uint32_t)(*p - '0');
+            ++p;
+        }
+        *value = binary;
+        return 1;
+    } else if (digits[0] == '0' && digits[1] != '\0') {
+        const char *p = digits + 1;
+        while (*p == '0')
+            ++p;
+        if (*p != '\0')
+            return 0;
+    }
+    if (*digits == '\0')
+        return 0;
     errno = 0;
-    parsed = strtoul(text, &end, 0);
+    parsed = strtoul(digits, &end, base);
     if (errno != 0 || *end != '\0' || parsed > 0xfffffffful)
         return 0;
     *value = (uint32_t)parsed;

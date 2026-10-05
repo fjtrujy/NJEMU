@@ -1,6 +1,7 @@
 #include "file.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +57,36 @@ int host_buffer_append(host_buffer_t *buffer, const void *data, size_t size)
 int host_buffer_append_byte(host_buffer_t *buffer, uint8_t value)
 {
     return host_buffer_append(buffer, &value, 1);
+}
+
+int host_buffer_append_string(host_buffer_t *buffer, const char *text)
+{
+    return host_buffer_append(buffer, text, strlen(text));
+}
+
+int host_buffer_append_format(host_buffer_t *buffer, const char *format, ...)
+{
+    va_list args;
+    va_list copy;
+    int length;
+    char *target;
+
+    va_start(args, format);
+    va_copy(copy, args);
+    length = vsnprintf(NULL, 0, format, copy);
+    va_end(copy);
+    if (length < 0 || !host_buffer_reserve(buffer, buffer->size + (size_t)length + 1)) {
+        va_end(args);
+        return 0;
+    }
+    target = (char *)buffer->data + buffer->size;
+    if (vsnprintf(target, (size_t)length + 1, format, args) != length) {
+        va_end(args);
+        return 0;
+    }
+    va_end(args);
+    buffer->size += (size_t)length;
+    return 1;
 }
 
 int host_read_file(const char *path, host_buffer_t *buffer)

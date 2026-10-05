@@ -10,11 +10,18 @@ add_library(njemu_host_tool_lib STATIC
     crc32.c
     endian.c
     file.c
+    game_database.c
+    game_metadata.c
+    rominfo.c
+    string_pool.c
     text.c
     tsv.c
     utf8.c
     command_compare_frames.c
     command_font.c
+    command_game_database.c
+    command_game_metadata.c
+    command_rominfo.c
     command_validate_cps2_cache.c
 )
 target_include_directories(njemu_host_tool_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
