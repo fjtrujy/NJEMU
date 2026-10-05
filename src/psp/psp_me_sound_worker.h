@@ -364,6 +364,9 @@ bool psp_me_sound_worker_read_status(psp_me_sound_worker_t *worker,
 bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 	psp_me_sound_recovery_snapshot_t *snapshot, uint8_t *ram,
 	ym2610_context_t *ym_context, uint64_t timeout_us);
+bool psp_me_sound_worker_read_published_recovery_snapshot(
+	psp_me_sound_worker_t *worker, psp_me_sound_recovery_snapshot_t *snapshot,
+	uint8_t *ram, ym2610_context_t *ym_context);
 psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
 	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
 	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,

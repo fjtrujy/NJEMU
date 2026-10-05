@@ -381,6 +381,7 @@ static void psp_me_sound_z80_reset_tracking(void)
 static bool psp_me_sound_recover_cpu(void)
 {
 	psp_me_sound_recovery_snapshot_t recovery;
+	psp_me_sound_worker_stats_t stats;
 	bool result = false;
 	bool gate_locked = false;
 	bool worker_locked = false;
@@ -401,9 +402,24 @@ static bool psp_me_sound_recover_cpu(void)
 		goto done;
 	}
 	worker_locked = true;
-	if (!me_available || !me_sound_worker.running ||
-		!psp_me_sound_worker_read_recovery_snapshot(&me_sound_worker, &recovery,
-			me_sound_recovery_ram, NULL, PSP_ME_SOUND_WORKER_TIMEOUT_US))
+	if (!me_available || !me_sound_worker.running)
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT;
+		goto done;
+	}
+	psp_me_sound_worker_get_stats(&me_sound_worker, &stats);
+	if (stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+	{
+		if (!psp_me_sound_worker_read_published_recovery_snapshot(&me_sound_worker,
+				&recovery, me_sound_recovery_ram, NULL))
+		{
+			me_sound_z80_failure_reason =
+				PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT;
+			goto done;
+		}
+	}
+	else if (!psp_me_sound_worker_read_recovery_snapshot(&me_sound_worker,
+			&recovery, me_sound_recovery_ram, NULL, PSP_ME_SOUND_WORKER_TIMEOUT_US))
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT;
 		goto done;
@@ -437,6 +453,7 @@ static bool psp_me_sound_recover_cpu(void)
 	me_sound_cpu_recovery_required = false;
 	me_sound_z80_autonomous = false;
 	me_sound_ym_authoritative = false;
+	__atomic_store_n(&me_sound_ym_render_pending, false, __ATOMIC_RELEASE);
 	me_sound_status_required_time = recovery.emulated_time;
 	__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
 	__atomic_store_n(&me_sound_z80_active, false, __ATOMIC_RELEASE);

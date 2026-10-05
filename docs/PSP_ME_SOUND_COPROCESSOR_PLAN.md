@@ -2095,7 +2095,7 @@ path, not merely over Main CPU.
 
 ### C8 - lifecycle/save-state hardening
 
-#### C8.1 - save/load round-trip through the existing CPU state format (2026-10-04) [host/build complete]
+#### C8.1 - save/load round-trip through the existing CPU state format (2026-10-04) [complete]
 
 Save states continue to use the existing NJEMU MVS file format; no ME-specific state
 chunk or version bump is introduced.  The normal format already serializes CZ80,
@@ -2138,6 +2138,14 @@ test executables with `SAVE_STATE=ON` still exposes a pre-existing test-link iss
 the save-state-only YM functions); the actual MVS executable builds successfully and
 that unrelated test-harness issue is not part of this lifecycle change.
 
+Real-PSP validation on 2026-10-05 closed the save/load hardware gate.  With the full
+sound coprocessor authoritative, slot 0 was saved as a 324,272-byte state, then loaded
+through the normal prepare/state-I/O/resume path.  Both operations completed with the
+ME authoritative before and after reseeding, and emulation continued through multiple
+300-frame windows after load with zero CPU recoveries, Z80/RAM/bank/I/O mismatches,
+YM render/context errors, PCM/status mismatches, send failures, ring overflows or
+worker fatal errors.
+
 - save/load state with ME-owned sound state;
 - game/browser/game transitions;
 - AudioProcessor mode changes;
@@ -2149,7 +2157,7 @@ that unrelated test-harness issue is not part of this lifecycle change.
 **Gate:** all existing M6 lifecycle coverage plus save/load-state coverage passes
 on real hardware.
 
-#### C8.2 - reset / restart lifecycle reconciliation (2026-10-04) [host/build complete]
+#### C8.2 - reset / restart lifecycle reconciliation (2026-10-04) [complete]
 
 The producer lifecycle now explicitly reconciles the requested `AudioProcessor`
 mode with the worker that is actually alive at each sound reset.  Previously the
@@ -2199,6 +2207,15 @@ ADPCM-A-only ME and full sound-coprocessor configurations, and the standalone PS
 worker harness builds.  The C8-specific `SAVE_STATE=ON` Desktop MVS executable and
 PSP full sound-coprocessor + hardware harness builds also pass.
 
+Real-PSP integrated lifecycle validation on 2026-10-05 now also covers the normal
+runtime boundaries.  A forced emulator reset advanced the active sound worker to a
+fresh generation and continued cleanly.  A runtime `Media Engine -> Main CPU -> Media
+Engine` sequence produced three complete CPU-only profile windows between two
+ME-authoritative segments.  A GUI-enabled `game -> browser -> game` run wrote
+persistent Memory Stick markers at both transitions; the second game rebuilt the
+sound island, ran three authoritative windows and shut down with zero recovery,
+mismatch, overflow or fatal counters.
+
 No physical sleep/resume test is part of this subphase; that check remains deferred
 by the current development decision.  The rebuilt standalone lifecycle harness was
 also rerun on real PSP hardware without any suspend operation and passed all four
@@ -2207,7 +2224,7 @@ no ring overflow and `fatal=0`).  Its historical `suspend_resume=1` field refers
 the harness's synthetic stop/rebootstrap ownership cycle only; it is not evidence
 for a physical PSP sleep / `RESUME_COMPLETE` callback.
 
-#### C8.3 - fatal-worker teardown and next-game restart (2026-10-04) [host/build complete]
+#### C8.3 - fatal-worker teardown and next-game restart (2026-10-04) [complete]
 
 The next lifecycle pass covers the case where the ME worker fails during one game,
 the emulator returns to the browser, and a later game starts in the **same PRX
@@ -2246,6 +2263,25 @@ already-initialized library instance.  Its observed `-4` path is the unsupported
 unrecognized-table result, not an `already initialized` status.  The intermittent
 real-PSP `init=-4` seen in earlier sessions therefore must not be "fixed" by inventing
 a per-game deinit sequence that the dependency does not provide.
+
+Real-PSP failure injection on 2026-10-05 exposed one additional lifecycle gap: a
+fatal ME worker exits before Allegrex can issue the existing `RECOVERY_SNAPSHOT`
+request, so the old CPU-recovery path could wait on a command that had no consumer.
+The worker now freezes its last valid autonomous Z80/RAM/YM/timer recovery image as
+part of the fatal transition.  Allegrex detects the published fatal state and consumes
+that immutable snapshot directly instead of sending another command to the dead ME;
+it also drops any host-side authoritative render-pending ownership before CPU sound
+resumes.  A focused host oracle verifies the frozen generation/time/latch/RAM image
+survives an emulated-time-regression fatal before normal teardown.
+
+The exact same time-regression injection was then repeated on the real PSP.  Persistent
+`ms0:` markers recorded, in order, `inject-time-regression`,
+`cpu-recovery-success`, `first-game-to-browser`, and
+`second-game-me-authoritative`.  Audio profiles independently showed four initial
+ME-authoritative windows, three CPU-fallback windows (`me_authoritative=0`), then
+three fresh ME-authoritative windows in the next game.  The second game shut down
+with zero Z80/RAM/bank/I/O mismatches, YM context/PCM/status errors, send failures,
+ring overflows or fatal errors.
 
 The complete regression matrix remains clean after this hardening: Desktop MVS is
 **31/31 CTest green**, Desktop NCDZ builds, PSP MVS builds in CPU-only,

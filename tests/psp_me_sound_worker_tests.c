@@ -489,6 +489,84 @@ static int test_time_regression_is_fatal(void)
 	return 1;
 }
 
+static int test_fatal_publishes_recovery_snapshot(void)
+{
+	host_dispatch_t host = { 0 };
+	psp_me_sound_worker_dispatch_t dispatch = {
+		host_dispatch_start,
+		host_dispatch_wait,
+		&host,
+	};
+	psp_me_sound_worker_t worker;
+	psp_me_sound_worker_stats_t stats;
+	psp_me_sound_recovery_snapshot_t recovery;
+	cz80_struc reference_cpu;
+	cz80_state_t initial_state;
+	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
+	uint8_t recovery_ram[PSP_ME_SOUND_Z80_RAM_SIZE];
+	uint64_t start;
+
+	memset(reference_memory, 0, sizeof(reference_memory));
+	reference_memory[PSP_ME_SOUND_Z80_RAM_OFFSET] = 0x5au;
+	Cz80_Init(&reference_cpu);
+	Cz80_Set_Fetch(&reference_cpu, 0x0000u, 0xffffu,
+		(uintptr_t)reference_memory);
+	Cz80_Set_ReadBase(&reference_cpu, (uintptr_t)reference_memory);
+	Cz80_Reset(&reference_cpu);
+	Cz80_Get_State(&reference_cpu, &initial_state);
+
+	memset(&worker, 0, sizeof(worker));
+	if (!psp_me_sound_worker_start(&worker, &dispatch, 16u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_reset(&worker, 1u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_z80_snapshot(&worker, &initial_state, reference_memory,
+			reference_memory, sizeof(reference_memory), banks, 0x12u, 0u, 0x34u,
+			44100u, 0x1000u, 0x1000u, false, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS,
+			TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_sync(&worker, 100u, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_authoritative_sound(&worker, 0x56u, 99u))
+	{
+		fprintf(stderr, "fatal recovery snapshot setup failed\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+
+	start = sceKernelGetSystemTimeWide();
+	do
+	{
+		psp_me_sound_worker_get_stats(&worker, &stats);
+		if (stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
+			break;
+		sched_yield();
+	} while (sceKernelGetSystemTimeWide() - start < TEST_TIMEOUT_US);
+
+	if (stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_TIME_REGRESSION ||
+		!psp_me_sound_worker_read_published_recovery_snapshot(&worker, &recovery,
+			recovery_ram, NULL) ||
+		recovery.generation != 1u || recovery.emulated_time != 100u ||
+		recovery.mode != PSP_ME_SOUND_Z80_MODE_AUTONOMOUS ||
+		recovery.sound_code != 0x12u || recovery.result_code != 0x34u ||
+		recovery_ram[0] != 0x5au)
+	{
+		fprintf(stderr,
+			"fatal recovery snapshot mismatch: fatal=%u generation=%u time=%llu mode=%u code=%u result=%u ram=%u\n",
+			stats.fatal_error, recovery.generation,
+			(unsigned long long)recovery.emulated_time, recovery.mode,
+			recovery.sound_code, recovery.result_code, recovery_ram[0]);
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	if (psp_me_sound_worker_shutdown(&worker, TEST_TIMEOUT_US) || worker.running)
+	{
+		fprintf(stderr, "fatal recovery worker teardown unexpectedly succeeded\n");
+		if (worker.running)
+			psp_me_sound_worker_abort(&worker);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_z80_shadow_slice_matches_reference(void)
 {
 	host_dispatch_t host = { 0 };
@@ -2422,6 +2500,7 @@ int main(void)
 	if (!test_audio_reset_lifecycle_policy() ||
 		!test_worker_reset_and_rebootstrap_lifecycle() ||
 		!test_shadow_order_reset_and_sync() || !test_time_regression_is_fatal() ||
+		!test_fatal_publishes_recovery_snapshot() ||
 		!test_z80_shadow_slice_matches_reference() || !test_z80_shadow_large_io_trace() ||
 		!test_sound_status_snapshot() ||
 		!test_authoritative_sound_command_without_echo() ||

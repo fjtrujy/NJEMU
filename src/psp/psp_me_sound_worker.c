@@ -997,6 +997,12 @@ static void me_fail(psp_me_sound_worker_shared_context_t *context,
 {
 	psp_me_sound_worker_message_t event;
 
+	/* A fatal ME task cannot service a later RECOVERY_SNAPSHOT command.  Freeze
+	 * the last valid autonomous sound-island state before publishing the fatal
+	 * transition so Allegrex can recover without talking to the dead worker. */
+	if (me_z80_runtime && me_z80_runtime->initialized)
+		(void)me_z80_publish_recovery(context, me_z80_runtime);
+
 	context->progress->fatal_error = error;
 	context->progress->running = 0;
 	context->progress->last_token = token;
@@ -1027,6 +1033,7 @@ static void psp_me_sound_worker_entry(void *param)
 	psp_me_sound_worker_message_t event;
 	uint32_t idle_spins = 0;
 
+	me_z80_runtime = NULL;
 	meCoreDcacheInvalidateRange(context, sizeof(*context));
 	psp_me_spsc_ring_acquire_initial(context->commands, &me_cache_ops);
 	psp_me_spsc_ring_acquire_initial(context->events, &me_cache_ops);
@@ -2160,7 +2167,6 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 {
 	psp_me_sound_worker_message_t command;
 	psp_me_sound_worker_message_t event;
-	psp_me_sound_recovery_snapshot_t *shared;
 
 	if (!worker || !worker->running || worker->generation == 0 || !snapshot ||
 		!ram || !worker->recovery_snapshot ||
@@ -2175,6 +2181,22 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 			worker->generation, command.token, timeout_us, &event))
 		return false;
 
+	if (!psp_me_sound_worker_read_published_recovery_snapshot(worker, snapshot,
+			ram, ym_context))
+		return false;
+	return event.emulated_time == snapshot->emulated_time;
+}
+
+bool psp_me_sound_worker_read_published_recovery_snapshot(
+	psp_me_sound_worker_t *worker, psp_me_sound_recovery_snapshot_t *snapshot,
+	uint8_t *ram, ym2610_context_t *ym_context)
+{
+	psp_me_sound_recovery_snapshot_t *shared;
+
+	if (!worker || worker->generation == 0 || !snapshot || !ram ||
+		!worker->recovery_snapshot || !worker->z80_memory || !worker->ym_context)
+		return false;
+
 	shared = worker->recovery_snapshot;
 	sceKernelDcacheInvalidateRange(shared,
 		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*shared)));
@@ -2187,7 +2209,6 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 		shared->ym_timer_arm_elapsed[0] != 0 ||
 		shared->ym_timer_arm_elapsed[1] != 0 ||
 		shared->irq_state != (uint8_t)shared->state.IRQState ||
-		event.emulated_time != shared->emulated_time ||
 		(ym_context &&
 			!YM2610ContextCloneForPcmWindow(ym_context, worker->ym_context)))
 		return false;
