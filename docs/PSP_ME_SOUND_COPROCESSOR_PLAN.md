@@ -2971,6 +2971,47 @@ failures, overflows or fatal worker errors.  Because the most render-bound title
 slower end-to-end, the specialization was fully reverted and no `mslug3`/`wjammers`
 hardware time was spent on it.
 
+#### Post-C9 ME render optimization: pack ADPCM-A decoder transitions [complete]
+
+The remaining ADPCM-A decoder-state work contained one more table-driven redundancy.
+Historically each decoded nibble loaded `jedi_table` for the accumulator delta, then
+loaded `step_inc`, added it to the current decoder step and clamped the result to
+`0..48*16`.  Both outputs are pure functions of `(current_step, nibble)`.  The retained
+implementation therefore packs the signed 16-bit accumulator delta in the low half of
+the existing native 32-bit transition entry and the already-clamped next decoder step
+in the high half.  The table remains exactly **49 * 16 * 4 = 3,136 bytes**; it does not
+trade instruction count for a larger cache footprint.
+
+A test-only historical table and selector keep the old delta plus `step_inc`/add/clamp
+path available to the host oracle.  Sixteen consecutive ADPCM-A render blocks compare
+the packed and historical implementations sample-for-sample.  The normal Desktop MVS
+suite remains **31/31 CTest green**.  Allegrex codegen confirms the intended hot-loop
+change: the old second table load, add and `max/min` clamp disappear; the retained path
+uses one 32-bit transition load followed by `seh` for the signed delta and `srl` for
+the pre-clamped next step.
+
+Real-PSP unprofiled comparisons against committed `e266d96` measured:
+
+- `fatfury1`: two interleaved control/candidate pairs were consistently, but only
+  slightly, positive.  The first steady pair averaged **7.739 ms/buffer** control
+  versus **7.709 ms** candidate (about **-0.4%**); the repeat averaged
+  **7.725 ms** versus **7.705 ms** (about **-0.3%**).
+- `mslug3`: the three complete control windows were
+  **5.625 / 5.365 / 5.565 ms**, averaging **5.518 ms/buffer**; the candidate measured
+  **5.579 / 5.291 / 5.402 ms**, averaging **5.424 ms**, approximately **-1.7%**.
+- `wjammers`: the two steady control windows were **4.579 / 5.508 ms**, averaging
+  **5.044 ms/buffer**; the candidate measured **4.471 / 5.460 ms**, averaging
+  **4.966 ms**, approximately **-1.5%**.
+
+All representative candidate runs stayed ME-authoritative through scripted stop with
+zero CPU recovery attempts, Z80/RAM/bank/I/O mismatches, YM render errors,
+PCM/status mismatches, context-sync failures, send failures, ring overflows or fatal
+worker errors.  The retained full-coprocessor PSP MVS PRX SHA-256 is
+`5ab33137c4eea15f1ff5e6adaf0ec5e4b20d157857430e1ef039fd66d660b840`.
+Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only, full PSP sound-coprocessor and the
+standalone full-coprocessor worker harness all build successfully; `git diff --check`
+is clean.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

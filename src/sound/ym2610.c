@@ -1496,6 +1496,7 @@ static inline bool fm_channel_settled_silent(const FM_CH *CH)
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
 static bool ym2610_force_full_fm_for_test;
 static bool ym2610_force_disabled_lfo_advance_for_test;
+static bool ym2610_force_historical_adpcma_transition_for_test;
 
 void YM2610ContextSetForceFullFmForTest(bool enabled)
 {
@@ -1510,6 +1511,11 @@ void YM2610ContextSetForceDisabledLfoAdvanceForTest(bool enabled)
 void YM2610ContextSetForcePairedTlTableForTest(bool enabled)
 {
 	ym2610_force_paired_tl_table_for_test = enabled;
+}
+
+void YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(bool enabled)
+{
+	ym2610_force_historical_adpcma_transition_for_test = enabled;
 }
 #endif
 
@@ -2354,8 +2360,12 @@ static int steps[49] =
 /* different from the usual ADPCM table */
 static int step_inc[8] = { -1*16, -1*16, -1*16, -1*16, 2*16, 5*16, 7*16, 9*16 };
 
-/* speedup purposes only */
-static int jedi_table[ 49*16 ];
+/* Packed per-nibble transition: signed 16-bit accumulator delta in the low
+ * half and the already-clamped next decoder step in the high half. */
+static uint32_t adpcma_transition_table[49 * 16];
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static int adpcma_delta_reference[49 * 16];
+#endif
 
 #if (EMU_SYSTEM == MVS)
 static bool ym2610_pcm_window_read_segment(const ym2610_pcm_window_segment_t *segment,
@@ -2419,7 +2429,15 @@ static void OPNB_ADPCMA_init_table(void)
 		for (nib = 0; nib < 16; nib++)
 		{
 			int value = (2 * (nib & 0x07) + 1) * steps[step] / 8;
-			jedi_table[step * 16 + nib] = (nib & 0x08) ? -value : value;
+			int delta = (nib & 0x08) ? -value : value;
+			int next_step = step * 16 + step_inc[nib & 7];
+
+			Limit(next_step, 48 * 16, 0);
+			adpcma_transition_table[step * 16 + nib] =
+				(uint16_t)(int16_t)delta | ((uint32_t)(uint16_t)next_step << 16);
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+			adpcma_delta_reference[step * 16 + nib] = delta;
+#endif
 		}
 	}
 }
@@ -2441,9 +2459,12 @@ static void OPNB_ADPCMA_calc_chan(ym2610_context_t *context, int c, ADPCMA *ch)
 		step = ch->now_step >> ADPCM_SHIFT;
 		ch->now_step &= (1 << ADPCM_SHIFT) - 1;
 
-		do
-		{
-			/* end check */
+			do
+			{
+				uint32_t transition;
+				uint32_t transition_index;
+
+				/* end check */
 			/* 11-06-2001 JB: corrected comparison. Was > instead of == */
 			/* YM2610 checks lower 20 bits only, the 4 MSB bits are sample bank */
 			/* Here we use 1<<21 to compensate for nibble calculations */
@@ -2482,17 +2503,31 @@ static void OPNB_ADPCMA_calc_chan(ym2610_context_t *context, int c, ADPCMA *ch)
 				data = (ch->now_data >> 4) & 0x0f;
 			}
 
-			ch->now_addr++;
-			ch->adpcma_acc += jedi_table[ch->adpcma_step + data];
+				ch->now_addr++;
+				transition_index = (uint32_t)ch->adpcma_step + data;
+				transition = adpcma_transition_table[transition_index];
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+				if (ym2610_force_historical_adpcma_transition_for_test)
+					ch->adpcma_acc += adpcma_delta_reference[transition_index];
+				else
+#endif
+					ch->adpcma_acc += (int16_t)(transition & 0xffffu);
 
-			/* extend 12-bit signed int */
-			if (ch->adpcma_acc & 0x800)
-				ch->adpcma_acc |= ~0xfff;
-			else
-				ch->adpcma_acc &= 0xfff;
+				/* extend 12-bit signed int */
+				if (ch->adpcma_acc & 0x800)
+					ch->adpcma_acc |= ~0xfff;
+				else
+					ch->adpcma_acc &= 0xfff;
 
-			ch->adpcma_step += step_inc[data & 7];
-			Limit(ch->adpcma_step, 48*16, 0*16);
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+				if (ym2610_force_historical_adpcma_transition_for_test)
+				{
+					ch->adpcma_step += step_inc[data & 7];
+					Limit(ch->adpcma_step, 48 * 16, 0);
+				}
+				else
+#endif
+					ch->adpcma_step = (int32_t)(transition >> 16);
 
 		} while (--step);
 
@@ -2670,8 +2705,11 @@ static void OPNB_ADPCMA_calc_chan_dynamic(ym2610_context_t *context, int c, ADPC
 		step = ch->now_step >> ADPCM_SHIFT;
 		ch->now_step &= (1 << ADPCM_SHIFT) - 1;
 
-		do
-		{
+			do
+			{
+				uint32_t transition;
+				uint32_t transition_index;
+
 			/* end check */
 			/* 11-06-2001 JB: corrected comparison. Was > instead of == */
 			/* YM2610 checks lower 20 bits only, the 4 MSB bits are sample bank */
@@ -2704,17 +2742,31 @@ static void OPNB_ADPCMA_calc_chan_dynamic(ym2610_context_t *context, int c, ADPC
 				data = (ch->now_data >> 4) & 0x0f;
 			}
 
-			ch->now_addr++;
-			ch->adpcma_acc += jedi_table[ch->adpcma_step + data];
+				ch->now_addr++;
+				transition_index = (uint32_t)ch->adpcma_step + data;
+				transition = adpcma_transition_table[transition_index];
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+				if (ym2610_force_historical_adpcma_transition_for_test)
+					ch->adpcma_acc += adpcma_delta_reference[transition_index];
+				else
+#endif
+					ch->adpcma_acc += (int16_t)(transition & 0xffffu);
 
-			/* extend 12-bit signed int */
-			if (ch->adpcma_acc & 0x800)
-				ch->adpcma_acc |= ~0xfff;
-			else
-				ch->adpcma_acc &= 0xfff;
+				/* extend 12-bit signed int */
+				if (ch->adpcma_acc & 0x800)
+					ch->adpcma_acc |= ~0xfff;
+				else
+					ch->adpcma_acc &= 0xfff;
 
-			ch->adpcma_step += step_inc[data & 7];
-			Limit(ch->adpcma_step, 48*16, 0*16);
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+				if (ym2610_force_historical_adpcma_transition_for_test)
+				{
+					ch->adpcma_step += step_inc[data & 7];
+					Limit(ch->adpcma_step, 48 * 16, 0);
+				}
+				else
+#endif
+					ch->adpcma_step = (int32_t)(transition >> 16);
 
 		} while (--step);
 

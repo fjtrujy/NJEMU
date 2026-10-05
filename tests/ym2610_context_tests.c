@@ -182,6 +182,25 @@ static bool render_tl_table_reference_pair(ym2610_context_t *optimized,
 			samples * sizeof(*optimized_buffer[1])) == 0;
 }
 
+static bool render_adpcma_transition_reference_pair(ym2610_context_t *optimized,
+	ym2610_context_t *reference, int32_t **optimized_buffer,
+	int32_t **reference_buffer, uint32_t samples)
+{
+	memset(optimized_buffer[0], 0, samples * sizeof(*optimized_buffer[0]));
+	memset(optimized_buffer[1], 0, samples * sizeof(*optimized_buffer[1]));
+	memset(reference_buffer[0], 0, samples * sizeof(*reference_buffer[0]));
+	memset(reference_buffer[1], 0, samples * sizeof(*reference_buffer[1]));
+	YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(false);
+	YM2610ContextUpdate(optimized, optimized_buffer, (int)samples);
+	YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(true);
+	YM2610ContextUpdate(reference, reference_buffer, (int)samples);
+	YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(false);
+	return memcmp(optimized_buffer[0], reference_buffer[0],
+			samples * sizeof(*optimized_buffer[0])) == 0 &&
+		memcmp(optimized_buffer[1], reference_buffer[1],
+			samples * sizeof(*optimized_buffer[1])) == 0;
+}
+
 static ym2610_context_t *alloc_context(void **storage_out)
 {
 	size_t size = YM2610ContextSize();
@@ -518,6 +537,28 @@ int main(void)
 	{
 		ym2610_pcm_window_t window;
 		bool nonzero = false;
+		uint32_t block;
+
+		/* The production ADPCM-A table packs the accumulator delta and the
+		 * already-clamped next decoder step into one native word. Compare that
+		 * path sample-for-sample against the historical delta table plus
+		 * step_inc/add/clamp transition logic. */
+		YM2610ContextInit(a, 8000000, 44100, pcm_a, sizeof(pcm_a),
+			pcm_b, sizeof(pcm_b), test_timer, test_irq, &a_state);
+		YM2610ContextInit(b, 8000000, 44100, pcm_a, sizeof(pcm_a),
+			pcm_b, sizeof(pcm_b), test_timer, test_irq, &b_state);
+		start_adpcma_channel_zero(a);
+		start_adpcma_channel_zero(b);
+		for (block = 0; block < 16; block++)
+		{
+			if (!render_adpcma_transition_reference_pair(a, b, a_buffer, b_buffer, 128))
+			{
+				fprintf(stderr,
+					"Packed ADPCM-A transition table diverged from historical path\n");
+				ok = 0;
+				break;
+			}
+		}
 
 		/* A window-backed context must decode exactly the same ADPCM-A stream
 		 * as a resident-ROM context without receiving decoder state from it. */
