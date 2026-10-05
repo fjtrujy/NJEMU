@@ -2608,6 +2608,72 @@ sound-coprocessor configurations, including the standalone hardware harness.  Th
 remaining performance headroom is therefore still overwhelmingly in the ME render
 itself rather than Allegrex-side PCM-window transport.
 
+#### Post-C9 ME render micro-optimizations: reject cache churn, skip settled-silent FM [complete]
+
+With the shared PCM window in place, the next measurements targeted the ME render
+itself.  Two cache-maintenance experiments were deliberately measured and rejected
+before changing synthesis semantics:
+
+- lazily publishing the YM context reduced the steady-state render-completion wait
+  only from **6.830 ms** to **6.787 ms / buffer** on the deterministic `mslug3`
+  workload, while the matching gameplay interval moved from **125.049 FPS** to
+  **124.190 FPS**.  That is noise-level cache improvement with no whole-emulator
+  benefit, so the change was reverted;
+- splitting the final render-job writeback/invalidate into several smaller cache-line
+  ranges made the hot path worse.  Render-completion wait rose to **7.099 ms / buffer**
+  and gameplay fell to **123.953 FPS**, consistent with extra cache-operation/syscall
+  overhead.  That experiment was also fully reverted.
+
+The retained optimization instead removes actual YM2610 work.  `chan_calc()` is now
+skipped only when an FM channel is provably settled and silent:
+
+- all four operators are `EG_OFF` and key-off;
+- both `op1_out[]` feedback-history samples are zero;
+- delayed `mem_value` is zero.
+
+This predicate is intentionally stricter than checking envelope volume alone.  It
+preserves the feedback/MEM tail until those histories have drained naturally.  Phase
+advance while this predicate is true is unobservable: every later FM key-on restarts
+that operator's phase generator at zero, while frequency/envelope refresh still runs
+outside `chan_calc()` as before.
+
+`ym2610_context_tests` contains a test-only reference mode that forces the historical
+always-`chan_calc()` path.  Two independent YM contexts are then compared sample for
+sample through long reset silence, a later key-on, active synthesis, key-off/release,
+and a maximum-feedback / algorithm-0 history-drain case.  The optimized and reference
+paths remain bit-exact throughout.  The test-only selector is compiled only into that
+host oracle and is absent from production PSP binaries.
+
+The final Release PSP/MVS binary used for hardware validation has SHA-256
+`9092ade279d19e46088cb4ed5279f0cc32b687a0237fc02cb8d64f6914262912`.
+On the same `mslug3` windows **8-11** (`sound_cmd = 4, 5, 4, 3`), two clean final
+runs measured **125.817 FPS** and **125.188 FPS** versus the shared-window baseline
+of **125.049 FPS**.  A third run contained one unrelated **60.279 ms** frame stall
+and therefore averaged 122.833 FPS; importantly, its ME render timing still matched
+the other runs.  Across all three final-binary runs, steady-state render-completion
+wait was **6.494 / 6.484 / 6.425 ms per buffer**, a repeatable roughly **5-6%**
+reduction from the **6.830 ms** baseline even when whole-emulator FPS was disturbed
+by the isolated stall.
+
+The exact same binary was rerun on the representative hardware set:
+
+| game | shared-window render wait | settled-silent FM render wait | change |
+| --- | ---: | ---: | ---: |
+| `wjammers` | 5.537 ms | **5.236 ms** | **-5.4%** |
+| `fatfury1` | 9.775 ms | **9.182 ms** | **-6.1%** |
+
+Both representative runs remained ME-authoritative through their automatic stop.
+There were zero CPU recovery attempts, Z80 state/RAM/bank/I/O mismatches, YM render
+errors, PCM/status mismatches, context-sync failures, command/event overflows or fatal
+worker errors.  Their final command-ring high-water marks were 9/16 (`wjammers`) and
+6/16 (`fatfury1`).
+
+The final regression matrix remains clean: Desktop MVS is **31/31 CTest green**,
+Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations, including the standalone hardware harness.  Unlike
+the rejected cache experiments, this fast path therefore removes measurable ME
+synthesis cost without weakening the sound-island oracle or fallback guarantees.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

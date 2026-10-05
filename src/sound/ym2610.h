@@ -67,6 +67,9 @@ void YM2610ContextSetCallbacks(ym2610_context_t *context,
 	YM2610_CONTEXT_IRQHANDLER IRQHandler, void *opaque);
 void YM2610ContextReset(ym2610_context_t *context);
 void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length);
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+void YM2610ContextSetForceFullFmForTest(bool enabled);
+#endif
 #if (EMU_SYSTEM == MVS)
 void YM2610ContextEnablePcmWindowSource(ym2610_context_t *context,
 	uint32_t pcmsizea, uint32_t pcmsizeb);

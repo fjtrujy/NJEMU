@@ -1793,6 +1793,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             src/sound/ym2610.c)
         target_include_directories(ym2610_context_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_compile_definitions(ym2610_context_tests PRIVATE
+            YM2610_CONTEXT_TEST_REFERENCE=1)
         target_link_libraries(ym2610_context_tests PRIVATE m)
         add_test(NAME ym2610_context_tests COMMAND ym2610_context_tests)
         add_executable(psp_me_spsc_ring_tests

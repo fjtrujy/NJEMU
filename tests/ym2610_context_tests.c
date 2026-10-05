@@ -83,6 +83,67 @@ static uint8_t read_reg(ym2610_context_t *context, uint8_t reg)
 	return YM2610ContextRead(context, 1);
 }
 
+static void configure_fm_channel_one(ym2610_context_t *context, uint8_t algorithm,
+	uint8_t feedback)
+{
+	uint8_t slot;
+
+	for (slot = 0; slot < 4; slot++)
+	{
+		uint8_t reg = (uint8_t)(0x31u + slot * 4u);
+
+		write_reg(context, reg, 0x01);             /* MUL = 1. */
+		write_reg(context, (uint8_t)(reg + 0x10), 0x00); /* TL = 0. */
+		write_reg(context, (uint8_t)(reg + 0x20), 0x1f); /* Fast attack. */
+		write_reg(context, (uint8_t)(reg + 0x30), 0x08); /* Decay. */
+		write_reg(context, (uint8_t)(reg + 0x40), 0x04); /* Sustain. */
+		write_reg(context, (uint8_t)(reg + 0x50), 0x0f); /* Fast release. */
+	}
+	write_reg(context, 0xa5, 0x22); /* Block/FNUM high for channel 1. */
+	write_reg(context, 0xa1, 0x69); /* FNUM low. */
+	write_reg(context, 0xb1, (uint8_t)((feedback << 3) | (algorithm & 7u)));
+	write_reg(context, 0xb5, 0xc0); /* Pan channel 1 to both outputs. */
+}
+
+static void fm_channel_one_key(ym2610_context_t *context, bool on)
+{
+	write_reg(context, 0x28, on ? 0xf1 : 0x01);
+}
+
+static bool render_fm_reference_pair(ym2610_context_t *optimized,
+	ym2610_context_t *reference, int32_t **optimized_buffer,
+	int32_t **reference_buffer, uint32_t samples, bool *saw_nonzero)
+{
+	uint32_t i;
+
+	memset(optimized_buffer[0], 0, samples * sizeof(*optimized_buffer[0]));
+	memset(optimized_buffer[1], 0, samples * sizeof(*optimized_buffer[1]));
+	memset(reference_buffer[0], 0, samples * sizeof(*reference_buffer[0]));
+	memset(reference_buffer[1], 0, samples * sizeof(*reference_buffer[1]));
+	YM2610ContextSetForceFullFmForTest(false);
+	YM2610ContextUpdate(optimized, optimized_buffer, (int)samples);
+	YM2610ContextSetForceFullFmForTest(true);
+	YM2610ContextUpdate(reference, reference_buffer, (int)samples);
+	YM2610ContextSetForceFullFmForTest(false);
+	if (memcmp(optimized_buffer[0], reference_buffer[0],
+			samples * sizeof(*optimized_buffer[0])) != 0 ||
+		memcmp(optimized_buffer[1], reference_buffer[1],
+			samples * sizeof(*optimized_buffer[1])) != 0)
+		return false;
+	if (saw_nonzero)
+	{
+		for (i = 0; i < samples; i++)
+		{
+			if (optimized_buffer[0][i] != 0 || optimized_buffer[1][i] != 0)
+			{
+				*saw_nonzero = true;
+				break;
+			}
+		}
+	}
+	return true;
+}
+
 static ym2610_context_t *alloc_context(void **storage_out)
 {
 	size_t size = YM2610ContextSize();
@@ -204,6 +265,100 @@ int main(void)
 	{
 		fprintf(stderr, "YM2610 render state leaked between contexts\n");
 		ok = 0;
+	}
+
+	/* The optimized FM path may skip chan_calc only when a channel is fully
+	 * settled and silent. Compare it sample-for-sample against a test-only
+	 * reference path that always executes chan_calc. This covers long reset
+	 * silence, a later key-on (whose phase generator must restart identically),
+	 * normal active output and the full release back to silence. */
+	{
+		bool saw_nonzero = false;
+		uint32_t block;
+
+		YM2610ContextReset(a);
+		YM2610ContextReset(b);
+		for (block = 0; block < 8; block++)
+		{
+			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128, NULL))
+			{
+				fprintf(stderr, "Settled-silent FM fast path diverged during reset silence\n");
+				ok = 0;
+				break;
+			}
+		}
+		configure_fm_channel_one(a, 7, 0);
+		configure_fm_channel_one(b, 7, 0);
+		fm_channel_one_key(a, true);
+		fm_channel_one_key(b, true);
+		for (block = 0; block < 8; block++)
+		{
+			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128,
+					&saw_nonzero))
+			{
+				fprintf(stderr, "Settled-silent FM fast path diverged after key-on\n");
+				ok = 0;
+				break;
+			}
+		}
+		if (!saw_nonzero)
+		{
+			fprintf(stderr, "FM fast-path oracle never produced active FM output\n");
+			ok = 0;
+		}
+		fm_channel_one_key(a, false);
+		fm_channel_one_key(b, false);
+		for (block = 0; block < 48; block++)
+		{
+			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128, NULL))
+			{
+				fprintf(stderr, "Settled-silent FM fast path diverged during release\n");
+				ok = 0;
+				break;
+			}
+		}
+	}
+
+	/* Exercise the history terms guarded by the predicate. Algorithm 0 routes
+	 * delayed MEM state through the channel and maximum feedback keeps op1_out
+	 * live after key-off; the optimized path must remain bit-exact until both
+	 * histories naturally drain to zero before it can skip chan_calc. */
+	{
+		bool saw_nonzero = false;
+		uint32_t block;
+
+		YM2610ContextReset(a);
+		YM2610ContextReset(b);
+		configure_fm_channel_one(a, 0, 7);
+		configure_fm_channel_one(b, 0, 7);
+		fm_channel_one_key(a, true);
+		fm_channel_one_key(b, true);
+		for (block = 0; block < 12; block++)
+		{
+			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128,
+					&saw_nonzero))
+			{
+				fprintf(stderr, "FM feedback/memory oracle diverged while active\n");
+				ok = 0;
+				break;
+			}
+		}
+		if (!saw_nonzero)
+		{
+			fprintf(stderr, "FM feedback/memory oracle produced only silence\n");
+			ok = 0;
+		}
+		fm_channel_one_key(a, false);
+		fm_channel_one_key(b, false);
+		for (block = 0; block < 64; block++)
+		{
+			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128, NULL))
+			{
+				fprintf(stderr, "FM feedback/memory oracle diverged during tail drain\n");
+				ok = 0;
+				break;
+			}
+		}
 	}
 
 #if (EMU_SYSTEM == MVS)

@@ -1457,6 +1457,38 @@ static inline void chan_calc(ym2610_context_t *context, FM_OPN *OPN, FM_CH *CH)
 	}
 }
 
+static inline bool fm_channel_settled_silent(const FM_CH *CH)
+{
+	return CH->SLOT[SLOT1].state == EG_OFF &&
+		CH->SLOT[SLOT1].key == 0 &&
+		CH->SLOT[SLOT2].state == EG_OFF &&
+		CH->SLOT[SLOT2].key == 0 &&
+		CH->SLOT[SLOT3].state == EG_OFF &&
+		CH->SLOT[SLOT3].key == 0 &&
+		CH->SLOT[SLOT4].state == EG_OFF &&
+		CH->SLOT[SLOT4].key == 0 &&
+		CH->op1_out[0] == 0 && CH->op1_out[1] == 0 &&
+		CH->mem_value == 0;
+}
+
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static bool ym2610_force_full_fm_for_test;
+
+void YM2610ContextSetForceFullFmForTest(bool enabled)
+{
+	ym2610_force_full_fm_for_test = enabled;
+}
+#endif
+
+static inline bool fm_channel_needs_calc(const FM_CH *CH)
+{
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+	if (ym2610_force_full_fm_for_test)
+		return true;
+#endif
+	return !fm_channel_settled_silent(CH);
+}
+
 /* update phase increment and envelope generator */
 static inline void refresh_fc_eg_slot(FM_SLOT *SLOT , int fc , int kc )
 {
@@ -3630,10 +3662,14 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 		}
 
 		/* calculate FM */
-		chan_calc(context, OPN, cch[0]);	/*remapped to 1*/
-		chan_calc(context, OPN, cch[1]);	/*remapped to 2*/
-		chan_calc(context, OPN, cch[2]);	/*remapped to 4*/
-		chan_calc(context, OPN, cch[3]);	/*remapped to 5*/
+		if (fm_channel_needs_calc(cch[0]))
+			chan_calc(context, OPN, cch[0]);	/*remapped to 1*/
+		if (fm_channel_needs_calc(cch[1]))
+			chan_calc(context, OPN, cch[1]);	/*remapped to 2*/
+		if (fm_channel_needs_calc(cch[2]))
+			chan_calc(context, OPN, cch[2]);	/*remapped to 4*/
+		if (fm_channel_needs_calc(cch[3]))
+			chan_calc(context, OPN, cch[3]);	/*remapped to 5*/
 
 		/* calculate SSG */
 		outn = SSG_CALC(context, outn);
