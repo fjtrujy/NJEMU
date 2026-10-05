@@ -39,7 +39,12 @@ jobs:
             exit 1
           fi
 
-          version="$(python3 tools/njemu_version.py --source-dir .)"
+          version_file="$RUNNER_TEMP/njemu-version.txt"
+          cmake \
+            -DNJEMU_SOURCE_DIR="$PWD" \
+            -DNJEMU_VERSION_OUTPUT_FILE="$version_file" \
+            -P cmake/NJEMUVersion.cmake
+          version="$(cat "$version_file")"
           if [[ "$version" != "${tag#v}" ]]; then
             echo "Tagged source produced version '$version', expected '${tag#v}'" >&2
             exit 1

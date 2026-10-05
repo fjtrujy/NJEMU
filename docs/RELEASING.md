@@ -26,7 +26,7 @@ The first stable SemVer release should be tagged `v2.4.0` once the maintainers c
 
 ## Build version identity
 
-`tools/njemu_version.py` derives the version centrally and CMake consumes its output.
+`cmake/NJEMUVersion.cmake` derives the version centrally from Git and is shared by normal builds and release automation.
 
 | Source state | Example |
 | --- | --- |
@@ -151,7 +151,8 @@ The existing MVS/CPS2 browser ROM converter is preserved at `converter.html` and
 At minimum validate:
 
 ```sh
-python3 -m unittest tests.version_derivation_tests tests.release_packaging_tests
+cmake -P cmake/NJEMUVersionTests.cmake
+python3 -m unittest tests.release_packaging_tests
 git diff --check
 ```
 

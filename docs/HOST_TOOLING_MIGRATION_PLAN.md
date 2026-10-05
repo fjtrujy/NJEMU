@@ -125,12 +125,12 @@ Status: **in progress**
 
 ### Phase 3 - version derivation
 
-Status: **pending**
+Status: **complete**
 
-- [ ] implement shared CMake/Git version helper;
-- [ ] port exact-tag, post-tag, no-tag, archive, override, and dirty regression cases;
-- [ ] migrate CMake and release workflow;
-- [ ] remove `tools/njemu_version.py` after parity.
+- [x] implement shared CMake/Git version helper;
+- [x] port exact-tag, post-tag, no-tag, archive, override, and dirty regression cases;
+- [x] migrate CMake and release workflow;
+- [x] remove `tools/njemu_version.py` after parity.
 
 ### Phase 4 - release packaging
 

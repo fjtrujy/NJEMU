@@ -317,24 +317,10 @@ endif()
 # Version
 #
 # The exact build identity comes from semantic Git tags plus the source commit.
-# tools/njemu_version.py also owns the pre-first-tag/source-archive fallback so
-# workflows and CMake do not maintain independent version constants.
-execute_process(
-    COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_SOURCE_DIR}/tools/njemu_version.py"
-        --source-dir "${CMAKE_SOURCE_DIR}"
-        --format cmake
-    RESULT_VARIABLE NJEMU_VERSION_RESULT
-    OUTPUT_VARIABLE NJEMU_VERSION_CMAKE
-    ERROR_VARIABLE NJEMU_VERSION_ERROR
-)
-if(NOT NJEMU_VERSION_RESULT EQUAL 0)
-    message(FATAL_ERROR "Unable to derive NJEMU version: ${NJEMU_VERSION_ERROR}")
-endif()
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
-set(NJEMU_VERSION_CMAKE_FILE "${CMAKE_BINARY_DIR}/generated/njemu_version.cmake")
-file(WRITE "${NJEMU_VERSION_CMAKE_FILE}" "${NJEMU_VERSION_CMAKE}")
-include("${NJEMU_VERSION_CMAKE_FILE}")
+# Keep all Git/source-archive fallback behavior in the shared CMake helper so
+# normal builds and release automation use the same implementation.
+include("${CMAKE_SOURCE_DIR}/cmake/NJEMUVersion.cmake")
+njemu_derive_version("${CMAKE_SOURCE_DIR}")
 
 # Keep the legacy numeric macro names for platform SDK metadata and the Ad Hoc
 # product ID while sourcing all values from the central semantic version.
@@ -1552,7 +1538,7 @@ endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME version_derivation_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/version_derivation_tests.py)
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/release_packaging_tests.py)
     add_test(NAME game_metadata_generator_tests
