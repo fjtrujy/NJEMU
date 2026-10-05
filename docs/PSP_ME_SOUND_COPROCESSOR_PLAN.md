@@ -2823,6 +2823,60 @@ failures, ring overflows or fatal worker errors.  With no measurable `mslug3` ga
 a `fatfury1` regression, the zero-PM bypass was fully reverted and no `wjammers` run
 was spent on it.
 
+#### Post-C9 ME render optimization: compact YM2610 sine table [complete]
+
+The next pass stopped guessing at branches and profiled the hot FM path itself.  A
+temporary `YM2610_ME_SECTION_PROFILE` build used the ME CP0 Count register and the
+existing render job's reserved words; none of that instrumentation is retained in the
+normal build.  On steady `fatfury1` buffers, the first split measured roughly
+**0.60 million ticks** in LFO/output-clear/EG housekeeping, **1.31-1.45 million** in
+the four `chan_calc()` calls and **0.88-0.93 million** after FM.  Splitting
+`chan_calc()` again showed **1.03-1.14 million ticks** in operator/output synthesis
+versus only **0.25-0.27 million** in phase-counter updates.  A per-slot split was
+approximately proportional to operator count: SLOT1/setup **0.33-0.35 million**,
+SLOT3+SLOT2 **0.50-0.55 million**, and SLOT4 **0.23-0.27 million** ticks per buffer.
+
+One final diagnostic around SLOT4 isolated `op_calc()` itself.  Steady buffers spent
+**0.157-0.192 million** of SLOT4's **0.246-0.287 million ticks** inside the shared
+sine/TL lookup calculation, about **64-67%**, across roughly **2,610-2,926 active
+SLOT4 calls per buffer**.  This made lookup-table footprint a better-supported target
+than another activity bit or dispatch branch.
+
+The generated value ranges permit narrower storage without changing any arithmetic:
+`tl_tab` is **-8168..8168** and `sin_tab` is **0..4275**.  Three variants were tested
+on real PSP.  Compacting both tables to 16-bit cuts their combined storage from
+**30 KiB to 15 KiB** and was very fast on `fatfury1`: two runs improved steady render
+wait from the retained **8.413 ms/buffer** control to **7.495 / 7.496 ms**
+(approximately **-10.9%**).  However, two `mslug3` runs regressed from an interleaved
+**5.653 ms** control to **5.783 / 5.777 ms** (approximately **+2.2%**), despite
+essentially unchanged frame-level performance.  The combined-table variant was
+therefore rejected rather than trading away render headroom on an established
+representative title.
+
+The decomposition showed why retaining only part of that change is preferable.
+Making only `tl_tab` 16-bit was worse on `mslug3`, averaging **6.067 ms/buffer**
+(approximately **+7.3%**), so `tl_tab` remains a native `signed int` table.  Making
+only `sin_tab` `uint16_t`, by contrast, reduces that hot table from **4 KiB to 2 KiB**
+and improved all three representative titles.  Against the same retained controls:
+
+- `mslug3`: **5.602 / 5.567 ms** over two runs versus **5.653 ms**
+  (approximately **-0.9% / -1.5%**);
+- `fatfury1`: **8.069 / 8.074 ms** versus **8.413 ms**
+  (approximately **-4.1% / -4.0%**);
+- `wjammers`: **4.787 / 4.729 ms** versus **5.063 ms**
+  (approximately **-5.5% / -6.6%**).
+
+All six retained-candidate runs stayed ME-authoritative through scripted stop with
+zero CPU recovery attempts, Z80/RAM/bank/I/O mismatches, YM render errors,
+PCM/status mismatches, context-sync failures, send failures, ring overflows or fatal
+worker errors.  The final candidate SHA-256 is
+`a1b37750f3607f242c9f19f6da3c06570c1567a762c24186a873a65b75f7e106`.
+Desktop MVS is **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only,
+full PSP sound-coprocessor and the standalone full-coprocessor worker harness all
+build successfully.  The only retained production change is the exact 16-bit storage
+of `sin_tab`; the experimental profiler and the rejected `tl_tab` compaction are not
+present in normal code.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

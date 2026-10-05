@@ -179,7 +179,9 @@ static signed int ALIGN16_DATA tl_tab[TL_TAB_LEN];
 #define ENV_QUIET		(TL_TAB_LEN>>3)
 
 /* sin waveform table in 'decibel' scale */
-static uint32_t ALIGN16_DATA sin_tab[SIN_LEN];
+/* Generated entries are 0..4275, so 16-bit storage is exact and halves this
+ * hot lookup table from 4 KiB to 2 KiB. */
+static uint16_t ALIGN16_DATA sin_tab[SIN_LEN];
 
 /* sustain level table (3dB per step) */
 /* bit0, bit1, bit2, bit3, bit4, bit5, bit6 */
