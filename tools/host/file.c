@@ -6,6 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
 void host_buffer_init(host_buffer_t *buffer)
 {
     buffer->data = NULL;
@@ -157,4 +164,78 @@ int host_file_exists(const char *path)
         return 0;
     fclose(file);
     return 1;
+}
+
+static int make_one_directory(const char *path)
+{
+#ifdef _WIN32
+    if (_mkdir(path) == 0 || errno == EEXIST)
+#else
+    if (mkdir(path, 0777) == 0 || errno == EEXIST)
+#endif
+        return 1;
+    return 0;
+}
+
+int host_make_directories(const char *path)
+{
+    char *copy;
+    char *cursor;
+    size_t length;
+
+    if (path == NULL || *path == '\0')
+        return 1;
+    copy = (char *)malloc(strlen(path) + 1);
+    if (copy == NULL)
+        return 0;
+    strcpy(copy, path);
+    length = strlen(copy);
+    while (length > 1 && (copy[length - 1] == '/' || copy[length - 1] == '\\'))
+        copy[--length] = '\0';
+    for (cursor = copy + 1; *cursor != '\0'; ++cursor) {
+        if (*cursor == '/' || *cursor == '\\') {
+            char separator = *cursor;
+            *cursor = '\0';
+            if (*copy != '\0' && !make_one_directory(copy)) {
+                free(copy);
+                return 0;
+            }
+            *cursor = separator;
+        }
+    }
+    if (!make_one_directory(copy)) {
+        free(copy);
+        return 0;
+    }
+    free(copy);
+    return 1;
+}
+
+int host_make_parent_directories(const char *path)
+{
+    char *copy;
+    char *slash;
+    char *backslash;
+    int result;
+
+    copy = (char *)malloc(strlen(path) + 1);
+    if (copy == NULL)
+        return 0;
+    strcpy(copy, path);
+    slash = strrchr(copy, '/');
+    backslash = strrchr(copy, '\\');
+    if (backslash != NULL && (slash == NULL || backslash > slash))
+        slash = backslash;
+    if (slash == NULL) {
+        free(copy);
+        return 1;
+    }
+    if (slash == copy) {
+        free(copy);
+        return 1;
+    }
+    *slash = '\0';
+    result = host_make_directories(copy);
+    free(copy);
+    return result;
 }

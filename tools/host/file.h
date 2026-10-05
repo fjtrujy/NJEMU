@@ -22,5 +22,7 @@ int host_read_file(const char *path, host_buffer_t *buffer);
 int host_write_file(const char *path, const void *data, size_t size);
 int host_write_file_if_different(const char *path, const void *data, size_t size);
 int host_file_exists(const char *path);
+int host_make_directories(const char *path);
+int host_make_parent_directories(const char *path);
 
 #endif

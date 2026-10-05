@@ -103,12 +103,12 @@ Status: **complete**
 Status: **in progress**
 
 - [x] font asset (C output is byte-identical to the Python reference);
-- [ ] translations and Unicode glyph lookup;
-- [ ] ROM converter translations;
+- [x] translations and Unicode glyph lookup (all five packs and every per-core generated Unicode source are byte-identical to Python);
+- [x] ROM converter translations (generated C include is byte-identical to Python);
 - [x] game metadata for CPS1/CPS2/MVS/NCDZ (binary and gamelist parity);
 - [x] rominfo parser (CPS2 topology regression: 286 games / 1387 regions / 5382 ROM records);
 - [x] CPS2 unified game database (byte-identical binary and gamelist parity);
-- [ ] DIP metadata;
+- [x] DIP metadata for CPS1/MVS (byte-identical `NJDP` output);
 - [ ] migrate emulator and ROM converter CMake generators;
 - [ ] prove old/new output parity before deleting references.
 

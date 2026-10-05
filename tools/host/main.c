@@ -16,7 +16,9 @@ static const command_entry_t commands[] = {
     {"font", command_font, "validate/build the external GBK font asset"},
     {"game-database", command_game_database, "validate/build the unified CPS2 game database"},
     {"game-metadata", command_game_metadata, "validate/build runtime game metadata"},
+    {"romcnv-translations", command_romcnv_translations, "validate/build ROM converter translations"},
     {"rominfo-validate", command_rominfo_validate, "validate textual rominfo topology"},
+    {"translations", command_translations, "validate/build runtime translations"},
     {"validate-cps2-cache", command_validate_cps2_cache, "validate CPS2 converter cache layouts"},
     {"compare-frames", command_compare_frames, "compare Desktop PPM frame dumps"},
 };

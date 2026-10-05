@@ -17,6 +17,8 @@ add_library(njemu_host_tool_lib STATIC
     rominfo.c
     string_pool.c
     text.c
+    translation_source.c
+    translations.c
     tsv.c
     utf8.c
     command_compare_frames.c
@@ -24,7 +26,9 @@ add_library(njemu_host_tool_lib STATIC
     command_font.c
     command_game_database.c
     command_game_metadata.c
+    command_romcnv_translations.c
     command_rominfo.c
+    command_translations.c
     command_validate_cps2_cache.c
 )
 target_include_directories(njemu_host_tool_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
