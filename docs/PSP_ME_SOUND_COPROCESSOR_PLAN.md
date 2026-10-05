@@ -2729,6 +2729,16 @@ CPU-only, ADPCM-A-only ME and full sound-coprocessor configurations.  The disabl
 fast path is therefore retained; unlike the block-mask experiment, it removes work at
 the exact per-sample point where the historical operation is provably a no-op.
 
+A subsequent attempt to cache the settled-silent decision as a persistent per-channel
+`needs_calc` bit was also rejected after hardware measurement.  The derived flag was
+correct and remained bit-exact against the forced always-`chan_calc()` oracle; reset
+and save-state load were handled conservatively so restored channels could not be
+skipped.  However, the extra bookkeeping on active channels outweighed the cheaper
+check on silent channels.  On the same `mslug3` workload, render-completion wait
+regressed from **5.610 ms** to **5.835 ms / buffer** (**+4.0%**) and windows 8-11 moved
+from **126.02 FPS** to **125.79 FPS**.  The experiment was fully reverted and no
+derived FM activity flag is retained.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
