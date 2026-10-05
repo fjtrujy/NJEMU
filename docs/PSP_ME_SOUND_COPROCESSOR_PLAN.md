@@ -3079,6 +3079,43 @@ mismatches, send failures, overflows or fatal worker errors.  Since the most
 render-bound representative title was already slower, the experiment was fully
 reverted and no `mslug3`/`wjammers` hardware runs were spent on it.
 
+#### Post-C9 ME render micro-optimization: reject ADPCM-A no-decode call bypass [complete]
+
+The retained ADPCM-A decoder still enters `OPNB_ADPCMA_calc_chan_static()` once per
+active channel and output sample even when the phase accumulator does not cross a
+nibble boundary.  At the production 8 MHz / 44.1 kHz YM2610 configuration,
+`adpcma.step` is about **27.5k** against a **65,536** decode threshold, so only about
+**42%** of active-channel calls decode a nibble and roughly **58%** only advance
+`now_step`, re-add the previous `adpcma_out` and return.
+
+A narrowly-scoped candidate inlined only that no-decode case at the PCM-window caller.
+The complex decoder remained unchanged and was still called whenever the threshold was
+crossed.  Allegrex codegen matched the intended shape: no-decode samples performed the
+phase load/add/compare, stored the updated phase and accumulated the existing output
+without a `jal`; decode samples branched to the historical out-of-line function.  A
+test-only selector forced the historical always-call path in an otherwise identical
+window-backed context and verified exact PCM/status output over repeated blocks.
+Desktop MVS stayed **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only,
+full PSP sound-coprocessor and the standalone worker harness all built successfully,
+with a clean `git diff --check`.  The candidate full-coprocessor PRX SHA-256 was
+`0f8d46fc72de1c7f98c2470433817eccfd08d06dd82be950e65dc0dfa9a087b8`.
+
+Real PSP showed that eliminating the call on the common no-decode path did not produce
+a measurable whole-render win.  Two same-session interleaved `fatfury1` A/B pairs
+against committed `5290b29` measured:
+
+- pair 1 steady control **7.447 / 7.572 ms/buffer** versus candidate
+  **7.433 / 7.547 ms**, about **-0.3%**;
+- pair 2 steady control **7.467 / 7.598 ms** versus candidate **7.495 / 7.590 ms**,
+  about **+0.1%**.
+
+Across all four steady windows the controls average about **7.521 ms/buffer** and the
+candidate about **7.516 ms**, effectively **-0.06%** and therefore noise.  Every run
+remained ME-authoritative with zero CPU recovery attempts, PCM/status mismatches, send
+failures or fatal worker errors.  Because the most render-bound representative title
+showed no repeatable end-to-end gain, the fast path was fully reverted and no
+`mslug3`/`wjammers` hardware runs were spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
