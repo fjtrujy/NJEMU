@@ -472,8 +472,13 @@ static const uint8_t ALIGN16_DATA lfo_pm_output[7*8][8]={ /* 7 bits meaningful (
 
 };
 
-/* all 128 LFO PM waveforms */
-static int32_t ALIGN16_DATA lfo_pm_table[128*8*32]; /* 128 combinations of 7 bits meaningful (of F-NUMBER), 8 LFO depths, 32 LFO output levels per one depth */
+/* all 128 LFO PM waveforms. Generated offsets are -190..190, so two exact
+ * signed 16-bit entries fit in one native word. */
+#define LFO_PM_TABLE_LEN (128*8*32)
+static uint32_t ALIGN16_DATA lfo_pm_table[LFO_PM_TABLE_LEN / 2];
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static int32_t ALIGN16_DATA lfo_pm_table_reference[LFO_PM_TABLE_LEN];
+#endif
 
 
 /*----------------------------------
@@ -1366,7 +1371,38 @@ static inline void advance_eg_channel(FM_OPN *OPN, FM_SLOT *SLOT)
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
 static bool ym2610_force_paired_tl_table_for_test;
 static bool ym2610_force_unpacked_tl_magnitude_for_test;
+static bool ym2610_force_wide_lfo_pm_table_for_test;
 #endif
+
+static inline int32_t lfo_pm_table_lookup(uint32_t index)
+{
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+	if (ym2610_force_wide_lfo_pm_table_for_test)
+		return lfo_pm_table_reference[index];
+#endif
+	{
+		uint32_t packed = lfo_pm_table[index >> 1];
+		int32_t value = (int16_t)(packed & 0xffffu);
+
+		if (index & 1u)
+			value = (int16_t)(packed >> 16);
+		return value;
+	}
+}
+
+static void lfo_pm_table_store(uint32_t index, int32_t value)
+{
+	uint32_t word = lfo_pm_table[index >> 1];
+
+	if (index & 1u)
+		word = (word & 0x0000ffffu) | ((uint32_t)(uint16_t)(int16_t)value << 16);
+	else
+		word = (word & 0xffff0000u) | (uint16_t)(int16_t)value;
+	lfo_pm_table[index >> 1] = word;
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+	lfo_pm_table_reference[index] = value;
+#endif
+}
 
 static inline int32_t op_calc(uint32_t phase, uint32_t env, int32_t pm)
 {
@@ -1451,8 +1487,8 @@ static inline void chan_calc(ym2610_context_t *context, FM_OPN *OPN, FM_CH *CH)
 		uint32_t block_fnum = CH->block_fnum;
 
 		uint32_t fnum_lfo = ((block_fnum & 0x7f0) >> 4) * 32 * 8;
-		int32_t lfo_fn_table_index_offset =
-			lfo_pm_table[fnum_lfo + CH->pms + CTX_LFO_PM(context)];
+		int32_t lfo_fn_table_index_offset = lfo_pm_table_lookup(
+			fnum_lfo + CH->pms + CTX_LFO_PM(context));
 
 		if (lfo_fn_table_index_offset)	/* LFO phase modulation active */
 		{
@@ -1529,6 +1565,11 @@ void YM2610ContextSetForcePairedTlTableForTest(bool enabled)
 void YM2610ContextSetForceUnpackedTlMagnitudeForTest(bool enabled)
 {
 	ym2610_force_unpacked_tl_magnitude_for_test = enabled;
+}
+
+void YM2610ContextSetForceWideLfoPmTableForTest(bool enabled)
+{
+	ym2610_force_wide_lfo_pm_table_for_test = enabled;
 }
 
 void YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(bool enabled)
@@ -1752,10 +1793,10 @@ static void OPNInitTable(void)
 						value += lfo_pm_output[offset_fnum_bit + offset_depth][step];
 					}
 				}
-				lfo_pm_table[(fnum*32*8) + (i*32) + step   + 0] = value;
-				lfo_pm_table[(fnum*32*8) + (i*32) +(step^7)+ 8] = value;
-				lfo_pm_table[(fnum*32*8) + (i*32) + step   +16] = -value;
-				lfo_pm_table[(fnum*32*8) + (i*32) +(step^7)+24] = -value;
+				lfo_pm_table_store((fnum*32*8) + (i*32) + step   + 0, value);
+				lfo_pm_table_store((fnum*32*8) + (i*32) +(step^7)+ 8, value);
+				lfo_pm_table_store((fnum*32*8) + (i*32) + step   +16, -value);
+				lfo_pm_table_store((fnum*32*8) + (i*32) +(step^7)+24, -value);
 			}
 #if 0
 			logerror("LFO depth=%1x FNUM=%04x (<<4=%4x): ", i, fnum, fnum<<4);

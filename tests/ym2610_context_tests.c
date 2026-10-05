@@ -201,6 +201,25 @@ static bool render_packed_tl_magnitude_reference_pair(ym2610_context_t *optimize
 			samples * sizeof(*optimized_buffer[1])) == 0;
 }
 
+static bool render_lfo_pm_table_reference_pair(ym2610_context_t *optimized,
+	ym2610_context_t *reference, int32_t **optimized_buffer,
+	int32_t **reference_buffer, uint32_t samples)
+{
+	memset(optimized_buffer[0], 0, samples * sizeof(*optimized_buffer[0]));
+	memset(optimized_buffer[1], 0, samples * sizeof(*optimized_buffer[1]));
+	memset(reference_buffer[0], 0, samples * sizeof(*reference_buffer[0]));
+	memset(reference_buffer[1], 0, samples * sizeof(*reference_buffer[1]));
+	YM2610ContextSetForceWideLfoPmTableForTest(false);
+	YM2610ContextUpdate(optimized, optimized_buffer, (int)samples);
+	YM2610ContextSetForceWideLfoPmTableForTest(true);
+	YM2610ContextUpdate(reference, reference_buffer, (int)samples);
+	YM2610ContextSetForceWideLfoPmTableForTest(false);
+	return memcmp(optimized_buffer[0], reference_buffer[0],
+			samples * sizeof(*optimized_buffer[0])) == 0 &&
+		memcmp(optimized_buffer[1], reference_buffer[1],
+			samples * sizeof(*optimized_buffer[1])) == 0;
+}
+
 static bool render_adpcma_transition_reference_pair(ym2610_context_t *optimized,
 	ym2610_context_t *reference, int32_t **optimized_buffer,
 	int32_t **reference_buffer, uint32_t samples)
@@ -553,6 +572,59 @@ int main(void)
 				}
 			}
 		}
+	}
+
+	/* lfo_pm_table contains exact signed offsets in a wide historical table.
+	 * Exercise the packed signed-16 representation across multiple FNUM regions,
+	 * every non-zero PMS depth and enough fastest-rate LFO samples to traverse
+	 * positive and negative modulation phases. */
+	{
+		static const uint16_t fnums[] = { 0x001, 0x155, 0x2aa, 0x3ff, 0x5a5, 0x7f0 };
+		uint32_t fnum_index;
+
+		for (fnum_index = 0; fnum_index < sizeof(fnums) / sizeof(fnums[0]) && ok;
+			fnum_index++)
+		{
+			uint8_t pms;
+			uint16_t fnum = fnums[fnum_index];
+
+			for (pms = 1; pms < 8 && ok; pms++)
+			{
+				uint32_t block;
+
+				YM2610ContextReset(a);
+				YM2610ContextReset(b);
+				configure_fm_channel_one(a, 7, 0);
+				configure_fm_channel_one(b, 7, 0);
+				write_reg(a, 0xa5, (uint8_t)(0x20u | (fnum >> 8)));
+				write_reg(b, 0xa5, (uint8_t)(0x20u | (fnum >> 8)));
+				write_reg(a, 0xa1, (uint8_t)fnum);
+				write_reg(b, 0xa1, (uint8_t)fnum);
+				write_reg(a, 0xb5, (uint8_t)(0xc0u | pms));
+				write_reg(b, 0xb5, (uint8_t)(0xc0u | pms));
+				write_reg(a, 0x22, 0x0f);
+				write_reg(b, 0x22, 0x0f);
+				fm_channel_one_key(a, true);
+				fm_channel_one_key(b, true);
+				for (block = 0; block < 24; block++)
+				{
+					if (!render_lfo_pm_table_reference_pair(a, b,
+							a_buffer, b_buffer, 128))
+					{
+						fprintf(stderr,
+							"Packed LFO PM table diverged for FNUM 0x%03x PMS %u\n",
+							fnum, pms);
+						ok = 0;
+						break;
+					}
+				}
+				}
+			}
+		write_reg(a, 0x22, 0x00);
+		write_reg(b, 0x22, 0x00);
+		fm_channel_one_key(a, false);
+		fm_channel_one_key(b, false);
+		YM2610ContextSetForceWideLfoPmTableForTest(false);
 	}
 
 	/* Exercise the history terms guarded by the predicate. Algorithm 0 routes

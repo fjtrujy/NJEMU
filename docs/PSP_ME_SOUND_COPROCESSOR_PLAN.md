@@ -3155,6 +3155,57 @@ ME-authoritative with zero CPU recovery attempts, PCM/status mismatches, send fa
 or fatal worker errors.  The packed-sine experiment was therefore fully reverted and
 no `mslug3`/`wjammers` hardware runs were spent on it.
 
+#### Post-C9 ME render optimization: pack LFO PM offsets into native words [complete]
+
+The refreshed profile above still showed approximately **0.261-0.272 million ME
+ticks/buffer** in FM phase updates.  The dominant table in that path was
+`lfo_pm_table`: **32,768 signed 32-bit entries (128 KiB)** even though the generated
+offsets are only **-190..190**.  The retained representation now packs two exact
+signed 16-bit offsets into each native 32-bit word, reducing the table to **64 KiB**.
+The hot lookup remains one `lw`; Allegrex codegen selects the requested half with a
+variable 0/16-bit shift and `seh`, then executes the existing PM arithmetic unchanged.
+
+A test-only historical 32-bit table is built from the same generated offsets and can
+be forced independently.  The oracle compares packed and wide-table PCM
+sample-for-sample across several FNUM regions, every non-zero PMS depth, fastest-rate
+LFO operation long enough to traverse positive and negative modulation phases, and
+the existing FM algorithms/release coverage.  Desktop MVS remained **31/31 CTest
+green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only, full PSP sound-coprocessor and
+the standalone worker harness all built successfully, with a clean `git diff --check`.
+The hardware-tested full-coprocessor candidate PRX SHA-256 was
+`3c6a5128bd4ffa5a491a5940f8cf19eab1f394fb99a3408ebb4801eacbe52359`.
+
+The PSP image also gets a direct memory win.  `psp-size` reports BSS dropping from
+**1,941,048 to 1,875,512 bytes**, exactly **64 KiB**, while text drops by **112 bytes**
+and the PRX file itself is **128 bytes smaller**.
+
+Real-PSP performance was validated with runtime fixtures cloned into control/candidate
+twins before either member of each pair was launched.  This matters for `mslug3`, whose
+persistent runtime state changes the later scripted workload enough to make
+cross-generation comparisons misleading.  Controlled results against committed
+`5290b29` were:
+
+- `fatfury1`: two control/candidate pairs measured steady control
+  **7.438 / 7.584 ms** versus candidate **7.262 / 7.547 ms**, then control
+  **7.456 / 7.582 ms** versus candidate **7.282 / 7.562 ms**.  Across all four steady
+  windows the candidate is approximately **1.35% faster**.
+- `mslug3`: one identical-snapshot pair measured control **9.469 / 9.097 ms** versus
+  candidate **8.580 / 8.261 ms**, approximately **9.3% faster**.  A second pair cloned
+  from a later common snapshot measured control **8.708 / 8.312 ms** versus candidate
+  **8.660 / 8.314 ms**, approximately **0.3% faster**.  The benefit is therefore
+  workload-state-dependent but did not reproduce a regression when the starting state
+  was controlled.
+- `wjammers`: the controlled steady windows measured control **7.363 / 8.893 ms**
+  versus candidate **7.296 / 8.914 ms**, approximately **0.3% faster** overall.  An
+  earlier candidate attempt was discarded because the hostfs transport died after the
+  first audio window; its ME correctness counters were clean, but it was not used as
+  performance evidence.
+
+All retained hardware comparisons stayed ME-authoritative with zero CPU recovery
+attempts, Z80/RAM/bank/I/O mismatches, YM render errors, PCM/status mismatches,
+context-sync failures, send failures, ring overflows or fatal worker errors.  The
+native-word LFO PM packing is therefore retained.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
