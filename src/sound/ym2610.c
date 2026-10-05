@@ -174,7 +174,14 @@
 *   TL_RES_LEN - sinus resolution (X axis)
 */
 #define TL_TAB_LEN (13*2*TL_RES_LEN)
-static signed int ALIGN16_DATA tl_tab[TL_TAB_LEN];
+#define TL_MAG_TAB_LEN (13*TL_RES_LEN)
+/* The historical table stored adjacent +magnitude/-magnitude pairs. The low
+ * bit of the lookup index already carries that sign, so keep one word per
+ * magnitude and restore the sign in op_calc(). */
+static signed int ALIGN16_DATA tl_mag_tab[TL_MAG_TAB_LEN];
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static signed int ALIGN16_DATA tl_tab_reference[TL_TAB_LEN];
+#endif
 
 #define ENV_QUIET		(TL_TAB_LEN>>3)
 
@@ -1353,11 +1360,24 @@ static inline void advance_eg_channel(FM_OPN *OPN, FM_SLOT *SLOT)
 
 #define volume_calc(OP) ((OP)->vol_out + (AM & (OP)->AMmask))
 
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static bool ym2610_force_paired_tl_table_for_test;
+#endif
+
 static inline int32_t op_calc(uint32_t phase, uint32_t env, int32_t pm)
 {
+	signed int value;
+
 	env = (env << 3) + sin_tab[(((int32_t)((phase & ~FREQ_MASK) + (pm))) >> FREQ_SH) & SIN_MASK];
 
-	return ((env < TL_TAB_LEN) ? tl_tab[env] : 0);
+	if (env >= TL_TAB_LEN)
+		return 0;
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+	if (ym2610_force_paired_tl_table_for_test)
+		return tl_tab_reference[env];
+#endif
+	value = tl_mag_tab[env >> 1];
+	return (env & 1u) ? -value : value;
 }
 
 static inline void chan_calc(ym2610_context_t *context, FM_OPN *OPN, FM_CH *CH)
@@ -1485,6 +1505,11 @@ void YM2610ContextSetForceFullFmForTest(bool enabled)
 void YM2610ContextSetForceDisabledLfoAdvanceForTest(bool enabled)
 {
 	ym2610_force_disabled_lfo_advance_for_test = enabled;
+}
+
+void YM2610ContextSetForcePairedTlTableForTest(bool enabled)
+{
+	ym2610_force_paired_tl_table_for_test = enabled;
 }
 #endif
 
@@ -1620,13 +1645,19 @@ static void OPNInitTable(void)
 			n = n>>1;
 						/* 11 bits here (rounded) */
 		n <<= 2;		/* 13 bits here (as in real chip) */
-		tl_tab[ x*2 + 0 ] = n;
-		tl_tab[ x*2 + 1 ] = -tl_tab[ x*2 + 0 ];
+		tl_mag_tab[x] = n;
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+		tl_tab_reference[x*2 + 0] = n;
+		tl_tab_reference[x*2 + 1] = -n;
+#endif
 
 		for (i=1; i<13; i++)
 		{
-			tl_tab[ x*2+0 + i*2*TL_RES_LEN ] =  tl_tab[ x*2+0 ]>>i;
-			tl_tab[ x*2+1 + i*2*TL_RES_LEN ] = -tl_tab[ x*2+0 + i*2*TL_RES_LEN ];
+			tl_mag_tab[x + i*TL_RES_LEN] = n >> i;
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+			tl_tab_reference[x*2 + i*2*TL_RES_LEN] = n >> i;
+			tl_tab_reference[x*2 + 1 + i*2*TL_RES_LEN] = -(n >> i);
+#endif
 		}
 	#if 0
 			logerror("tl %04i", x);
@@ -1636,7 +1667,7 @@ static void OPNInitTable(void)
 		}
 	#endif
 	}
-	/*logerror("FM.C: TL_TAB_LEN = %i elements (%i bytes)\n",TL_TAB_LEN, (int)sizeof(tl_tab));*/
+	/*logerror("FM.C: TL_MAG_TAB_LEN = %i elements (%i bytes)\n",TL_MAG_TAB_LEN, (int)sizeof(tl_mag_tab));*/
 
 
 	for (i=0; i<SIN_LEN; i++)
@@ -1660,7 +1691,7 @@ static void OPNInitTable(void)
 			n = n>>1;
 
 		sin_tab[ i ] = n*2 + (m>=0.0? 0: 1 );
-		/*logerror("FM.C: sin [%4i]= %4i (tl_tab value=%5i)\n", i, sin_tab[i],tl_tab[sin_tab[i]]);*/
+		/*logerror("FM.C: sin [%4i]= %4i\n", i, sin_tab[i]);*/
 	}
 
 	/*logerror("FM.C: ENV_QUIET= %08x\n",ENV_QUIET );*/

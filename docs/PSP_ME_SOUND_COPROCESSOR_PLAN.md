@@ -2877,6 +2877,59 @@ build successfully.  The only retained production change is the exact 16-bit sto
 of `sin_tab`; the experimental profiler and the rejected `tl_tab` compaction are not
 present in normal code.
 
+#### Post-C9 ME render optimization: compact native-word TL magnitude table [complete]
+
+The `op_calc()` profiling above also exposed a second form of redundancy in the
+remaining native-word TL table.  The historical `tl_tab` contains **6,656 signed
+32-bit entries (26 KiB)**, but every magnitude is stored as an adjacent
+`{+value, -value}` pair.  The low bit of the combined envelope/sine lookup index is
+already exactly the sign bit, so the production representation can instead retain
+**3,328 native 32-bit magnitudes (13 KiB)** and reconstruct the sign at lookup time.
+This preserves full-word Allegrex loads, unlike the rejected 16-bit TL experiment.
+
+The first sign reconstruction used an xor/sub mask.  It improved `fatfury1` and
+`mslug3`, but made the noisier `wjammers` render-wait metric look worse.  Allegrex
+codegen inspection showed that the C ternary form compiles to a cheaper conditional
+move (`andi`, negate, `movz`) instead of the mask form's extra xor/add sequence, so
+the final implementation uses the ternary expression.  A test-only paired TL table
+keeps the historical representation available to the host oracle.  The oracle
+compares the compact and historical paths sample-for-sample across all eight FM
+algorithms, active synthesis and release.
+
+Same-session real-PSP control/candidate runs for the final conditional-move form
+measured:
+
+- `fatfury1`: steady render wait **8.106 ms/buffer** control
+  (**7.915 / 8.297 ms**) versus **7.767 ms** candidate
+  (**7.557 / 7.977 ms**), approximately **-4.2%**;
+- `mslug3`: final three complete windows averaged **5.609 ms** control
+  (**5.726 / 5.432 / 5.670 ms**) versus **5.544 ms** candidate
+  (**5.666 / 5.379 / 5.588 ms**), approximately **-1.2%**;
+- `wjammers`: the Allegrex-side render-wait result was not stable enough to decide
+  a small change.  One interleaved candidate run averaged about **1.2% faster** than
+  its control while a repeat averaged about **2.5% slower** despite the same scripted
+  workload sequence.
+
+To resolve the `wjammers` ambiguity, a temporary CP0 Count build measured the YM2610
+render directly on the ME, avoiding Allegrex polling/overlap noise.  The paired-table
+control measured **1,458,481 / 1,417,322 / 1,753,984 ticks/buffer** across its three
+complete audio windows; the magnitude-table candidate measured
+**1,411,633 / 1,455,778 / 1,714,474**.  Across all three windows the compact table was
+about **1.0% lower**, while the two steady windows were effectively identical
+(**1,585,653 vs 1,585,126 ticks/buffer**, about **-0.03%**).  This rules out a real
+synthesis regression on the third representative title: the conflicting
+`me_render_wait` result came from scheduling/overlap noise rather than extra ME work.
+
+All retained-candidate hardware runs stayed ME-authoritative through scripted stop
+with zero CPU recovery attempts, Z80/RAM/bank/I/O mismatches, YM render errors,
+PCM/status mismatches, context-sync failures, send failures, ring overflows or fatal
+worker errors.  The final unprofiled PSP MVS candidate SHA-256 is
+`0a96589f61e95f92bfa00df178574285f19ba322bedd3ee51bfcbc029a0c6cf3`.
+Desktop MVS is **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only,
+full PSP sound-coprocessor and the standalone full-coprocessor worker harness all
+build successfully.  `git diff --check` is clean.  No CP0 profiler or diagnostic
+transport changes are retained in normal code.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
