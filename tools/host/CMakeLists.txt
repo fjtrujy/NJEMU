@@ -8,16 +8,19 @@ set(CMAKE_C_EXTENSIONS OFF)
 add_library(njemu_host_tool_lib STATIC
     c_source.c
     crc32.c
+    dip_metadata.c
     endian.c
     file.c
     game_database.c
     game_metadata.c
+    json.c
     rominfo.c
     string_pool.c
     text.c
     tsv.c
     utf8.c
     command_compare_frames.c
+    command_dip_metadata.c
     command_font.c
     command_game_database.c
     command_game_metadata.c

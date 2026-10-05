@@ -12,6 +12,7 @@ typedef struct command_entry {
 } command_entry_t;
 
 static const command_entry_t commands[] = {
+    {"dip-metadata", command_dip_metadata, "validate/build localized DIP metadata"},
     {"font", command_font, "validate/build the external GBK font asset"},
     {"game-database", command_game_database, "validate/build the unified CPS2 game database"},
     {"game-metadata", command_game_metadata, "validate/build runtime game metadata"},
