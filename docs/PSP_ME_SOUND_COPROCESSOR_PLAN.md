@@ -2674,6 +2674,61 @@ sound-coprocessor configurations, including the standalone hardware harness.  Un
 the rejected cache experiments, this fast path therefore removes measurable ME
 synthesis cost without weakening the sound-island oracle or fallback guarantees.
 
+#### Post-C9 ME render micro-optimizations: reject block FM mask, skip disabled LFO [complete]
+
+A follow-up attempt tried to cache the set of FM channels that required `chan_calc()`
+once per output block instead of reevaluating the settled-silent predicate every
+sample.  The idea was correct only for channels whose state remains stable for the
+whole block; in practice an active channel can finish its release and become safely
+skippable part-way through the block.  Freezing the active mask at block entry kept
+calling `chan_calc()` for the rest of that block and made the real PSP slower.  On the
+same deterministic `mslug3` workload, steady-state render-completion wait increased
+from **6.425 ms / buffer** for the retained settled-silent implementation to
+**7.115 ms / buffer**.  The block-mask experiment was therefore fully reverted.
+
+The retained follow-up instead removes a per-sample no-op from the LFO path.  In the
+historical implementation `advance_lfo()` is called for every sample even when the LFO
+is disabled.  With `OPN->lfo_inc == 0` that function performs exactly two operations:
+it sets AM to zero and PM to zero.  It does **not** advance `lfo_cnt`.  The optimized
+path therefore clears AM/PM once before the render loop and skips the per-sample call
+while `lfo_inc` is zero; enabled-LFO behavior is unchanged.
+
+`ym2610_context_tests` contains a test-only reference selector that forces the old
+per-sample disabled-LFO call.  Two independent contexts are driven through:
+
+- enabled LFO at maximum AMS/PMS until phase/state is non-trivial;
+- LFO disable, comparing optimized and historical paths sample-for-sample;
+- LFO re-enable, proving the preserved `lfo_cnt` resumes the same phase/output;
+- key-off/release while disabled, again remaining bit-exact.
+
+This also exposed an oracle hygiene detail: `YM2610ContextReset()` intentionally does
+not erase every FM history term (`phase`, feedback and delayed MEM state), so the test
+drains release before reusing those contexts rather than assuming reset is a complete
+history wipe.
+
+The Release PSP/MVS candidate used for hardware validation has SHA-256
+`ba70af9cf5e96d32b4b3b463bc0318ff3df2228aacc8dd089a349fbdf5d7e3eb`.
+On the deterministic `mslug3` workload, representative windows **8-11** retain the
+same `sound_cmd = 4, 5, 4, 3` sequence and improve from **125.09 FPS** to
+**126.02 FPS**.  More importantly for this micro-optimization, the steady-state ME
+render-completion wait drops from **6.425 ms** to **5.610 ms / buffer** (**-12.7%**).
+
+The same candidate was rerun on the representative hardware set:
+
+| game | settled-silent FM render wait | disabled-LFO fast path | change |
+| --- | ---: | ---: | ---: |
+| `mslug3` | 6.425 ms | **5.610 ms** | **-12.7%** |
+| `wjammers` | 5.237 ms | **5.063 ms** | **-3.3%** |
+| `fatfury1` | 9.182 ms | **8.380 ms** | **-8.7%** |
+
+All three runs remained ME-authoritative through their scripted stop with zero CPU
+recovery failures, Z80 state/RAM/bank/I/O mismatches, YM render errors, PCM/status
+mismatches, context-sync failures, command/event overflows or fatal worker errors.
+Desktop MVS remains **31/31 CTest green**, Desktop NCDZ builds, and PSP MVS builds in
+CPU-only, ADPCM-A-only ME and full sound-coprocessor configurations.  The disabled-LFO
+fast path is therefore retained; unlike the block-mask experiment, it removes work at
+the exact per-sample point where the historical operation is provably a no-op.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

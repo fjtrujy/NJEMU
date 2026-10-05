@@ -144,6 +144,25 @@ static bool render_fm_reference_pair(ym2610_context_t *optimized,
 	return true;
 }
 
+static bool render_disabled_lfo_reference_pair(ym2610_context_t *optimized,
+	ym2610_context_t *reference, int32_t **optimized_buffer,
+	int32_t **reference_buffer, uint32_t samples)
+{
+	memset(optimized_buffer[0], 0, samples * sizeof(*optimized_buffer[0]));
+	memset(optimized_buffer[1], 0, samples * sizeof(*optimized_buffer[1]));
+	memset(reference_buffer[0], 0, samples * sizeof(*reference_buffer[0]));
+	memset(reference_buffer[1], 0, samples * sizeof(*reference_buffer[1]));
+	YM2610ContextSetForceDisabledLfoAdvanceForTest(false);
+	YM2610ContextUpdate(optimized, optimized_buffer, (int)samples);
+	YM2610ContextSetForceDisabledLfoAdvanceForTest(true);
+	YM2610ContextUpdate(reference, reference_buffer, (int)samples);
+	YM2610ContextSetForceDisabledLfoAdvanceForTest(false);
+	return memcmp(optimized_buffer[0], reference_buffer[0],
+			samples * sizeof(*optimized_buffer[0])) == 0 &&
+		memcmp(optimized_buffer[1], reference_buffer[1],
+			samples * sizeof(*optimized_buffer[1])) == 0;
+}
+
 static ym2610_context_t *alloc_context(void **storage_out)
 {
 	size_t size = YM2610ContextSize();
@@ -313,6 +332,76 @@ int main(void)
 			if (!render_fm_reference_pair(a, b, a_buffer, b_buffer, 128, NULL))
 			{
 				fprintf(stderr, "Settled-silent FM fast path diverged during release\n");
+				ok = 0;
+				break;
+			}
+		}
+	}
+
+	/* Disabled advance_lfo() only clears AM/PM and leaves lfo_cnt untouched.
+	 * Exercise the transition from an active, non-zero LFO state to disabled,
+	 * compare the block fast path against the historical per-sample calls, then
+	 * re-enable LFO and require both contexts to resume the same phase/output. */
+	{
+		uint32_t block;
+
+		YM2610ContextReset(a);
+		YM2610ContextReset(b);
+		configure_fm_channel_one(a, 7, 0);
+		configure_fm_channel_one(b, 7, 0);
+		write_reg(a, 0xb5, 0xf7); /* L/R, maximum AMS/PMS on channel 1. */
+		write_reg(b, 0xb5, 0xf7);
+		write_reg(a, 0x22, 0x0f); /* Enable LFO at the fastest rate. */
+		write_reg(b, 0x22, 0x0f);
+		fm_channel_one_key(a, true);
+		fm_channel_one_key(b, true);
+		for (block = 0; block < 4; block++)
+		{
+			memset(a_left, 0, sizeof(a_left));
+			memset(a_right, 0, sizeof(a_right));
+			memset(b_left, 0, sizeof(b_left));
+			memset(b_right, 0, sizeof(b_right));
+			YM2610ContextUpdate(a, a_buffer, 128);
+			YM2610ContextUpdate(b, b_buffer, 128);
+			if (memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+				memcmp(a_right, b_right, sizeof(a_right)) != 0)
+			{
+				fprintf(stderr, "Enabled LFO setup diverged between reference contexts\n");
+				ok = 0;
+				break;
+			}
+		}
+		write_reg(a, 0x22, 0x00);
+		write_reg(b, 0x22, 0x00);
+		if (ok && !render_disabled_lfo_reference_pair(a, b, a_buffer, b_buffer,
+				128))
+		{
+			fprintf(stderr, "Disabled LFO block fast path diverged from per-sample reference\n");
+			ok = 0;
+		}
+		write_reg(a, 0x22, 0x0f);
+		write_reg(b, 0x22, 0x0f);
+		memset(a_left, 0, sizeof(a_left));
+		memset(a_right, 0, sizeof(a_right));
+		memset(b_left, 0, sizeof(b_left));
+		memset(b_right, 0, sizeof(b_right));
+		YM2610ContextUpdate(a, a_buffer, 128);
+		YM2610ContextUpdate(b, b_buffer, 128);
+		if (memcmp(a_left, b_left, sizeof(a_left)) != 0 ||
+			memcmp(a_right, b_right, sizeof(a_right)) != 0)
+		{
+			fprintf(stderr, "Disabled LFO fast path changed resumed LFO phase/output\n");
+			ok = 0;
+		}
+		write_reg(a, 0x22, 0x00);
+		write_reg(b, 0x22, 0x00);
+		fm_channel_one_key(a, false);
+		fm_channel_one_key(b, false);
+		for (block = 0; block < 48; block++)
+		{
+			if (!render_disabled_lfo_reference_pair(a, b, a_buffer, b_buffer, 128))
+			{
+				fprintf(stderr, "Disabled LFO fast path diverged during FM release\n");
 				ok = 0;
 				break;
 			}

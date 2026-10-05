@@ -1473,10 +1473,16 @@ static inline bool fm_channel_settled_silent(const FM_CH *CH)
 
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
 static bool ym2610_force_full_fm_for_test;
+static bool ym2610_force_disabled_lfo_advance_for_test;
 
 void YM2610ContextSetForceFullFmForTest(bool enabled)
 {
 	ym2610_force_full_fm_for_test = enabled;
+}
+
+void YM2610ContextSetForceDisabledLfoAdvanceForTest(bool enabled)
+{
+	ym2610_force_disabled_lfo_advance_for_test = enabled;
 }
 #endif
 
@@ -3582,6 +3588,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 {
 	FM_OPN *OPN = &CTX_YM2610(context).OPN;
 	int i, j, outn;
+	bool advance_lfo_per_sample = OPN->lfo_inc != 0;
 	int32_t *bufL, *bufR;
 	FMSAMPLE_MIX lt, rt;
 	FM_CH *cch[6];
@@ -3616,6 +3623,15 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 	refresh_fc_eg_chan(cch[2]);
 	refresh_fc_eg_chan(cch[3]);
 
+	if (!advance_lfo_per_sample)
+	{
+		CTX_LFO_AM(context) = 0;
+		CTX_LFO_PM(context) = 0;
+#if defined(YM2610_CONTEXT_TEST_REFERENCE)
+		advance_lfo_per_sample = ym2610_force_disabled_lfo_advance_for_test;
+#endif
+	}
+
 	/* calc SSG count */
 	outn = SSG_calc_count(context, length);
 
@@ -3627,7 +3643,8 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 	/* buffering */
 	for (i = 0; i < length; i++)
 	{
-		advance_lfo(context, OPN);
+		if (advance_lfo_per_sample)
+			advance_lfo(context, OPN);
 
 		/* clear output acc. */
 		CTX_out_adpcma(context)[OUTD_LEFT] =
