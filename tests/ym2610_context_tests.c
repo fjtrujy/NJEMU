@@ -182,6 +182,25 @@ static bool render_tl_table_reference_pair(ym2610_context_t *optimized,
 			samples * sizeof(*optimized_buffer[1])) == 0;
 }
 
+static bool render_packed_tl_magnitude_reference_pair(ym2610_context_t *optimized,
+	ym2610_context_t *reference, int32_t **optimized_buffer,
+	int32_t **reference_buffer, uint32_t samples)
+{
+	memset(optimized_buffer[0], 0, samples * sizeof(*optimized_buffer[0]));
+	memset(optimized_buffer[1], 0, samples * sizeof(*optimized_buffer[1]));
+	memset(reference_buffer[0], 0, samples * sizeof(*reference_buffer[0]));
+	memset(reference_buffer[1], 0, samples * sizeof(*reference_buffer[1]));
+	YM2610ContextSetForceUnpackedTlMagnitudeForTest(false);
+	YM2610ContextUpdate(optimized, optimized_buffer, (int)samples);
+	YM2610ContextSetForceUnpackedTlMagnitudeForTest(true);
+	YM2610ContextUpdate(reference, reference_buffer, (int)samples);
+	YM2610ContextSetForceUnpackedTlMagnitudeForTest(false);
+	return memcmp(optimized_buffer[0], reference_buffer[0],
+			samples * sizeof(*optimized_buffer[0])) == 0 &&
+		memcmp(optimized_buffer[1], reference_buffer[1],
+			samples * sizeof(*optimized_buffer[1])) == 0;
+}
+
 static bool render_adpcma_transition_reference_pair(ym2610_context_t *optimized,
 	ym2610_context_t *reference, int32_t **optimized_buffer,
 	int32_t **reference_buffer, uint32_t samples)
@@ -483,6 +502,51 @@ int main(void)
 				{
 					fprintf(stderr,
 						"Compact TL magnitude table diverged during FM release for algorithm %u\n",
+						algorithm);
+					ok = 0;
+					break;
+				}
+			}
+		}
+	}
+
+	/* The production magnitude table packs two exact 16-bit magnitudes into
+	 * each native word. Compare its word-load/extract path against the prior
+	 * one-native-word-per-magnitude representation across every FM algorithm. */
+	{
+		uint32_t algorithm;
+
+		for (algorithm = 0; algorithm < 8 && ok; algorithm++)
+		{
+			uint32_t block;
+
+			YM2610ContextReset(a);
+			YM2610ContextReset(b);
+			configure_fm_channel_one(a, (uint8_t)algorithm, 7);
+			configure_fm_channel_one(b, (uint8_t)algorithm, 7);
+			fm_channel_one_key(a, true);
+			fm_channel_one_key(b, true);
+			for (block = 0; block < 12; block++)
+			{
+				if (!render_packed_tl_magnitude_reference_pair(a, b,
+						a_buffer, b_buffer, 128))
+				{
+					fprintf(stderr,
+						"Packed TL magnitude table diverged for FM algorithm %u\n",
+						algorithm);
+					ok = 0;
+					break;
+				}
+			}
+			fm_channel_one_key(a, false);
+			fm_channel_one_key(b, false);
+			for (block = 0; block < 24 && ok; block++)
+			{
+				if (!render_packed_tl_magnitude_reference_pair(a, b,
+						a_buffer, b_buffer, 128))
+				{
+					fprintf(stderr,
+						"Packed TL magnitude table diverged during FM release for algorithm %u\n",
 						algorithm);
 					ok = 0;
 					break;

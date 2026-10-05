@@ -3012,6 +3012,48 @@ Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only, full PSP sound-coprocessor and the
 standalone full-coprocessor worker harness all build successfully; `git diff --check`
 is clean.
 
+#### Post-C9 ME render optimization: pack two TL magnitudes per native word [complete]
+
+The retained native-word TL magnitude table still occupied **13,312 bytes** even
+though every generated magnitude is in the exact unsigned range **0..8168**.  The
+earlier direct 16-bit TL experiment had already shown that simply switching the hot
+lookup to halfword loads is a bad trade on Allegrex, especially on `mslug3`.  This
+follow-up keeps native 32-bit loads instead: two exact 16-bit magnitudes are packed
+into each word, reducing the hot magnitude table from **13 KiB to 6.5 KiB**.
+
+A dedicated test-only unpacked magnitude table keeps the immediately preceding
+one-word-per-magnitude representation available as an oracle.  The packed and
+unpacked paths compare sample-for-sample across all eight FM algorithms, active
+synthesis and release; the older paired signed TL-table oracle remains in place as an
+additional independent reference.  Allegrex codegen uses one `lw`, extracts/selects
+the low or high 16-bit magnitude with ALU operations and a conditional move, then
+performs the already-retained sign restoration.  No `lh`/`lhu` access was introduced
+for the TL magnitude table.
+
+Real-PSP unprofiled A/B runs against committed `c534e6a` measured:
+
+- `fatfury1`: steady control **7.513 / 7.924 ms**, averaging
+  **7.719 ms/buffer**; packed TL **7.426 / 7.564 ms**, averaging **7.495 ms**,
+  approximately **-2.9%**.
+- `mslug3`: the three complete control windows were
+  **5.526 / 5.255 / 5.352 ms**, averaging **5.378 ms/buffer**; packed TL measured
+  **5.297 / 5.083 / 5.258 ms**, averaging **5.213 ms**, approximately **-3.1%**.
+- `wjammers`: the two steady control windows were **4.492 / 5.440 ms**, averaging
+  **4.966 ms/buffer**; packed TL measured **4.512 / 4.890 ms**, averaging
+  **4.701 ms**, approximately **-5.3%**.  Because this title has previously shown
+  noisy render-wait results, the scripted workload was checked explicitly: all
+  **19** `sound_cmd` counts matched control window-for-window, and candidate frame FPS
+  was higher in every corresponding frame window.
+
+All representative runs stayed ME-authoritative through scripted stop with zero CPU
+recovery attempts, Z80/RAM/bank/I/O mismatches, YM render errors, PCM/status
+mismatches, context-sync failures, send failures, ring overflows or fatal worker
+errors.  The retained full-coprocessor PSP MVS candidate SHA-256 is
+`05f480ff85221fc4f1de0034a7cd915123e6ac54701701f67fbd76e2c71d7705`.
+Desktop MVS is **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only,
+full PSP sound-coprocessor and the standalone worker harness all build successfully;
+`git diff --check` is clean.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

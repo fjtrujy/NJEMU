@@ -175,11 +175,14 @@
 */
 #define TL_TAB_LEN (13*2*TL_RES_LEN)
 #define TL_MAG_TAB_LEN (13*TL_RES_LEN)
+#define TL_PACKED_MAG_TAB_LEN (TL_MAG_TAB_LEN/2)
 /* The historical table stored adjacent +magnitude/-magnitude pairs. The low
- * bit of the lookup index already carries that sign, so keep one word per
- * magnitude and restore the sign in op_calc(). */
-static signed int ALIGN16_DATA tl_mag_tab[TL_MAG_TAB_LEN];
+ * bit of the lookup index already carries that sign. Two exact 16-bit
+ * magnitudes fit in one native word, preserving 32-bit loads while halving
+ * the remaining magnitude-table footprint. */
+static uint32_t ALIGN16_DATA tl_mag_tab[TL_PACKED_MAG_TAB_LEN];
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
+static signed int ALIGN16_DATA tl_mag_reference[TL_MAG_TAB_LEN];
 static signed int ALIGN16_DATA tl_tab_reference[TL_TAB_LEN];
 #endif
 
@@ -1362,10 +1365,12 @@ static inline void advance_eg_channel(FM_OPN *OPN, FM_SLOT *SLOT)
 
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
 static bool ym2610_force_paired_tl_table_for_test;
+static bool ym2610_force_unpacked_tl_magnitude_for_test;
 #endif
 
 static inline int32_t op_calc(uint32_t phase, uint32_t env, int32_t pm)
 {
+	uint32_t packed;
 	signed int value;
 
 	env = (env << 3) + sin_tab[(((int32_t)((phase & ~FREQ_MASK) + (pm))) >> FREQ_SH) & SIN_MASK];
@@ -1375,8 +1380,16 @@ static inline int32_t op_calc(uint32_t phase, uint32_t env, int32_t pm)
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
 	if (ym2610_force_paired_tl_table_for_test)
 		return tl_tab_reference[env];
+	if (ym2610_force_unpacked_tl_magnitude_for_test)
+	{
+		value = tl_mag_reference[env >> 1];
+		return (env & 1u) ? -value : value;
+	}
 #endif
-	value = tl_mag_tab[env >> 1];
+	packed = tl_mag_tab[env >> 2];
+	value = packed & 0xffffu;
+	if (env & 2u)
+		value = packed >> 16;
 	return (env & 1u) ? -value : value;
 }
 
@@ -1513,6 +1526,11 @@ void YM2610ContextSetForcePairedTlTableForTest(bool enabled)
 	ym2610_force_paired_tl_table_for_test = enabled;
 }
 
+void YM2610ContextSetForceUnpackedTlMagnitudeForTest(bool enabled)
+{
+	ym2610_force_unpacked_tl_magnitude_for_test = enabled;
+}
+
 void YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(bool enabled)
 {
 	ym2610_force_historical_adpcma_transition_for_test = enabled;
@@ -1635,6 +1653,8 @@ static void OPNInitTable(void)
 	signed int n;
 	float o,m;
 
+	memset(tl_mag_tab, 0, sizeof(tl_mag_tab));
+
 	for (x=0; x<TL_RES_LEN; x++)
 	{
 		m = (1<<16) / pow(2, (x+1) * (ENV_STEP/4.0) / 8.0);
@@ -1651,16 +1671,22 @@ static void OPNInitTable(void)
 			n = n>>1;
 						/* 11 bits here (rounded) */
 		n <<= 2;		/* 13 bits here (as in real chip) */
-		tl_mag_tab[x] = n;
+		tl_mag_tab[x >> 1] |= (uint32_t)(uint16_t)n << ((x & 1) * 16);
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
+		tl_mag_reference[x] = n;
 		tl_tab_reference[x*2 + 0] = n;
 		tl_tab_reference[x*2 + 1] = -n;
 #endif
 
 		for (i=1; i<13; i++)
 		{
-			tl_mag_tab[x + i*TL_RES_LEN] = n >> i;
+			uint32_t index = (uint32_t)(x + i*TL_RES_LEN);
+			uint32_t magnitude = (uint32_t)(n >> i);
+
+			tl_mag_tab[index >> 1] |=
+				magnitude << ((index & 1u) * 16u);
 #if defined(YM2610_CONTEXT_TEST_REFERENCE)
+			tl_mag_reference[index] = (signed int)magnitude;
 			tl_tab_reference[x*2 + i*2*TL_RES_LEN] = n >> i;
 			tl_tab_reference[x*2 + 1 + i*2*TL_RES_LEN] = -(n >> i);
 #endif
@@ -1673,7 +1699,7 @@ static void OPNInitTable(void)
 		}
 	#endif
 	}
-	/*logerror("FM.C: TL_MAG_TAB_LEN = %i elements (%i bytes)\n",TL_MAG_TAB_LEN, (int)sizeof(tl_mag_tab));*/
+	/*logerror("FM.C: TL_PACKED_MAG_TAB_LEN = %i elements (%i bytes)\n",TL_PACKED_MAG_TAB_LEN, (int)sizeof(tl_mag_tab));*/
 
 
 	for (i=0; i<SIN_LEN; i++)

@@ -71,6 +71,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 void YM2610ContextSetForceFullFmForTest(bool enabled);
 void YM2610ContextSetForceDisabledLfoAdvanceForTest(bool enabled);
 void YM2610ContextSetForcePairedTlTableForTest(bool enabled);
+void YM2610ContextSetForceUnpackedTlMagnitudeForTest(bool enabled);
 void YM2610ContextSetForceHistoricalAdpcmaTransitionForTest(bool enabled);
 #endif
 #if (EMU_SYSTEM == MVS)
