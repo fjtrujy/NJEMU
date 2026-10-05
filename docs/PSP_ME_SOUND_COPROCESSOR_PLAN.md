@@ -2513,6 +2513,44 @@ This closes the immediate post-C9 synchronization optimization: the dominant ren
 fence still exists for the sound thread, but it no longer serializes Allegrex main-thread
 progress for the duration of ME synthesis.
 
+#### Post-C9 render overlap: representative-game hardware closure [complete]
+
+The render-overlap change was also rerun on the two representative titles that had
+previously exposed the most useful non-`mslug3` sound-side behavior: `wjammers` and
+`fatfury1`.  Fresh run directories were created from the current runtime layout and
+used local ROM copies, so this validation did not modify or depend on writable files
+under the repository `resources/` tree.  Both titles used the exact same Release PSP
+binary as the final `mslug3` overlap measurement:
+
+`aa5c2f5043cc788ed4196b24dc9b539d8b35a5093ddd72252e81bdf0250705c4`.
+
+All three workloads remained ME-authoritative for every profiled emulation window and
+ran through their automatic stop without falling back to CPU sound:
+
+| game | autonomous Z80 slices | ME-owned scheduler slices | YM renders | rendered sample frames | command-ring high-water |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `mslug3` | 22,493 | 6,059 | 1,406 | 1,047,629 | 5/16 |
+| `wjammers` | 14,081 | 6,233 | 1,122 | 836,017 | **9/16** |
+| `fatfury1` | 16,823 | 6,204 | 1,154 | 859,861 | 5/16 |
+
+`wjammers` remains the strongest FIFO/concurrency stress case of this set: its command
+ring reached **9/16**, substantially above `mslug3`, while the event ring still peaked
+at only 1 and the legacy Z80 batch ring remained unused in the authoritative path.
+It also exercised a much higher volume of M68000-visible sound-status reads during its
+startup/attract sequence.  `fatfury1` supplied a different timer/render workload with
+10,619 locally generated YM timer overflows across the complete run.
+
+Across both new representative runs there were **zero** CPU recovery attempts, Z80
+state/RAM/bank/I/O mismatches, PCM or YM-status mismatches, context-sync failures,
+send failures, command/event/batch overflows or fatal worker errors.  The maximum
+bounded status-fence wait was 253 us for `wjammers` and 292 us for `fatfury1`.
+
+This closes the representative-game correctness gate for the post-C9 overlap: the
+concurrency optimization is not specific to the `mslug3` benchmark and remains
+fail-safe under distinct command, timer and status-read patterns.  Physical PSP
+sleep/resume observation remains intentionally deferred by the current development
+decision and is not part of this closure.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
