@@ -294,6 +294,7 @@ int host_translation_load_catalog(const char *path,
     char *error, size_t error_size)
 {
     host_buffer_t file;
+    uint8_t *seen = NULL;
     char *cursor;
     size_t line_number = 0;
     size_t message_index = 0;
@@ -307,6 +308,11 @@ int host_translation_load_catalog(const char *path,
         return 0;
     }
     catalog->count = manifest->count;
+    seen = (uint8_t *)calloc(manifest->count, sizeof(*seen));
+    if (seen == NULL && manifest->count != 0) {
+        snprintf(error, error_size, "out of memory loading %s", path);
+        goto out;
+    }
     host_buffer_init(&file);
     if (!host_read_file(path, &file)) {
         snprintf(error, error_size, "missing translation source: %s", path);
@@ -323,6 +329,8 @@ int host_translation_load_catalog(const char *path,
         char *equals;
         char *lstrip;
         size_t key_length;
+        size_t key_index = manifest->count;
+        size_t key;
         char context[512];
 
         ++line_number;
@@ -347,14 +355,35 @@ int host_translation_load_catalog(const char *path,
             goto out;
         }
         key_length = (size_t)(equals - line);
-        if (key_length == 0 || message_index >= manifest->count
-            || strlen(manifest->names[message_index]) != key_length
-            || memcmp(line, manifest->names[message_index], key_length) != 0) {
-            snprintf(error, error_size,
-                "%s:%lu: keys must follow manifest order and contain no unknown entries",
+        if (key_length == 0) {
+            snprintf(error, error_size, "%s:%lu: invalid empty key",
                 path, (unsigned long)line_number);
             goto out;
         }
+        for (key = 0; key < manifest->count; ++key) {
+            if (strlen(manifest->names[key]) == key_length
+                && memcmp(line, manifest->names[key], key_length) == 0) {
+                key_index = key;
+                break;
+            }
+        }
+        if (key_index == manifest->count) {
+            snprintf(error, error_size, "%s:%lu: unknown key %.*s",
+                path, (unsigned long)line_number, (int)key_length, line);
+            goto out;
+        }
+        if (seen[key_index]) {
+            snprintf(error, error_size, "%s:%lu: duplicate key %s",
+                path, (unsigned long)line_number, manifest->names[key_index]);
+            goto out;
+        }
+        if (message_index >= manifest->count || key_index != message_index) {
+            snprintf(error, error_size,
+                "%s:%lu: keys must follow manifest order",
+                path, (unsigned long)line_number);
+            goto out;
+        }
+        seen[key_index] = 1;
         snprintf(context, sizeof(context), "%s:%lu (%s)", path,
             (unsigned long)line_number, manifest->names[message_index]);
         if (!decode_value((const uint8_t *)equals + 1, strlen(equals + 1),
@@ -370,6 +399,7 @@ int host_translation_load_catalog(const char *path,
     }
     ok = 1;
 out:
+    free(seen);
     host_buffer_free(&file);
     if (!ok)
         host_translation_catalog_free(catalog);

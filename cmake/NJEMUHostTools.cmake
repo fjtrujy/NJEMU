@@ -8,6 +8,7 @@ set(NJEMU_HOST_C_COMPILER "" CACHE FILEPATH
 function(njemu_enable_host_tools)
     if(TARGET njemu_host_tools)
         set(NJEMU_HOST_TOOL "${NJEMU_HOST_TOOL}" PARENT_SCOPE)
+        set(NJEMU_HOST_TEST "${NJEMU_HOST_TEST}" PARENT_SCOPE)
         set(NJEMU_HOST_TOOL_TARGET njemu_host_tools PARENT_SCOPE)
         return()
     endif()
@@ -34,6 +35,7 @@ function(njemu_enable_host_tools)
     set(_host_root "${CMAKE_BINARY_DIR}/host-tools")
     set(_host_install "${_host_root}/install")
     set(_host_tool "${_host_install}/bin/njemu-tool${_host_executable_suffix}")
+    set(_host_test "${_host_install}/bin/njemu-host-tests${_host_executable_suffix}")
     set(_host_cmake_args
         "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
         "-DCMAKE_BUILD_TYPE=Release"
@@ -47,12 +49,14 @@ function(njemu_enable_host_tools)
         BINARY_DIR "${_host_root}/build"
         INSTALL_DIR "${_host_install}"
         CMAKE_ARGS ${_host_cmake_args}
-        BUILD_BYPRODUCTS "${_host_tool}"
+        BUILD_BYPRODUCTS "${_host_tool}" "${_host_test}"
         UPDATE_COMMAND ""
         TEST_COMMAND ""
     )
 
     set(NJEMU_HOST_TOOL "${_host_tool}" CACHE INTERNAL "NJEMU native host tool executable")
+    set(NJEMU_HOST_TEST "${_host_test}" CACHE INTERNAL "NJEMU native host-tool tests executable")
     set(NJEMU_HOST_TOOL_TARGET njemu_host_tools PARENT_SCOPE)
     set(NJEMU_HOST_TOOL "${_host_tool}" PARENT_SCOPE)
+    set(NJEMU_HOST_TEST "${_host_test}" PARENT_SCOPE)
 endfunction()

@@ -36,9 +36,13 @@ target_include_directories(njemu_host_tool_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DI
 add_executable(njemu-tool main.c)
 target_link_libraries(njemu-tool PRIVATE njemu_host_tool_lib)
 
+add_executable(njemu-host-tests host_tests.c)
+target_link_libraries(njemu-host-tests PRIVATE njemu_host_tool_lib)
+
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(njemu_host_tool_lib PRIVATE -Wall -Wextra -Werror -pedantic)
     target_compile_options(njemu-tool PRIVATE -Wall -Wextra -Werror -pedantic)
+    target_compile_options(njemu-host-tests PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
-install(TARGETS njemu-tool RUNTIME DESTINATION bin)
+install(TARGETS njemu-tool njemu-host-tests RUNTIME DESTINATION bin)

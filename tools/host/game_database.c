@@ -71,6 +71,12 @@ static int validate_v1(const host_game_metadata_t *metadata,
         snprintf(error, error_size, "CPS2 database has no games");
         return 0;
     }
+    if (metadata->count != rominfo->game_count) {
+        snprintf(error, error_size,
+            "CPS2 identity divergence: metadata has %lu games, topology has %lu",
+            (unsigned long)metadata->count, (unsigned long)rominfo->game_count);
+        return 0;
+    }
     if (metadata->count >= DATABASE_PARENT_NONE) {
         snprintf(error, error_size, "CPS2 game count exceeds uint16 parent/index capacity");
         return 0;
