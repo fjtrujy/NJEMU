@@ -2930,6 +2930,47 @@ full PSP sound-coprocessor and the standalone full-coprocessor worker harness al
 build successfully.  `git diff --check` is clean.  No CP0 profiler or diagnostic
 transport changes are retained in normal code.
 
+#### Post-C9 ME render profiling: ADPCM-A follow-up and rejected micro-optimizations [complete]
+
+With the compact TL magnitude table retained, a temporary ME CP0 Count build split
+the remaining post-FM work on `fatfury1`.  In the two steady 300-buffer windows it
+measured approximately **0.128-0.133 million ticks/buffer** in SSG,
+**0.090-0.125 million** in ADPCM-B and **0.502-0.511 million** in ADPCM-A.  ADPCM-A
+is therefore the dominant remaining PCM-side render cost on this representative
+title.
+
+The first ADPCM-A experiment replaced the historical 12-bit accumulator
+sign-extension mask/conditional sequence with an equivalent expression that Allegrex
+GCC lowers to a left shift plus arithmetic right shift.  A host oracle forced the
+historical implementation and verified sample-for-sample equality.  Despite the
+shorter generated sequence, real PSP rejected it: the two steady ADPCM-A windows
+moved from **0.511 / 0.502 million ticks/buffer** to **0.520 / 0.519 million**,
+approximately **+1.8% / +3.4% slower**, and render wait was also slightly worse.
+The experiment was fully reverted.
+
+A second diagnostic split ADPCM-A itself.  On the historical path the two steady
+windows measured about **0.568 / 0.574 million ticks/buffer** for the whole ADPCM-A
+section, of which only **0.055 / 0.052 million** was spent in PCM-window byte reads
+and **0.155 / 0.157 million** in decoder-state arithmetic.  Linked Allegrex codegen
+showed that the hot ADPCM-A window read still repeated checks already guaranteed by
+its caller: channel range and a second active-window null test.  A specialized
+internal reader removed only those redundant checks while retaining the segment
+base/size bounds checks and fail-closed behavior.  The host historical-vs-specialized
+oracle and the truncated-window failure test both stayed green.
+
+Direct ME counters confirmed that the specialization made its target cheaper: average
+window-read cost fell from about **53.3k to 49.1k ticks/buffer (-7.9%)**, while the
+whole instrumented ADPCM-A section fell from about **571k to 564k (-1.3%)**.  However,
+the required unprofiled whole-render comparison did not agree.  A fresh same-session
+`fatfury1` control on committed `e266d96` averaged **7.739 ms/buffer** render wait
+(**7.539 / 7.939 ms**) versus **7.823 ms** for the specialized reader
+(**7.623 / 8.023 ms**), approximately **+1.1% slower**.  The unprofiled candidate
+SHA-256 was `d28a7075c3a27c37bf72e03891ed55b5af69d8fb4a305aa3baa230b26824e495`.
+Both runs stayed ME-authoritative with zero recovery attempts, mismatches, send
+failures, overflows or fatal worker errors.  Because the most render-bound title was
+slower end-to-end, the specialization was fully reverted and no `mslug3`/`wjammers`
+hardware time was spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
