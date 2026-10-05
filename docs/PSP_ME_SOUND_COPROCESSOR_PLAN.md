@@ -2739,6 +2739,16 @@ regressed from **5.610 ms** to **5.835 ms / buffer** (**+4.0%**) and windows 8-1
 from **126.02 FPS** to **125.79 FPS**.  The experiment was fully reverted and no
 derived FM activity flag is retained.
 
+The same lesson also applies to an ADPCM-A follow-up that tried to derive a per-sample
+active-channel mask before mixing the six channels.  Host oracle coverage remained
+bit-exact, but the extra mask construction/dispatch cost was substantially larger than
+the work it avoided on real hardware.  On the deterministic `mslug3` workload,
+render-completion wait regressed from **5.610 ms** to **6.882 ms / buffer** (**+22.7%**)
+and windows 8-11 fell from **126.02 FPS** to **124.62 FPS**.  The experiment was fully
+reverted without spending additional hardware time on the representative titles.  No
+ADPCM-A activity mask is retained; further render work should target operations that
+can be removed outright rather than replaced with per-sample bookkeeping.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
