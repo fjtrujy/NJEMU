@@ -3116,6 +3116,45 @@ failures or fatal worker errors.  Because the most render-bound representative t
 showed no repeatable end-to-end gain, the fast path was fully reverted and no
 `mslug3`/`wjammers` hardware runs were spent on it.
 
+#### Post-C9 ME render profiling refresh and packed-sine rejection [complete]
+
+After retaining the packed TL magnitudes and ADPCM-A transition table, the ME hotspot
+split was refreshed on real `fatfury1` rather than continuing from stale pre-optimization
+numbers.  A temporary CP0 Count build measured `chan_calc()` operator/output work,
+phase-counter updates, and the complete YM2610 render on the current retained baseline.
+The two steady 300-buffer windows measured approximately:
+
+- operator/output synthesis: **0.738 / 0.775 million ticks/buffer**;
+- FM phase updates: **0.261 / 0.272 million ticks/buffer**;
+- complete YM2610 update: **2.381 / 2.470 million ticks/buffer**.
+
+The instrumentation itself adds counter-read overhead, so these absolute totals are
+diagnostic rather than production timing.  The ratio is the useful result: FM
+operator/output work remains about **3x** the phase-update cost and is still the largest
+single measured synthesis subregion after the retained table optimizations.  The
+temporary profiler was removed after the measurement.
+
+That evidence motivated one final table-footprint experiment in `op_calc()`.  The
+retained sine table contains 1,024 exact 16-bit entries (**2 KiB**).  The candidate
+packed two entries into each native 32-bit word (**1 KiB**) and selected the low/high
+half after one `lw`, avoiding direct halfword loads.  A test-only unpacked 16-bit sine
+table compared the two paths sample-for-sample across all eight FM algorithms, active
+synthesis and release.  Allegrex codegen used the intended native-word load plus
+`andi`/`srl`/conditional-move extraction.  Desktop MVS remained **31/31 CTest green**;
+Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only, full PSP sound-coprocessor and the
+standalone worker harness all built successfully, with a clean `git diff --check`.
+The candidate full-coprocessor PRX SHA-256 was
+`988a4e6fa7fe77e7f2a876c20be3d115c1260352b3a651581c922a4548a7bca5`.
+
+Real PSP rejected the extra extraction work.  After restoring a dropped hostfs session,
+a fresh same-session `fatfury1` control/candidate pair against committed `5290b29`
+measured steady render wait **7.454 / 7.581 ms/buffer** for the retained 16-bit table
+(**7.518 ms** average) versus **7.599 / 7.707 ms** for the packed native-word table
+(**7.653 ms** average), approximately **+1.8% slower**.  Both runs stayed
+ME-authoritative with zero CPU recovery attempts, PCM/status mismatches, send failures
+or fatal worker errors.  The packed-sine experiment was therefore fully reverted and
+no `mslug3`/`wjammers` hardware runs were spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
