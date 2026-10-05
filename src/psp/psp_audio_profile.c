@@ -28,6 +28,8 @@ static const char *const metric_names[AUDIO_PROFILE_METRIC_COUNT] = {
 	"post",
 	"me_wait",
 	"me_prepare_wait",
+	"me_pcm_fill",
+	"me_render_submit",
 	"me_render_wait",
 	"output_block",
 	"loop_period",
@@ -67,7 +69,7 @@ void audio_profile_add(audio_profile_metric_t metric, uint64_t elapsed_us)
 static void audio_profile_report(void)
 {
 	char path[1024];
-	char line[1024];
+	char line[1536];
 	char *cursor = line;
 	size_t remaining = sizeof(line);
 	int fd;

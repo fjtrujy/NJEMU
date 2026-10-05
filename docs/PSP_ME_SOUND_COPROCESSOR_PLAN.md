@@ -2551,6 +2551,63 @@ fail-safe under distinct command, timer and status-read patterns.  Physical PSP
 sleep/resume observation remains intentionally deferred by the current development
 decision and is not part of this closure.
 
+#### Post-C9 shared PCM window: remove the Allegrex round-trip [complete]
+
+Profiling after the render-overlap work showed that the ME synthesis itself still
+dominates the audio callback, but the remaining pre-render path was also doing an
+avoidable copy/cache round-trip.  `YM_RENDER_PREPARE` produced a roughly 4.2 KiB PCM
+window in the shared job, Allegrex copied the complete window to a stack local, filled
+the requested compressed bytes, then `YM_RENDER` copied the whole window back into the
+same shared job.  Prepare and submit also synchronized cache ranges for the complete
+render job even though the output sample arrays are not inputs to either phase.
+
+The production path now keeps that PCM window in shared storage end-to-end:
+
+- `psp_me_sound_worker_ym_render_prepare_shared()` returns the worker-owned window
+  after the prepare ACK;
+- Allegrex fills the ADPCM-A/B source ranges directly in that shared window;
+- `psp_me_sound_worker_ym_render_begin_shared()` publishes the already-filled window
+  without materializing another copy;
+- prepare synchronizes only the job header on input and header+window on completion;
+  render submission synchronizes only header+window instead of the complete job;
+- the legacy copy-in/copy-out prepare/begin wrappers remain available for the existing
+  standalone/oracle paths.  The host PCM oracle now deliberately exercises the shared
+  path for its first render and the legacy wrappers for its mismatch/fail-closed render.
+
+Two extra profiling counters split the remaining pre-render work into PCM-window fill
+and render-submit time.  On the same deterministic `mslug3` workload, a baseline
+instrumented build (`82d77388beee83b1b3e7887e39cddc36a63b948b6175a7f93e2c8abf81cd434d`)
+was compared with the shared-window build
+(`642953344100ca58498472f0a00f6ef8212ed1966e4a1b582bfd22cfeb9c26ce`).
+Across the final three complete 300-buffer steady-state windows:
+
+| metric | baseline | shared window | change |
+| --- | ---: | ---: | ---: |
+| callback | 7.908 ms | **7.653 ms** | **-3.2%** |
+| producer | 8.046 ms | **7.792 ms** | **-3.2%** |
+| prepare ACK | 0.661 ms | **0.487 ms** | **-26.4%** |
+| PCM-window fill | 0.320 ms | **0.296 ms** | -7.5% |
+| render submit | 0.190 ms | **0.016 ms** | **-91.6%** |
+| render completion wait | 6.705 ms | 6.830 ms | +1.9% |
+
+The small render-wait increase is run-to-run scheduling variance; whole-callback cost
+still falls by about **255 us per buffer**.  The identical gameplay windows with
+`sound_cmd = 4, 5, 4, 3` improve from **123.596 FPS** to **125.049 FPS** (+1.18%),
+while the worst frame falls from **19.442 ms** to **16.330 ms**.
+
+The exact shared-window binary was also run through the existing representative PSP
+set: `mslug3`, `wjammers` and `fatfury1` all reached their scripted stop while remaining
+ME-authoritative, with zero CPU recovery attempts, Z80 state/RAM/bank/I/O mismatches,
+PCM/status mismatches, send failures, command/event/batch overflows or fatal worker
+errors.  Final command-ring high-water was 5/16 for `mslug3`, 8/16 for `wjammers` and
+5/16 for `fatfury1`.
+
+The final regression matrix is also clean: Desktop MVS is **31/31 CTest green**,
+Desktop NCDZ builds, and PSP MVS builds in CPU-only, ADPCM-A-only ME and full
+sound-coprocessor configurations, including the standalone hardware harness.  The
+remaining performance headroom is therefore still overwhelmingly in the ME render
+itself rather than Allegrex-side PCM-window transport.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

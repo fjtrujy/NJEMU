@@ -1957,6 +1957,7 @@ static int test_ym_shadow_pcm_render(void)
 	static uint8_t pcm_a[0x1000];
 	static uint8_t pcm_b[0x1000];
 	ym2610_pcm_window_t window;
+	ym2610_pcm_window_t *shared_window;
 	int32_t left[128], right[128];
 	int32_t presented_left[128], presented_right[128];
 	int32_t rejected_left[128], rejected_right[128];
@@ -2037,30 +2038,33 @@ static int test_ym_shadow_pcm_render(void)
 		return 0;
 	}
 
-	if (!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 200u, &window,
+	if (!psp_me_sound_worker_ym_render_prepare_shared(&worker, 128u, 200u,
+			&shared_window,
 			TEST_TIMEOUT_US))
 	{
-		fprintf(stderr, "YM PCM render prepare failed\n");
+		fprintf(stderr, "YM PCM shared render prepare failed\n");
 		psp_me_sound_worker_abort(&worker);
 		free(ym_storage);
 		return 0;
 	}
 	for (i = 0; i < YM2610_PCM_WINDOW_ADPCMA_CHANNELS; i++)
 	{
-		if (window.adpcma[i].size != 0)
-			memcpy(window.adpcma[i].data, pcm_a + window.adpcma[i].base_byte,
-				window.adpcma[i].size);
+		if (shared_window->adpcma[i].size != 0)
+			memcpy(shared_window->adpcma[i].data,
+				pcm_a + shared_window->adpcma[i].base_byte,
+				shared_window->adpcma[i].size);
 	}
-	for (i = 0; i < window.adpcmb_segment_count; i++)
+	for (i = 0; i < shared_window->adpcmb_segment_count; i++)
 	{
-		if (window.adpcmb[i].size != 0)
-			memcpy(window.adpcmb[i].data, pcm_b + window.adpcmb[i].base_byte,
-				window.adpcmb[i].size);
+		if (shared_window->adpcmb[i].size != 0)
+			memcpy(shared_window->adpcmb[i].data,
+				pcm_b + shared_window->adpcmb[i].base_byte,
+				shared_window->adpcmb[i].size);
 	}
-	if (!psp_me_sound_worker_ym_render_begin(&worker, &window, 200u,
+	if (!psp_me_sound_worker_ym_render_begin_shared(&worker, 200u,
 			TEST_TIMEOUT_US))
 	{
-		fprintf(stderr, "YM PCM render submission failed\n");
+		fprintf(stderr, "YM PCM shared render submission failed\n");
 		psp_me_sound_worker_abort(&worker);
 		free(ym_storage);
 		return 0;

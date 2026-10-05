@@ -1174,9 +1174,10 @@ void mvs_me_sound_shadow_ym_timer_completed(void)
 
 bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time)
 {
-	ym2610_pcm_window_t window;
+	ym2610_pcm_window_t *window = NULL;
 	bool result = false;
 	uint64_t wait_start;
+	uint64_t stage_start;
 
 	if (!me_available || !me_sound_worker.running)
 		return false;
@@ -1205,7 +1206,7 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
 	{
 		wait_start = audio_profile_now_us();
-		result = psp_me_sound_worker_ym_render_prepare(&me_sound_worker,
+		result = psp_me_sound_worker_ym_render_prepare_shared(&me_sound_worker,
 			samples, emulated_time, &window, PSP_ME_SOUND_WORKER_TIMEOUT_US);
 		wait_start = audio_profile_now_us() - wait_start;
 		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
@@ -1218,14 +1219,18 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 		psp_me_sound_z80_mark_failed("YM render prepare");
 		goto fail;
 	}
-	if (!YM2610DefaultFillPcmWindow(&window))
+	stage_start = audio_profile_now_us();
+	if (!YM2610DefaultFillPcmWindow(window))
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_PREPARE;
 		psp_me_sound_z80_mark_failed("YM PCM window fill");
 		goto fail;
 	}
+	audio_profile_add(AUDIO_PROFILE_ME_PCM_FILL,
+		audio_profile_now_us() - stage_start);
 
 	result = false;
+	stage_start = audio_profile_now_us();
 	if (!psp_me_sound_worker_lock())
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK;
@@ -1235,10 +1240,12 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 	if (me_available && me_sound_worker.running &&
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
 	{
-		result = psp_me_sound_worker_ym_render_begin(&me_sound_worker, &window,
+		result = psp_me_sound_worker_ym_render_begin_shared(&me_sound_worker,
 			emulated_time, PSP_ME_SOUND_WORKER_TIMEOUT_US);
 	}
 	psp_me_sound_worker_unlock();
+	audio_profile_add(AUDIO_PROFILE_ME_RENDER_SUBMIT,
+		audio_profile_now_us() - stage_start);
 	if (!result)
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_SEND;

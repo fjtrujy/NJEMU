@@ -401,9 +401,14 @@ bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
 bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
 	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
 	uint64_t timeout_us);
+bool psp_me_sound_worker_ym_render_prepare_shared(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t **window,
+	uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
 	const ym2610_pcm_window_t *window, uint64_t emulated_time,
 	uint64_t timeout_us);
+bool psp_me_sound_worker_ym_render_begin_shared(psp_me_sound_worker_t *worker,
+	uint64_t emulated_time, uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
 	const int32_t *expected_left, const int32_t *expected_right,
 	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);

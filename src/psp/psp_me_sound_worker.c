@@ -1,5 +1,6 @@
 #include <malloc.h>
 #include <limits.h>
+#include <stddef.h>
 #include <string.h>
 #include <pspkernel.h>
 #include <me-core-mapper/me-core-mapper.h>
@@ -78,6 +79,11 @@ typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	int32_t left[PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES];
 	int32_t right[PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES];
 } psp_me_sound_ym_render_job_t;
+
+#define PSP_ME_SOUND_YM_RENDER_HEADER_SIZE \
+	PSP_ME_SOUND_WORKER_CACHE_SIZE(offsetof(psp_me_sound_ym_render_job_t, window))
+#define PSP_ME_SOUND_YM_RENDER_INPUT_SIZE \
+	PSP_ME_SOUND_WORKER_CACHE_SIZE(offsetof(psp_me_sound_ym_render_job_t, left))
 
 typedef struct __attribute__((aligned(PSP_ME_SOUND_WORKER_CACHE_LINE)))
 	psp_me_sound_worker_shared_context
@@ -1527,7 +1533,7 @@ static void psp_me_sound_worker_entry(void *param)
 						return;
 					}
 					meCoreDcacheInvalidateRange(job,
-						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+						PSP_ME_SOUND_YM_RENDER_HEADER_SIZE);
 					if (job->generation != command.generation ||
 						job->token != command.token || job->samples == 0 ||
 						job->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
@@ -1550,7 +1556,7 @@ static void psp_me_sound_worker_entry(void *param)
 							context->z80_progress->ym_render_errors++;
 					}
 					meCoreDcacheWritebackRange(job,
-						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+						PSP_ME_SOUND_YM_RENDER_INPUT_SIZE);
 					meCoreDcacheWritebackRange(context->z80_progress,
 						sizeof(*context->z80_progress));
 					event.type = PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK;
@@ -1572,7 +1578,7 @@ static void psp_me_sound_worker_entry(void *param)
 						return;
 					}
 					meCoreDcacheInvalidateRange(job,
-						PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+						PSP_ME_SOUND_YM_RENDER_INPUT_SIZE);
 					if (job->generation != command.generation ||
 						job->token != command.token || job->samples == 0 ||
 						job->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES ||
@@ -2447,8 +2453,8 @@ bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
 	return true;
 }
 
-bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
-	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
+bool psp_me_sound_worker_ym_render_prepare_shared(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t **window,
 	uint64_t timeout_us)
 {
 	psp_me_sound_ym_render_job_t *job;
@@ -2461,12 +2467,13 @@ bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
 		return false;
 
 	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
-	memset(job, 0, sizeof(*job));
 	job->generation = worker->generation;
 	job->token = worker->next_token;
 	job->samples = samples;
+	job->error = 0;
+	job->status_b = 0;
 	sceKernelDcacheWritebackInvalidateRange(job,
-		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+		PSP_ME_SOUND_YM_RENDER_HEADER_SIZE);
 
 	memset(&command, 0, sizeof(command));
 	command.type = PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER_PREPARE;
@@ -2480,8 +2487,7 @@ bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
 		worker->ym_send_failures++;
 		return false;
 	}
-	sceKernelDcacheInvalidateRange(job,
-		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+	sceKernelDcacheInvalidateRange(job, PSP_ME_SOUND_YM_RENDER_INPUT_SIZE);
 	if (event.value != 0 || job->error != 0 ||
 		job->generation != worker->generation || job->token != command.token ||
 		job->samples != samples || job->window.samples != samples)
@@ -2489,30 +2495,44 @@ bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
 		worker->ym_send_failures++;
 		return false;
 	}
-	*window = job->window;
+	*window = &job->window;
 	return true;
 }
 
-bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
-	const ym2610_pcm_window_t *window, uint64_t emulated_time,
+bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
 	uint64_t timeout_us)
+{
+	ym2610_pcm_window_t *shared_window;
+
+	if (!window || !psp_me_sound_worker_ym_render_prepare_shared(worker, samples,
+			emulated_time, &shared_window, timeout_us))
+		return false;
+	*window = *shared_window;
+	return true;
+}
+
+bool psp_me_sound_worker_ym_render_begin_shared(psp_me_sound_worker_t *worker,
+	uint64_t emulated_time, uint64_t timeout_us)
 {
 	psp_me_sound_ym_render_job_t *job;
 	psp_me_sound_worker_message_t command;
 
-	if (!worker || !worker->running || worker->generation == 0 || !window ||
-		!worker->ym_render_job || worker->ym_render_in_flight ||
-		window->samples == 0 || window->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+	if (!worker || !worker->running || worker->generation == 0 ||
+		!worker->ym_render_job || worker->ym_render_in_flight)
 		return false;
 
 	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
-	memset(job, 0, sizeof(*job));
+	if (job->window.samples == 0 ||
+		job->window.samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+		return false;
 	job->generation = worker->generation;
 	job->token = worker->next_token;
-	job->samples = window->samples;
-	job->window = *window;
+	job->samples = job->window.samples;
+	job->error = 0;
+	job->status_b = 0;
 	sceKernelDcacheWritebackInvalidateRange(job,
-		PSP_ME_SOUND_WORKER_CACHE_SIZE(sizeof(*job)));
+		PSP_ME_SOUND_YM_RENDER_INPUT_SIZE);
 
 	memset(&command, 0, sizeof(command));
 	command.type = PSP_ME_SOUND_WORKER_COMMAND_YM_RENDER;
@@ -2528,6 +2548,21 @@ bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
 	worker->ym_render_token = command.token;
 	worker->ym_render_in_flight = true;
 	return true;
+}
+
+bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
+	const ym2610_pcm_window_t *window, uint64_t emulated_time,
+	uint64_t timeout_us)
+{
+	psp_me_sound_ym_render_job_t *job;
+
+	if (!worker || !window || !worker->ym_render_job || window->samples == 0 ||
+		window->samples > PSP_ME_SOUND_YM_RENDER_MAX_SAMPLES)
+		return false;
+	job = (psp_me_sound_ym_render_job_t *)worker->ym_render_job;
+	job->window = *window;
+	return psp_me_sound_worker_ym_render_begin_shared(worker, emulated_time,
+		timeout_us);
 }
 
 static bool psp_me_sound_worker_ym_render_finish_internal(psp_me_sound_worker_t *worker,
