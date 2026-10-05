@@ -73,7 +73,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash python3
+        apk add build-base git bash
     
 
     - name: Resolve cache override
@@ -166,7 +166,7 @@ jobs:
 
     - name: Install host build dependencies
       run: |
-        apk add build-base git bash python3 xxd
+        apk add build-base git bash xxd
 
     - name: Build and install Media Engine dependencies
       run: |

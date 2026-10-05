@@ -85,7 +85,7 @@ A loader must reject at least:
 Generated packs are deterministic build artifacts. They are produced with:
 
 ```sh
-python3 tools/build_translations.py --build
+./build-host-tools/njemu-tool translations --build
 ```
 
 The default output is `build/translations/lang/`; generated `.lng` files are

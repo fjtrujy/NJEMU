@@ -110,7 +110,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        apk add build-base git bash cmake python3
+        apk add build-base git bash cmake
 
     # libbdm correctness fix intended for a future upstream PS2SDK PR.
     # cacheio itself is owned and built by ps2_drivers.

@@ -103,7 +103,7 @@ Classification: generated translation/UI asset.
 
 Generation:
 
-- `tools/build_translations.py`
+- `njemu-tool translations`
 - input schema: `translations/messages.def`
 - language sources: `translations/*.lang`
 - generated into `\${CMAKE_BINARY_DIR}/lang/`
@@ -137,7 +137,7 @@ Classification: generated font/UI asset.
 
 Generation:
 
-- `tools/build_font_asset.py`
+- `njemu-tool font`
 - source data: `src/common/font/gbk_s14.c`
 - mapping data: `src/common/font/gbk_tbl.c`
 
@@ -301,7 +301,7 @@ game_metadata.ncdz
 Classification: generated distributed runtime metadata.
 
 Source authority: `metadata/<core>.tsv` plus `rominfo.<core>` identity
-validation for CPS1/MVS. Generator: `tools/game_metadata.py`. Runtime
+validation for CPS1/MVS. Generator: `njemu-tool game-metadata`. Runtime
 reader: `src/common/game_metadata.c`.
 
 Rules:
@@ -335,7 +335,7 @@ Classification: generated distributed runtime metadata.
 Build-time authorities are `metadata/cps2.tsv` for titles/display flags/CPS2
 policy and tracked `resources/cps2/rominfo.cps2` for ROM topology. The latter is
 now a source/generator input only; it is not distributed. Generator:
-`tools/game_database.py`. Bounded runtime reader: `src/common/game_database.c`.
+`njemu-tool game-database`. Bounded runtime reader: `src/common/game_database.c`.
 
 The generated database owns canonical set identity, localized titles, display
 flags, parent relationships, machine/input/init/rotation selectors, all region
@@ -374,7 +374,7 @@ dip_metadata.mvs
 Classification: generated distributed UI/runtime metadata.
 
 Source authority: `metadata/cps1_dips.json` and `metadata/mvs_dips.json`.
-Generator: `tools/dip_metadata.py`. Shared runtime reader:
+Generator: `njemu-tool dip-metadata`. Shared runtime reader:
 `src/common/dip_metadata.c`.
 
 The files contain localized menu schema/text only. CPS1/MVS bit-level DIP
@@ -793,7 +793,7 @@ gamelist_mvs.txt
 
 Classification: generated documentation/distribution assets.
 
-`tools/game_metadata.py` produces these files from the same canonical
+`njemu-tool game-metadata` produces these files from the same canonical
 `metadata/<core>.tsv` records used to build `game_metadata.<core>`. They are not
 runtime inputs and are not tracked under `resources/`, which removes the old
 second manually maintained supported-game catalog.

@@ -148,8 +148,8 @@ translations/
     zh-Hans.lang
     zh-Hant.lang
 
-tools/
-    build_translations.py
+tools/host/
+    njemu-tool translations
 ```
 
 Packaged runtime files:
@@ -384,7 +384,7 @@ tables must be validated against the new enum.
 
 ## Offline generator and validation
 
-`tools/build_translations.py` should be the strict part of the system.
+`njemu-tool translations` should be the strict part of the system.
 
 It should:
 
@@ -585,8 +585,8 @@ MVS and NCDZ rather than treating one build as authoritative.
 
 Deliverable: a machine-readable stable key manifest plus a baseline report.
 
-T0 status (2026-09-21): implemented in `tools/capture_translation_contract.py`
-and `docs/TRANSLATION_T0_BASELINE.md`. The exhaustive source-level matrix covers
+T0 status (2026-09-21): implemented with the historical translation-contract
+capture helper and `docs/TRANSLATION_T0_BASELINE.md`. The exhaustive source-level matrix covers
 all 16 combinations of `ADHOC`, `SAVE_STATE`, `COMMAND_LIST` and
 `LARGE_MEMORY` for each core and compares Desktop/PS2/PSP tables byte-for-byte.
 It found and fixed one pre-existing MVS positional-table bug in the four
@@ -639,7 +639,7 @@ No embedded tables are removed yet.
 
 T2 status (2026-09-21): implemented with five complete ASCII source catalogs
 (`en.lang`, `ja.lang`, `es.lang`, `zh-Hans.lang`, `zh-Hant.lang`) and
-`tools/build_translations.py`. The source format preserves runtime-visible
+`njemu-tool translations`. The source format preserves runtime-visible
 legacy bytes using deterministic escapes, represents NJEMU graphic bytes with
 named tokens, and keeps the reserved `END_OF_TEXT` NULL value explicit. The
 validator rejects duplicate/unknown/missing/reordered keys, invalid escapes or
@@ -668,7 +668,7 @@ little-endian header,
 377 direct `uint16_t` offsets, a reserved `0xffff` NULL offset, a <=65534-byte
 NUL-terminated string blob, and a 32-bit FNV-1a schema hash over the explicit
 ID/name manifest (`0x1ed49de8` for the current schema).
-`tools/build_translations.py --build` deterministically emits and immediately
+`njemu-tool translations --build` deterministically emits and immediately
 round-trips all five packs
 under `build/translations/lang/`. Current complete pack sizes are 7452 B (en),
 8446 B (ja), 8598 B (es), 5298 B (zh-Hans) and 5294 B (zh-Hant). Twelve pack
@@ -699,7 +699,7 @@ Desktop is the first migrated runtime: it now links
 and CMake generates the five packs under each Desktop build's `lang/` directory
 without writing to `resources/`. A C loader test covers a real valid pack,
 missing/corrupt requested-language fallback, missing English, bad magic/schema,
-out-of-range offsets and truncation; the Python pack tests cover the remaining
+out-of-range offsets and truncation; the native host-tool translation suite covers the remaining
 malformed-header/NUL cases. All four Desktop feature-on cores pass 6/6 CTest,
 and all four PS2 feature-on cores compile the common loader successfully while
 continuing to use their embedded adapter until language selection is separated
@@ -748,7 +748,7 @@ capture tool that depended on those sources. `ui_text_driver.c` is now the
 single runtime text driver on Desktop, PS2 and PSP; it asks the platform driver
 for `ui_language_t` and loads the corresponding common `.lng` catalog. The old
 platform-specific text-driver registry is gone. `messages.def` plus the five
-`.lang` files are now the authoritative source, and `build_translations.py` is
+`.lang` files are now the authoritative source, and `njemu-tool translations` is
 self-contained instead of reading deleted C tables. CMake generates the same
 five packs into every build directory regardless of platform/core/feature
 flags. Byte equivalence was established and committed before deletion in T0-T5.

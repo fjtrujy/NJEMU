@@ -23,6 +23,24 @@ cmake --install build-desktop-mvs
 Unless an install prefix is supplied explicitly, NJEMU installs to `<build>/install`.
 The install tree is the distributable runtime tree for that one core. It is built from an explicit manifest and intentionally excludes ROMs, BIOS files, processed assets, caches, saves, NVRAM, screenshots, and local configuration.
 
+## Native host tools
+
+NJEMU's build-time generators are portable C99 programs. Python is not required for a normal build, ROM converter build, test run, or release package.
+
+The main build configures `tools/host/` as a separate native CMake sub-build through `cmake/NJEMUHostTools.cmake`. This is important for PSP, PS2, PS Vita, and WebAssembly builds: metadata, translation, and font generators must execute on the build machine rather than being compiled with the target toolchain.
+
+Cross-builds locate a native `cc`, `clang`, or `gcc` outside the target sysroot. Set `NJEMU_HOST_C_COMPILER=/path/to/host/cc` when the automatic choice is not appropriate. The target toolchain file is never forwarded to the host-tool sub-build.
+
+For manual generator/validator use:
+
+```sh
+cmake -S tools/host -B build-host-tools -DCMAKE_BUILD_TYPE=Release
+cmake --build build-host-tools --parallel
+./build-host-tools/njemu-tool --help
+```
+
+The unified tool provides translation, font, metadata/database, DIP, rominfo, CPS2 cache-layout, and frame-comparison commands. `docs/HOST_TOOLING_MIGRATION_PLAN.md` documents the architecture and format-parity history.
+
 ## Main CMake options
 
 The current public feature switches include:

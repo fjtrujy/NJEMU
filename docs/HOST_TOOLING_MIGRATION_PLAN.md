@@ -31,7 +31,7 @@ cmake --build build-host-tools --parallel
 
 Version derivation and release packaging are intentionally not part of `njemu-tool` unless CMake proves insufficient. Semantic Git identity belongs in CMake/Git logic; release staging, validation, hashing, and archive creation should use CMake primitives.
 
-## Python inventory and replacement decision
+## Baseline Python inventory and replacement decision
 
 | Python file | Current role | Classification | Replacement |
 | --- | --- | --- | --- |
@@ -100,7 +100,7 @@ Status: **complete**
 
 ### Phase 1 - build-time generators
 
-Status: **in progress**
+Status: **complete**
 
 - [x] font asset (C output is byte-identical to the Python reference);
 - [x] translations and Unicode glyph lookup (all five packs and every per-core generated Unicode source are byte-identical to Python);
@@ -116,12 +116,12 @@ Exit condition: a normal emulator or ROM converter build requires no Python and 
 
 ### Phase 2 - validation/developer tools
 
-Status: **in progress**
+Status: **complete**
 
 - [x] CPS2 cache-layout validator (acceptance/output parity on canonical data);
 - [x] frame comparator (exit status and diff PPM parity on tie/real-difference fixtures);
-- [ ] migrate generator/format regression coverage to native tests/CTest;
-- [ ] migrate Python cache-reader test harnesses without weakening coverage.
+- [x] migrate generator/format regression coverage to native host tests/CTest;
+- [x] migrate cache-reader/PCM test harnesses to C without weakening coverage.
 
 ### Phase 3 - version derivation
 
@@ -146,18 +146,22 @@ Status: **complete**
 
 ### Phase 5 - final Python removal and validation
 
-Status: **pending**
+Status: **in progress**
 
-- [ ] remove remaining project-maintained Python tests where equivalent native/CMake coverage exists;
-- [ ] remove `find_package(Python3)` and Python CI setup no longer needed;
-- [ ] explain any unavoidable remaining Python match here;
-- [ ] build/test all four Desktop cores;
+- [x] remove remaining project-maintained Python tests after equivalent native/CMake coverage was added;
+- [x] remove `find_package(Python3)` and Python CI setup no longer needed;
+- [x] explain the remaining Python text matches here;
+- [x] build/test all four Desktop cores under the canonical release feature profile;
 - [ ] configure/build available PSP, PS2, and Vita variants and verify host-tool provenance;
 - [ ] validate ROM converter native/WASM flows;
 - [ ] validate canonical release packaging;
 - [ ] run `git diff --check` and final Python-reference audit;
 - [ ] verify no `resources/` path is modified or staged.
 
-## Current remaining Python dependency
+## Remaining Python references
 
-Until the parity gates above are completed, all baseline Python implementations and tests remain intentionally present as reference or active tooling. No remaining Python dependency is accepted as permanent yet.
+There is no project-maintained Python file or active Python build/test/release dependency.
+The `.py` names in the baseline inventory above are intentionally retained as the historical
+mapping from removed tools to their replacements. `docs/MVS_CACHE_IO_INVESTIGATION.md` also
+mentions the external PS2SDK test `ps2sdk/iop/fs/libbdm/tests/test_bd_cache.py`; that path is
+documentation about another repository and is not an NJEMU dependency.

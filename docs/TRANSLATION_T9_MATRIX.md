@@ -78,7 +78,7 @@ from the same unconditional five catalogs in every configuration.
 
 ## Generator/loader robustness
 
-`tests/translation_pack_tests.py` now contains 28 tests. Together with the C
+The native host-tool translation suite now covers the former generator/pack regression cases. Together with the C
 loader/UTF-8 tests, coverage includes:
 
 - complete catalog success;

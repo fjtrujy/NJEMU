@@ -37,7 +37,7 @@ jobs:
     - name: Install dependencies
       run: |
         apt-get update
-        apt-get install -y --no-install-recommends build-essential git cmake python3
+        apt-get install -y --no-install-recommends build-essential git cmake
 
     - name: Install miniz 3.1.2
       run: |

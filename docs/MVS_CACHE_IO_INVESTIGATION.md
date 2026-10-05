@@ -2341,7 +2341,7 @@ partes de 16 KiB; los de PCM conservan bloques de 64 KiB. Comparar bytes y
 espera total, no interpretar una diferencia en numero de misses como regresion
 por si sola. La linea inicial identifica demanda 16384 y slot 65536.
 
-Test `tests/mvs_partial_cache_tests.py`: compila la funcion real del lector con
+Test `tests/mvs_partial_cache_tests.c`: compila la funcion real del lector con
 storage simulado y dos slots; cubre hits, carga de otra parte, eviction,
 fallo/reintento y 10000 tiles pseudoaleatorios. Pasan siete tests seleccionados
 de renderer y memoria en desktop. Compilan las builds PS2 de referencia y
@@ -2423,7 +2423,7 @@ conserva su puntero hasta cambiar de parte. El modo no cambia la sincronizacion,
 prioridades, formato del archivo ni la politica de asignacion de slots.
 Los contadores PCM de misses/reloads pasan a contar partes, igual que C-ROM.
 
-`mvs_pcm_partial_tests.py` compila la funcion PCM real con almacenamiento
+`tests/mvs_pcm_partial_tests.c` compila la funcion PCM real con almacenamiento
 simulado: hits, distintas partes, eviction, fallo/reintento, 10000 claves
 pseudoaleatorias y recorrido secuencial de bytes por limites de 16 y 64 KiB.
 Pasan los ocho tests seleccionados. Compilan tanto PCM parcial como el modo

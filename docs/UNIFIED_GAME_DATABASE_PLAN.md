@@ -57,9 +57,8 @@ The pre-migration CPS2 runtime and tooling consumers are:
   distributes `rominfo.cps2`, and wires the metadata generator/reader tests;
 - `romcnv/CMakeLists.txt`: separately stages/preloads `rominfo.cps2`, generates
   `game_metadata.cps2`, and compiles the shared metadata reader;
-- `tests/game_metadata_generator_tests.py` and
-  `tests/game_metadata_reader_tests.c`: validate the current metadata format and
-  representative CPS2 policy records;
+- the native host-tool metadata suite and `tests/game_metadata_reader_tests.c`:
+  validate the current metadata format and representative CPS2 policy records;
 - `docs/RUNTIME_FILES_AUDIT.md`, `resources/cps2/README.md`, the top-level README
   and converter README currently describe the two-file runtime contract.
 
@@ -192,9 +191,9 @@ struct serialization:
   cache-parent string offset;
 - one deduplicated UTF-8 NUL-terminated string pool.
 
-The host parser in `tools/rominfo.py` now normalizes the complete textual CPS2
+The shared C host parser in `tools/host/rominfo.c` now normalizes the complete textual CPS2
 topology and rejects malformed records, duplicate sets, unresolved parents and
-parent cycles. `tools/game_database.py` merges that topology with
+parent cycles. `njemu-tool game-database` merges that topology with
 `metadata/cps2.tsv`, enforces V1 field-width limits and existing CPS2 metadata
 invariants, and emits deterministic `NJGD` V1 data. The generator parity test
 decodes every generated game/region/ROM record and compares it against both source

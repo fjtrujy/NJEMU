@@ -38,6 +38,8 @@ For the detailed contract, see [PLATFORM_PORTING_GUIDE.md](PLATFORM_PORTING_GUID
 
 See [BUILDING.md](BUILDING.md) for toolchains and build options.
 
+Project-specific build generators live in the C99 `njemu-tool` host executable. Keep reusable parsing/filesystem/endian/UTF-8 logic in `tools/host/` rather than adding language-specific one-off scripts. Cross-build generators must remain native host executables; do not add target-built generator binaries to PSP/PS2/Vita/WASM custom commands.
+
 Prefer the smallest focused validation first, then expand when shared code changes. Typical expectations include:
 
 - the affected Desktop target build and CTests;

@@ -511,7 +511,7 @@ The menu schema/text is now authoritative in UTF-8 source files:
 - `metadata/cps1_dips.json`: 33 profiles, four languages, 1,844 localized rows;
 - `metadata/mvs_dips.json`: four profiles, four languages, 152 localized rows.
 
-`tools/dip_metadata.py` validates locale structure and emits the ABI-independent
+`njemu-tool dip-metadata` validates locale structure and emits the ABI-independent
 `NJDP` V1 runtime format. `src/common/dip_metadata.c` validates bounds/version/
 CRC and materializes only the selected language/profile into a transient
 `dipswitch_t` array. The allocation exists only while the DIP menu is active;
