@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.12)
 project(ROMCNV)
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/NJEMUHostTools.cmake")
+njemu_enable_host_tools()
+
 # Configuration
 
 # Different target availables
@@ -83,18 +86,16 @@ set(COMMON_SRC
     zip_writer.h
 )
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(ROMCNV_TRANSLATION_DIR "${CMAKE_SOURCE_DIR}/../translations/romcnv")
 set(ROMCNV_TRANSLATION_OUTPUT "${CMAKE_BINARY_DIR}/generated/romcnv_translation_data.inc")
 add_custom_command(
     OUTPUT "${ROMCNV_TRANSLATION_OUTPUT}"
-    COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_SOURCE_DIR}/../tools/build_romcnv_translations.py"
+    COMMAND "${NJEMU_HOST_TOOL}"
+        romcnv-translations
         --translations-dir "${ROMCNV_TRANSLATION_DIR}"
         --output "${ROMCNV_TRANSLATION_OUTPUT}"
     DEPENDS
-        "${CMAKE_SOURCE_DIR}/../tools/build_romcnv_translations.py"
-        "${CMAKE_SOURCE_DIR}/../tools/build_translations.py"
+        ${NJEMU_HOST_TOOL_TARGET}
         "${ROMCNV_TRANSLATION_DIR}/messages.def"
         "${ROMCNV_TRANSLATION_DIR}/en.lang"
         "${ROMCNV_TRANSLATION_DIR}/zh-Hans.lang"
@@ -213,18 +214,17 @@ endif()
 
 if(${TARGET} STREQUAL "MVS")
     set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/../metadata/${TARGET_LOWER}.tsv")
-    set(GAME_METADATA_TOOL "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py")
     set(GAME_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/game_metadata.${TARGET_LOWER}")
     add_custom_command(
         OUTPUT "${GAME_METADATA_OUTPUT}"
-        COMMAND ${Python3_EXECUTABLE}
-            "${GAME_METADATA_TOOL}"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            game-metadata
             --core ${TARGET_LOWER}
             --source "${GAME_METADATA_SOURCE}"
             --rominfo "${ROMINFO_SOURCE}"
             --output "${GAME_METADATA_OUTPUT}"
         DEPENDS
-            "${GAME_METADATA_TOOL}"
+            ${NJEMU_HOST_TOOL_TARGET}
             "${GAME_METADATA_SOURCE}"
             "${ROMINFO_SOURCE}"
         VERBATIM
@@ -242,18 +242,17 @@ elseif(${TARGET} STREQUAL "CPS2")
     set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
     set(CPS2_CACHE_LAYOUT_SOURCE "${CMAKE_SOURCE_DIR}/data/cps2_cache_layouts.tsv")
     set(CPS2_CACHE_LAYOUT_OUTPUT "${CMAKE_BINARY_DIR}/cps2_cache_layouts.tsv")
-    set(CPS2_CACHE_LAYOUT_VALIDATOR "${CMAKE_SOURCE_DIR}/../tools/validate_cps2_cache_layouts.py")
     add_custom_command(
         OUTPUT "${CPS2_CACHE_LAYOUT_OUTPUT}"
-        COMMAND ${Python3_EXECUTABLE}
-            "${CPS2_CACHE_LAYOUT_VALIDATOR}"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            validate-cps2-cache
             --layouts "${CPS2_CACHE_LAYOUT_SOURCE}"
             --metadata "${GAME_DATABASE_SOURCE}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CPS2_CACHE_LAYOUT_SOURCE}"
             "${CPS2_CACHE_LAYOUT_OUTPUT}"
         DEPENDS
-            "${CPS2_CACHE_LAYOUT_VALIDATOR}"
+            ${NJEMU_HOST_TOOL_TARGET}
             "${CPS2_CACHE_LAYOUT_SOURCE}"
             "${GAME_DATABASE_SOURCE}"
         VERBATIM
@@ -262,16 +261,14 @@ elseif(${TARGET} STREQUAL "CPS2")
     add_dependencies(${BINARY_TARGET} cps2_cache_layouts)
     add_custom_command(
         OUTPUT "${GAME_DATABASE_OUTPUT}"
-        COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/../tools/game_database.py"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            game-database
             --core cps2
             --metadata "${GAME_DATABASE_SOURCE}"
             --rominfo "${ROMINFO_SOURCE}"
             --output "${GAME_DATABASE_OUTPUT}"
         DEPENDS
-            "${CMAKE_SOURCE_DIR}/../tools/game_database.py"
-            "${CMAKE_SOURCE_DIR}/../tools/rominfo.py"
-            "${CMAKE_SOURCE_DIR}/../tools/game_metadata.py"
+            ${NJEMU_HOST_TOOL_TARGET}
             "${GAME_DATABASE_SOURCE}"
             "${ROMINFO_SOURCE}"
         VERBATIM

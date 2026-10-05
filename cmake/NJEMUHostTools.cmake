@@ -14,14 +14,15 @@ function(njemu_enable_host_tools)
 
     set(_host_compiler "${NJEMU_HOST_C_COMPILER}")
     if(CMAKE_CROSSCOMPILING AND NOT _host_compiler)
-        find_program(_host_compiler
+        find_program(_detected_host_compiler
             NAMES cc clang gcc
             NO_CMAKE_FIND_ROOT_PATH)
-        if(NOT _host_compiler)
+        if(NOT _detected_host_compiler)
             message(FATAL_ERROR
                 "Cross-building NJEMU requires a native host C compiler for build-time tools. "
                 "Set NJEMU_HOST_C_COMPILER to a host compiler executable.")
         endif()
+        set(_host_compiler "${_detected_host_compiler}")
     endif()
 
     if(CMAKE_HOST_WIN32)

@@ -3,6 +3,8 @@ project(NJEMU)
 
 include(CTest)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUHostTools.cmake")
+njemu_enable_host_tools()
 
 # Configuration
 
@@ -962,14 +964,15 @@ add_custom_command(
     OUTPUT ${TRANSLATION_PACKS} "${UI_UNICODE_GLYPH_SOURCE}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${TRANSLATION_PACK_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/generated"
-    COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+    COMMAND "${NJEMU_HOST_TOOL}"
+        translations
+        --translations-dir "${CMAKE_SOURCE_DIR}/translations"
         --build
         --output-dir "${TRANSLATION_PACK_DIR}"
         --unicode-map-output "${UI_UNICODE_GLYPH_SOURCE}"
         ${UI_EXTRA_UNICODE_ARGS}
     DEPENDS
-        "${CMAKE_SOURCE_DIR}/tools/build_translations.py"
+        ${NJEMU_HOST_TOOL_TARGET}
         ${UI_EXTRA_UNICODE_DEPENDS}
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         "${CMAKE_SOURCE_DIR}/translations/messages.def"
@@ -990,13 +993,13 @@ set(GBK_FONT_ASSET "${CMAKE_BINARY_DIR}/font/gbk_s14.bin")
 add_custom_command(
     OUTPUT "${GBK_FONT_ASSET}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/font"
-    COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+    COMMAND "${NJEMU_HOST_TOOL}"
+        font
         --source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
         --table-source "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         --output "${GBK_FONT_ASSET}"
     DEPENDS
-        "${CMAKE_SOURCE_DIR}/tools/build_font_asset.py"
+        ${NJEMU_HOST_TOOL_TARGET}
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_s14.c"
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
     VERBATIM
@@ -1041,17 +1044,15 @@ if("${TARGET}" STREQUAL "CPS2")
     set(GAME_DATABASE_OUTPUT "${CMAKE_BINARY_DIR}/game_database.cps2")
     add_custom_command(
         OUTPUT "${GAME_DATABASE_OUTPUT}" "${GAMELIST_OUTPUT}"
-        COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/game_database.py"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            game-database
             --core cps2
             --metadata "${GAME_METADATA_SOURCE}"
             --rominfo "${GAME_METADATA_ROMINFO}"
             --output "${GAME_DATABASE_OUTPUT}"
             --gamelist-output "${GAMELIST_OUTPUT}"
         DEPENDS
-            "${CMAKE_SOURCE_DIR}/tools/game_database.py"
-            "${CMAKE_SOURCE_DIR}/tools/rominfo.py"
-            "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+            ${NJEMU_HOST_TOOL_TARGET}
             "${GAME_METADATA_SOURCE}"
             "${GAME_METADATA_ROMINFO}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -1070,7 +1071,7 @@ else()
         --output "${GAME_METADATA_OUTPUT}"
     )
     set(GAME_METADATA_GENERATOR_DEPENDS
-        "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+        ${NJEMU_HOST_TOOL_TARGET}
         "${GAME_METADATA_SOURCE}"
     )
     if(NOT "${TARGET}" STREQUAL "NCDZ")
@@ -1081,8 +1082,8 @@ else()
     endif()
     add_custom_command(
         OUTPUT ${GAME_METADATA_GENERATED_OUTPUTS}
-        COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/game_metadata.py"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            game-metadata
             ${GAME_METADATA_GENERATOR_ARGS}
         DEPENDS ${GAME_METADATA_GENERATOR_DEPENDS}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -1096,12 +1097,12 @@ if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
     set(DIP_METADATA_OUTPUT "${CMAKE_BINARY_DIR}/dip_metadata.${TARGET_LOWER}")
     add_custom_command(
         OUTPUT "${DIP_METADATA_OUTPUT}"
-        COMMAND ${Python3_EXECUTABLE}
-            "${CMAKE_SOURCE_DIR}/tools/dip_metadata.py"
+        COMMAND "${NJEMU_HOST_TOOL}"
+            dip-metadata
             --source "${DIP_METADATA_SOURCE}"
             --output "${DIP_METADATA_OUTPUT}"
         DEPENDS
-            "${CMAKE_SOURCE_DIR}/tools/dip_metadata.py"
+            ${NJEMU_HOST_TOOL_TARGET}
             "${DIP_METADATA_SOURCE}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         VERBATIM
@@ -1851,18 +1852,21 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	)
 	add_test(NAME power_driver_tests COMMAND power_driver_tests)
 
-		if(Python3_Interpreter_FOUND)
 			add_test(
 				NAME translation_source_validation
-				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_translations.py
+				COMMAND "${NJEMU_HOST_TOOL}" translations
+					--translations-dir ${CMAKE_CURRENT_SOURCE_DIR}/translations
 			)
 			add_test(
 				NAME romcnv_translation_source_validation
-				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/build_romcnv_translations.py
+				COMMAND "${NJEMU_HOST_TOOL}" romcnv-translations
+					--translations-dir ${CMAKE_CURRENT_SOURCE_DIR}/translations/romcnv
 			)
 			add_test(
 				NAME cps2_romcnv_layout_validation
-				COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_cps2_cache_layouts.py
+				COMMAND "${NJEMU_HOST_TOOL}" validate-cps2-cache
+					--layouts ${CMAKE_CURRENT_SOURCE_DIR}/romcnv/data/cps2_cache_layouts.tsv
+					--metadata ${CMAKE_CURRENT_SOURCE_DIR}/metadata/cps2.tsv
 			)
 			add_test(
 				NAME translation_pack_tests
@@ -1870,12 +1874,10 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 			)
 			add_test(
 				NAME font_asset_validation
-				COMMAND ${Python3_EXECUTABLE}
-					${CMAKE_CURRENT_SOURCE_DIR}/tools/build_font_asset.py
+				COMMAND "${NJEMU_HOST_TOOL}" font
 					--source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_s14.c
 					--table-source ${CMAKE_CURRENT_SOURCE_DIR}/src/common/font/gbk_tbl.c
 			)
-		endif()
 endif()
 
 # ==============================================================================

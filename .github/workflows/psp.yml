@@ -103,7 +103,7 @@ jobs:
 
     - name: Validate translation package
       run: |
-        python3 tools/build_translations.py
+        build/host-tools/install/bin/njemu-tool translations --translations-dir translations
         test -f build/install/lang/en.lng
         test -f build/install/lang/es.lng
         test -f build/install/lang/ja.lng

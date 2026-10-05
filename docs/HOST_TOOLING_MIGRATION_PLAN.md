@@ -109,8 +109,8 @@ Status: **in progress**
 - [x] rominfo parser (CPS2 topology regression: 286 games / 1387 regions / 5382 ROM records);
 - [x] CPS2 unified game database (byte-identical binary and gamelist parity);
 - [x] DIP metadata for CPS1/MVS (byte-identical `NJDP` output);
-- [ ] migrate emulator and ROM converter CMake generators;
-- [ ] prove old/new output parity before deleting references.
+- [x] migrate emulator and ROM converter CMake generators to the native host-tool sub-build;
+- [x] prove old/new output parity before deleting references.
 
 Exit condition: a normal emulator or ROM converter build requires no Python and every cross-build executes a native host tool.
 
