@@ -2780,6 +2780,49 @@ errors, PCM/status mismatches, context-sync failures, ring overflows or fatal wo
 errors.  Because the most render-bound representative title became materially slower,
 the experiment was fully reverted and no `wjammers` hardware run was spent on it.
 
+#### Post-C9 ME render micro-optimization: reject disabled-LFO zero-PM bypass [complete]
+
+Section profiling on real PSP then split the remaining YM2610 render cost broadly into
+FM-side work, SSG and PCM/mix.  The render-bound `fatfury1` workload showed the FM-side
+region dominating at roughly **1.9-2.0 million ME Count ticks per buffer**, compared
+with about **0.14 million** for SSG and **0.75-0.79 million** for PCM/mix; `mslug3`
+showed the same ordering at roughly **1.0-1.07 / 0.13 / 0.68-0.77 million** ticks.
+This evidence motivated one more narrowly scoped FM experiment rather than another
+activity cache.
+
+When the retained disabled-LFO fast path is active, `lfo_inc == 0`, AM/PM have already
+been cleared once for the block and PM therefore remains zero.  Historically a channel
+with non-zero PMS still enters `chan_calc()`'s phase-modulation branch, indexes the PM
+table, obtains a zero offset and then executes the ordinary phase increments.  The
+candidate passed the block's `advance_lfo_per_sample` state into `chan_calc()` and
+bypassed that PM branch only while LFO was disabled.  The existing disabled-LFO host
+oracle exercises maximum PMS, disable after non-trivial LFO phase, disabled rendering,
+LFO re-enable and release, so the optimized and historical paths remained bit-exact.
+Desktop MVS stayed **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only,
+full PSP sound-coprocessor and the standalone worker harness all built successfully.
+The deterministic hardware candidate had SHA-256
+`edf079eda7e8263d76c44f588d245e7ad25c79c21209794cdfc92d39e6859807`.
+
+Real PSP again showed that the smaller instruction path was not a useful whole-render
+optimization.  A same-session isolated `mslug3` control/candidate comparison used
+independent copies of the ROM/cache fixture and preserved windows 8-11
+`sound_cmd = 4, 5, 4, 3`.  The retained disabled-LFO control averaged **5.650 ms**
+render wait across its final three complete 300-buffer windows
+(**5.771 / 5.483 / 5.695 ms**) while the candidate averaged **5.640 ms**
+(**5.766 / 5.486 / 5.668 ms**), only about **0.2%** and therefore noise.  Matching
+windows 8-11 averaged **126.532 FPS** for the control and **126.609 FPS** for the
+candidate, likewise effectively unchanged.
+
+The more FM-bound `fatfury1` control/candidate pair made the decision clearer.  Its two
+steady 300-buffer control windows averaged **8.413 ms** render wait
+(**8.186 / 8.639 ms**), whereas the candidate averaged **8.499 ms**
+(**8.256 / 8.741 ms**), about **1.0% slower**.  Both candidate runs stayed
+ME-authoritative through scripted stop with zero CPU recovery attempts, Z80/RAM/bank/I/O
+mismatches, YM render errors, PCM/status mismatches, context-sync failures, send
+failures, ring overflows or fatal worker errors.  With no measurable `mslug3` gain and
+a `fatfury1` regression, the zero-PM bypass was fully reverted and no `wjammers` run
+was spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
