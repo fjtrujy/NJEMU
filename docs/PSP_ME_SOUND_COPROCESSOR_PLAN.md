@@ -3054,6 +3054,31 @@ Desktop MVS is **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-on
 full PSP sound-coprocessor and the standalone worker harness all build successfully;
 `git diff --check` is clean.
 
+#### Post-C9 ME render micro-optimization: reject packed ADPCM-B decode constants [complete]
+
+The ADPCM-B follow-up applied the same one-load idea that succeeded for ADPCM-A.
+Historically every decoded nibble loads two 32-bit constant tables: a signed forecast
+multiplier in **-15..15** and an unsigned delta multiplier in **57..153**.  Both fit
+exactly in 16 bits, so the candidate packed them into the low/high halves of one
+native 32-bit table entry, reducing the constant footprint from **128 to 64 bytes**
+and replacing two table loads with one `lw`, `seh` and `srl` in the Allegrex hot loop.
+
+A test-only historical two-table path compared PCM and ADPCM-B status
+sample-for-sample through active decode and end-of-sample transitions.  Desktop MVS
+remained **31/31 CTest green**; Desktop NCDZ, PSP CPU-only, PSP ADPCM-A-only, full PSP
+sound-coprocessor and the standalone worker harness all built successfully, with a
+clean `git diff --check`.  The candidate full-coprocessor PRX SHA-256 was
+`aa9c07ef61394fcf3cd59c673da674bf68d8a0dd791e2cfbcdb74022d432c879`.
+
+Real PSP nevertheless rejected the change on `fatfury1`.  In a same-session
+control/candidate pair against committed `5290b29`, the two steady control windows
+measured **7.450 / 7.577 ms/buffer**, averaging **7.514 ms**.  The packed ADPCM-B
+candidate measured **7.603 / 7.702 ms**, averaging **7.653 ms**, approximately
+**+1.9% slower**.  Both runs stayed ME-authoritative with zero recovery attempts,
+mismatches, send failures, overflows or fatal worker errors.  Since the most
+render-bound representative title was already slower, the experiment was fully
+reverted and no `mslug3`/`wjammers` hardware runs were spent on it.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance
