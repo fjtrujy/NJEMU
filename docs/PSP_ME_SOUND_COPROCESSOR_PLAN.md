@@ -2432,6 +2432,87 @@ next optimization should overlap the authoritative ME render with Allegrex/main-
 work while preserving FIFO ordering, rather than adding a full audio block of latency
 or moving YM work back to the CPU.
 
+#### Post-C9 render overlap: remove Allegrex lock serialization [complete]
+
+The render-completion measurement above exposed a second cost that was not visible in
+the ME execution time itself: while the sound thread waited for `YM_RENDER_ACK`, it
+also held both the coarse YM gate and the worker mutex.  The emulation thread therefore
+could not enqueue later Z80/sound work even though the persistent worker's command FIFO
+already guaranteed that such work would execute only after the in-flight render.
+
+The authoritative path now keeps the existing synchronous `YM_RENDER_PREPARE` fence,
+because Allegrex still has to fill the exact compressed-PCM ranges requested by the ME.
+Once the filled `YM_RENDER` command has been successfully queued, however:
+
+- the sound thread publishes `render_pending` and releases the coarse YM gate when
+  Z80/control ownership is fully ME-authoritative;
+- later sound commands / Z80 horizons may be enqueued by the emulation thread and are
+  naturally ordered **behind** the render by the existing SPSC command FIFO;
+- render completion uses a non-blocking `YM_RENDER_ACK` poll.  The sound thread holds
+  the worker mutex only for each short poll, releases it while the render is pending,
+  and sleeps for 50 us between polls so the lower-priority emulation thread actually
+  receives Allegrex execution time;
+- shadow/oracle mode keeps the old gate-held behavior because CPU YM rendering is still
+  live there;
+- recovery, initial/resume snapshots, reset and shutdown acquire an **idle-stable** YM
+  gate: they check `render_pending`, take the gate, then recheck it under exclusion.
+  This closes the race where a render could be queued between the first idle check and
+  gate acquisition.  The snapshot path also no longer clears render tracking before
+  obtaining that exclusion.
+
+The host oracle now covers the ordering property directly.  It queues a Z80 advance
+horizon after an authoritative `YM_RENDER` but before collecting the render ACK,
+finishes the render through the polling API, then fences the worker and verifies that
+the later horizon completed at the expected emulated time.  The existing authoritative
+PCM/fallback oracles remain green.  Desktop MVS is **31/31 CTest green**; PSP MVS also
+builds cleanly in CPU-only, ADPCM-A-only and full-coprocessor configurations, including
+the standalone hardware harness.
+
+The final Release PSP/MVS binary was measured with exactly the same deterministic
+5,400-frame `mslug3` script and settings used by C9 and the wait-split measurement.  Its
+SHA-256 is
+`aa5c2f5043cc788ed4196b24dc9b539d8b35a5093ddd72252e81bdf0250705c4`.
+The representative gameplay windows **8-11** again contain the identical
+`sound_cmd = 4, 5, 4, 3` sequence:
+
+| metric | C9 full ME | render-overlap full ME | change |
+| --- | ---: | ---: | ---: |
+| uncapped gameplay FPS | 103.11 | **124.381** | **+20.63%** |
+| frame average | 9.698 ms | **8.040 ms** | -17.10% |
+| mean p50 | 9.123 ms | **8.459 ms** | -7.28% |
+| mean p95 | 17.418 ms | **11.733 ms** | -32.64% |
+| mean p99 | 19.133 ms | **12.799 ms** | -33.11% |
+| worst frame | 21.785 ms | **15.207 ms** | -30.20% |
+
+The new result is also **+38.35%** over the C9 ADPCM-A-only ME reference (89.90 FPS)
+and **+45.29%** over the C9 Main-CPU reference (85.61 FPS) on the same controlled
+workload.
+
+This improvement does **not** come from making the ME render itself shorter.  Because
+the fixed 5,400-frame workload now completes substantially faster, the run contains
+only three complete steady-state 300-buffer audio windows after startup.  Across those
+windows the sound thread measures:
+
+- prepare wait: **0.633 ms / buffer**;
+- render-completion wait: **6.869 ms / buffer**;
+- aggregate ME wait: **7.502 ms / buffer**;
+- producer: **8.160 ms / buffer**;
+- callback: **8.023 ms / buffer**.
+
+Those per-buffer values are slightly higher than the pre-overlap wait-split run because
+the sound thread is deliberately yielding Allegrex while the ME works, allowing the
+main emulation thread to execute concurrently instead of being serialized behind the
+audio lock.  Whole-emulator throughput is therefore the relevant success metric.  The
+audio loop remains healthy: its worst observed period is **36.755 ms** against the
+33.378 ms nominal period, slightly below the 36.890 ms worst period of the C9 full-ME
+run.  The final worker stop record reports command-ring high-water **5/16**,
+event-ring high-water **1**, zero overflows, zero CPU recovery attempts, zero PCM/status
+mismatches, zero send failures and `fatal=0`.
+
+This closes the immediate post-C9 synchronization optimization: the dominant render
+fence still exists for the sound thread, but it no longer serializes Allegrex main-thread
+progress for the duration of ME synthesis.
+
 ## 15. Representative validation games
 
 Start with `mslug3` because it is already the demanding hardware/performance

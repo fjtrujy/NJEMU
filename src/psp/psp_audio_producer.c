@@ -189,6 +189,7 @@ static void psp_me_dispatch_wait(void)
 
 #define PSP_ME_SOUND_WORKER_CAPACITY 16u
 #define PSP_ME_SOUND_WORKER_TIMEOUT_US 2000000ULL
+#define PSP_ME_SOUND_RENDER_POLL_SLEEP_US 50u
 
 enum
 {
@@ -247,6 +248,34 @@ static void psp_me_sound_ym_gate_unlock(void)
 {
 	if (me_sound_ym_gate_ready)
 		(void)sceKernelUnlockLwMutex(&me_sound_ym_gate, 1);
+}
+
+static bool psp_me_sound_ym_gate_lock_idle(void)
+{
+	uint64_t start_us = sceKernelGetSystemTimeWide();
+
+	for (;;)
+	{
+		while (__atomic_load_n(&me_sound_ym_render_pending, __ATOMIC_ACQUIRE))
+		{
+			if (sceKernelGetSystemTimeWide() - start_us >=
+				PSP_ME_SOUND_WORKER_TIMEOUT_US)
+				return false;
+			sceKernelDelayThread(PSP_ME_SOUND_RENDER_POLL_SLEEP_US);
+		}
+		if (!psp_me_sound_ym_gate_lock())
+			return false;
+		/* A render can be submitted between the unlocked pending check and
+		 * acquiring the gate. Recheck while holding the gate; once both are
+		 * idle, render_begin cannot publish another in-flight render until we
+		 * release it. */
+		if (!__atomic_load_n(&me_sound_ym_render_pending, __ATOMIC_ACQUIRE))
+			return true;
+		psp_me_sound_ym_gate_unlock();
+		if (sceKernelGetSystemTimeWide() - start_us >= PSP_ME_SOUND_WORKER_TIMEOUT_US)
+			return false;
+		sceKernelDelayThread(PSP_ME_SOUND_RENDER_POLL_SLEEP_US);
+	}
 }
 
 static bool psp_me_sound_worker_dispatch_start(void (*task)(void *), void *data,
@@ -343,7 +372,7 @@ static void psp_me_sound_z80_reset_tracking(void)
 	__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
 	me_sound_z80_failed = false;
 	me_sound_z80_horizon_queued = false;
-	me_sound_ym_render_pending = false;
+	__atomic_store_n(&me_sound_ym_render_pending, false, __ATOMIC_RELEASE);
 	me_sound_ym_authoritative = false;
 	me_sound_state_resume_me = false;
 	me_sound_shadow_failed = false;
@@ -360,7 +389,7 @@ static bool psp_me_sound_recover_cpu(void)
 	if (!me_sound_cpu_recovery_required)
 		return true;
 	me_sound_cpu_recovery_attempts++;
-	if (!psp_me_sound_ym_gate_lock())
+	if (!psp_me_sound_ym_gate_lock_idle())
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_LOCK;
 		goto done;
@@ -879,22 +908,22 @@ bool mvs_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	uint8_t ym_timer_enabled[2];
 	uint64_t ym_timer_remaining[2];
 
-	psp_me_sound_z80_reset_tracking();
 	if (!state || !visible_memory || !source_rom || !banks)
 		return false;
 	if (!me_available || !me_sound_worker.running)
 		return false;
-	if (!timer_get_ym2610_state(ym_timer_enabled, ym_timer_remaining))
-		return false;
-	if (!psp_me_sound_ym_gate_lock())
+	if (!psp_me_sound_ym_gate_lock_idle())
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_GATE_LOCK;
 		psp_me_sound_z80_mark_failed("YM snapshot gate lock");
 		return false;
 	}
 	gate_locked = true;
+	if (!timer_get_ym2610_state(ym_timer_enabled, ym_timer_remaining))
+		goto done;
 	if (!psp_me_sound_worker_lock())
 		goto done;
+	psp_me_sound_z80_reset_tracking();
 	if (me_available && me_sound_worker.running)
 	{
 		uint32_t ym_sample_rate = 44100u >> (2 - option_samplerate);
@@ -1216,7 +1245,15 @@ bool mvs_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_tim
 		psp_me_sound_z80_mark_failed("YM render send");
 		goto fail;
 	}
-	me_sound_ym_render_pending = true;
+	__atomic_store_n(&me_sound_ym_render_pending, true, __ATOMIC_RELEASE);
+	if (me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required)
+	{
+		/* The render command is now ordered ahead of any later Z80/YM work by
+		 * the worker FIFO. Release only the coarse YM gate so the emulation
+		 * thread can enqueue work while the ME mixes this block. */
+		me_sound_ym_render_gate_locked = false;
+		psp_me_sound_ym_gate_unlock();
+	}
 	return true;
 
 inactive:
@@ -1249,30 +1286,79 @@ bool mvs_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 	uint32_t samples)
 {
 	bool result = false;
+	bool pipelined_wait;
+	bool sync_cpu_context;
 	uint64_t wait_start;
+	uint64_t timeout_start;
 
-	if (!me_sound_ym_render_pending)
+	if (!__atomic_load_n(&me_sound_ym_render_pending, __ATOMIC_ACQUIRE))
 		return false;
-	me_sound_ym_render_pending = false;
-	if (!buffer || !buffer[0] || !buffer[1] || !psp_me_sound_worker_lock())
+	if (!buffer || !buffer[0] || !buffer[1])
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK;
 		psp_me_sound_z80_mark_failed("authoritative YM render completion lock");
 		goto done;
 	}
-	if (me_available && me_sound_worker.running &&
-		mvs_me_sound_shadow_ym_authoritative())
+	pipelined_wait = !me_sound_ym_render_gate_locked &&
+		me_sound_z80_control_authoritative;
+	sync_cpu_context = !me_sound_z80_control_authoritative;
+	wait_start = audio_profile_now_us();
+	timeout_start = sceKernelGetSystemTimeWide();
+	if (pipelined_wait)
 	{
-		wait_start = audio_profile_now_us();
-		result = psp_me_sound_worker_ym_render_finish_authoritative(
-			&me_sound_worker, buffer[0], buffer[1], samples,
-			!me_sound_z80_control_authoritative,
-			PSP_ME_SOUND_WORKER_TIMEOUT_US);
-		wait_start = audio_profile_now_us() - wait_start;
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
-		audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
+		for (;;)
+		{
+			psp_me_sound_render_result_t render_result = PSP_ME_SOUND_RENDER_PENDING;
+
+			if (psp_me_sound_worker_try_lock())
+			{
+				if (me_available && me_sound_worker.running)
+					render_result = psp_me_sound_worker_ym_render_poll_authoritative(
+						&me_sound_worker, buffer[0], buffer[1], samples,
+						sync_cpu_context);
+				else
+					render_result = PSP_ME_SOUND_RENDER_FAILED;
+				psp_me_sound_worker_unlock();
+			}
+			if (render_result == PSP_ME_SOUND_RENDER_COMPLETE)
+			{
+				result = true;
+				break;
+			}
+			if (render_result == PSP_ME_SOUND_RENDER_FAILED)
+				break;
+			if (sceKernelGetSystemTimeWide() - timeout_start >=
+				PSP_ME_SOUND_WORKER_TIMEOUT_US)
+			{
+				/* Reuse the blocking finalizer with a minimal timeout so worker
+				 * state is closed consistently on a genuine timeout. */
+				if (psp_me_sound_worker_lock())
+				{
+					if (me_available && me_sound_worker.running)
+						result = psp_me_sound_worker_ym_render_finish_authoritative(
+							&me_sound_worker, buffer[0], buffer[1], samples,
+							sync_cpu_context, 1u);
+					psp_me_sound_worker_unlock();
+				}
+				break;
+			}
+			sceKernelDelayThread(PSP_ME_SOUND_RENDER_POLL_SLEEP_US);
+		}
 	}
-	psp_me_sound_worker_unlock();
+	else if (psp_me_sound_worker_lock())
+	{
+		if (me_available && me_sound_worker.running &&
+			mvs_me_sound_shadow_ym_authoritative())
+		{
+			result = psp_me_sound_worker_ym_render_finish_authoritative(
+				&me_sound_worker, buffer[0], buffer[1], samples,
+				sync_cpu_context, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+		}
+		psp_me_sound_worker_unlock();
+	}
+	wait_start = audio_profile_now_us() - wait_start;
+	audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+	audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
 	if (!result)
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_CONTEXT_SYNC;
@@ -1280,6 +1366,7 @@ bool mvs_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 	}
 
 done:
+	__atomic_store_n(&me_sound_ym_render_pending, false, __ATOMIC_RELEASE);
 	if (me_sound_ym_render_gate_locked)
 	{
 		me_sound_ym_render_gate_locked = false;
@@ -1294,9 +1381,8 @@ void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	bool result = false;
 	uint64_t wait_start;
 
-	if (!me_sound_ym_render_pending)
+	if (!__atomic_load_n(&me_sound_ym_render_pending, __ATOMIC_ACQUIRE))
 		return;
-	me_sound_ym_render_pending = false;
 	if (!buffer || !buffer[0] || !buffer[1] || !psp_me_sound_worker_lock())
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK;
@@ -1321,6 +1407,7 @@ void mvs_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
 	}
 
 done:
+	__atomic_store_n(&me_sound_ym_render_pending, false, __ATOMIC_RELEASE);
 	if (me_sound_ym_render_gate_locked)
 	{
 		me_sound_ym_render_gate_locked = false;
@@ -1481,7 +1568,7 @@ static void psp_me_sound_worker_stop(void)
 
 	if (me_sound_ym_gate_ready)
 	{
-		if (!psp_me_sound_ym_gate_lock())
+		if (!psp_me_sound_ym_gate_lock_idle())
 			return;
 		gate_locked = true;
 	}
@@ -1511,7 +1598,7 @@ static bool psp_me_sound_worker_reset_generation(void)
 	bool gate_locked = false;
 	bool worker_locked = false;
 
-	if (!psp_me_sound_ym_gate_lock())
+	if (!psp_me_sound_ym_gate_lock_idle())
 		return false;
 	gate_locked = true;
 	if (!psp_me_sound_worker_lock())

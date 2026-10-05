@@ -2299,6 +2299,8 @@ static int test_ym_authoritative_render_without_hot_cpu_sync(void)
 		&host,
 	};
 	psp_me_sound_worker_t worker;
+	psp_me_sound_status_snapshot_t status;
+	psp_me_sound_render_result_t render_result;
 	cz80_struc reference_cpu;
 	cz80_state_t initial_state;
 	const uint32_t banks[4] = { 0x8000u, 0xc000u, 0xe000u, 0xf000u };
@@ -2346,10 +2348,11 @@ static int test_ym_authoritative_render_without_hot_cpu_sync(void)
 			reference_memory, sizeof(reference_memory), banks, 0, 0, 0,
 			44100u, sizeof(pcm_a), sizeof(pcm_b), true,
 			PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, TEST_TIMEOUT_US) ||
-		!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 100u, &window,
-			TEST_TIMEOUT_US) || !YM2610DefaultFillPcmWindow(&window) ||
-		!psp_me_sound_worker_ym_render_begin(&worker, &window, 100u,
-			TEST_TIMEOUT_US))
+			!psp_me_sound_worker_ym_render_prepare(&worker, 128u, 100u, &window,
+				TEST_TIMEOUT_US) || !YM2610DefaultFillPcmWindow(&window) ||
+			!psp_me_sound_worker_ym_render_begin(&worker, &window, 100u,
+				TEST_TIMEOUT_US) ||
+			!psp_me_sound_worker_z80_advance_horizon(&worker, 120u, 1000u))
 	{
 		fprintf(stderr, "Authoritative YM no-sync render setup failed\n");
 		goto done;
@@ -2364,12 +2367,29 @@ static int test_ym_authoritative_render_without_hot_cpu_sync(void)
 		fprintf(stderr, "Authoritative YM no-sync oracle blocks are identical\n");
 		goto done;
 	}
-	if (!psp_me_sound_worker_ym_render_finish_authoritative(&worker,
-			me_left, me_right, 128u, false, TEST_TIMEOUT_US) ||
+	do
+	{
+		render_result = psp_me_sound_worker_ym_render_poll_authoritative(&worker,
+			me_left, me_right, 128u, false);
+		if (render_result == PSP_ME_SOUND_RENDER_PENDING)
+			sched_yield();
+	} while (render_result == PSP_ME_SOUND_RENDER_PENDING);
+	if (render_result != PSP_ME_SOUND_RENDER_COMPLETE ||
 		memcmp(me_left, reference_first_left, sizeof(me_left)) != 0 ||
 		memcmp(me_right, reference_first_right, sizeof(me_right)) != 0)
 	{
-		fprintf(stderr, "Authoritative YM no-sync ME presentation failed\n");
+		fprintf(stderr, "Authoritative YM polled ME presentation failed: result=%d\n",
+			(int)render_result);
+		goto done;
+	}
+	if (!psp_me_sound_worker_fence(&worker, TEST_TIMEOUT_US) ||
+		!psp_me_sound_worker_read_status(&worker, &status) ||
+		status.emulated_time != 120u || status.last_advance_elapsed_us != 120u)
+	{
+		fprintf(stderr,
+			"Authoritative YM render/horizon FIFO mismatch: time=%llu elapsed=%u\n",
+			(unsigned long long)status.emulated_time,
+			status.last_advance_elapsed_us);
 		goto done;
 	}
 

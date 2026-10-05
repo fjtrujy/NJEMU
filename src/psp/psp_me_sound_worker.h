@@ -198,6 +198,13 @@ typedef enum psp_me_sound_fence_result
 	PSP_ME_SOUND_FENCE_COMPLETE = 1
 } psp_me_sound_fence_result_t;
 
+typedef enum psp_me_sound_render_result
+{
+	PSP_ME_SOUND_RENDER_FAILED = -1,
+	PSP_ME_SOUND_RENDER_PENDING = 0,
+	PSP_ME_SOUND_RENDER_COMPLETE = 1
+} psp_me_sound_render_result_t;
+
 typedef struct psp_me_sound_z80_slice
 {
 	cz80_state_t expected_state;
@@ -408,6 +415,9 @@ bool psp_me_sound_worker_ym_render_finish_authoritative(
 	psp_me_sound_worker_t *worker, int32_t *present_left,
 	int32_t *present_right, uint32_t samples, bool sync_cpu_context,
 	uint64_t timeout_us);
+psp_me_sound_render_result_t psp_me_sound_worker_ym_render_poll_authoritative(
+	psp_me_sound_worker_t *worker, int32_t *present_left,
+	int32_t *present_right, uint32_t samples, bool sync_cpu_context);
 bool psp_me_sound_worker_z80_slice(psp_me_sound_worker_t *worker,
 	const psp_me_sound_z80_io_t *io, uint32_t io_count, uint32_t cycles,
 	uint64_t emulated_time, const cz80_state_t *expected_state,
