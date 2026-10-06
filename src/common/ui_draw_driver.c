@@ -105,9 +105,14 @@ void ui_draw_configure_layout(void)
 			&viewport_x, &viewport_y, &viewport_width, &viewport_height);
 	ui_draw_driver->getLogicalSize(ui_draw_data, viewport_width, viewport_height,
 		&logical_width, &logical_height);
-	ui_layout_init_viewport(logical_width, logical_height,
-		output_width, output_height,
-		viewport_x, viewport_y, viewport_width, viewport_height);
+	if (ui_draw_has_capability(UI_DRAW_CAP_FILL_LOGICAL_HEIGHT))
+		ui_layout_init_viewport_fill_height(logical_width, logical_height,
+			output_width, output_height,
+			viewport_x, viewport_y, viewport_width, viewport_height);
+	else
+		ui_layout_init_viewport(logical_width, logical_height,
+			output_width, output_height,
+			viewport_x, viewport_y, viewport_width, viewport_height);
 }
 
 int ui_draw_has_capability(uint32_t capability)

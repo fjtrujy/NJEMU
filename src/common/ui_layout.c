@@ -26,9 +26,10 @@ void ui_layout_init(int logical_width, int logical_height,
 		output_width, output_height, 0, 0, output_width, output_height);
 }
 
-void ui_layout_init_viewport(int logical_width, int logical_height,
+static void ui_layout_init_viewport_internal(int logical_width, int logical_height,
 	int output_width, int output_height,
-	int viewport_x, int viewport_y, int viewport_width, int viewport_height)
+	int viewport_x, int viewport_y, int viewport_width, int viewport_height,
+	int fill_logical_height)
 {
 	int pixel_aspect_num = 1;
 	int pixel_aspect_den = 1;
@@ -70,7 +71,9 @@ void ui_layout_init_viewport(int logical_width, int logical_height,
 	metrics.scale = scale_x < scale_y ? scale_x : scale_y;
 	transform_scale_x = metrics.scale *
 		(float)pixel_aspect_den / (float)pixel_aspect_num;
-	transform_scale_y = metrics.scale;
+	transform_scale_y = fill_logical_height ? scale_y : metrics.scale;
+	if (fill_logical_height)
+		metrics.scale = transform_scale_y;
 
 	transformed_width =
 		(int)((float)logical_width * transform_scale_x + 0.5f);
@@ -80,6 +83,24 @@ void ui_layout_init_viewport(int logical_width, int logical_height,
 	metrics.viewport_height = transformed_height;
 	metrics.viewport_x = viewport_x + (viewport_width - transformed_width) / 2;
 	metrics.viewport_y = viewport_y + (viewport_height - transformed_height) / 2;
+}
+
+void ui_layout_init_viewport(int logical_width, int logical_height,
+	int output_width, int output_height,
+	int viewport_x, int viewport_y, int viewport_width, int viewport_height)
+{
+	ui_layout_init_viewport_internal(logical_width, logical_height,
+		output_width, output_height,
+		viewport_x, viewport_y, viewport_width, viewport_height, 0);
+}
+
+void ui_layout_init_viewport_fill_height(int logical_width, int logical_height,
+	int output_width, int output_height,
+	int viewport_x, int viewport_y, int viewport_width, int viewport_height)
+{
+	ui_layout_init_viewport_internal(logical_width, logical_height,
+		output_width, output_height,
+		viewport_x, viewport_y, viewport_width, viewport_height, 1);
 }
 
 void ui_layout_compute_responsive_size(int output_width, int output_height,

@@ -346,9 +346,23 @@ static void ps2_ui_draw_term(void *data)
 static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_height,
 	int *logical_width, int *logical_height)
 {
-	(void)data;
-	ui_layout_compute_responsive_size(output_width, output_height,
-		logical_width, logical_height);
+	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
+	int width;
+	int height;
+
+	ui_layout_compute_responsive_size(output_width, output_height, &width, &height);
+
+	/* 240p has half the vertical addressability of the corresponding 480-line
+	 * NTSC modes. Keep the established horizontal 480-unit menu layout, but
+	 * expose only half as many logical rows vertically so text and menu entries
+	 * remain large enough to read on a real CRT instead of fitting the same
+	 * number of rows into half as many scanlines. */
+	if (d && d->gsGlobal && d->gsGlobal->Mode == GS_MODE_NTSC &&
+		d->gsGlobal->Interlace == GS_NONINTERLACED)
+		height = (height + 1) / 2;
+
+	if (logical_width) *logical_width = width;
+	if (logical_height) *logical_height = height;
 }
 
 static void ps2_ui_draw_getOutputViewport(void *data,
@@ -590,7 +604,7 @@ const ui_draw_driver_t ps2_ui_draw_driver = {
 	ps2_ui_draw_init,
 	ps2_ui_draw_term,
 	ps2_ui_draw_getLogicalSize,
-	0,
+	UI_DRAW_CAP_FILL_LOGICAL_HEIGHT,
 	ps2_ui_draw_uploadTexture,
 	ps2_ui_draw_clearTexture,
 	ps2_ui_draw_getTextureBasePtr,

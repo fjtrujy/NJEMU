@@ -55,7 +55,8 @@ enum {
 	UI_DRAW_CAP_TRANSLUCENT_CHROME  = 1u << 1,
 	UI_DRAW_CAP_FILTERED_SHADOWS    = 1u << 2,
 	UI_DRAW_CAP_ANIMATED_GLOW       = 1u << 3,
-	UI_DRAW_CAP_PARTIAL_REFRESH     = 1u << 4
+	UI_DRAW_CAP_PARTIAL_REFRESH     = 1u << 4,
+	UI_DRAW_CAP_FILL_LOGICAL_HEIGHT = 1u << 5
 };
 
 /*------------------------------------------------------
