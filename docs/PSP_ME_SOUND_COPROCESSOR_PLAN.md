@@ -3295,7 +3295,7 @@ The experiment is complete only when all of the following are true:
   to justify its complexity, or the plan explicitly records that it does not and
   retains the simpler implementation.
 
-## 18. Follow-on NCDZ sound-coprocessor extension (2026-10-06) [host validated; PSP bring-up partially validated]
+## 18. Follow-on NCDZ sound-coprocessor extension (2026-10-06) [real-PSP sound path validated]
 
 After the MVS persistent-worker architecture was proven, the same ownership model
 was extended to NCDZ as a separate follow-on step rather than being developed in
@@ -3336,7 +3336,7 @@ Validation completed for this extension:
 - PSP NCDZ with ME disabled also builds, preserving the PPSSPP-compatible CPU path;
 - `git diff --check` is clean.
 
-Real-PSP bring-up now covers the worker bootstrap and initial ownership handoff.  An
+Real-PSP bring-up first covered the worker bootstrap and initial ownership handoff.  An
 unpacked Metal Slug 2 fixture was staged entirely on `ms0:` so validation did not
 depend on host0 streaming or ZIP random-access behavior.  After staging the required
 `neocd.bin` and `000-lo.lo` runtime files and resetting PSPLink to remove user-memory
@@ -3350,11 +3350,43 @@ and no worker fatal error.  The PSP audio profiler also showed stable ME render 
 over repeated 300-buffer windows at 44.1 kHz / 1472 samples, with average ME render
 wait around 2.33-2.35 ms and the audio loop remaining close to its 33.378 ms target.
 
-Full gameplay validation is still blocked by an **independent PSP NCDZ video issue**:
+Normal rendered gameplay remains blocked by an **independent PSP NCDZ video issue**:
 with otherwise equivalent Release/no-GUI settings, both the ME-disabled control and
 the full-ME build stop in `blit_finish()` at the PSP GU completion wait before the
 first emulated frame completes.  Because the matched CPU-only build reproduces the
-same wait, this is not attributed to the ME sound-coprocessor path.  Until that video
-blocker is fixed, autonomous Z80 slice ownership, CDDA mailbox traffic during normal
-gameplay, reset, save/load, suspend/resume, relaunch, fatal recovery and end-to-end
-performance remain open real-hardware validation items.
+same wait, this is not attributed to the ME sound-coprocessor path.
+
+To isolate the sound subsystem from that baseline video blocker, a temporary
+validation-only build retained normal frame/timer/audio scheduling but suppressed the
+two `neogeo_screenrefresh()` calls.  That change was never committed.  On the physical
+PSP the NCDZ worker then remained authoritative across repeated 300-frame windows.  A
+representative window reported `z80_active=1`, 1,154 autonomous Z80 slices, 313 Z80
+slices suppressed on Allegrex in favor of ME, 842 YM timer callbacks, 151
+authoritative YM renders and 112,512 rendered samples.  Repeated windows stayed free
+of Z80 state/RAM/bank/I/O mismatches, send failures, YM render/context/PCM/status
+errors, ring overflows and fatal worker errors.
+
+The same hardware run deliberately exercised lifecycle boundaries:
+
+- a CPU-state prepare/resume boundary recovered the NCDZ sound state and published a
+  fresh ME snapshot; authoritative Z80/YM execution continued afterward with zero
+  mismatch/fatal counters;
+- an emulator reset cleanly reset worker generation 2, after which generation 3
+  immediately reacquired Z80/YM authority and resumed the same steady-state profile;
+- a browser-exit boundary produced a clean generation-3 `SHUTDOWN` / `reason=stop`
+  record and removed the sound thread without a fatal error or queue overflow.
+
+The prepare/resume test also exposed a diagnostics-only issue: applying a fresh Z80
+snapshot recreates the worker runtime and legitimately restarts its YM timer callback
+counters, while the profile window retained the previous baseline.  The logger now
+treats a lower current counter as a new epoch instead of reporting an unsigned-wrap
+delta.  The fix was revalidated on the same PSP; the first post-resnapshot window
+reported normal timer counts (`843/843`) while all authority/error counters remained
+clean.
+
+This proves persistent NCDZ Z80+YM2610 ownership, direct PCM-A rendering,
+state-recovery/resnapshot, worker-generation reset and orderly shutdown on real PSP
+hardware.  Audible CDDA behavior, normal rendered gameplay, interactive save/load,
+physical suspend/resume, same-process game relaunch, NCDZ-specific fatal recovery and
+end-to-end performance remain outstanding until the independent PSP NCDZ video stall
+is resolved.

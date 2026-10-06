@@ -619,6 +619,11 @@ bool neogeo_me_sound_shadow_pcm_write_byte(uint32_t offset, uint8_t data)
 #endif
 }
 
+static uint32_t psp_me_sound_counter_delta(uint32_t current, uint32_t base)
+{
+	return current >= base ? current - base : current;
+}
+
 static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 {
 	psp_me_sound_worker_stats_t stats;
@@ -693,10 +698,13 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 		me_sound_shadow_window_base.z80_autonomous_slices;
 	z80_checkpoints = stats.z80_checkpoints -
 		me_sound_shadow_window_base.z80_checkpoints;
-	ym_timer_callbacks = stats.ym_timer_callbacks -
-		me_sound_shadow_window_base.ym_timer_callbacks;
-	ym_timer_overflows = stats.ym_timer_overflows -
-		me_sound_shadow_window_base.ym_timer_overflows;
+	/* A fresh Z80 snapshot recreates the worker runtime and therefore restarts
+	 * its YM timer counters.  Treat that as a new counter epoch rather than
+	 * reporting an unsigned-wrap delta in the next profiling window. */
+	ym_timer_callbacks = psp_me_sound_counter_delta(stats.ym_timer_callbacks,
+		me_sound_shadow_window_base.ym_timer_callbacks);
+	ym_timer_overflows = psp_me_sound_counter_delta(stats.ym_timer_overflows,
+		me_sound_shadow_window_base.ym_timer_overflows);
 	status_presented_reads = me_sound_status_presented_reads;
 	status_fallback_busy = me_sound_status_fallback_busy;
 	status_fallback_stale = me_sound_status_fallback_stale;

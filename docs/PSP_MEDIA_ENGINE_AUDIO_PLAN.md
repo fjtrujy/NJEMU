@@ -454,11 +454,11 @@ lifecycle path.
 - A physical power-switch suspend/resume with the final full emulator remains a
   manual hardware check; producer suspend/resume and post-resume MIST
   reinitialization have passed on real hardware.
-- The bounded jobs deliberately leave each core's control CPU and register
-  ownership on Allegrex.  Moving complete CPS1/CPS2/NCDZ sound islands to ME
-  would require separate ownership, lifecycle and recovery work comparable to
-  the MVS sound-coprocessor project and should only be attempted if profiling
-  justifies it.
+- The bounded CPS1/CPS2 jobs deliberately leave each core's control CPU and
+  register ownership on Allegrex.  NCDZ has since received the follow-on full
+  Z80+YM2610 persistent-worker path described in
+  `docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`; equivalent full CPS1/CPS2 ownership
+  still requires separate lifecycle/recovery work and performance evidence.
 - The current job snapshots ADPCM-A state once per output buffer.  Future work
   that changes control/update timing must preserve the generation/lifecycle
   semantics proven here rather than exposing live YM2610 globals to ME.
@@ -531,6 +531,12 @@ reported:
 ```
 
 The integrated PSP builds for CPS1, CPS2 and NCDZ compile/package with
-`PSP_ME_AUDIO=ON`; their CPU-only builds remain available unchanged, and MVS
-continues to use the stronger full sound-coprocessor implementation when
-`PSP_ME_SOUND_COPROCESSOR=ON`.
+`PSP_ME_AUDIO=ON`; their CPU-only builds remain available unchanged.  MVS uses the
+full sound-coprocessor implementation when `PSP_ME_SOUND_COPROCESSOR=ON`, and a
+follow-on 2026-10-06 milestone extended that same persistent ownership model to
+NCDZ with a target-specific flat-Z80/direct-PCM profile.  The NCDZ persistent path
+has since run authoritatively on real PSP hardware with zero worker mismatches or
+fatal errors across steady-state execution, a CPU recovery/resnapshot boundary, a
+worker-generation reset and orderly shutdown.  Full rendered NCDZ gameplay remains
+blocked by an independent PSP `blit_finish()` / `sceGuSync()` stall reproduced with
+ME disabled as well.
