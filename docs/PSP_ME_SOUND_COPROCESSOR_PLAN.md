@@ -3295,7 +3295,7 @@ The experiment is complete only when all of the following are true:
   to justify its complexity, or the plan explicitly records that it does not and
   retains the simpler implementation.
 
-## 18. Follow-on NCDZ sound-coprocessor extension (2026-10-06) [host validated]
+## 18. Follow-on NCDZ sound-coprocessor extension (2026-10-06) [host validated; PSP bring-up partially validated]
 
 After the MVS persistent-worker architecture was proven, the same ownership model
 was extended to NCDZ as a separate follow-on step rather than being developed in
@@ -3336,7 +3336,25 @@ Validation completed for this extension:
 - PSP NCDZ with ME disabled also builds, preserving the PPSSPP-compatible CPU path;
 - `git diff --check` is clean.
 
-The NCDZ extension is **not yet real-hardware validated**.  Before it can be treated
-as production-equivalent to the MVS path, run representative Neo Geo CD titles on a
-real PSP and verify audio correctness, CDDA mailbox behavior, CD/Z80/PCM loading,
-reset, save/load, suspend/resume, game relaunch, fatal recovery, and performance.
+Real-PSP bring-up now covers the worker bootstrap and initial ownership handoff.  An
+unpacked Metal Slug 2 fixture was staged entirely on `ms0:` so validation did not
+depend on host0 streaming or ZIP random-access behavior.  After staging the required
+`neocd.bin` and `000-lo.lo` runtime files and resetting PSPLink to remove user-memory
+fragmentation from repeated module launches, both the CPU-only control and the full
+ME build reached the NCDZ sound thread.
+
+The full-coprocessor build then completed the real-hardware snapshot path with the
+expected NCDZ machine shape: 64 KiB flat Z80 memory, 1 MiB resident PCM-A, successful
+YM2610 context cloning, successful worker command/ACK, zero snapshot send failures,
+and no worker fatal error.  The PSP audio profiler also showed stable ME render work
+over repeated 300-buffer windows at 44.1 kHz / 1472 samples, with average ME render
+wait around 2.33-2.35 ms and the audio loop remaining close to its 33.378 ms target.
+
+Full gameplay validation is still blocked by an **independent PSP NCDZ video issue**:
+with otherwise equivalent Release/no-GUI settings, both the ME-disabled control and
+the full-ME build stop in `blit_finish()` at the PSP GU completion wait before the
+first emulated frame completes.  Because the matched CPU-only build reproduces the
+same wait, this is not attributed to the ME sound-coprocessor path.  Until that video
+blocker is fixed, autonomous Z80 slice ownership, CDDA mailbox traffic during normal
+gameplay, reset, save/load, suspend/resume, relaunch, fatal recovery and end-to-end
+performance remain open real-hardware validation items.
