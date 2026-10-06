@@ -91,11 +91,21 @@ option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
-option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
+option(PSP_ME_AUDIO "PSP: enable Media Engine audio acceleration" OFF)
 option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
 option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
 option(PSP_ME_RING_SELFTEST "PSP MVS: run the synthetic ME shared-ring self-test" OFF)
-option(PSP_ME_SOUND_COPROCESSOR "PSP: build the experimental persistent ME sound worker" OFF)
+
+# PSP_ME_SOUND_COPROCESSOR used to expose intermediate bring-up combinations.
+# It is intentionally no longer configurable: PSP_ME_AUDIO now selects the
+# validated implementation for the chosen target.
+if(DEFINED PSP_ME_SOUND_COPROCESSOR)
+    message(STATUS
+        "PSP_ME_SOUND_COPROCESSOR is obsolete and ignored; "
+        "PSP_ME_AUDIO now selects the target-specific ME implementation")
+    unset(PSP_ME_SOUND_COPROCESSOR CACHE)
+    unset(PSP_ME_SOUND_COPROCESSOR)
+endif()
 
 # Official downloadable builds use one stable, feature-complete configuration
 # per platform instead of exposing the CI/developer option matrix. Set future
@@ -114,11 +124,14 @@ if(NJEMU_CANONICAL_RELEASE)
     set(USE_ASAN OFF CACHE BOOL "Use ASAN" FORCE)
     set(USE_UBSAN OFF CACHE BOOL "Use UBSAN" FORCE)
     set(USE_PG OFF CACHE BOOL "Use Performance Graph" FORCE)
-    set(PSP_ME_AUDIO OFF CACHE BOOL "PSP: enable experimental Media Engine audio producer" FORCE)
+    if(PLATFORM STREQUAL "PSP")
+        set(PSP_ME_AUDIO ON CACHE BOOL "PSP: enable Media Engine audio acceleration" FORCE)
+    else()
+        set(PSP_ME_AUDIO OFF CACHE BOOL "PSP: enable Media Engine audio acceleration" FORCE)
+    endif()
     set(PSP_AUDIO_PROFILE OFF CACHE BOOL "PSP: log audio producer/chip/output timing" FORCE)
     set(PSP_ME_SOUND_PROFILE OFF CACHE BOOL "PSP MVS: log 68000/Z80/scheduler/sound-island timing" FORCE)
     set(PSP_ME_RING_SELFTEST OFF CACHE BOOL "PSP MVS: run the synthetic ME shared-ring self-test" FORCE)
-    set(PSP_ME_SOUND_COPROCESSOR OFF CACHE BOOL "PSP: build the experimental persistent ME sound worker" FORCE)
     set(CACHE_IO_PROFILE OFF CACHE BOOL "Profile MVS cache I/O" FORCE)
     set(CACHE_IO_FORCE_SEEK OFF CACHE BOOL "Force legacy seek-before-read MVS cache behavior" FORCE)
     set(CACHE_IO_VALIDATE_ACCELERATED OFF CACHE BOOL "Validate accelerated MVS cache reads against POSIX" FORCE)
@@ -171,10 +184,25 @@ endif()
 if(PSP_ME_RING_SELFTEST AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
     message(FATAL_ERROR "PSP_ME_RING_SELFTEST requires PLATFORM=PSP, TARGET=MVS, and PSP_ME_AUDIO=ON")
 endif()
-if(PSP_ME_SOUND_COPROCESSOR AND NOT (PLATFORM STREQUAL "PSP" AND
-   ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "NCDZ" OR
-    "${TARGET}" STREQUAL "CPS2") AND PSP_ME_AUDIO))
-    message(FATAL_ERROR "PSP_ME_SOUND_COPROCESSOR requires PLATFORM=PSP, TARGET=MVS/NCDZ/CPS2, and PSP_ME_AUDIO=ON")
+
+# PSP_ME_AUDIO is the only user-facing ME feature switch. Select the strongest
+# validated implementation for each emulator so production builds cannot drift
+# into stale intermediate combinations from the bring-up work.
+set(NJEMU_PSP_ME_AUDIO_JOBS OFF)
+set(NJEMU_PSP_ME_SOUND_COPROCESSOR OFF)
+set(NJEMU_PSP_ME_AUDIO_MODE "CPU")
+if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
+    if("${TARGET}" STREQUAL "CPS1")
+        set(NJEMU_PSP_ME_AUDIO_JOBS ON)
+        set(NJEMU_PSP_ME_AUDIO_MODE "BOUNDED_JOBS")
+    elseif("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "NCDZ" OR
+           "${TARGET}" STREQUAL "CPS2")
+        set(NJEMU_PSP_ME_SOUND_COPROCESSOR ON)
+        set(NJEMU_PSP_ME_AUDIO_MODE "SOUND_COPROCESSOR")
+    endif()
+endif()
+if(PLATFORM STREQUAL "PSP")
+    message(STATUS "PSP ME audio mode for ${TARGET}: ${NJEMU_PSP_ME_AUDIO_MODE}")
 endif()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
@@ -518,25 +546,16 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         psp/psp_me_spsc_ring.h
         psp/psp_me_spsc_ring.c
     )
-    if("${TARGET}" STREQUAL "CPS1")
+    if(NJEMU_PSP_ME_AUDIO_JOBS)
         list(APPEND COMMON_SRC
             common/qsound_mix_job.h
             common/qsound_mix_job.c
             common/okim6295_job.h
             common/okim6295_job.c
         )
-    elseif("${TARGET}" STREQUAL "CPS2")
-        list(APPEND COMMON_SRC
-            common/qsound_mix_job.h
-            common/qsound_mix_job.c
-        )
-    elseif("${TARGET}" STREQUAL "NCDZ")
-        list(APPEND COMMON_SRC
-            common/ym2610_adpcma_job.h
-            common/ym2610_adpcma_job.c
-        )
+        add_definitions(-DAUDIO_PRODUCER_JOBS=1)
     endif()
-    add_definitions(-DPSP_ME_AUDIO=1 -DAUDIO_PRODUCER_JOBS=1)
+    add_definitions(-DPSP_ME_AUDIO=1)
 else()
     list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
 endif()
@@ -550,15 +569,18 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         src/psp/psp_audio_producer.c
         src/psp/psp_me_spsc_ring.c
         src/psp/psp_me_spsc_ring_mist_test.c
-        src/psp/psp_me_sound_worker.c
-        src/common/qsound_mix_job.c
-        src/common/okim6295_job.c
-        src/common/ym2610_adpcma_job.c
         PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
     )
+    if(NJEMU_PSP_ME_AUDIO_JOBS)
+        set_source_files_properties(
+            src/common/qsound_mix_job.c
+            src/common/okim6295_job.c
+            PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
+        )
+    endif()
 endif()
 
-if(PSP_ME_SOUND_COPROCESSOR)
+if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
     if("${TARGET}" STREQUAL "CPS2")
         set_source_files_properties(
             src/psp/psp_me_qsound_worker.c
@@ -568,6 +590,7 @@ if(PSP_ME_SOUND_COPROCESSOR)
         )
     else()
         set_source_files_properties(
+            src/psp/psp_me_sound_worker.c
             src/cpu/z80/cz80.c
             src/sound/ym2610.c
             PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
@@ -593,7 +616,7 @@ if(PSP_ME_RING_SELFTEST)
     add_definitions(-DPSP_ME_RING_SELFTEST=1)
 endif()
 
-if(PSP_ME_SOUND_COPROCESSOR)
+if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
     if("${TARGET}" STREQUAL "CPS2")
         list(APPEND COMMON_SRC
             common/cps2_me_sound_shadow.h
@@ -829,13 +852,6 @@ if (${TARGET} STREQUAL "MVS")
         mvs/biosmenu.c
     )
 
-    if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-        list(APPEND TARGET_SRC
-            common/ym2610_adpcma_job.h
-            common/ym2610_adpcma_job.c
-        )
-    endif()
-
     # Set SOUND_2610 flag
     set(SOUND_2610 ON)
 endif()
@@ -1027,32 +1043,34 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
     )
 
-    add_executable(psp_me_audio_jobs_hardware_test
-        tests/psp_me_audio_jobs_hardware.c
-        src/common/qsound_mix_job.c
-        src/common/okim6295_job.c
-        src/common/ym2610_adpcma_job.c
-    )
-    target_include_directories(psp_me_audio_jobs_hardware_test PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    )
-    target_include_directories(psp_me_audio_jobs_hardware_test SYSTEM PRIVATE
-        "${PSP_ME_CORE_INCLUDE_DIR}"
-        "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-    )
-    target_compile_options(psp_me_audio_jobs_hardware_test PRIVATE
-        ${COMMON_FLAGS}
-        ${WARNING_OPTIONS}
-        -G0
-        -fno-pic
-    )
-    target_link_libraries(psp_me_audio_jobs_hardware_test PRIVATE
-        "${PSP_ME_SAFE_TASK_LIBRARY}"
-        "${PSP_ME_CORE_MAPPER_LIBRARY}"
-        pspkubridge
-    )
+    if(BUILD_TESTING AND NJEMU_PSP_ME_AUDIO_JOBS)
+        add_executable(psp_me_audio_jobs_hardware_test
+            tests/psp_me_audio_jobs_hardware.c
+            src/common/qsound_mix_job.c
+            src/common/okim6295_job.c
+            src/common/ym2610_adpcma_job.c
+        )
+        target_include_directories(psp_me_audio_jobs_hardware_test PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        )
+        target_include_directories(psp_me_audio_jobs_hardware_test SYSTEM PRIVATE
+            "${PSP_ME_CORE_INCLUDE_DIR}"
+            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+        )
+        target_compile_options(psp_me_audio_jobs_hardware_test PRIVATE
+            ${COMMON_FLAGS}
+            ${WARNING_OPTIONS}
+            -G0
+            -fno-pic
+        )
+        target_link_libraries(psp_me_audio_jobs_hardware_test PRIVATE
+            "${PSP_ME_SAFE_TASK_LIBRARY}"
+            "${PSP_ME_CORE_MAPPER_LIBRARY}"
+            pspkubridge
+        )
+    endif()
 
-    if(PSP_ME_RING_SELFTEST)
+    if(BUILD_TESTING AND PSP_ME_RING_SELFTEST)
         add_executable(psp_me_ring_hardware_test
             tests/psp_me_spsc_ring_mist_hardware.c
             src/psp/psp_me_spsc_ring.c
@@ -1078,7 +1096,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         )
     endif()
 
-    if(PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
+    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
         add_executable(psp_me_sound_worker_hardware_test
             tests/psp_me_sound_worker_hardware.c
             src/psp/psp_me_spsc_ring.c
@@ -1730,33 +1748,33 @@ if(PLATFORM STREQUAL "PSP")
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
         MEMSIZE 1
     )
-    if(PSP_ME_AUDIO)
+    if(BUILD_TESTING AND NJEMU_PSP_ME_AUDIO_JOBS)
         create_pbp_file(
             TARGET psp_me_audio_jobs_hardware_test
             BUILD_PRX
             OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_audio_jobs_hardware_package"
             TITLE "NJEMU PSP ME Audio Jobs Test"
-            VERSION "${VERSION_STR}"
+            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
             MEMSIZE 1
         )
     endif()
-    if(PSP_ME_RING_SELFTEST)
+    if(BUILD_TESTING AND PSP_ME_RING_SELFTEST)
         create_pbp_file(
             TARGET psp_me_ring_hardware_test
             BUILD_PRX
             OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_ring_hardware_package"
             TITLE "NJEMU PSP ME Ring Hardware Test"
-            VERSION "${VERSION_STR}"
+            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
             MEMSIZE 1
         )
     endif()
-    if(PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
+    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
         create_pbp_file(
             TARGET psp_me_sound_worker_hardware_test
             BUILD_PRX
             OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_sound_worker_hardware_package"
             TITLE "NJEMU PSP ME Sound Worker Test"
-            VERSION "${VERSION_STR}"
+            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
             MEMSIZE 1
         )
     endif()

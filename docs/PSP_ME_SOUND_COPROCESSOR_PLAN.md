@@ -3454,5 +3454,33 @@ Each lifecycle recovery reported success with zero recovery failures, and every 
 generation resumed with zero FIFO overflow or worker fatal error.  Desktop CPS2 also
 passes the dedicated worker oracle, including shared-RAM synchronization, reset/suspend
 semantics, ordered memory access, QSound rendering, recovery snapshots, and fatal
-snapshot publication.  CI keeps CPU-only and bounded-ME CPS2 variants and now also
-builds full-coprocessor no-GUI plus GUI/save-state configurations.
+snapshot publication.  CI keeps the CPU-only CPS2 reference and builds the selected
+full-coprocessor path in both no-GUI and GUI/save-state configurations.
+
+## 20. Final PSP ME build-policy cleanup (2026-10-07)
+
+The completed target implementations no longer expose
+`PSP_ME_SOUND_COPROCESSOR` as a user-selectable CMake option. Intermediate
+bounded/full combinations were useful during bring-up, but retaining them after
+validation made it possible to build a target with an implementation already known
+to be suboptimal.
+
+`PSP_ME_AUDIO` is now the single public ME capability switch:
+
+- `OFF`: CPU-only producer for every core; this remains the PPSSPP/reference build;
+- `ON`, CPS1: bounded QSound/OKIM6295 jobs;
+- `ON`, CPS2: persistent Z80 + QSound sound island;
+- `ON`, MVS: persistent Z80 + YM2610 sound island;
+- `ON`, NCDZ: persistent Z80 + YM2610 sound island using the NCDZ machine profile.
+
+CMake derives the full-worker mode internally and compiles only the workload needed
+by that target. In particular, MVS/NCDZ/CPS2 no longer carry the bounded-job
+production sources that `audio_producer_driver.canRunJobs()` already disabled while
+the persistent worker owned MIST. The standalone bounded-job oracle remains attached
+to the CPS1 ME build, where bounded jobs are still the production architecture.
+
+The PSP CI matrix follows the same policy and no longer has a second coprocessor axis.
+This removes duplicate bounded/full rows while retaining CPU-only coverage and the
+relevant ME-enabled GUI/no-GUI/lifecycle combinations. Existing CMake caches that
+still contain `PSP_ME_SOUND_COPROCESSOR` are migrated automatically and report that
+the option is obsolete.

@@ -1,25 +1,25 @@
 # PSP Media Engine Audio Experiment
 
 This document is the authoritative plan and status for the optional PSP Media
-Engine (ME) audio experiment.
+Engine (ME) audio implementation.
 
-The validated implementation in this document uses ME as a bounded DSP
-accelerator across all PSP emulator cores.  CPS1 offloads QSound mixing or,
-for classic YM2151 titles, OKIM6295 ADPCM decode/mix; CPS2 offloads QSound
-mixing; NCDZ offloads YM2610 ADPCM-A decode/mix; and MVS retains the bounded
-YM2610 ADPCM-A job as a diagnostic/reference configuration.  The separate MVS
-follow-up that makes ME the persistent owner of the complete sound island
-(Z80 + YM2610 + PCM generation), using shared-memory SPSC rings for
-cross-processor communication, is specified in
+`PSP_ME_AUDIO=ON` now selects the strongest validated implementation for the
+chosen emulator core.  CPS1 uses bounded QSound or OKIM6295 jobs; CPS2 uses a
+persistent Z80 + QSound worker; and MVS/NCDZ use a persistent Z80 + YM2610
+worker.  The persistent-worker architecture, shared-memory SPSC transport,
+lifecycle/recovery design, and hardware evidence are specified in
 `docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`.
 
 ## Goals and compatibility contract
 
 The existing Allegrex audio path remains the reference implementation.  ME
-support is an additional PSP-only capability intended for real hardware and is
-never required by the normal PSP build.
+support is an additional PSP-only capability intended for real hardware. Developer
+builds can still compile it out entirely; canonical PSP packages enable it while
+retaining the Main CPU runtime fallback.
 
-- `PSP_ME_AUDIO=OFF` is the default and the PPSSPP/CI reference configuration.
+- `PSP_ME_AUDIO=OFF` is the default developer configuration and the explicit
+  PPSSPP/CPU-only CI reference.
+- `PSP_ME_AUDIO=ON` is enabled by the canonical PSP release configuration.
 - `PSP_ME_AUDIO=OFF` must not link or initialize any ME-specific dependency.
 - `PSP_ME_AUDIO=ON` keeps the CPU producer compiled as the runtime fallback.
 - ME initialization or proof-of-execution failure must leave audio on the CPU.
@@ -121,11 +121,11 @@ the active PSPDEV toolchain:
 - PSP `kubridge` support (`pspkubridge`).
 
 The normal OFF build does not search for or link these libraries.  The PSP
-GitHub Actions matrix now makes `PSP_ME_AUDIO` explicit in every job/artifact.
-All four emulator targets retain OFF reference artifacts.  CPS1, CPS2 and NCDZ
-also have explicit ON jobs for their bounded ME workloads, while MVS produces
-ON artifacts for the normal GUI/no-GUI variants plus the existing MVS
-command-list/cache and ADHOC variants.
+GitHub Actions matrix makes `PSP_ME_AUDIO` explicit in every job/artifact.
+All four emulator targets retain OFF reference artifacts.  ON builds select
+their target-specific implementation automatically: CPS1 bounded jobs,
+CPS2 Z80 + QSound, and MVS/NCDZ Z80 + YM2610.  There is no separate public
+sound-coprocessor build flag.
 
 Each `PSP_ME_AUDIO=ON` matrix job installs the two upstream dependencies from the
 exact revisions above and builds safe-task with `PRX_FREE=1` before compiling
@@ -530,10 +530,9 @@ reported:
 ```
 
 The integrated PSP builds for CPS1, CPS2 and NCDZ compile/package with
-`PSP_ME_AUDIO=ON`; their CPU-only builds remain available unchanged.  MVS uses the
-full sound-coprocessor implementation when `PSP_ME_SOUND_COPROCESSOR=ON`, and a
-follow-on 2026-10-06 milestone extended that same persistent ownership model to
-NCDZ with a target-specific flat-Z80/direct-PCM profile.  The NCDZ persistent path
+`PSP_ME_AUDIO=ON`; their CPU-only builds remain available unchanged.  MVS and
+NCDZ automatically use the full sound-coprocessor implementation, with NCDZ
+using its target-specific flat-Z80/direct-PCM profile.  The NCDZ persistent path
 has since run authoritatively on real PSP hardware with zero worker mismatches or
 fatal errors across steady-state execution, a CPU recovery/resnapshot boundary, a
 worker-generation reset and orderly shutdown.  Full rendered NCDZ gameplay remains
@@ -549,4 +548,5 @@ raised steady raw throughput to **129.87 FPS**, versus **112.04 FPS Main CPU** a
 **111.42 FPS bounded QSound ME** under the same 333 MHz/no-limit/no-VSync settings.
 The optimized worker remained authoritative with zero FIFO overflow/fatal errors and
 passed real-PSP save/load/reset/exit recovery/resnapshot validation.  The bounded
-QSound job remains available as a simpler reference/fallback configuration.
+QSound kernel remains covered by host/hardware job tests as a reference, but it is no
+longer a selectable CPS2 production configuration.

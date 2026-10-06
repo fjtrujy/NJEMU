@@ -16,6 +16,9 @@
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 #include <pspthreadman.h>
+#ifdef SAVE_STATE
+#include "common/state.h"
+#endif
 #if (EMU_SYSTEM == CPS2)
 #include "common/cps2_me_sound_shadow.h"
 #include "psp/psp_cps2_me_sound.h"
@@ -2309,8 +2312,8 @@ static bool psp_audio_producer_isAvailable(void)
 static bool psp_audio_producer_canRunJobs(void)
 {
 #ifdef PSP_ME_SOUND_COPROCESSOR
-	/* C2 reserves MIST for the persistent worker.  Until that worker owns the
-	 * complete sound island, YM2610 production intentionally stays on Allegrex. */
+	/* The persistent sound worker owns MIST, so bounded producer jobs cannot
+	 * share the dispatcher while the full sound island is active. */
 	return false;
 #else
 	return me_available;
