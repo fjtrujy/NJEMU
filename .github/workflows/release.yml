@@ -222,21 +222,6 @@ jobs:
       - name: Install dependencies
         run: apk add build-base git bash cmake
 
-      - name: Checkout PS2SDK BDM cache fix
-        uses: actions/checkout@v7
-        with:
-          repository: fjtrujy/ps2sdk
-          ref: bdm-cache-read-ahead-fix
-          path: .ci-deps/ps2sdk
-          persist-credentials: false
-
-      - name: Build and install PS2SDK
-        working-directory: .ci-deps/ps2sdk
-        run: |
-          export PS2SDKSRC="$PWD"
-          make -j "$(getconf _NPROCESSORS_ONLN)"
-          make install
-
       - name: Checkout ps2_drivers
         uses: actions/checkout@v7
         with:

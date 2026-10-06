@@ -112,24 +112,6 @@ jobs:
       run: |
         apk add build-base git bash cmake
 
-    # libbdm correctness fix intended for a future upstream PS2SDK PR.
-    # cacheio itself is owned and built by ps2_drivers.
-    - name: Checkout PS2SDK BDM cache fix
-      uses: actions/checkout@v7
-      with:
-        repository: fjtrujy/ps2sdk
-        ref: bdm-cache-read-ahead-fix
-        path: .ci-deps/ps2sdk
-        persist-credentials: false
-
-    - name: Build and install PS2SDK
-      working-directory: .ci-deps/ps2sdk
-      run: |
-        export PS2SDKSRC="$PWD"
-        git rev-parse HEAD
-        make -j "$(getconf _NPROCESSORS_ONLN)"
-        make install
-
     - name: Checkout ps2_drivers njemu
       uses: actions/checkout@v7
       with:
