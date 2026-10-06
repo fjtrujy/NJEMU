@@ -1527,7 +1527,10 @@ if(PLATFORM STREQUAL "PSP")
         ICON_PATH "${PSP_EBOOT_ICON}"
         BACKGROUND_PATH NULL
         PREVIEW_PATH NULL
-        TITLE "${TARGET} ${VERSION_STR} for PSP"
+        # PSPSDK's create_pbp_file() forwards TITLE through a shell command.
+        # Keep this metadata shell-safe; the runtime still shows the canonical
+        # parenthesized display version (for example, 2.4.0 (88138190)).
+        TITLE "${TARGET} ${NJEMU_RELEASE_VERSION} build ${NJEMU_BUILD_NUMBER} for PSP"
         # PARAM.SFO's application version remains the SDK-friendly numeric
         # major/minor pair; the title/runtime version carries the human-readable
         # release version and commit build number.
