@@ -53,6 +53,8 @@ function(_njemu_validate_install core install_dir)
 
     if(NJEMU_RELEASE_PLATFORM STREQUAL "psp")
         set(_required_binary "EBOOT.PBP")
+    elseif(NJEMU_RELEASE_PLATFORM STREQUAL "ps2")
+        set(_required_binary "${core}.ELF")
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "psvita")
         set(_required_binary "${core}.vpk")
     else()
