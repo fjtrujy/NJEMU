@@ -352,14 +352,16 @@ static void ps2_ui_draw_getLogicalSize(void *data, int output_width, int output_
 
 	ui_layout_compute_responsive_size(output_width, output_height, &width, &height);
 
-	/* 240p has half the vertical addressability of the corresponding 480-line
-	 * NTSC modes. Keep the established horizontal 480-unit menu layout, but
-	 * expose only half as many logical rows vertically so text and menu entries
-	 * remain large enough to read on a real CRT instead of fitting the same
-	 * number of rows into half as many scanlines. */
+	/* Keep the established 480-unit horizontal menu layout in 240p, but use a
+	 * dedicated 240-line logical canvas instead of inheriting the much denser
+	 * responsive 480-line layout. The 224-line active picture then scales this
+	 * canvas only slightly vertically, keeping text readable while still
+	 * exposing enough rows for practical menu navigation. */
 	if (d && d->gsGlobal && d->gsGlobal->Mode == GS_MODE_NTSC &&
-		d->gsGlobal->Interlace == GS_NONINTERLACED)
-		height = (height + 1) / 2;
+		d->gsGlobal->Interlace == GS_NONINTERLACED) {
+		width = 480;
+		height = 240;
+	}
 
 	if (logical_width) *logical_width = width;
 	if (logical_height) *logical_height = height;

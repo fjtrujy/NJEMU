@@ -3219,12 +3219,17 @@ void showmenu(void)
 			{
 				int res = mainmenu[sel].menu_func();
 
-				if (res == 0)
-				{
-					pad_wait_clear();
-					load_background(WP_LOGO);
-					update = 1;
-				}
+					if (res == 0)
+					{
+						pad_wait_clear();
+						load_background(WP_LOGO);
+						/* A submenu can rebuild the video/UI geometry (PS2 output-mode
+						 * switching does exactly that). Refresh the parent menu's row
+						 * count immediately so its selection window stays focused on the
+						 * current item instead of using the previous resolution's density. */
+						rows = ui_layout_visible_rows(40, 32);
+						update = 1;
+					}
 				else break;
 			}
 			else break;

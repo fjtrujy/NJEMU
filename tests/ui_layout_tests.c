@@ -376,7 +376,7 @@ static void test_non_square_pixel_safe_viewport(int output_width, int output_hei
 		center_y <= output_height / 2 + 1);
 }
 
-static void test_ps2_240p_half_height_ui_density(void)
+static void test_ps2_240p_ui_density(void)
 {
 	const ui_layout_metrics_t *layout;
 	int logical_width;
@@ -392,20 +392,20 @@ static void test_ps2_240p_half_height_ui_density(void)
 	assert(logical_width == 480);
 	assert(logical_height == 370);
 
-	logical_height = (logical_height + 1) / 2;
-	assert(logical_height == 185);
+	logical_width = 480;
+	logical_height = 240;
 	ui_layout_init_viewport_fill_height(logical_width, logical_height,
 		704, 240, 32, 8, 640, 224);
 	layout = ui_layout_get();
 	assert(layout->logical_width == 480);
-	assert(layout->logical_height == 185);
+	assert(layout->logical_height == 240);
 	assert(layout->viewport_x == 32);
 	assert(layout->viewport_y == 8);
 	assert(layout->viewport_width == 640);
 	assert(layout->viewport_height == 224);
-	assert(ui_layout_visible_rows(37, 20) == 7);
-	assert(ui_layout_visible_rows(40, 17) == 8);
-	assert(ui_layout_visible_rows(40, 32) == 4);
+	assert(ui_layout_visible_rows(37, 20) == 10);
+	assert(ui_layout_visible_rows(40, 17) == 11);
+	assert(ui_layout_visible_rows(40, 32) == 6);
 
 	ui_layout_transform_rect(0, 0, logical_width, logical_height,
 		&x, &y, &w, &h);
@@ -445,7 +445,7 @@ int main(void)
 	test_display_mode_presentation_viewport();
 	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
 	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);
-	test_ps2_240p_half_height_ui_density();
+	test_ps2_240p_ui_density();
 	video_set_pixel_aspect_ratio(1, 1);
 	return 0;
 }
