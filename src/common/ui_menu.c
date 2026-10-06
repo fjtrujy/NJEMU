@@ -852,6 +852,11 @@ static int menu_system_video_settings(void)
 		if (option_video_output_mode != mode_before_input)
 		{
 			menu_apply_live_video_output_mode(mode_before_input);
+			/* Rebuilding the GS and UI can take long enough for the normal menu
+			 * key-repeat timer to fire while the same direction is still held.
+			 * Consume the release so one deliberate tap always selects exactly one
+			 * video mode rather than skipping directly across multiple modes. */
+			pad_wait_clear();
 			update = 1;
 		}
 

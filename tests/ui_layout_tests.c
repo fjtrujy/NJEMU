@@ -156,30 +156,94 @@ static void test_cps1_240p_display_modes(void)
 	int width;
 	int height;
 
-	/* PS2 240p presents gameplay through a 640x224 visible framebuffer. Original
-	 * Size must remain a true 1:1 384x224 copy; the other modes intentionally
-	 * scale and therefore require filtered presentation in the PS2 backend. */
+	/* The complete PS2 NTSC raster is 704x240, while native arcade content and
+	 * UI live in the centered 704x224 active-picture viewport. CPS pixels are
+	 * not square: both native-size and original-aspect presentation preserve the
+	 * intended 4:3 display aspect instead of treating 384:224 as the DAR. */
 	video_set_pixel_aspect_ratio(10, 22);
 
-	display_mode_size(DISPLAY_MODE_ORIGINAL_SIZE, 640, 224, 384, 224,
+	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_SIZE, 704, 224, 384, 224,
+		4, 3,
 		&width, &height);
+	assert(width == 657);
+	assert(height == 224);
+
+	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_ASPECT, 704, 224, 384, 224,
+		4, 3,
+		&width, &height);
+	assert(width == 657);
+	assert(height == 224);
+
+	display_mode_size_aspect(DISPLAY_MODE_4_3, 704, 224, 384, 224,
+		4, 3,
+		&width, &height);
+	assert(width == 657);
+	assert(height == 224);
+
+	display_mode_size_aspect(DISPLAY_MODE_FULLSCREEN, 704, 224, 384, 224,
+		4, 3,
+		&width, &height);
+	assert(width == 704);
+	assert(height == 224);
+
+	/* Square-pixel platforms retain the traditional literal native-size mode. */
+	video_set_pixel_aspect_ratio(1, 1);
+	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_SIZE, 480, 272, 384, 224,
+		4, 3, &width, &height);
 	assert(width == 384);
 	assert(height == 224);
 
-	display_mode_size(DISPLAY_MODE_ORIGINAL_ASPECT, 640, 224, 384, 224,
-		&width, &height);
-	assert(width == 640);
-	assert(height == 169);
+	video_set_pixel_aspect_ratio(10, 22);
+}
 
-	display_mode_size(DISPLAY_MODE_4_3, 640, 224, 384, 224,
-		&width, &height);
-	assert(width == 640);
-	assert(height == 218);
+static void test_neogeo_240p_display_aspect(void)
+{
+	int width;
+	int height;
 
-	display_mode_size(DISPLAY_MODE_FULLSCREEN, 640, 224, 384, 224,
-		&width, &height);
-	assert(width == 640);
+	video_set_pixel_aspect_ratio(10, 22);
+	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_ASPECT,
+		704, 224, 304, 224, 4, 3, &width, &height);
+	assert(width == 657);
 	assert(height == 224);
+}
+
+static void test_cps_vertical_240p_display_aspect(void)
+{
+	int width;
+	int height;
+
+	video_set_pixel_aspect_ratio(10, 22);
+	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_ASPECT,
+		704, 224, 224, 384, 3, 4, &width, &height);
+	assert(width == 369);
+	assert(height == 224);
+}
+
+static void test_get_ps2_240p_presentation_viewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	(void)data;
+	assert(output_width == 704);
+	assert(output_height == 240);
+	if (x) *x = 0;
+	if (y) *y = 8;
+	if (width) *width = 704;
+	if (height) *height = 224;
+}
+
+static void test_get_ps2_480i_presentation_viewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	(void)data;
+	assert(output_width == 704);
+	assert(output_height == 480);
+	if (x) *x = 0;
+	if (y) *y = 16;
+	if (width) *width = 704;
+	if (height) *height = 448;
 }
 
 static void test_cps1_240p_presentation_rect(void)
@@ -188,31 +252,65 @@ static void test_cps1_240p_presentation_rect(void)
 	void (*saved_viewport)(void *, int, int, int *, int *, int *, int *) =
 		test_video_driver.getPresentationViewport;
 
-	test_output_width = 640;
-	test_output_height = 224;
-	test_video_driver.getPresentationViewport = NULL;
+	test_output_width = 704;
+	test_output_height = 240;
+	test_video_driver.getPresentationViewport = test_get_ps2_240p_presentation_viewport;
 	video_set_pixel_aspect_ratio(10, 22);
 
-	rect = display_mode_presentation_rect(DISPLAY_MODE_ORIGINAL_SIZE, 384, 224);
-	assert(rect.left == 128);
-	assert(rect.top == 0);
-	assert(rect.right == 512);
-	assert(rect.bottom == 224);
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_ORIGINAL_SIZE, 384, 224, 4, 3);
+	assert(rect.left == 23);
+	assert(rect.top == 8);
+	assert(rect.right == 680);
+	assert(rect.bottom == 232);
 
-	rect = display_mode_presentation_rect(DISPLAY_MODE_ORIGINAL_ASPECT, 384, 224);
-	assert(rect.left == 0);
-	assert(rect.top == 27);
-	assert(rect.right == 640);
-	assert(rect.bottom == 196);
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_ORIGINAL_ASPECT, 384, 224, 4, 3);
+	assert(rect.left == 23);
+	assert(rect.top == 8);
+	assert(rect.right == 680);
+	assert(rect.bottom == 232);
 
-	rect = display_mode_presentation_rect(DISPLAY_MODE_FULLSCREEN, 384, 224);
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_FULLSCREEN, 384, 224, 4, 3);
 	assert(rect.left == 0);
-	assert(rect.top == 0);
-	assert(rect.right == 640);
-	assert(rect.bottom == 224);
+	assert(rect.top == 8);
+	assert(rect.right == 704);
+	assert(rect.bottom == 232);
 
 	test_output_width = 704;
 	test_output_height = 480;
+	test_video_driver.getPresentationViewport = saved_viewport;
+}
+
+static void test_cps1_ps2_480i_480p_presentation_rects(void)
+{
+	RECT rect;
+	void (*saved_viewport)(void *, int, int, int *, int *, int *, int *) =
+		test_video_driver.getPresentationViewport;
+
+	test_output_width = 704;
+	test_output_height = 480;
+	video_set_pixel_aspect_ratio(10, 11);
+
+	test_video_driver.getPresentationViewport = test_get_ps2_480i_presentation_viewport;
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_ORIGINAL_ASPECT, 384, 224, 4, 3);
+	assert(rect.left == 23);
+	assert(rect.top == 16);
+	assert(rect.right == 680);
+	assert(rect.bottom == 464);
+
+	/* 480p uses the full DTV raster, whose 704x480 framebuffer already has a
+	 * physical 4:3 aspect with the PS2 pixel aspect applied. */
+	test_video_driver.getPresentationViewport = NULL;
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_ORIGINAL_ASPECT, 384, 224, 4, 3);
+	assert(rect.left == 0);
+	assert(rect.top == 0);
+	assert(rect.right == 704);
+	assert(rect.bottom == 480);
+
 	test_video_driver.getPresentationViewport = saved_viewport;
 }
 
@@ -301,7 +399,10 @@ int main(void)
 	test_non_square_pixel_layout(704, 240, 10, 22);
 	test_non_square_pixel_display_mode();
 	test_cps1_240p_display_modes();
+	test_neogeo_240p_display_aspect();
+	test_cps_vertical_240p_display_aspect();
 	test_cps1_240p_presentation_rect();
+	test_cps1_ps2_480i_480p_presentation_rects();
 	test_display_mode_presentation_viewport();
 	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
 	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);

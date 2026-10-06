@@ -44,8 +44,8 @@ static uint16_t *clut;
 
 static RECT mvs_presentation_rect(int native_width, int native_height)
 {
-	return display_mode_presentation_rect(option_display_mode,
-		native_width, native_height);
+	return display_mode_presentation_rect_aspect(option_display_mode,
+		native_width, native_height, 4, 3);
 }
 
 static void mvs_decode_fix_tile(uint8_t pixels[8 * 8], uint32_t code,

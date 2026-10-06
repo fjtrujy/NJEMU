@@ -71,8 +71,10 @@ static video_point_vertex_t *vertices_stars;
 
 static RECT cps_presentation_rect(int native_width, int native_height)
 {
-	return display_mode_presentation_rect(option_display_mode,
-		native_width, native_height);
+	return display_mode_presentation_rect_aspect(option_display_mode,
+		native_width, native_height,
+		native_width < native_height ? 3 : 4,
+		native_width < native_height ? 4 : 3);
 }
 
 static void cps_atlas_position(int16_t index, int tile_size, int *x, int *y)

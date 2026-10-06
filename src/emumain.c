@@ -179,6 +179,7 @@ volatile int Sleep;
 static void show_fps(bool draw)
 {
 	const ui_layout_metrics_t *layout;
+	int glyph_size = 8;
 	int sx;
 	int sy;
 	int text_width;
@@ -200,16 +201,26 @@ static void show_fps(bool draw)
 		return;
 
 	layout = ui_layout_get();
-	text_width = (int)strlen(buf) << 3;
+	/* Keep the HUD readable on low-line-count outputs such as PS2 240p. The
+	 * normal 8x8 font would otherwise become roughly 5 output scanlines after
+	 * the 4:3/non-square-pixel UI transform. Scale only this compact HUD font;
+	 * the menu renderer keeps its normal responsive layout. */
+	if (layout->scale > 0.0f && layout->scale < 1.0f) {
+		glyph_size = (int)(8.0f / layout->scale + 0.9999f);
+		if (glyph_size > 16)
+			glyph_size = 16;
+	}
+	text_width = (int)strlen(buf) * glyph_size;
 	sx = layout->logical_width - text_width - option_fps_offset_x;
 	sy = option_fps_offset_y;
 	if (sx < 0)
 		sx = 0;
 	if (sy < 0)
 		sy = 0;
-	if (sy > layout->logical_height - 8)
-		sy = layout->logical_height > 8 ? layout->logical_height - 8 : 0;
-	small_font_print(sx, sy, buf, 1);
+	if (sy > layout->logical_height - glyph_size)
+		sy = layout->logical_height > glyph_size ?
+			layout->logical_height - glyph_size : 0;
+	small_font_print_scaled(sx, sy, buf, 1, glyph_size);
 }
 
 

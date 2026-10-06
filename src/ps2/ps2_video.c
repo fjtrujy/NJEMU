@@ -117,16 +117,16 @@ typedef struct ps2_output_mode
 	int pixel_aspect_den;
 } ps2_output_mode_t;
 
-/* NTSC output uses the conventional 640-pixel visible framebuffer. gsKit
- * centers 640x448 (480i) or 640x224 (240p) inside the complete NTSC timing;
- * using the full 704x480 timing extent as the framebuffer instead changes
- * DISPLAY.DX/DY and makes the nominal visible region start part-way through
- * NJEMU's presentation rectangle in PCSX2. 480p keeps the 704-pixel DTV
- * framebuffer. The pixel-aspect values describe the underlying video timing,
- * with 240p doubling the vertical pixel extent. */
+/* Keep the framebuffer geometry aligned with the complete PS2 video timing,
+ * matching the mature RetroArch PS2 backend. 704 pixels are 64-pixel aligned
+ * for GS FBW and represent the complete NTSC/DTV active raster. 240p uses the
+ * same NTSC timing as 480i with non-interlaced FRAME output and therefore has
+ * a doubled vertical pixel aspect (10:22). Presentation code must not add a
+ * second 640-pixel "safe" viewport inside this raster; doing that was the
+ * source of the earlier right-edge clipping. */
 static const ps2_output_mode_t ps2_output_modes[VIDEO_OUTPUT_MODE_COUNT] = {
-	{ GS_MODE_NTSC,     640, 224, GS_NONINTERLACED, GS_FRAME, 10, 22 },
-	{ GS_MODE_NTSC,     640, 448, GS_INTERLACED,    GS_FIELD, 10, 11 },
+	{ GS_MODE_NTSC,     704, 240, GS_NONINTERLACED, GS_FRAME, 10, 22 },
+	{ GS_MODE_NTSC,     704, 480, GS_INTERLACED,    GS_FIELD, 10, 11 },
 	{ GS_MODE_DTV_480P, 704, 480, GS_NONINTERLACED, GS_FRAME, 10, 11 },
 };
 
@@ -630,6 +630,36 @@ static void ps2_getOutputSize(void *data, int *width, int *height)
 	}
 	if (width) *width = w;
 	if (height) *height = h;
+}
+
+static void ps2_getPresentationViewport(void *data,
+	int output_width, int output_height,
+	int *x, int *y, int *width, int *height)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)data;
+	int viewport_x = 0;
+	int viewport_y = 0;
+	int viewport_width = output_width;
+	int viewport_height = output_height;
+
+	/* NTSC timing is 704x240/480, but the conventional active picture is
+	 * 224/448 lines. Keep the full 704-pixel horizontal timing: the previous
+	 * 640-wide safe rectangle double-applied horizontal overscan and clipped
+	 * the right edge in PCSX2. Vertically, however, reserving 8 lines per side
+	 * in 240p (16 per side in 480i) is important for native 224-line arcade
+	 * content and keeps GUI/HUD text away from the CRTC overscan boundary. */
+	if (ps2 && ps2->gsGlobal && ps2->gsGlobal->Mode == GS_MODE_NTSC) {
+		viewport_height =
+			ps2->gsGlobal->Interlace == GS_NONINTERLACED ? 224 : 448;
+		if (viewport_height > output_height)
+			viewport_height = output_height;
+		viewport_y = (output_height - viewport_height) / 2;
+	}
+
+	if (x) *x = viewport_x;
+	if (y) *y = viewport_y;
+	if (width) *width = viewport_width;
+	if (height) *height = viewport_height;
 }
 
 static void ps2_setOutputOffset(void *data, int x, int y)
@@ -2335,7 +2365,7 @@ video_driver_t video_ps2 = {
 	ps2_fillUIRectGradient,
 	ps2_setUIScissor,
 	NULL,
-	NULL,
+	ps2_getPresentationViewport,
 	ps2_setOutputOffset,
 	ps2_setOutputMode,
 };

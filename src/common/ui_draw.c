@@ -1446,12 +1446,15 @@ int ui_output_update(void)
 	Print small font string
 ------------------------------------------------------*/
 
-void small_font_print(int sx, int sy, const char *s, int bg)
+void small_font_print_scaled(int sx, int sy, const char *s, int bg, int size)
 {
 	int i;
 	int len = strlen(s);
 
-	ui_driver_set_scissor(sx, sy, 8 * len, 8);
+	if (size < 1)
+		size = 1;
+
+	ui_driver_set_scissor(sx, sy, size * len, size);
 
 	for (i = 0; i < len; i++)
 	{
@@ -1461,15 +1464,20 @@ void small_font_print(int sx, int sy, const char *s, int bg)
 
 		ui_driver_draw_sprite(UI_TEXTURE_SMALLFONT,
 			u, v, 8, 8,
-			sx, sy, 8, 8,
+			sx, sy, size, size,
 			bg ? 0 : 1);
 
-		sx += 8;
+		sx += size;
 	}
 
 	/* Reset scissor to full screen */
 	ui_driver_set_scissor(0, 0,
 		ui_layout_get()->logical_width, ui_layout_get()->logical_height);
+}
+
+void small_font_print(int sx, int sy, const char *s, int bg)
+{
+	small_font_print_scaled(sx, sy, s, bg, 8);
 }
 
 

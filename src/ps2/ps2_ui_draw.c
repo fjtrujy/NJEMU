@@ -355,17 +355,28 @@ static void ps2_ui_draw_getOutputViewport(void *data,
 	int output_width, int output_height,
 	int *x, int *y, int *width, int *height)
 {
+	ps2_ui_data_t *d = (ps2_ui_data_t *)data;
 	int viewport_width = output_width;
 	int viewport_height = output_height;
 	int viewport_x = 0;
 	int viewport_y = 0;
-	(void)data;
 
-	/* UI and gameplay share one backend-owned visible-area policy. */
+	/* Start from the gameplay-safe vertical active picture. */
 	if (video_driver && video_driver->getPresentationViewport)
 		video_driver->getPresentationViewport(video_data,
 			output_width, output_height,
 			&viewport_x, &viewport_y, &viewport_width, &viewport_height);
+
+	/* NTSC CRT/CRTC presentation commonly hides part of the 704-wide timing at
+	 * the horizontal edges. Keep menus and HUD text inside the conventional
+	 * centered 640-pixel UI-safe region without constraining gameplay itself.
+	 * Applying this inset to gameplay caused the earlier right-edge clipping;
+	 * it belongs only to UI/HUD layout. */
+	if (d && d->gsGlobal && d->gsGlobal->Mode == GS_MODE_NTSC &&
+		viewport_width >= 704) {
+		viewport_x += 32;
+		viewport_width -= 64;
+	}
 
 	if (x) *x = viewport_x;
 	if (y) *y = viewport_y;

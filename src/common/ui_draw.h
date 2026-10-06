@@ -19,6 +19,7 @@ int ui_init(void);
 void ui_exit(void);
 
 void small_font_print(int sx, int sy, const char *s, int bg);
+void small_font_print_scaled(int sx, int sy, const char *s, int bg, int size);
 void small_font_printf(int x, int y, const char *text, ...);
 void small_icon(int sx, int sy, int r, int g, int b, int no);
 void small_icon_shadow(int sx, int sy, int r, int g, int b, int no);
