@@ -516,6 +516,24 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         psp/psp_me_spsc_ring.h
         psp/psp_me_spsc_ring.c
     )
+    if("${TARGET}" STREQUAL "CPS1")
+        list(APPEND COMMON_SRC
+            common/qsound_mix_job.h
+            common/qsound_mix_job.c
+            common/okim6295_job.h
+            common/okim6295_job.c
+        )
+    elseif("${TARGET}" STREQUAL "CPS2")
+        list(APPEND COMMON_SRC
+            common/qsound_mix_job.h
+            common/qsound_mix_job.c
+        )
+    elseif("${TARGET}" STREQUAL "NCDZ")
+        list(APPEND COMMON_SRC
+            common/ym2610_adpcma_job.h
+            common/ym2610_adpcma_job.c
+        )
+    endif()
     add_definitions(-DPSP_ME_AUDIO=1 -DAUDIO_PRODUCER_JOBS=1)
 else()
     list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
@@ -531,6 +549,8 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         src/psp/psp_me_spsc_ring.c
         src/psp/psp_me_spsc_ring_mist_test.c
         src/psp/psp_me_sound_worker.c
+        src/common/qsound_mix_job.c
+        src/common/okim6295_job.c
         src/common/ym2610_adpcma_job.c
         PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
     )
@@ -984,6 +1004,31 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     target_include_directories(${TARGET} SYSTEM PRIVATE
         "${PSP_ME_CORE_INCLUDE_DIR}"
         "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+    )
+
+    add_executable(psp_me_audio_jobs_hardware_test
+        tests/psp_me_audio_jobs_hardware.c
+        src/common/qsound_mix_job.c
+        src/common/okim6295_job.c
+        src/common/ym2610_adpcma_job.c
+    )
+    target_include_directories(psp_me_audio_jobs_hardware_test PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_include_directories(psp_me_audio_jobs_hardware_test SYSTEM PRIVATE
+        "${PSP_ME_CORE_INCLUDE_DIR}"
+        "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+    )
+    target_compile_options(psp_me_audio_jobs_hardware_test PRIVATE
+        ${COMMON_FLAGS}
+        ${WARNING_OPTIONS}
+        -G0
+        -fno-pic
+    )
+    target_link_libraries(psp_me_audio_jobs_hardware_test PRIVATE
+        "${PSP_ME_SAFE_TASK_LIBRARY}"
+        "${PSP_ME_CORE_MAPPER_LIBRARY}"
+        pspkubridge
     )
 
     if(PSP_ME_RING_SELFTEST)
@@ -1664,6 +1709,16 @@ if(PLATFORM STREQUAL "PSP")
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
         MEMSIZE 1
     )
+    if(PSP_ME_AUDIO)
+        create_pbp_file(
+            TARGET psp_me_audio_jobs_hardware_test
+            BUILD_PRX
+            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_audio_jobs_hardware_package"
+            TITLE "NJEMU PSP ME Audio Jobs Test"
+            VERSION "${VERSION_STR}"
+            MEMSIZE 1
+        )
+    endif()
     if(PSP_ME_RING_SELFTEST)
         create_pbp_file(
             TARGET psp_me_ring_hardware_test
@@ -1691,6 +1746,18 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
+
+    add_executable(audio_me_job_tests
+        tests/audio_me_job_tests.c
+        src/common/qsound_mix_job.c
+        src/common/okim6295_job.c)
+    target_include_directories(audio_me_job_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_compile_options(audio_me_job_tests PRIVATE
+        ${COMMON_FLAGS}
+        ${WARNING_OPTIONS})
+    add_test(NAME audio_me_job_tests COMMAND audio_me_job_tests)
+
     add_test(NAME game_metadata_generator_tests
         COMMAND "${NJEMU_HOST_TEST}"
             --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"

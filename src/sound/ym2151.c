@@ -1641,7 +1641,16 @@ static void YM2151Update_mono(int32_t **buffer, int length)
 #if (EMU_SYSTEM == CPS1)
 static void YM2151Update_mono_with_okim6295(int32_t **buffer, int length)
 {
+#if defined(AUDIO_PRODUCER_JOBS)
+	bool okim_me_job = OKIM6295_submit_me_job(length);
+#endif
+
 	YM2151Update_mono(buffer, length);
+#if defined(AUDIO_PRODUCER_JOBS)
+	if (okim_me_job)
+		OKIM6295_finish_me_job(buffer[0], length);
+	else
+#endif
 	OKIM6295Update(buffer[0], length);
 }
 #endif

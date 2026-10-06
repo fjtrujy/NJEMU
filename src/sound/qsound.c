@@ -10,6 +10,11 @@
 #include "sound/qsound.h"
 #include "common/capcom_driver_info.h"
 #include "common/sound.h"
+#if defined(AUDIO_PRODUCER_JOBS)
+#include "common/audio_producer_driver.h"
+#include "common/audio_profile.h"
+#include "common/qsound_mix_job.h"
+#endif
 #if (EMU_SYSTEM == CPS1)
 #include "cps1/memintrf.h"
 #elif (EMU_SYSTEM == CPS2)
@@ -52,6 +57,9 @@ static QSOUND_SRC_SAMPLE *qsound_sample_rom;
 
 static int qsound_data;
 static int qsound_volume_shift;
+#if defined(AUDIO_PRODUCER_JOBS)
+static qsound_mix_job_t *qsound_mix_job;
+#endif
 
 static const int ALIGN16_DATA qsound_pan_table[33] =
 {
@@ -61,6 +69,93 @@ static const int ALIGN16_DATA qsound_pan_table[33] =
 	221,226,230,235,239,243,247,251,
 	256
 };
+
+#if defined(AUDIO_PRODUCER_JOBS)
+static bool qsound_update_me(int32_t **buffer, int length)
+{
+	uint64_t wait_start;
+	int ch;
+
+	if (!buffer || !buffer[0] || !buffer[1] || length <= 0 ||
+		(uint32_t)length > QSOUND_MIX_JOB_MAX_SAMPLES ||
+		!audio_producer_driver->canRunJobs())
+		return false;
+
+	if (!qsound_mix_job)
+	{
+		qsound_mix_job = audio_producer_driver->acquireJobBuffer(
+			sizeof(*qsound_mix_job), 64);
+		if (!qsound_mix_job)
+			return false;
+	}
+
+	qsound_mix_job->samples = (uint32_t)length;
+	qsound_mix_job->error = 0;
+	for (ch = 0; ch < QSOUND_CHANNELS; ch++)
+	{
+		QSOUND_CHANNEL *channel = &qsound_channel[ch];
+		qsound_mix_channel_job_t *job_channel = &qsound_mix_job->channel[ch];
+		int i;
+
+		job_channel->left_gain =
+			(channel->lvol * channel->vol) >> qsound_volume_shift;
+		job_channel->right_gain =
+			(channel->rvol * channel->vol) >> qsound_volume_shift;
+		memset(job_channel->sample, 0, (size_t)length);
+		if (!channel->key)
+			continue;
+
+		for (i = 0; i < length; i++)
+		{
+			int count = channel->offset >> 16;
+
+			channel->offset &= 0xffff;
+			if (count)
+			{
+				const QSOUND_SRC_SAMPLE *source = qsound_sample_rom + channel->bank;
+
+				channel->address += count;
+				if (channel->address >= channel->end)
+				{
+					if (!channel->loop)
+					{
+						channel->key = 0;
+						break;
+					}
+					channel->address = (channel->end - channel->loop) & 0xffff;
+				}
+				channel->lastdt = source[channel->address];
+			}
+			job_channel->sample[i] = (int8_t)channel->lastdt;
+			channel->offset += channel->pitch;
+		}
+	}
+
+	if (!audio_producer_driver->submitJob(qsound_mix_job_run,
+			qsound_mix_job, sizeof(*qsound_mix_job)))
+	{
+		/* State has already advanced to this block boundary.  Running the same
+		 * pure mixer locally preserves correctness if dispatch fails. */
+		qsound_mix_job_run(qsound_mix_job);
+	}
+	else
+	{
+		wait_start = audio_profile_now_us();
+		audio_producer_driver->waitJob();
+		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+			audio_profile_now_us() - wait_start);
+	}
+
+	if (qsound_mix_job->error)
+		return false;
+	for (ch = 0; ch < length; ch++)
+	{
+		buffer[0][ch] += qsound_mix_job->left[ch];
+		buffer[1][ch] += qsound_mix_job->right[ch];
+	}
+	return true;
+}
+#endif
 
 
 /******************************************************************************
@@ -74,6 +169,11 @@ static const int ALIGN16_DATA qsound_pan_table[33] =
 static void qsound_update(int32_t **buffer, int length)
 {
 	int ch;
+
+#if defined(AUDIO_PRODUCER_JOBS)
+	if (qsound_update_me(buffer, length))
+		return;
+#endif
 
 	for (ch = 0; ch < QSOUND_CHANNELS; ch++)
 	{
@@ -143,6 +243,9 @@ void qsound_sh_start(void)
 
 	qsound_sample_rom   = (QSOUND_SRC_SAMPLE *)memory_region_sound1;
 	qsound_volume_shift = 6;
+#if defined(AUDIO_PRODUCER_JOBS)
+	qsound_mix_job = NULL;
+#endif
 
 #if (EMU_SYSTEM == CPS2)
 	if (!strcmp(capcom_driver_name(), "csclub"))

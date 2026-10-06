@@ -114,7 +114,12 @@
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
 #include "common/sound.h"
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if defined(AUDIO_PRODUCER_JOBS) && (MVS_PCM_CACHE || (EMU_SYSTEM == NCDZ))
+#define YM2610_ADPCMA_ME_JOBS 1
+#else
+#define YM2610_ADPCMA_ME_JOBS 0
+#endif
+#if YM2610_ADPCMA_ME_JOBS
 #include "common/ym2610_adpcma_job.h"
 #endif
 
@@ -797,7 +802,7 @@ typedef struct ym2610_context
 	uint8_t pcm_window_source_enabled;
 	uint8_t pcm_window_error;
 #endif
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	ym2610_adpcma_job_t *adpcma_job_state;
 	volatile uint32_t adpcma_generation[YM2610_ADPCMA_JOB_CHANNELS];
 #endif
@@ -834,7 +839,7 @@ static void ym2610_context_irq_noop(void *opaque, int irq);
 #define CTX_pcmbufB(ctx)              ((ctx)->pcm_b)
 #define CTX_pcmsizeB(ctx)             ((ctx)->pcm_b_size)
 #endif
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 #define CTX_adpcma_job(ctx)           ((ctx)->adpcma_job_state)
 #define CTX_adpcma_generation(ctx)    ((ctx)->adpcma_generation)
 #endif
@@ -862,7 +867,7 @@ static void ym2610_context_irq_noop(void *opaque, int irq);
 #define pcmbufB                     (ym2610_default_context.pcm_b)
 #define pcmsizeB                    (ym2610_default_context.pcm_b_size)
 #endif
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 #define adpcma_job                  (ym2610_default_context.adpcma_job_state)
 #define adpcma_control_generation   (ym2610_default_context.adpcma_generation)
 #endif
@@ -2606,7 +2611,7 @@ static void OPNB_ADPCMA_calc_chan(ym2610_context_t *context, int c, ADPCMA *ch)
 	*ch->pan += ch->adpcma_out;
 }
 
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 static bool OPNB_ADPCMA_prepare_job_channel(ym2610_adpcma_channel_job_t *dst,
 	ADPCMA *src, int channel, int length)
 {
@@ -2615,9 +2620,11 @@ static bool OPNB_ADPCMA_prepare_job_channel(ym2610_adpcma_channel_job_t *dst,
 	uint32_t decode_count;
 	uint32_t source_bytes;
 	uint32_t source_base;
+	uint32_t i;
+#if MVS_PCM_CACHE
 	uint16_t cached_part = 0xffff;
 	uint8_t *cached_data = NULL;
-	uint32_t i;
+#endif
 
 	dst->flag = src->flag;
 	dst->flag_mask = src->flagMask;
@@ -2658,6 +2665,7 @@ static bool OPNB_ADPCMA_prepare_job_channel(ym2610_adpcma_channel_job_t *dst,
 
 	dst->source_base_byte = source_base;
 	dst->source_size = (uint16_t)source_bytes;
+#if MVS_PCM_CACHE
 	for (i = 0; i < source_bytes; i++)
 	{
 		uint32_t byte_addr = source_base + i;
@@ -2672,6 +2680,10 @@ static bool OPNB_ADPCMA_prepare_job_channel(ym2610_adpcma_channel_job_t *dst,
 		}
 		dst->source[i] = cached_data[byte_addr & PCM_CACHE_MASK];
 	}
+#else
+	for (i = 0; i < source_bytes; i++)
+		dst->source[i] = pcmbufA[source_base + i];
+#endif
 
 	return true;
 }
@@ -2680,10 +2692,13 @@ static bool OPNB_ADPCMA_submit_job(int length)
 {
 	int channel;
 
-	if (!pcm_cache_enable || length <= 0 ||
-		length > YM2610_ADPCMA_JOB_MAX_SAMPLES ||
+	if (length <= 0 || length > YM2610_ADPCMA_JOB_MAX_SAMPLES ||
 		!audio_producer_driver->canRunJobs())
 		return false;
+#if MVS_PCM_CACHE
+	if (!pcm_cache_enable)
+		return false;
+#endif
 
 	if (!adpcma_job)
 	{
@@ -2747,8 +2762,10 @@ static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
 		 * controls for the next period while advancing only decoder state. */
 		dst->adpcma_out =
 			((dst->adpcma_acc * dst->vol_mul) >> dst->vol_shift) & ~3;
+#if (EMU_SYSTEM == MVS)
 		dst->block = 0xffff;
 		dst->buf = NULL;
+#endif
 	}
 
 	for (sample = 0; sample < length; sample++)
@@ -2890,7 +2907,7 @@ static void OPNB_ADPCMA_write(ym2610_context_t *context, int r, int v)
 					if (CTX_pcmbufA(context) == NULL || adpcma[c].start >= CTX_pcmsizeA(context))
 						adpcma[c].flag = 0;
 					#endif
-	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	#if YM2610_ADPCMA_ME_JOBS
 					CTX_adpcma_generation(context)[c]++;
 	#endif
 				}
@@ -2903,7 +2920,7 @@ static void OPNB_ADPCMA_write(ym2610_context_t *context, int r, int v)
 				if ((v >> c) & 1)
 				{
 					adpcma[c].flag = 0;
-	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	#if YM2610_ADPCMA_ME_JOBS
 					CTX_adpcma_generation(context)[c]++;
 	#endif
 				}
@@ -3632,7 +3649,7 @@ bool YM2610ContextCloneForPcmWindow(ym2610_context_t *destination,
 	destination->active_pcm_window = NULL;
 	destination->pcm_window_source_enabled = 1;
 	destination->pcm_window_error = 0;
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	CTX_adpcma_job(destination) = NULL;
 #endif
 	destination->legacy_timer_handler = NULL;
@@ -3655,7 +3672,7 @@ bool YM2610ContextRestoreFromPcmWindow(ym2610_context_t *destination,
 	uint8_t pcm_cache_enabled;
 	void (*adpcma_calc_chan)(ym2610_context_t *, int, ADPCMA *);
 	void (*adpcmb_calc)(ym2610_context_t *, ADPCMB *);
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	ym2610_adpcma_job_t *adpcma_job_state;
 #endif
 	uint32_t channel;
@@ -3674,7 +3691,7 @@ bool YM2610ContextRestoreFromPcmWindow(ym2610_context_t *destination,
 	pcm_cache_enabled = CTX_pcm_cache_enabled(destination);
 	adpcma_calc_chan = CTX_ADPCMA_calc_chan(destination);
 	adpcmb_calc = CTX_ADPCMB_calc(destination);
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	adpcma_job_state = CTX_adpcma_job(destination);
 #endif
 
@@ -3692,7 +3709,7 @@ bool YM2610ContextRestoreFromPcmWindow(ym2610_context_t *destination,
 	CTX_pcm_cache_enabled(destination) = pcm_cache_enabled;
 	CTX_ADPCMA_calc_chan(destination) = adpcma_calc_chan;
 	CTX_ADPCMB_calc(destination) = adpcmb_calc;
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	CTX_adpcma_job(destination) = adpcma_job_state;
 #endif
 	for (channel = 0; channel < 6; channel++)
@@ -3744,7 +3761,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 	int32_t *bufL, *bufR;
 	FMSAMPLE_MIX lt, rt;
 	FM_CH *cch[6];
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	bool adpcma_job_submitted = false;
 #endif
 
@@ -3787,7 +3804,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 	/* calc SSG count */
 	outn = SSG_calc_count(context, length);
 
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	if (context == &ym2610_default_context)
 		adpcma_job_submitted = OPNB_ADPCMA_submit_job(length);
 #endif
@@ -3854,7 +3871,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 		}
 #endif
 
-	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	#if YM2610_ADPCMA_ME_JOBS
 		if (!adpcma_job_submitted)
 	#endif
 		{
@@ -3879,7 +3896,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 		}
 
 		/* buffering */
-	#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+	#if YM2610_ADPCMA_ME_JOBS
 		if (adpcma_job_submitted)
 		{
 			lt = 0;
@@ -3918,7 +3935,7 @@ void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length
 		*bufR++ = rt;
 	}
 
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	if (adpcma_job_submitted)
 		OPNB_ADPCMA_finish_job(buffer[0], buffer[1], length);
 #endif
@@ -3995,7 +4012,7 @@ static void YM2610ContextInitInternal(ym2610_context_t *context, int clock,
 	context->pcm_cache_enabled = cache_enabled;
 	context->legacy_timer_handler = legacy_timer;
 	context->legacy_irq_handler = legacy_irq;
-#if MVS_PCM_CACHE && defined(AUDIO_PRODUCER_JOBS)
+#if YM2610_ADPCMA_ME_JOBS
 	CTX_adpcma_job(context) = NULL;
 	memset((void *)CTX_adpcma_generation(context), 0,
 		sizeof(context->adpcma_generation));

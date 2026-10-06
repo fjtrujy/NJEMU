@@ -2423,6 +2423,10 @@ to label the legacy ADPCM-A-only build as the normal `Media Engine` artifact.
   `PSP_ME_SOUND_COPROCESSOR=ON`;
 - one explicit `PSP_ME_AUDIO=ON` / `PSP_ME_SOUND_COPROCESSOR=OFF` MVS row remains
   as the ADPCM-A benchmark/diagnostic reference;
+- CPS1, CPS2 and NCDZ now also have independent `PSP_ME_AUDIO=ON` rows for
+  their bounded DSP jobs; those rows deliberately keep
+  `PSP_ME_SOUND_COPROCESSOR=OFF` because the persistent sound-worker design is
+  MVS-specific;
 - job and artifact names include both flags, so full-coprocessor and ADPCM-A-only
   packages cannot be mistaken for one another;
 - the generic CMake defaults remain `OFF`.  Cross-platform and developer builds

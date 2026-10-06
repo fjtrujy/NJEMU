@@ -109,6 +109,29 @@ jobs:
             gui: ON
             psp_me_audio: ON
             psp_me_sound_coprocessor: ON
+          # The other PSP cores use bounded MIST jobs while retaining their
+          # existing sound/control CPU paths as the fallback implementation.
+          - target: CPS1
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            psp_me_audio: ON
+            psp_me_sound_coprocessor: OFF
+          - target: CPS2
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            psp_me_audio: ON
+            psp_me_sound_coprocessor: OFF
+          - target: NCDZ
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            psp_me_audio: ON
+            psp_me_sound_coprocessor: OFF
           # Retain one ADPCM-A-only ME build as a benchmark/diagnostic reference.
           - target: MVS
             command_list: OFF

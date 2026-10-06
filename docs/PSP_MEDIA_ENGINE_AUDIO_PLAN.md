@@ -4,10 +4,13 @@ This document is the authoritative plan and status for the optional PSP Media
 Engine (ME) audio experiment.
 
 The validated implementation in this document uses ME as a bounded DSP
-accelerator and currently offloads only MVS YM2610 ADPCM-A decode/mix.  The
-separate follow-up experiment that investigates making ME the persistent owner
-of the complete MVS sound island (Z80 + YM2610 + PCM generation), using
-shared-memory SPSC rings for cross-processor communication, is specified in
+accelerator across all PSP emulator cores.  CPS1 offloads QSound mixing or,
+for classic YM2151 titles, OKIM6295 ADPCM decode/mix; CPS2 offloads QSound
+mixing; NCDZ offloads YM2610 ADPCM-A decode/mix; and MVS retains the bounded
+YM2610 ADPCM-A job as a diagnostic/reference configuration.  The separate MVS
+follow-up that makes ME the persistent owner of the complete sound island
+(Z80 + YM2610 + PCM generation), using shared-memory SPSC rings for
+cross-processor communication, is specified in
 `docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`.
 
 ## Goals and compatibility contract
@@ -119,13 +122,13 @@ the active PSPDEV toolchain:
 
 The normal OFF build does not search for or link these libraries.  The PSP
 GitHub Actions matrix now makes `PSP_ME_AUDIO` explicit in every job/artifact.
-CPS1/CPS2/NCDZ remain OFF because no workload from those emulators has been
-migrated to ME yet.  MVS produces both OFF reference artifacts and ON artifacts
-for the normal GUI/no-GUI variants plus the existing MVS command-list/cache and
-ADHOC variants.
+All four emulator targets retain OFF reference artifacts.  CPS1, CPS2 and NCDZ
+also have explicit ON jobs for their bounded ME workloads, while MVS produces
+ON artifacts for the normal GUI/no-GUI variants plus the existing MVS
+command-list/cache and ADHOC variants.
 
-Each MVS `PSP_ME_AUDIO=ON` matrix job installs the two upstream dependencies from
-the exact revisions above and builds safe-task with `PRX_FREE=1` before compiling
+Each `PSP_ME_AUDIO=ON` matrix job installs the two upstream dependencies from the
+exact revisions above and builds safe-task with `PRX_FREE=1` before compiling
 NJEMU.  These jobs validate/build the ME-capable binary but do not run PPSSPP as
 ME execution evidence.  The custom-core dependency still uses its own upstream
 kernel bridge build machinery, while NJEMU itself avoids loading a temporary
@@ -451,9 +454,11 @@ lifecycle path.
 - A physical power-switch suspend/resume with the final full emulator remains a
   manual hardware check; producer suspend/resume and post-resume MIST
   reinitialization have passed on real hardware.
-- The first ADPCM-A workload is beneficial but only modestly at whole-system
-  level; additional migrations should be attempted only when profiling shows a
-  similarly coarse, state-bounded workload.
+- The bounded jobs deliberately leave each core's control CPU and register
+  ownership on Allegrex.  Moving complete CPS1/CPS2/NCDZ sound islands to ME
+  would require separate ownership, lifecycle and recovery work comparable to
+  the MVS sound-coprocessor project and should only be attempted if profiling
+  justifies it.
 - The current job snapshots ADPCM-A state once per output buffer.  Future work
   that changes control/update timing must preserve the generation/lifecycle
   semantics proven here rather than exposing live YM2610 globals to ME.
@@ -496,5 +501,36 @@ whole-emulator gain.  MIST itself measured ~32% lower isolated dispatch/wait
 overhead than Classic and passed two consecutive producer init/job/shutdown
 cycles in one PSP process.  Runtime Auto/Main CPU/Media Engine selection,
 in-process mode restart, GUI ROM switching and producer suspend/resume recovery
-are now implemented and hardware validated as described in M6.  No additional
-audio workload currently meets the profiling threshold for further ME migration.
+are now implemented and hardware validated as described in M6.
+
+## Multi-core ME workload extension - 2026-10-06
+
+The bounded producer contract is now used by the remaining PSP emulator cores:
+
+- CPS1 QSound titles prepare the per-channel sample stream on Allegrex and
+  dispatch the independent 16-channel gain/mix operation to ME.  QSound channel
+  control and ROM addressing remain on the CPU, so an unavailable ME simply
+  uses the original mixer.
+- Classic CPS1 keeps YM2151 synthesis on Allegrex and dispatches the OKIM6295
+  ADPCM decoder/mixer from a bounded decoder-state snapshot and copied source
+  window.  A control-generation fence prevents an ME result from overwriting
+  newer CPU-side commands.
+- CPS2 uses the same bounded QSound mixer job as CPS1.
+- NCDZ reuses the proven YM2610 ADPCM-A job with a copied PCM window from its
+  resident sample ROM.  The MVS cache-backed source preparation remains
+  unchanged.
+
+The job functions are self-contained and compiled with `-G0 -fno-pic` when
+entered by ME.  Desktop tests exercise QSound and OKIM6295 job semantics, and a
+reusable PSP hardware oracle dispatches QSound, OKIM6295 and YM2610 ADPCM-A jobs
+through MIST directly.  On the physical PSP used for this project the oracle
+reported:
+
+```text
+[psp-me-audio-jobs-hw] passed=1 init=0 qsound=1 okim6295=1 ym2610_adpcma=1
+```
+
+The integrated PSP builds for CPS1, CPS2 and NCDZ compile/package with
+`PSP_ME_AUDIO=ON`; their CPU-only builds remain available unchanged, and MVS
+continues to use the stronger full sound-coprocessor implementation when
+`PSP_ME_SOUND_COPROCESSOR=ON`.
