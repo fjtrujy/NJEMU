@@ -146,17 +146,32 @@ Status: **complete**
 
 ### Phase 5 - final Python removal and validation
 
-Status: **in progress**
+Status: **complete locally; real console/WASM toolchain execution remains CI-only until these commits are pushed**
 
 - [x] remove remaining project-maintained Python tests after equivalent native/CMake coverage was added;
 - [x] remove `find_package(Python3)` and Python CI setup no longer needed;
 - [x] explain the remaining Python text matches here;
 - [x] build/test all four Desktop cores under the canonical release feature profile;
-- [ ] configure/build available PSP, PS2, and Vita variants and verify host-tool provenance;
-- [ ] validate ROM converter native/WASM flows;
-- [ ] validate canonical release packaging;
-- [ ] run `git diff --check` and final Python-reference audit;
-- [ ] verify no `resources/` path is modified or staged.
+- [x] verify cross-build host-tool provenance with a synthetic CMake cross toolchain; no PSP, PS2, or Vita SDK is installed in the local environment, so real console builds remain CI coverage;
+- [x] validate native CPS2/MVS ROM converter builds; Emscripten is not installed locally, so the WASM build remains CI coverage while its workflow/configuration contains no Python dependency;
+- [x] validate canonical release packaging using the four real Desktop install trees;
+- [x] run `git diff --check` and final Python-reference audit;
+- [x] verify no `resources/` path is modified or staged.
+
+## Final local validation
+
+Post-removal validation was repeated from clean build directories against commit `5c17768` and the final documentation update:
+
+- standalone `njemu-host-tests` passed the metadata, rominfo, game-database, DIP, and translation suites;
+- a synthetic cross-compilation probe used a dedicated target-compiler wrapper with `CMAKE_CROSSCOMPILING=TRUE`, while the `njemu_host_tools` external project selected `/usr/bin/cc` and produced a native macOS arm64 `njemu-tool`; this proves target executables are not used as build-time generators;
+- native ROM converter builds passed for CPS2 and MVS, including native host-tool generation of ROMCNV translations, metadata/database content, and CPS2 cache-layout validation;
+- canonical Desktop builds and CTests passed for all four cores: CPS1 `28/28`, CPS2 `29/29`, MVS `33/33`, and NCDZ `27/27`;
+- all four Desktop install trees were successfully generated with version `2.4.0-pre.979+g5c177685` during this validation run;
+- `cmake/NJEMUReleasePackage.cmake` successfully created the canonical `desktop-macos` archive from those real install trees, with four cores, generated metadata/translations/font assets, placeholders only in runtime-data directories, release manifest, and SHA-256 sidecar;
+- `find . -name '*.py'` returns no project-maintained Python sources, and active CMake/workflow/test/tooling paths contain no Python dependency;
+- `git diff --check` is clean and no path under `resources/` is modified or staged.
+
+The local machine does not provide PSPDEV, PS2DEV/PS2SDK, VitaSDK, or Emscripten. The corresponding GitHub Actions matrices are therefore the remaining execution environment for real PSP/PS2/Vita/WASM compiler coverage. The current branch is intentionally not pushed as part of this milestone unless explicitly requested, so those CI jobs cannot yet exercise these local commits.
 
 ## Remaining Python references
 
