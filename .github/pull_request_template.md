@@ -26,6 +26,16 @@
 - [ ] Desktop
 - [ ] Platform-independent
 
+## Release notes
+
+<!-- Apply the matching PR label so automated release notes classify the change correctly. -->
+
+- [ ] Breaking change (`breaking-change` or `breaking`)
+- [ ] Feature (`enhancement` or `feature`)
+- [ ] Fix (`bug` or `fix`)
+- [ ] Other change (falls back to **Other Changes**)
+- [ ] Exclude from release notes (`skip-changelog` or `documentation-only`)
+
 ## Validation
 
 <!-- List builds, tests, games/scenes, emulators, and real hardware used. -->

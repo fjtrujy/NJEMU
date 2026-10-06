@@ -41,7 +41,7 @@ Ready-to-run release packages are published through the NJEMU project site:
 
 **[NJEMU downloads and ROM converter](https://fjtrujy.github.io/NJEMU/)**
 
-Official packages use one recommended full configuration per platform rather than exposing the CI option matrix. ROMs, BIOS files, caches, processed game data, saves, and other user-owned runtime data are not included.
+The site offers both the latest stable SemVer release and an automatically refreshed Development build from `master`. Official packages use one recommended full configuration per platform rather than exposing the CI option matrix. ROMs, BIOS files, caches, processed game data, saves, and other user-owned runtime data are not included.
 
 ## Building
 

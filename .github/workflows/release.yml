@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -11,30 +13,55 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
 permissions:
   contents: read
 
 jobs:
   version:
-    name: Validate release version
+    name: Resolve release channel and version
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      source_ref: ${{ steps.version.outputs.source_ref }}
+      channel: ${{ steps.version.outputs.channel }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.sha }}
 
-      - name: Validate SemVer tag and source identity
+      - name: Resolve release channel and validate source identity
         id: version
         shell: bash
         run: |
           set -euo pipefail
-          tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+
+          event="${{ github.event_name }}"
+          ref_type="${{ github.ref_type }}"
+          source_ref="${{ github.sha }}"
+
+          if [[ "$event" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+            channel=stable
+            publish=false
+            source_ref="$tag"
+          elif [[ "$ref_type" == "tag" ]]; then
+            tag="${{ github.ref_name }}"
+            channel=stable
+            publish=true
+          else
+            tag=development
+            channel=development
+            publish=true
+          fi
+
+          if [[ "$channel" == "stable" && ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "Release tag must be strict vMAJOR.MINOR.PATCH: $tag" >&2
             exit 1
           fi
@@ -45,18 +72,17 @@ jobs:
             -DNJEMU_VERSION_OUTPUT_FILE="$version_file" \
             -P cmake/NJEMUVersion.cmake
           version="$(cat "$version_file")"
-          if [[ "$version" != "${tag#v}" ]]; then
+
+          if [[ "$channel" == "stable" && "$version" != "${tag#v}" ]]; then
             echo "Tagged source produced version '$version', expected '${tag#v}'" >&2
             exit 1
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "source_ref=$source_ref" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
   desktop:
     name: Desktop ${{ matrix.label }}
@@ -76,7 +102,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.tag }}
+          ref: ${{ needs.version.outputs.source_ref }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -133,7 +159,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.tag }}
+          ref: ${{ needs.version.outputs.source_ref }}
 
       - name: Install dependencies
         run: apk add build-base git bash
@@ -183,7 +209,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.tag }}
+          ref: ${{ needs.version.outputs.source_ref }}
 
       - name: Install dependencies
         run: apk add build-base git bash cmake
@@ -266,7 +292,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.tag }}
+          ref: ${{ needs.version.outputs.source_ref }}
 
       - name: Install dependencies
         run: |
@@ -354,7 +380,8 @@ jobs:
           test "$(find release-assets -maxdepth 1 -type f -name '*.zip.json' | wc -l)" -eq 5
           ls -lh release-assets
 
-      - name: Create release
+      - name: Create stable release
+        if: needs.version.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -365,4 +392,53 @@ jobs:
             release-assets/*.zip.json \
             --verify-tag \
             --title "NJEMU ${{ needs.version.outputs.version }}" \
-            --generate-notes
+            --generate-notes \
+            --latest
+
+      - name: Refresh development release
+        if: needs.version.outputs.channel == 'development'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          VERSION: ${{ needs.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh api "repos/$REPOSITORY/git/ref/tags/development" >/dev/null 2>&1; then
+            gh api \
+              --method PATCH \
+              "repos/$REPOSITORY/git/refs/tags/development" \
+              -f sha="$SOURCE_SHA" \
+              -F force=true \
+              >/dev/null
+          else
+            gh api \
+              --method POST \
+              "repos/$REPOSITORY/git/refs" \
+              -f ref='refs/tags/development' \
+              -f sha="$SOURCE_SHA" \
+              >/dev/null
+          fi
+
+          if gh release view development --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release delete development --repo "$REPOSITORY" --yes
+          fi
+
+          notes_args=(--generate-notes)
+          stable_tag="$(gh api "repos/$REPOSITORY/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          if [[ -n "$stable_tag" && "$stable_tag" != "development" ]]; then
+            notes_args+=(--notes-start-tag "$stable_tag")
+          fi
+
+          gh release create development \
+            release-assets/*.zip \
+            release-assets/*.zip.json \
+            --repo "$REPOSITORY" \
+            --verify-tag \
+            --title "NJEMU Development · $VERSION" \
+            --notes "Automated development build from the current master branch. This prerelease may be less stable than a tagged NJEMU release." \
+            "${notes_args[@]}" \
+            --prerelease \
+            --latest=false

@@ -78,26 +78,56 @@
         </section>
 
         <section class="site-section" id="downloads" aria-labelledby="downloads-heading">
-            <div class="site-section-heading site-download-heading">
-                <div>
-                    <p class="site-eyebrow">Latest stable release</p>
-                    <h2 id="downloads-heading">Downloads</h2>
-                </div>
-                <div class="site-release-meta">
-                    <strong id="stable-version">Checking latest release…</strong>
-                    <span id="release-date"></span>
-                </div>
+            <div class="site-section-heading">
+                <p class="site-eyebrow">Official packages</p>
+                <h2 id="downloads-heading">Downloads</h2>
             </div>
-            <div id="download-status" class="site-notice" role="status">
-                Loading release metadata from GitHub Releases…
+
+            <div class="site-download-channel" aria-labelledby="stable-downloads-heading">
+                <div class="site-download-heading">
+                    <div>
+                        <p class="site-eyebrow">Latest stable release</p>
+                        <h3 id="stable-downloads-heading">Stable</h3>
+                    </div>
+                    <div class="site-release-meta">
+                        <strong id="stable-version">Checking latest release…</strong>
+                        <span id="stable-release-date"></span>
+                    </div>
+                </div>
+                <div id="stable-download-status" class="site-notice" role="status">
+                    Loading stable release metadata from GitHub Releases…
+                </div>
+                <div id="stable-download-grid" class="site-download-grid" hidden></div>
+                <p><a id="stable-release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases">View stable releases and notes on GitHub</a></p>
             </div>
-            <div id="download-grid" class="site-download-grid" hidden></div>
+
+            <div class="site-download-channel site-download-channel-development" aria-labelledby="development-downloads-heading">
+                <div class="site-download-heading">
+                    <div>
+                        <p class="site-eyebrow">Latest master build</p>
+                        <h3 id="development-downloads-heading">Development</h3>
+                    </div>
+                    <div class="site-release-meta">
+                        <strong id="development-version">Checking development build…</strong>
+                        <span id="development-release-date"></span>
+                    </div>
+                </div>
+                <div id="development-download-status" class="site-notice" role="status">
+                    Loading the latest development build from GitHub Releases…
+                </div>
+                <div id="development-download-grid" class="site-download-grid" hidden></div>
+                <p class="site-muted">
+                    Development packages are rebuilt automatically from the current <code>master</code> branch.
+                    They contain the newest merged changes and may be less stable than a tagged release.
+                </p>
+                <p><a id="development-release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases/tag/development">View development changes on GitHub</a></p>
+            </div>
+
             <p class="site-muted">
                 Release archives never contain ROMs or BIOS files. Each archive includes CPS1, CPS2, MVS,
                 and NCDZ builds for the selected host. Desktop downloads are split by operating system
                 because native executables are not cross-platform.
             </p>
-            <p><a id="release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases">View releases and notes on GitHub</a></p>
         </section>
 
         <section class="site-section site-tool-callout" aria-labelledby="converter-heading">

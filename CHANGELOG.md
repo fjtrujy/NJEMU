@@ -4,6 +4,9 @@ NJEMU follows Semantic Versioning for releases from the 2.4.0 line onward. Histo
 
 ## Unreleased
 
+- Added an automatically refreshed Development prerelease for every successful `master` release build.
+- Added categorized GitHub release notes for breaking changes, features, fixes, and other changes.
+- Added separate stable and Development package downloads to the GitHub Pages site.
 - Restructured project/user/developer documentation and introduced structured contribution templates.
 - Added Git-derived Semantic Versioning/build identity with exact source revision reporting.
 - Added canonical release configurations, packaging validation, and automated release publishing.
