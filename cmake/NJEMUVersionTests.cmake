@@ -133,6 +133,17 @@ assert_equal("${NJEMU_VERSION_MINOR}" "1" "override minor")
 assert_equal("${NJEMU_VERSION_PATCH}" "4" "override patch")
 unset(NJEMU_VERSION_OVERRIDE)
 
+set(NJEMU_VERSION_OVERRIDE "3.1.4-pre.27+g01234567")
+set(NJEMU_GIT_SHA_OVERRIDE "0123456789abcdef0123456789abcdef01234567")
+njemu_derive_version("${_archive}")
+assert_equal("${NJEMU_VERSION}" "3.1.4-pre.27+g01234567" "container override version")
+assert_equal("${NJEMU_DISPLAY_VERSION}" "3.1.4 (01234567)" "container override display version")
+assert_equal("${NJEMU_RELEASE_VERSION}" "3.1.4" "container override release version")
+assert_equal("${NJEMU_BUILD_NUMBER}" "01234567" "container override build number")
+assert_equal("${NJEMU_VERSION_SOURCE}" "override" "container override identity")
+unset(NJEMU_GIT_SHA_OVERRIDE)
+unset(NJEMU_VERSION_OVERRIDE)
+
 execute_process(
     COMMAND "${CMAKE_COMMAND}"
         -DNJEMU_SOURCE_DIR=${_archive}

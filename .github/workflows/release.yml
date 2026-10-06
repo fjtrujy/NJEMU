@@ -27,7 +27,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      source_ref: ${{ steps.version.outputs.source_ref }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
       channel: ${{ steps.version.outputs.channel }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
@@ -44,13 +44,11 @@ jobs:
 
           event="${{ github.event_name }}"
           ref_type="${{ github.ref_type }}"
-          source_ref="${{ github.sha }}"
 
           if [[ "$event" == "workflow_dispatch" ]]; then
             tag="${{ inputs.tag }}"
             channel=stable
             publish=false
-            source_ref="$tag"
           elif [[ "$ref_type" == "tag" ]]; then
             tag="${{ github.ref_name }}"
             channel=stable
@@ -72,6 +70,7 @@ jobs:
             -DNJEMU_VERSION_OUTPUT_FILE="$version_file" \
             -P cmake/NJEMUVersion.cmake
           version="$(cat "$version_file")"
+          source_sha="$(git rev-parse HEAD)"
 
           if [[ "$channel" == "stable" && "$version" != "${tag#v}" ]]; then
             echo "Tagged source produced version '$version', expected '${tag#v}'" >&2
@@ -80,7 +79,7 @@ jobs:
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "source_ref=$source_ref" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
@@ -88,6 +87,9 @@ jobs:
     name: Desktop ${{ matrix.label }}
     needs: version
     runs-on: ${{ matrix.os }}
+    env:
+      NJEMU_VERSION_OVERRIDE: ${{ needs.version.outputs.version }}
+      NJEMU_GIT_SHA_OVERRIDE: ${{ needs.version.outputs.source_sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -102,7 +104,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.source_ref }}
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -155,11 +157,14 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     container: ghcr.io/pspdev/pspdev:develop
+    env:
+      NJEMU_VERSION_OVERRIDE: ${{ needs.version.outputs.version }}
+      NJEMU_GIT_SHA_OVERRIDE: ${{ needs.version.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.source_ref }}
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Install dependencies
         run: apk add build-base git bash
@@ -205,11 +210,14 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     container: ps2dev/ps2dev:latest
+    env:
+      NJEMU_VERSION_OVERRIDE: ${{ needs.version.outputs.version }}
+      NJEMU_GIT_SHA_OVERRIDE: ${{ needs.version.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.source_ref }}
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Install dependencies
         run: apk add build-base git bash cmake
@@ -288,11 +296,14 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     container: vitasdk/vitasdk:latest
+    env:
+      NJEMU_VERSION_OVERRIDE: ${{ needs.version.outputs.version }}
+      NJEMU_GIT_SHA_OVERRIDE: ${{ needs.version.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ needs.version.outputs.source_ref }}
+          ref: ${{ needs.version.outputs.source_sha }}
 
       - name: Install dependencies
         run: |
