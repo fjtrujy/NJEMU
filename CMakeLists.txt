@@ -1726,6 +1726,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME frame_pacing_tests COMMAND frame_pacing_tests)
 
+    add_executable(auto_frameskip_tests
+        tests/auto_frameskip_tests.c
+    )
+    target_include_directories(auto_frameskip_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME auto_frameskip_tests COMMAND auto_frameskip_tests)
+
     add_executable(sound_output_contract_tests
         tests/sound_output_contract_tests.c
     )

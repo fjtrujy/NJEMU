@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "emucfg.h"
+#include "common/auto_frameskip.h"
 #include "common/config.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
@@ -59,7 +60,7 @@
 #endif
 
 
-#define FRAMESKIP_LEVELS	12
+#define FRAMESKIP_LEVELS	AUTO_FRAMESKIP_LEVEL_COUNT
 
 
 /******************************************************************************
@@ -437,10 +438,16 @@ void update_screen(void)
 
 		if (frameskip_counter == 0)
 		{
-			float seconds_elapsed = (float)(curr - last_skipcount0_time)/ 1000000.0;
+			uint64_t elapsed_us = curr - last_skipcount0_time;
 
-			frames_per_second = ((float)rendered_frames_since_last_fps / seconds_elapsed);
-			game_speed_percent = (frames_per_second / (float)FPS) * 100;
+			/* Presentation FPS and emulation speed are intentionally different.
+			 * Auto frame skipping reduces rendered_frames_since_last_fps by design;
+			 * feeding that value back into game speed creates a positive feedback
+			 * loop where every skipped frame asks the controller to skip more. */
+			frames_per_second = auto_frameskip_frame_rate(
+				(uint32_t)rendered_frames_since_last_fps, elapsed_us);
+			game_speed_percent = auto_frameskip_speed_percent(
+				(uint32_t)frames_since_last_fps, elapsed_us, (float)FPS);
 
 			last_skipcount0_time = curr;
 			frames_since_last_fps = 0;
@@ -449,36 +456,8 @@ void update_screen(void)
 			if (option_autoframeskip)
 			{
 				if (option_speedlimit && frames_displayed > 2 * FRAMESKIP_LEVELS)
-				{
-					if (game_speed_percent >= 99)
-					{
-						frameskipadjust++;
-
-						if (frameskipadjust >= 3)
-						{
-							frameskipadjust = 0;
-							if (frameskip > 0) frameskip--;
-						}
-					}
-					else
-					{
-						if (game_speed_percent < 80)
-						{
-							frameskipadjust -= (90 - game_speed_percent) / 5;
-						}
-						else if (frameskip < 8)
-						{
-							frameskipadjust--;
-						}
-
-						while (frameskipadjust <= -2)
-						{
-							frameskipadjust += 2;
-							if (frameskip < FRAMESKIP_LEVELS - 1)
-								frameskip++;
-						}
-					}
-				}
+					auto_frameskip_adjust_level(&frameskip, &frameskipadjust,
+						game_speed_percent);
 			}
 		}
 	}
