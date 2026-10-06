@@ -14,7 +14,7 @@
 
 #if (EMU_SYSTEM == MVS)
 #include "mvs/me_sound_profile.h"
-#include "mvs/me_sound_shadow.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include "mvs/memintrf.h"
 #include "mvs/timer.h"
 #elif (EMU_SYSTEM == NCDZ)
@@ -35,18 +35,18 @@ static void YM2610_shadow_update(int32_t **buffer, int length);
 #if (EMU_SYSTEM == MVS)
 static void YM2610_shadow_update(int32_t **buffer, int length)
 {
-	bool shadow_started = mvs_me_sound_shadow_ym_render_begin((uint32_t)length,
+	bool shadow_started = neogeo_me_sound_shadow_ym_render_begin((uint32_t)length,
 		timer_get_time_us());
 
-	if (shadow_started && mvs_me_sound_shadow_ym_authoritative())
+	if (shadow_started && neogeo_me_sound_shadow_ym_authoritative())
 	{
-		if (mvs_me_sound_shadow_ym_render_completed_authoritative(buffer,
+		if (neogeo_me_sound_shadow_ym_render_completed_authoritative(buffer,
 				(uint32_t)length))
 			return;
 		/* Once ME also owns Z80/control, the CPU YM can be behind writes made
 		 * since the previous block. Do not render from stale state; the next
 		 * scheduler boundary restores an exact recovery snapshot first. */
-		if (mvs_me_sound_shadow_z80_cpu_suppressed())
+		if (neogeo_me_sound_shadow_z80_cpu_suppressed())
 		{
 			memset(buffer[0], 0, (size_t)length * sizeof(*buffer[0]));
 			memset(buffer[1], 0, (size_t)length * sizeof(*buffer[1]));
@@ -56,7 +56,7 @@ static void YM2610_shadow_update(int32_t **buffer, int length)
 		return;
 	}
 
-	if (mvs_me_sound_shadow_z80_cpu_suppressed())
+	if (neogeo_me_sound_shadow_z80_cpu_suppressed())
 	{
 		memset(buffer[0], 0, (size_t)length * sizeof(*buffer[0]));
 		memset(buffer[1], 0, (size_t)length * sizeof(*buffer[1]));
@@ -64,7 +64,7 @@ static void YM2610_shadow_update(int32_t **buffer, int length)
 	}
 	YM2610Update(buffer, length);
 	if (shadow_started)
-		mvs_me_sound_shadow_ym_render_completed(buffer, (uint32_t)length,
+		neogeo_me_sound_shadow_ym_render_completed(buffer, (uint32_t)length,
 			YM2610Read(2));
 }
 #endif
@@ -224,11 +224,11 @@ void timer_callback_2610(int param)
 #if (EMU_SYSTEM == MVS)
 	mvs_me_sound_profile_event(param == 0 ? MVS_ME_SOUND_PROFILE_YM_TIMER_A :
 		MVS_ME_SOUND_PROFILE_YM_TIMER_B);
-	mvs_me_sound_shadow_ym_timer((uint32_t)param, timer_get_time_us());
+	neogeo_me_sound_shadow_ym_timer((uint32_t)param, timer_get_time_us());
 #endif
 	YM2610TimerOver(param);
 #if (EMU_SYSTEM == MVS)
-	mvs_me_sound_shadow_ym_timer_completed();
+	neogeo_me_sound_shadow_ym_timer_completed();
 #endif
 }
 

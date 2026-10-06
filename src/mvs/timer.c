@@ -15,7 +15,7 @@
 #include "common/emulator_runtime.h"
 #include "include/cpuintrf.h"
 #include "me_sound_profile.h"
-#include "me_sound_shadow.h"
+#include "common/neogeo_me_sound_shadow.h"
 
 
 #define CPU_NOTACTIVE	-1
@@ -87,7 +87,7 @@ static void timer_update_cpu_raster(void);
 static int timer_is_me_owned_ym(int which)
 {
 	return (which == YM2610_TIMERA || which == YM2610_TIMERB) &&
-		mvs_me_sound_shadow_z80_cpu_suppressed();
+		neogeo_me_sound_shadow_z80_cpu_suppressed();
 }
 
 
@@ -112,7 +112,7 @@ static void cpu_execute(int cpunum)
 		if (cpunum == CPU_Z80)
 		{
 			z80_start_time = timer_get_time_us();
-			skip_cpu = mvs_me_sound_shadow_z80_slice_begin(
+			skip_cpu = neogeo_me_sound_shadow_z80_slice_begin(
 				z80_start_time + (uint64_t)(uint32_t)timer_ticks,
 				(uint32_t)timer_left);
 		}
@@ -141,7 +141,7 @@ static void cpu_execute(int cpunum)
 			mvs_me_sound_profile_now_us() - start);
 
 		if (cpunum == CPU_Z80)
-			mvs_me_sound_shadow_z80_slice_completed(z80_end_time);
+			neogeo_me_sound_shadow_z80_slice_completed(z80_end_time);
 	}
 }
 
@@ -335,7 +335,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 				mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_TIMER_PREEMPT);
 			if (active_cpu == CPU_Z80 &&
 				(which == YM2610_TIMERA || which == YM2610_TIMERB))
-				mvs_me_sound_shadow_z80_preempt((uint32_t)which);
+				neogeo_me_sound_shadow_z80_preempt((uint32_t)which);
 			timer_ticks -= time_left;
 			cpu[active_cpu].cycles -= cycles_left;
 			*cpu[active_cpu].icount = 0;
@@ -416,7 +416,7 @@ static void timer_update_cpu_normal(void)
 
 	while (timer_left > 0)
 	{
-		mvs_me_sound_shadow_scheduler_boundary();
+		neogeo_me_sound_shadow_scheduler_boundary();
 		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
@@ -483,7 +483,7 @@ static void timer_update_cpu_normal(void)
 		const cz80_state_t *state = NULL;
 		const uint32_t *banks = NULL;
 
-		if (mvs_me_sound_shadow_checkpoint_due())
+		if (neogeo_me_sound_shadow_checkpoint_due())
 		{
 			Cz80_Get_State(&CZ80, &checkpoint_state);
 			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
@@ -492,7 +492,7 @@ static void timer_update_cpu_normal(void)
 		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
-		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+		neogeo_me_sound_shadow_frame_completed(frame_end_time, sound_code,
 			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
 	mvs_me_sound_profile_frame_completed();
@@ -518,7 +518,7 @@ static void timer_update_cpu_raster(void)
 
 		while (timer_left > 0)
 		{
-			mvs_me_sound_shadow_scheduler_boundary();
+			neogeo_me_sound_shadow_scheduler_boundary();
 			mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
 			timer_ticks = timer_left;
 			time = base_time + frame_base;
@@ -586,7 +586,7 @@ static void timer_update_cpu_raster(void)
 		const cz80_state_t *state = NULL;
 		const uint32_t *banks = NULL;
 
-		if (mvs_me_sound_shadow_checkpoint_due())
+		if (neogeo_me_sound_shadow_checkpoint_due())
 		{
 			Cz80_Get_State(&CZ80, &checkpoint_state);
 			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
@@ -595,7 +595,7 @@ static void timer_update_cpu_raster(void)
 		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
-		mvs_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+		neogeo_me_sound_shadow_frame_completed(frame_end_time, sound_code,
 			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
 	mvs_me_sound_profile_frame_completed();

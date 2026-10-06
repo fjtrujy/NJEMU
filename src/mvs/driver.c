@@ -8,7 +8,7 @@
 
 #include "mvs.h"
 #include "me_sound_profile.h"
-#include "me_sound_shadow.h"
+#include "common/neogeo_me_sound_shadow.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -765,7 +765,7 @@ READ16_HANDLER( neogeo_timer_r )
 	int coinflip = pd4990a_testbit_r(0);
 	int databit = pd4990a_databit_r(0);
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_MAIN_STATUS_READ);
-	if (!mvs_me_sound_shadow_main_status((uint8_t)sound_code,
+	if (!neogeo_me_sound_shadow_main_status((uint8_t)sound_code,
 			(uint8_t)pending_command, (uint8_t)result_code,
 			&visible_pending, &visible_result))
 	{
@@ -795,9 +795,9 @@ TIMER_CALLBACK( neogeo_sound_write )
 	 * the ME first. The CPU latch remains warm for fallback; once ME control is
 	 * authoritative, the stale CPU CZ80 must not receive an NMI that it will not
 	 * execute before a recovery snapshot is applied. */
-	(void)mvs_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
+	(void)neogeo_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 	sound_code = param;
-	if (!mvs_me_sound_shadow_z80_cpu_suppressed())
+	if (!neogeo_me_sound_shadow_z80_cpu_suppressed())
 		z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
 }
 
@@ -806,7 +806,7 @@ WRITE16_HANDLER( neogeo_z80_w )
 {
 	mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_SOUND_COMMAND);
 	pending_command = 1;
-	mvs_me_sound_shadow_status_pending();
+	neogeo_me_sound_shadow_status_pending();
 	timer_set(SOUNDLATCH_TIMER, TIME_NOW, (data >> 8) & 0xff, neogeo_sound_write);
 }
 
@@ -1020,7 +1020,7 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 		break;
 	};
 
-	mvs_me_sound_shadow_z80_io_read(port, value);
+	neogeo_me_sound_shadow_z80_io_read(port, value);
 	return value;
 }
 
@@ -1031,7 +1031,7 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 
 void neogeo_z80_port_w(uint16_t port, uint8_t data)
 {
-	mvs_me_sound_shadow_z80_io_write(port, data);
+	neogeo_me_sound_shadow_z80_io_write(port, data);
 
 	switch (port & 0xff)
 	{
@@ -1068,7 +1068,7 @@ void neogeo_sound_irq(int irq)
 	mvs_me_sound_profile_event(irq ? MVS_ME_SOUND_PROFILE_YM_IRQ_ASSERT :
 		MVS_ME_SOUND_PROFILE_YM_IRQ_CLEAR);
 	z80_set_irq_line(0, irq ? ASSERT_LINE : CLEAR_LINE);
-	mvs_me_sound_shadow_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
+	neogeo_me_sound_shadow_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
 		timer_get_time_us());
 }
 

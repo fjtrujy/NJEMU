@@ -6,7 +6,7 @@
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
 #include "common/runtime_paths.h"
-#include "mvs/me_sound_shadow.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include "mvs/me_sound_profile.h"
 
 #define MVS_ME_SOUND_PROFILE_WINDOW_FRAMES 300u
@@ -153,7 +153,7 @@ static void mvs_me_sound_profile_report(uint64_t now_us)
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	me_coprocessor = 1u;
-	me_authoritative = mvs_me_sound_shadow_authoritative() ? 1u : 0u;
+	me_authoritative = neogeo_me_sound_shadow_authoritative() ? 1u : 0u;
 #endif
 
 	written = snprintf(cursor, remaining,
