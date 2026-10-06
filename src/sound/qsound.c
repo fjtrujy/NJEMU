@@ -18,6 +18,7 @@
 #if (EMU_SYSTEM == CPS1)
 #include "cps1/memintrf.h"
 #elif (EMU_SYSTEM == CPS2)
+#include "common/cps2_me_sound_shadow.h"
 #include "cps2/memintrf.h"
 #endif
 
@@ -195,6 +196,10 @@ void qsound_context_update(qsound_context_t *context, int32_t **buffer, int leng
 
 static void qsound_update(int32_t **buffer, int length)
 {
+#if (EMU_SYSTEM == CPS2)
+	if (cps2_me_sound_render(buffer, (uint32_t)length))
+		return;
+#endif
 #if defined(AUDIO_PRODUCER_JOBS)
 	if (qsound_update_me(buffer, length))
 		return;

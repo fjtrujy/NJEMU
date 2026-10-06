@@ -16,6 +16,10 @@
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 #include <pspthreadman.h>
+#if (EMU_SYSTEM == CPS2)
+#include "common/cps2_me_sound_shadow.h"
+#include "psp/psp_cps2_me_sound.h"
+#else
 #include "common/neogeo_me_sound_shadow.h"
 #if (EMU_SYSTEM == MVS)
 #include "mvs/timer.h"
@@ -28,6 +32,7 @@
 #include "psp/psp_me_sound_worker.h"
 #include "psp/psp_me_sound_lifecycle.h"
 #include "sound/ym2610.h"
+#endif
 #endif
 #ifdef PSP_ME_RING_SELFTEST
 #include "psp/psp_me_spsc_ring_mist_test.h"
@@ -59,6 +64,7 @@ static uint32_t me_job_cache_size;
 static void *me_workspace;
 static uint32_t me_workspace_size;
 #ifdef PSP_ME_SOUND_COPROCESSOR
+#if (EMU_SYSTEM != CPS2)
 static psp_me_sound_worker_t me_sound_worker;
 static SceLwMutexWorkarea me_sound_worker_mutex;
 static SceLwMutexWorkarea me_sound_ym_gate;
@@ -114,6 +120,7 @@ static bool me_sound_cpu_recovery_required;
 static bool me_sound_cpu_replay_command_pending;
 static bool me_sound_state_resume_me;
 static bool me_sound_status_dirty;
+#endif
 #endif
 
 static void psp_audio_producer_waitJob(void);
@@ -198,6 +205,30 @@ static void psp_me_dispatch_wait(void)
 }
 
 #ifdef PSP_ME_SOUND_COPROCESSOR
+
+#if (EMU_SYSTEM == CPS2)
+
+static bool psp_me_qsound_worker_dispatch_start(void (*task)(void *), void *data,
+	uint32_t size, void *opaque)
+{
+	(void)opaque;
+	if (!task || !data || size == 0 || me_job_in_flight)
+		return false;
+
+	me_job.job = task;
+	me_job.data = data;
+	me_job.size = size;
+	sceKernelDcacheWritebackInvalidateRange(&me_job, sizeof(me_job));
+	return psp_me_dispatch_job() >= 0;
+}
+
+static void psp_me_qsound_worker_dispatch_wait(void *opaque)
+{
+	(void)opaque;
+	psp_me_dispatch_wait();
+}
+
+#else
 
 #define PSP_ME_SOUND_WORKER_CAPACITY 16u
 #define PSP_ME_SOUND_WORKER_TIMEOUT_US 2000000ULL
@@ -1827,6 +1858,7 @@ done:
 	return result;
 }
 
+#endif /* EMU_SYSTEM != CPS2 */
 #endif /* PSP_ME_SOUND_COPROCESSOR */
 
 	#ifdef PSP_ME_RING_SELFTEST
@@ -1952,6 +1984,27 @@ static bool psp_me_enable(const char *context)
 	if (!psp_me_mode_enabled())
 		return false;
 #ifdef PSP_ME_SOUND_COPROCESSOR
+	#if (EMU_SYSTEM == CPS2)
+	if (!psp_cps2_me_sound_sync_ready())
+	{
+		printf("[PSP_ME_AUDIO] %s: QSound worker synchronization unavailable; using Main CPU\n",
+			context);
+		return false;
+	}
+	if (psp_cps2_me_sound_running())
+	{
+		printf("[PSP_ME_AUDIO] %s: stopping stale QSound worker before ME bootstrap\n",
+			context);
+		psp_cps2_me_sound_stop();
+		if (psp_cps2_me_sound_running())
+		{
+			printf("[PSP_ME_AUDIO] %s: stale QSound worker did not stop; using Main CPU\n",
+				context);
+			me_available = false;
+			return false;
+		}
+	}
+	#else
 	if (!me_sound_worker_mutex_ready || !me_sound_ym_gate_ready)
 	{
 		printf("[PSP_ME_AUDIO] %s: sound worker synchronization unavailable; using Main CPU\n",
@@ -1971,6 +2024,7 @@ static bool psp_me_enable(const char *context)
 			return false;
 		}
 	}
+	#endif
 #endif
 
 	result = psp_me_dispatch_init();
@@ -1996,8 +2050,25 @@ static bool psp_me_enable(const char *context)
 		me_available = false;
 		return false;
 	}
-	#endif
-	#ifdef PSP_ME_SOUND_COPROCESSOR
+		#endif
+		#ifdef PSP_ME_SOUND_COPROCESSOR
+	#if (EMU_SYSTEM == CPS2)
+	{
+		const psp_me_qsound_worker_dispatch_t dispatch = {
+			psp_me_qsound_worker_dispatch_start,
+			psp_me_qsound_worker_dispatch_wait,
+			NULL,
+		};
+
+		if (!psp_cps2_me_sound_bootstrap(&dispatch))
+		{
+			printf("[PSP_ME_AUDIO] %s: persistent QSound worker bootstrap failed; using Main CPU\n",
+				context);
+			me_available = false;
+			return false;
+		}
+	}
+	#else
 	if (!psp_me_sound_worker_bootstrap())
 	{
 		printf("[PSP_ME_AUDIO] %s: persistent sound worker bootstrap failed; using Main CPU\n",
@@ -2006,6 +2077,7 @@ static bool psp_me_enable(const char *context)
 		return false;
 	}
 	#endif
+		#endif
 
 	me_available = true;
 	printf("[PSP_ME_AUDIO] %s: %s -> Media Engine (MIST); Main CPU retained as fallback\n",
@@ -2023,6 +2095,10 @@ static bool psp_audio_producer_init(void)
 	me_workspace = NULL;
 	me_workspace_size = 0;
 #ifdef PSP_ME_SOUND_COPROCESSOR
+	#if (EMU_SYSTEM == CPS2)
+	if (!psp_cps2_me_sound_sync_init())
+		printf("[PSP_ME_AUDIO] QSound worker synchronization unavailable\n");
+	#else
 	memset(&me_sound_worker, 0, sizeof(me_sound_worker));
 	memset(&me_sound_worker_mutex, 0, sizeof(me_sound_worker_mutex));
 	memset(&me_sound_ym_gate, 0, sizeof(me_sound_ym_gate));
@@ -2041,13 +2117,17 @@ static bool psp_audio_producer_init(void)
 	{
 		char path[1024];
 		snprintf(path, sizeof(path), "%spsp_me_sound_shadow.log", launchDir);
-		remove(path);
-	}
+			remove(path);
+		}
+	#endif
 #endif
 	if (!audio_producer_cpu.init())
 	{
 #ifdef PSP_ME_SOUND_COPROCESSOR
-		if (me_sound_ym_gate_ready)
+		#if (EMU_SYSTEM == CPS2)
+			psp_cps2_me_sound_sync_shutdown();
+		#else
+			if (me_sound_ym_gate_ready)
 		{
 			(void)sceKernelDeleteLwMutex(&me_sound_ym_gate);
 			me_sound_ym_gate_ready = false;
@@ -2055,8 +2135,9 @@ static bool psp_audio_producer_init(void)
 		if (me_sound_worker_mutex_ready)
 		{
 			(void)sceKernelDeleteLwMutex(&me_sound_worker_mutex);
-			me_sound_worker_mutex_ready = false;
-		}
+				me_sound_worker_mutex_ready = false;
+			}
+		#endif
 #endif
 		return false;
 	}
@@ -2073,7 +2154,11 @@ static bool psp_audio_producer_init(void)
 static void psp_audio_producer_shutdown(void)
 {
 #ifdef PSP_ME_SOUND_COPROCESSOR
-	psp_me_sound_worker_stop();
+	#if (EMU_SYSTEM == CPS2)
+	psp_cps2_me_sound_stop();
+	psp_cps2_me_sound_sync_shutdown();
+	#else
+		psp_me_sound_worker_stop();
 	/* sound_thread_stop() has already joined the audio thread here.  If an
 	 * exceptional mutex/gate failure prevented the orderly stop, do not delete
 	 * synchronization objects or start another game while the ME still owns
@@ -2088,8 +2173,9 @@ static void psp_audio_producer_shutdown(void)
 	if (me_sound_worker_mutex_ready)
 	{
 		(void)sceKernelDeleteLwMutex(&me_sound_worker_mutex);
-		me_sound_worker_mutex_ready = false;
-	}
+			me_sound_worker_mutex_ready = false;
+		}
+	#endif
 #endif
 	if (me_job_in_flight)
 	{
@@ -2112,7 +2198,28 @@ static void psp_audio_producer_reset(void)
 {
 	psp_audio_producer_waitJob();
 #ifdef PSP_ME_SOUND_COPROCESSOR
-	psp_me_sound_reset_action_t action = psp_me_sound_reset_action(
+	#if (EMU_SYSTEM == CPS2)
+	if (!psp_me_mode_enabled())
+	{
+		psp_cps2_me_sound_stop();
+		me_available = false;
+	}
+	else if (me_suspended)
+		me_available = false;
+	else if (psp_cps2_me_sound_running())
+	{
+		if (!psp_cps2_me_sound_reset_generation())
+			me_available = false;
+		else
+			me_available = true;
+	}
+	else
+	{
+		me_available = false;
+		(void)psp_me_enable("reset");
+	}
+	#else
+		psp_me_sound_reset_action_t action = psp_me_sound_reset_action(
 		psp_me_mode_enabled(), me_available, me_sound_worker.running, me_suspended);
 	switch (action)
 	{
@@ -2137,8 +2244,9 @@ static void psp_audio_producer_reset(void)
 	case PSP_ME_SOUND_RESET_KEEP_CPU:
 	default:
 		me_available = false;
-		break;
-	}
+			break;
+		}
+	#endif
 #else
 	if (!psp_me_mode_enabled())
 		me_available = false;
@@ -2152,7 +2260,12 @@ static void psp_audio_producer_suspend(void)
 {
 	psp_audio_producer_waitJob();
 #ifdef PSP_ME_SOUND_COPROCESSOR
-	psp_me_sound_worker_stop();
+	#if (EMU_SYSTEM == CPS2)
+	(void)cps2_me_sound_prepare_cpu_state();
+	psp_cps2_me_sound_stop();
+	#else
+		psp_me_sound_worker_stop();
+	#endif
 #endif
 	me_available = false;
 	me_suspended = true;
@@ -2160,12 +2273,26 @@ static void psp_audio_producer_suspend(void)
 
 static void psp_audio_producer_resume(void)
 {
+	bool enabled;
+
 	if (!me_suspended)
 		return;
 
 	me_suspended = false;
-	if (psp_me_mode_enabled())
-		psp_me_enable("resume");
+	if (!psp_me_mode_enabled())
+		return;
+
+	enabled = psp_me_enable("resume");
+#if defined(PSP_ME_SOUND_COPROCESSOR) && (EMU_SYSTEM == CPS2)
+	if (enabled && !cps2_me_sound_snapshot_from_cpu())
+	{
+		printf("[PSP_ME_AUDIO] resume: CPS2 sound snapshot failed; using Main CPU\n");
+		psp_cps2_me_sound_stop();
+		me_available = false;
+	}
+#else
+	(void)enabled;
+#endif
 }
 
 static void psp_audio_producer_render(audio_producer_render_fn cpu_render,

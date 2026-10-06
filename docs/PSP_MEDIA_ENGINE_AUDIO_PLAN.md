@@ -454,11 +454,10 @@ lifecycle path.
 - A physical power-switch suspend/resume with the final full emulator remains a
   manual hardware check; producer suspend/resume and post-resume MIST
   reinitialization have passed on real hardware.
-- The bounded CPS1/CPS2 jobs deliberately leave each core's control CPU and
-  register ownership on Allegrex.  NCDZ has since received the follow-on full
-  Z80+YM2610 persistent-worker path described in
-  `docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`; equivalent full CPS1/CPS2 ownership
-  still requires separate lifecycle/recovery work and performance evidence.
+- The bounded CPS1 job deliberately leaves its control CPU and register ownership on
+  Allegrex.  NCDZ and CPS2 have since received follow-on persistent-worker paths
+  described in `docs/PSP_ME_SOUND_COPROCESSOR_PLAN.md`.  Full CPS1 ownership still
+  requires separate lifecycle/recovery work and performance evidence.
 - The current job snapshots ADPCM-A state once per output buffer.  Future work
   that changes control/update timing must preserve the generation/lifecycle
   semantics proven here rather than exposing live YM2610 globals to ME.
@@ -540,3 +539,14 @@ fatal errors across steady-state execution, a CPU recovery/resnapshot boundary, 
 worker-generation reset and orderly shutdown.  Full rendered NCDZ gameplay remains
 blocked by an independent PSP `blit_finish()` / `sceGuSync()` stall reproduced with
 ME disabled as well.
+
+CPS2 now also has a full persistent **Z80 + QSound** path.  A real-PSP `ssf2`
+comparison showed why this was not treated as an automatic win: synchronizing the
+entire 4 KiB QSound shared-RAM window on every scheduler slice made the first full
+worker slower than both controls.  Making that synchronization lazy—only acquiring
+the window on an actual M68000 sound-RAM access and publishing it only after a write—
+raised steady raw throughput to **129.87 FPS**, versus **112.04 FPS Main CPU** and
+**111.42 FPS bounded QSound ME** under the same 333 MHz/no-limit/no-VSync settings.
+The optimized worker remained authoritative with zero FIFO overflow/fatal errors and
+passed real-PSP save/load/reset/exit recovery/resnapshot validation.  The bounded
+QSound job remains available as a simpler reference/fallback configuration.

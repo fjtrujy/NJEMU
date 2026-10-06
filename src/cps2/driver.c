@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "cps2.h"
+#include "common/cps2_me_sound_shadow.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -153,6 +154,23 @@ static void z80_set_bank(uint32_t offset)
 	}
 }
 
+uint32_t cps2_get_z80_bank(void)
+{
+	return z80_bank;
+}
+
+void cps2_restore_z80_bank(uint32_t offset)
+{
+	if (offset >= memory_length_cpu2 ||
+		memory_length_cpu2 - offset < 0x4000u)
+	{
+		z80_bank = offset;
+		return;
+	}
+	z80_bank = 0xffffffffu;
+	z80_set_bank(offset);
+}
+
 
 /******************************************************************************
 	Callback Functions
@@ -231,6 +249,7 @@ READ16_HANDLER( cps2_inputport1_r )
 
 READ16_HANDLER( qsound_sharedram1_r )
 {
+	(void)cps2_me_sound_main_shared_ram_access(false);
 	offset &= 0xfff;
 	return qsound_sharedram1[offset] | 0xff00;
 }
@@ -239,6 +258,7 @@ WRITE16_HANDLER( qsound_sharedram1_w )
 {
 	if (ACCESSING_LSB)
 	{
+		(void)cps2_me_sound_main_shared_ram_access(true);
 		offset &= 0xfff;
 		qsound_sharedram1[offset] = data;
 	}

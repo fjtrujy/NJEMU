@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "cps2.h"
+#include "common/cps2_me_sound_shadow.h"
 
 
 /******************************************************************************
@@ -35,6 +36,7 @@ static float timer_ticks;
 static float timer_left;
 
 static int z80_suspended;
+static uint64_t z80_sound_cycles;
 
 
 /******************************************************************************
@@ -65,7 +67,8 @@ static void timer_set_vblank_interrupt(void)
 
 static TIMER_CALLBACK( qsound_interrupt )
 {
-	z80_set_irq_line(0, HOLD_LINE);
+	if (!cps2_me_sound_irq(HOLD_LINE, cps2_timer_sound_time_us()))
+		z80_set_irq_line(0, HOLD_LINE);
 	timer_set(QSOUND_INTERRUPT, TIME_IN_HZ(251), 0, qsound_interrupt);
 }
 
@@ -80,16 +83,51 @@ static TIMER_CALLBACK( qsound_interrupt )
 
 void z80_set_reset_line(int state)
 {
+	bool changed = false;
+
 	if (z80_suspended & SUSPEND_REASON_RESET)
 	{
 		if (state == CLEAR_LINE)
+		{
 			z80_suspended &= ~SUSPEND_REASON_RESET;
+			changed = true;
+		}
 	}
 	else if (state == ASSERT_LINE)
 	{
 		z80_suspended |= SUSPEND_REASON_RESET;
-		z80_reset();
+		changed = true;
 	}
+
+	if (!changed)
+		return;
+	if (!cps2_me_sound_z80_reset_line(state, cps2_timer_sound_time_us()))
+	{
+		/* A failed ME command can recover the pre-command worker snapshot,
+		 * including its previous suspend flag. Reapply the requested reset-line
+		 * state locally so CPU fallback observes the same transition. */
+		cps2_timer_restore_z80_suspended(state == ASSERT_LINE);
+		if (state == ASSERT_LINE)
+			z80_reset();
+	}
+}
+
+uint64_t cps2_timer_sound_time_us(void)
+{
+	return z80_sound_cycles / 8u;
+}
+
+bool cps2_timer_z80_suspended(void)
+{
+	return (z80_suspended & SUSPEND_REASON_RESET) != 0;
+}
+
+void cps2_timer_restore_z80_suspended(bool suspended)
+{
+	if (suspended)
+		z80_suspended |= SUSPEND_REASON_RESET;
+	else
+		z80_suspended &= ~SUSPEND_REASON_RESET;
 }
 
 
@@ -101,9 +139,10 @@ void timer_reset(void)
 {
 	memset(&timer, 0, sizeof(timer));
 
-	base_time     = 0;
-	frame_base    = 0;
-	z80_suspended = 0;
+	base_time        = 0;
+	frame_base       = 0;
+	z80_suspended    = 0;
+	z80_sound_cycles = 0;
 
 	time_slice = 1000000.0 / FPS;
 
@@ -145,6 +184,8 @@ void timer_update_cpu(void)
 
 	while (timer_left > 0)
 	{
+		bool me_sound_slice;
+
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
 
@@ -165,10 +206,26 @@ void timer_update_cpu(void)
 			}
 		}
 
+		me_sound_slice = cps2_me_sound_main_slice_begin();
 		m68000_execute((int)(timer_ticks * (11800000.0 / 1000000.0)));
 
 		if (!z80_suspended)
-			z80_execute((int)(timer_ticks * (8000000.0 / 1000000.0)));
+		{
+			int z80_cycles = (int)(timer_ticks * (8000000.0 / 1000000.0));
+			uint64_t end_time = (z80_sound_cycles + (uint32_t)z80_cycles) / 8u;
+			bool me_executed;
+
+			if (me_sound_slice)
+				me_executed = cps2_me_sound_main_slice_finish(
+					(uint32_t)z80_cycles, end_time, true);
+			else
+				me_executed = cps2_me_sound_advance((uint32_t)z80_cycles, end_time);
+			if (!me_executed)
+				z80_execute(z80_cycles);
+			z80_sound_cycles += (uint32_t)z80_cycles;
+		}
+		else if (me_sound_slice)
+			(void)cps2_me_sound_main_slice_finish(0, cps2_timer_sound_time_us(), false);
 
 		frame_base += timer_ticks;
 		timer_left -= timer_ticks;

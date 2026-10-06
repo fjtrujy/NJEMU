@@ -109,8 +109,8 @@ jobs:
             gui: ON
             psp_me_audio: ON
             psp_me_sound_coprocessor: ON
-          # The other PSP cores use bounded MIST jobs while retaining their
-          # existing sound/control CPU paths as the fallback implementation.
+          # Retain the bounded-job variants as reference/fallback coverage even
+          # when a target also has a persistent sound-coprocessor path.
           - target: CPS1
             command_list: OFF
             adhoc: OFF
@@ -125,6 +125,22 @@ jobs:
             gui: OFF
             psp_me_audio: ON
             psp_me_sound_coprocessor: OFF
+          # CPS2 can hand the complete Z80 + QSound island to the persistent ME
+          # worker. Cover both the headless runtime and GUI/save-state wiring.
+          - target: CPS2
+            command_list: OFF
+            adhoc: OFF
+            save_state: OFF
+            gui: OFF
+            psp_me_audio: ON
+            psp_me_sound_coprocessor: ON
+          - target: CPS2
+            command_list: ON
+            adhoc: OFF
+            save_state: ON
+            gui: ON
+            psp_me_audio: ON
+            psp_me_sound_coprocessor: ON
           - target: NCDZ
             command_list: OFF
             adhoc: OFF

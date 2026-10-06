@@ -9,6 +9,9 @@
 #ifndef TIMER_H
 #define TIMER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define QSOUND_INTERRUPT		0
 #define VBLANK_INTERRUPT		1
 #define RASTER_INTERRUPT1		2
@@ -37,6 +40,9 @@ void timer_set(int which, float duration, int param, void (*callback)(int param)
 void timer_update_cpu(void);
 
 void z80_set_reset_line(int state);
+uint64_t cps2_timer_sound_time_us(void);
+bool cps2_timer_z80_suspended(void);
+void cps2_timer_restore_z80_suspended(bool suspended);
 
 #ifdef SAVE_STATE
 STATE_SAVE( timer );

@@ -30,5 +30,7 @@ enum TEXTURE_LAYER_INDEX {
 };
 
 void cps2_main(void);
+bool cps2_sound_state_prepare(void);
+bool cps2_sound_state_resume(void);
 
 #endif /* CPS2_H */

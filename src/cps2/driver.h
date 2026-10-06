@@ -83,6 +83,8 @@ TIMER_CALLBACK( cps2_vblank_interrupt );
 int cps2_driver_init(void);
 void cps2_driver_reset(void);
 void cps2_driver_exit(void);
+uint32_t cps2_get_z80_bank(void);
+void cps2_restore_z80_bank(uint32_t offset);
 
 READ16_HANDLER( cps2_inputport0_r );
 READ16_HANDLER( cps2_inputport1_r );

@@ -14,6 +14,7 @@
 #endif
 #include "common/cache.h"
 #include "common/cmdlist.h"
+#include "common/cps2_me_sound_shadow.h"
 #include "common/emulator_runtime.h"
 #include "common/runtime_paths.h"
 #include "common/ui_defs.h"
@@ -113,6 +114,12 @@ static int cps2_init(void)
 
 static void cps2_reset(void)
 {
+	/* The persistent ME worker may own the live Z80/QSound state.  Recover it
+	 * before resetting the Allegrex mirrors; otherwise the producer reset can
+	 * later restore the pre-reset worker snapshot over freshly reset CPU state. */
+	if (!cps2_me_sound_prepare_cpu_state())
+		printf("[PSP_ME_QSOUND] CPU recovery failed before CPS2 reset; continuing with local reset state\n");
+
 	video_driver->clearScreen(video_data);
 
 	Loop = LOOP_EXEC;
@@ -125,8 +132,19 @@ static void cps2_reset(void)
 	timer_reset();
 	input_reset();
 	sound_reset();
+	(void)cps2_me_sound_snapshot_from_cpu();
 
 	blit_clear_all_sprite();
+}
+
+bool cps2_sound_state_prepare(void)
+{
+	return cps2_me_sound_prepare_cpu_state();
+}
+
+bool cps2_sound_state_resume(void)
+{
+	return cps2_me_sound_resume_from_cpu();
 }
 
 /*--------------------------------------------------------
@@ -233,17 +251,18 @@ static void cps2_run(void)
 					usleep(EMULATOR_SLEEP_POLL_US);
 				} while (Sleep);
 
-#if USE_CACHE
-				cache_sleep(0);
-#endif
-				autoframeskip_reset();
+	#if USE_CACHE
+					cache_sleep(0);
+	#endif
+					autoframeskip_reset();
+				}
+
+				apply_cheat();//davex
+				timer_update_cpu();
+				cps2_me_sound_frame_completed();
+				update_screen();
+				update_inputport();
 			}
-			
-			apply_cheat();//davex
-			timer_update_cpu();
-			update_screen();
-			update_inputport();
-		}
 
 		video_driver->clearScreen(video_data);
 		sound_mute(1);

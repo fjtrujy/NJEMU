@@ -3390,3 +3390,69 @@ hardware.  Audible CDDA behavior, normal rendered gameplay, interactive save/loa
 physical suspend/resume, same-process game relaunch, NCDZ-specific fatal recovery and
 end-to-end performance remain outstanding until the independent PSP NCDZ video stall
 is resolved.
+
+## 19. Follow-on CPS2 Z80 + QSound sound island (2026-10-06) [real-PSP validated]
+
+CPS2 now has a target-specific persistent worker rather than relying only on the
+bounded QSound mixer job.  Allegrex still owns the M68000 and all video/input work;
+the ME owns the 8 MHz Z80, its 64 KiB address space and bank state, QSound register
+state, QSound sample generation, sound IRQ delivery, and the sound-side reset state.
+The committed CPU implementation remains the recovery oracle and the
+`PSP_ME_AUDIO=OFF` / PPSSPP-compatible path.
+
+The QSound implementation was first made explicitly copyable through a
+`qsound_context_t`.  Worker snapshots therefore transfer emulator state rather than
+sharing mutable QSound globals.  A fatal worker publishes its last coherent Z80 RAM,
+CZ80 state, bank/reset state, emulated time, and QSound context so Allegrex can recover
+synchronously without sending a command to an already-dead worker.  Save/load and
+reset cross the same recovery/resnapshot boundary used by the MVS/NCDZ workers.
+
+CPS2's main CPU and sound CPU share the 4 KiB window at Z80 `0xc000-0xcfff`.  The first
+correct implementation synchronized and copied the complete window before and after
+every scheduler slice.  It was reliable on hardware, but a controlled benchmark
+proved that it was the wrong performance shape: it processed about 5,090 worker
+commands per 300 frames and the full island averaged only **85.85 FPS** over benchmark
+frames 900-1800, substantially below both CPU and bounded-ME controls.
+
+The final implementation makes that boundary lazy.  A scheduler slice can enqueue Z80
+work directly when the M68000 never touches QSound shared RAM.  On the first actual
+main-CPU shared-RAM access, NJEMU drains preceding sound work and copies the 4 KiB
+window once; the CPU then accesses its local mirror for the rest of that slice.  The
+window is copied back only if the M68000 wrote it.  FIFO ordering still guarantees
+that the following ME Z80 slice observes those writes.  This reduced representative
+worker traffic to about 3,490 commands per 300 frames without weakening the ownership
+or recovery rules.
+
+Real-PSP performance was measured with `ssf2` using the same runtime fixture and build
+settings for all three variants: 333 MHz, VSync off, autoframeskip off, frameskip 0,
+60 FPS limiter off, sound on, Release optimization, no GUI, and cache enabled.  A
+temporary probe recorded identical 300-frame wall-clock windows and was removed after
+measurement.  Averaging the steady benchmark windows from frames 900-1800 produced:
+
+- **Main CPU:** 112.04 FPS;
+- **bounded QSound ME job:** 111.42 FPS;
+- **full persistent Z80 + QSound ME island:** **129.87 FPS**.
+
+The final full island is therefore **15.9% faster than Main CPU** and **16.6% faster
+than the bounded ME job** for this representative run.  The bounded job by itself was
+effectively neutral/slightly negative versus CPU here, which is direct evidence that
+moving the complete sound island can be worthwhile only when the cross-domain
+synchronization is designed carefully.
+
+The optimized full worker stayed authoritative for every retained 300-frame hardware
+window.  Typical windows contained about 1,862-1,863 ME-owned Z80 slices, 1,262-1,263
+IRQs, and 60-72 authoritative QSound renders, with zero command/event overflow, fatal
+errors, or normal-run CPU recovery.  The hardware lifecycle probe also passed:
+
+- frame 300 save: CPU prepare, state save, and ME resume all succeeded;
+- frame 600 load: CPU prepare, state load, and ME resume all succeeded;
+- frame 1200 reset: the current worker state recovered once, a fresh generation was
+  created, and the new snapshot immediately became authoritative;
+- frame 1500 exit: the worker performed an orderly final recovery/shutdown.
+
+Each lifecycle recovery reported success with zero recovery failures, and every fresh
+generation resumed with zero FIFO overflow or worker fatal error.  Desktop CPS2 also
+passes the dedicated worker oracle, including shared-RAM synchronization, reset/suspend
+semantics, ordered memory access, QSound rendering, recovery snapshots, and fatal
+snapshot publication.  CI keeps CPU-only and bounded-ME CPS2 variants and now also
+builds full-coprocessor no-GUI plus GUI/save-state configurations.
