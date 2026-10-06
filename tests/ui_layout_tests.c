@@ -4,11 +4,14 @@
 #include "common/ui_layout.h"
 #include "common/video_driver.h"
 
+static int test_output_width = 704;
+static int test_output_height = 480;
+
 static void test_get_output_size(void *data, int *width, int *height)
 {
 	(void)data;
-	if (width) *width = 704;
-	if (height) *height = 480;
+	if (width) *width = test_output_width;
+	if (height) *height = test_output_height;
 }
 
 static void test_get_presentation_viewport(void *data,
@@ -153,7 +156,7 @@ static void test_cps1_240p_display_modes(void)
 	int width;
 	int height;
 
-	/* PS2 240p presents gameplay inside a 640x224 safe viewport. Original
+	/* PS2 240p presents gameplay through a 640x224 visible framebuffer. Original
 	 * Size must remain a true 1:1 384x224 copy; the other modes intentionally
 	 * scale and therefore require filtered presentation in the PS2 backend. */
 	video_set_pixel_aspect_ratio(10, 22);
@@ -177,6 +180,40 @@ static void test_cps1_240p_display_modes(void)
 		&width, &height);
 	assert(width == 640);
 	assert(height == 224);
+}
+
+static void test_cps1_240p_presentation_rect(void)
+{
+	RECT rect;
+	void (*saved_viewport)(void *, int, int, int *, int *, int *, int *) =
+		test_video_driver.getPresentationViewport;
+
+	test_output_width = 640;
+	test_output_height = 224;
+	test_video_driver.getPresentationViewport = NULL;
+	video_set_pixel_aspect_ratio(10, 22);
+
+	rect = display_mode_presentation_rect(DISPLAY_MODE_ORIGINAL_SIZE, 384, 224);
+	assert(rect.left == 128);
+	assert(rect.top == 0);
+	assert(rect.right == 512);
+	assert(rect.bottom == 224);
+
+	rect = display_mode_presentation_rect(DISPLAY_MODE_ORIGINAL_ASPECT, 384, 224);
+	assert(rect.left == 0);
+	assert(rect.top == 27);
+	assert(rect.right == 640);
+	assert(rect.bottom == 196);
+
+	rect = display_mode_presentation_rect(DISPLAY_MODE_FULLSCREEN, 384, 224);
+	assert(rect.left == 0);
+	assert(rect.top == 0);
+	assert(rect.right == 640);
+	assert(rect.bottom == 224);
+
+	test_output_width = 704;
+	test_output_height = 480;
+	test_video_driver.getPresentationViewport = saved_viewport;
 }
 
 static void test_display_mode_presentation_viewport(void)
@@ -264,6 +301,7 @@ int main(void)
 	test_non_square_pixel_layout(704, 240, 10, 22);
 	test_non_square_pixel_display_mode();
 	test_cps1_240p_display_modes();
+	test_cps1_240p_presentation_rect();
 	test_display_mode_presentation_viewport();
 	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
 	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);

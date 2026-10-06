@@ -117,14 +117,16 @@ typedef struct ps2_output_mode
 	int pixel_aspect_den;
 } ps2_output_mode_t;
 
-/* Match the GS raster geometry used by RetroArch's mature PS2 backend.
- * 480-line NTSC/DTV uses a 10:11 pixel aspect; 240p doubles the vertical
- * pixel extent to 10:22. 704 pixels therefore cover the intended 4:3 active
- * width while remaining 64-pixel aligned for GS FBW. With gsKit's timing
- * widths this also derives VCK x4 for NTSC/240p and VCK x2 for 480p. */
+/* NTSC output uses the conventional 640-pixel visible framebuffer. gsKit
+ * centers 640x448 (480i) or 640x224 (240p) inside the complete NTSC timing;
+ * using the full 704x480 timing extent as the framebuffer instead changes
+ * DISPLAY.DX/DY and makes the nominal visible region start part-way through
+ * NJEMU's presentation rectangle in PCSX2. 480p keeps the 704-pixel DTV
+ * framebuffer. The pixel-aspect values describe the underlying video timing,
+ * with 240p doubling the vertical pixel extent. */
 static const ps2_output_mode_t ps2_output_modes[VIDEO_OUTPUT_MODE_COUNT] = {
-	{ GS_MODE_NTSC,     704, 240, GS_NONINTERLACED, GS_FRAME, 10, 22 },
-	{ GS_MODE_NTSC,     704, 480, GS_INTERLACED,    GS_FIELD, 10, 11 },
+	{ GS_MODE_NTSC,     640, 224, GS_NONINTERLACED, GS_FRAME, 10, 22 },
+	{ GS_MODE_NTSC,     640, 448, GS_INTERLACED,    GS_FIELD, 10, 11 },
 	{ GS_MODE_DTV_480P, 704, 480, GS_NONINTERLACED, GS_FRAME, 10, 11 },
 };
 
@@ -628,36 +630,6 @@ static void ps2_getOutputSize(void *data, int *width, int *height)
 	}
 	if (width) *width = w;
 	if (height) *height = h;
-}
-
-static void ps2_getPresentationViewport(void *data,
-	int output_width, int output_height,
-	int *x, int *y, int *width, int *height)
-{
-	ps2_video_t *ps2 = (ps2_video_t *)data;
-	int viewport_width = output_width;
-	int viewport_height = output_height;
-	int viewport_x = 0;
-	int viewport_y = 0;
-
-	/* Keep gameplay inside the same conventional NTSC safe area used by the
-	 * common UI. The 704-pixel framebuffer remains intact for GS timing/FBW,
-	 * while content no longer depends on emulator/TV overscan settings. */
-	if (ps2 && ps2->gsGlobal && ps2->gsGlobal->Mode == GS_MODE_NTSC &&
-		output_width >= 704) {
-		viewport_width = 640;
-		viewport_height =
-			ps2->gsGlobal->Interlace == GS_NONINTERLACED ? 224 : 448;
-		if (viewport_height > output_height)
-			viewport_height = output_height;
-		viewport_x = (output_width - viewport_width) / 2;
-		viewport_y = (output_height - viewport_height) / 2;
-	}
-
-	if (x) *x = viewport_x;
-	if (y) *y = viewport_y;
-	if (width) *width = viewport_width;
-	if (height) *height = viewport_height;
 }
 
 static void ps2_setOutputOffset(void *data, int x, int y)
@@ -2363,7 +2335,7 @@ video_driver_t video_ps2 = {
 	ps2_fillUIRectGradient,
 	ps2_setUIScissor,
 	NULL,
-	ps2_getPresentationViewport,
+	NULL,
 	ps2_setOutputOffset,
 	ps2_setOutputMode,
 };
