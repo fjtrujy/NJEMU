@@ -148,6 +148,37 @@ static void test_non_square_pixel_display_mode(void)
 	assert(height == 240);
 }
 
+static void test_cps1_240p_display_modes(void)
+{
+	int width;
+	int height;
+
+	/* PS2 240p presents gameplay inside a 640x224 safe viewport. Original
+	 * Size must remain a true 1:1 384x224 copy; the other modes intentionally
+	 * scale and therefore require filtered presentation in the PS2 backend. */
+	video_set_pixel_aspect_ratio(10, 22);
+
+	display_mode_size(DISPLAY_MODE_ORIGINAL_SIZE, 640, 224, 384, 224,
+		&width, &height);
+	assert(width == 384);
+	assert(height == 224);
+
+	display_mode_size(DISPLAY_MODE_ORIGINAL_ASPECT, 640, 224, 384, 224,
+		&width, &height);
+	assert(width == 640);
+	assert(height == 169);
+
+	display_mode_size(DISPLAY_MODE_4_3, 640, 224, 384, 224,
+		&width, &height);
+	assert(width == 640);
+	assert(height == 218);
+
+	display_mode_size(DISPLAY_MODE_FULLSCREEN, 640, 224, 384, 224,
+		&width, &height);
+	assert(width == 640);
+	assert(height == 224);
+}
+
 static void test_display_mode_presentation_viewport(void)
 {
 	RECT rect;
@@ -232,6 +263,7 @@ int main(void)
 	test_non_square_pixel_layout(704, 480, 10, 11);
 	test_non_square_pixel_layout(704, 240, 10, 22);
 	test_non_square_pixel_display_mode();
+	test_cps1_240p_display_modes();
 	test_display_mode_presentation_viewport();
 	test_non_square_pixel_safe_viewport(704, 480, 32, 16, 640, 448, 10, 11);
 	test_non_square_pixel_safe_viewport(704, 240, 32, 8, 640, 224, 10, 22);

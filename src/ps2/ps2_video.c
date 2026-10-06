@@ -1107,6 +1107,14 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 	int prev_alpha = ps2->gsGlobal->PrimAlphaEnable;
 	int prev_alpha_test = ps2->gsGlobal->Test->ATE;
+	int src_width = src_rect->right - src_rect->left;
+	int src_height = src_rect->bottom - src_rect->top;
+	int dst_width = dst_rect->right - dst_rect->left;
+	int dst_height = dst_rect->bottom - dst_rect->top;
+	int integer_upscale = src_width > 0 && src_height > 0 &&
+		dst_width >= src_width && dst_height >= src_height &&
+		(dst_width % src_width) == 0 && (dst_height % src_height) == 0;
+	int filter = integer_upscale ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
 	uint8_t textureVertexCount = 2;
 	GSPRIMUVPOINTFLAT textureVertex[textureVertexCount];
@@ -1122,7 +1130,11 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	ps2->gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	gsKit_renderToScreen(ps2->gsGlobal);
-	gsKit_set_texfilter(ps2->gsGlobal, ps2->scrbitmap->Filter);
+	/* Preserve exact texel sampling for pixel-accurate 1:1 and integer-upscaled
+	 * presentation, but filter fractional scaling. Fractional nearest-neighbour
+	 * scaling makes moving source pixels alternate between uneven destination
+	 * widths, which appears as shimmer during scrolling. */
+	gsKit_set_texfilter(ps2->gsGlobal, filter);
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, textureVertexCount, textureVertex);
 	ps2->gsGlobal->PrimAlphaEnable = prev_alpha;
 
