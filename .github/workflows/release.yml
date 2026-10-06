@@ -422,12 +422,11 @@ jobs:
             gh release delete development --repo "$REPOSITORY" --yes
           fi
 
-          notes_args=(--generate-notes)
-          stable_tag="$(gh api "repos/$REPOSITORY/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
-          if [[ -n "$stable_tag" && "$stable_tag" != "development" ]]; then
-            notes_args+=(--notes-start-tag "$stable_tag")
-          fi
-
+          # The development tag is force-moved on every master build. GitHub's
+          # generated-notes API can reject that moving tag as an invalid
+          # previous_tag, especially before the repository has a stable release.
+          # Keep generated notes for immutable stable releases and use explicit
+          # notes for this rolling prerelease.
           gh release create development \
             release-assets/*.zip \
             release-assets/*.zip.json \
@@ -435,6 +434,5 @@ jobs:
             --verify-tag \
             --title "NJEMU Development · $VERSION" \
             --notes "Automated development build from the current master branch. This prerelease may be less stable than a tagged NJEMU release." \
-            "${notes_args[@]}" \
             --prerelease \
             --latest=false
