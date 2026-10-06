@@ -21,8 +21,6 @@
 #include "cps2/memintrf.h"
 #endif
 
-#define QSOUND_CHANNELS 16
-
 typedef int8_t  QSOUND_SRC_SAMPLE;
 typedef int16_t QSOUND_SAMPLE;
 typedef int32_t QSOUND_SAMPLE_MIX;
@@ -32,31 +30,7 @@ typedef int32_t QSOUND_SAMPLE_MIX;
 	Local Variables/Structures
 ******************************************************************************/
 
-typedef struct
-{
-	int bank;			/* bank (x16)	*/
-	int address;		/* start address */
-	int pitch;			/* pitch */
-	int loop;			/* loop address */
-	int end;			/* end address */
-	int vol;			/* master volume */
-	int pan;			/* Pan value */
-
-	/* Work variables */
-	int key;			/* Key on / key off */
-
-	int lvol;			/* left volume */
-	int rvol;			/* right volume */
-	int lastdt;			/* last sample value */
-	int offset;			/* current offset counter */
-} QSOUND_CHANNEL;
-
-static QSOUND_CHANNEL ALIGN16_DATA qsound_channel[QSOUND_CHANNELS];
-
-static QSOUND_SRC_SAMPLE *qsound_sample_rom;
-
-static int qsound_data;
-static int qsound_volume_shift;
+static qsound_context_t ALIGN16_DATA qsound_default_context;
 #if defined(AUDIO_PRODUCER_JOBS)
 static qsound_mix_job_t *qsound_mix_job;
 #endif
@@ -93,14 +67,14 @@ static bool qsound_update_me(int32_t **buffer, int length)
 	qsound_mix_job->error = 0;
 	for (ch = 0; ch < QSOUND_CHANNELS; ch++)
 	{
-		QSOUND_CHANNEL *channel = &qsound_channel[ch];
+		qsound_channel_state_t *channel = &qsound_default_context.channel[ch];
 		qsound_mix_channel_job_t *job_channel = &qsound_mix_job->channel[ch];
 		int i;
 
 		job_channel->left_gain =
-			(channel->lvol * channel->vol) >> qsound_volume_shift;
+			(channel->lvol * channel->vol) >> qsound_default_context.volume_shift;
 		job_channel->right_gain =
-			(channel->rvol * channel->vol) >> qsound_volume_shift;
+			(channel->rvol * channel->vol) >> qsound_default_context.volume_shift;
 		memset(job_channel->sample, 0, (size_t)length);
 		if (!channel->key)
 			continue;
@@ -112,7 +86,8 @@ static bool qsound_update_me(int32_t **buffer, int length)
 			channel->offset &= 0xffff;
 			if (count)
 			{
-				const QSOUND_SRC_SAMPLE *source = qsound_sample_rom + channel->bank;
+				const QSOUND_SRC_SAMPLE *source =
+					qsound_default_context.sample_rom + channel->bank;
 
 				channel->address += count;
 				if (channel->address >= channel->end)
@@ -166,27 +141,26 @@ static bool qsound_update_me(int32_t **buffer, int length)
 	Sound Stream Generation
 --------------------------------------------------------*/
 
-static void qsound_update(int32_t **buffer, int length)
+void qsound_context_update(qsound_context_t *context, int32_t **buffer, int length)
 {
 	int ch;
 
-#if defined(AUDIO_PRODUCER_JOBS)
-	if (qsound_update_me(buffer, length))
+	if (!context || !buffer || !buffer[0] || !buffer[1] || length <= 0 ||
+		!context->sample_rom)
 		return;
-#endif
 
 	for (ch = 0; ch < QSOUND_CHANNELS; ch++)
 	{
-		QSOUND_CHANNEL *pC = &qsound_channel[ch];
+		qsound_channel_state_t *pC = &context->channel[ch];
 
 		if (pC->key)
 		{
 			int i;
-			QSOUND_SRC_SAMPLE *pST  = qsound_sample_rom + pC->bank;
+			const QSOUND_SRC_SAMPLE *pST  = context->sample_rom + pC->bank;
 			QSOUND_SAMPLE_MIX *bufL = buffer[0];
 			QSOUND_SAMPLE_MIX *bufR = buffer[1];
-			QSOUND_SAMPLE_MIX lvol  = (pC->lvol * pC->vol) >> qsound_volume_shift;
-			QSOUND_SAMPLE_MIX rvol  = (pC->rvol * pC->vol) >> qsound_volume_shift;
+			QSOUND_SAMPLE_MIX lvol  = (pC->lvol * pC->vol) >> context->volume_shift;
+			QSOUND_SAMPLE_MIX rvol  = (pC->rvol * pC->vol) >> context->volume_shift;
 
 			for (i = 0; i < length; i++)
 			{
@@ -219,6 +193,15 @@ static void qsound_update(int32_t **buffer, int length)
 	}
 }
 
+static void qsound_update(int32_t **buffer, int length)
+{
+#if defined(AUDIO_PRODUCER_JOBS)
+	if (qsound_update_me(buffer, length))
+		return;
+#endif
+	qsound_context_update(&qsound_default_context, buffer, length);
+}
+
 
 /******************************************************************************
 	QSound Interface Functions
@@ -241,8 +224,8 @@ void qsound_sh_start(void)
 #endif
 	sound->callback  = qsound_update;
 
-	qsound_sample_rom   = (QSOUND_SRC_SAMPLE *)memory_region_sound1;
-	qsound_volume_shift = 6;
+	qsound_default_context.sample_rom = (const QSOUND_SRC_SAMPLE *)memory_region_sound1;
+	qsound_default_context.volume_shift = 6;
 #if defined(AUDIO_PRODUCER_JOBS)
 	qsound_mix_job = NULL;
 #endif
@@ -250,14 +233,14 @@ void qsound_sh_start(void)
 #if (EMU_SYSTEM == CPS2)
 	if (!strcmp(capcom_driver_name(), "csclub"))
 	{
-		qsound_volume_shift = 4;
+		qsound_default_context.volume_shift = 4;
 	}
 	else
 	if (!strcmp(capcom_driver_name(), "ddsom")
 	||	!strcmp(capcom_driver_name(), "vsav")
 	||	!strcmp(capcom_driver_name(), "vsav2"))
 	{
-		qsound_volume_shift = 5;
+		qsound_default_context.volume_shift = 5;
 	}
 	else
 	if (!strcmp(capcom_driver_name(), "batcir")
@@ -266,12 +249,12 @@ void qsound_sh_start(void)
 	||	!strcmp(capcom_driver_name(), "mpangj")
 	||	!strcmp(capcom_driver_name(), "puzloop2"))
 	{
-		qsound_volume_shift = 7;
+		qsound_default_context.volume_shift = 7;
 	}
 #else
 	if (!strncmp(capcom_driver_name(), "punish", 6))
 	{
-		qsound_volume_shift = 4;
+		qsound_default_context.volume_shift = 4;
 	}
 #endif
 }
@@ -292,8 +275,36 @@ void qsound_sh_stop(void)
 
 void qsound_sh_reset(void)
 {
-	memset(&qsound_channel, 0, sizeof(qsound_channel));
-	qsound_data = 0;
+	memset(qsound_default_context.channel, 0, sizeof(qsound_default_context.channel));
+	qsound_default_context.data = 0;
+}
+
+size_t qsound_context_size(void)
+{
+	return sizeof(qsound_context_t);
+}
+
+bool qsound_default_clone_for_worker(qsound_context_t *destination)
+{
+	if (!destination || !qsound_default_context.sample_rom)
+		return false;
+	*destination = qsound_default_context;
+	return true;
+}
+
+bool qsound_default_restore_from_worker(const qsound_context_t *source)
+{
+	const int8_t *sample_rom;
+	int volume_shift;
+
+	if (!source)
+		return false;
+	sample_rom = qsound_default_context.sample_rom;
+	volume_shift = qsound_default_context.volume_shift;
+	qsound_default_context = *source;
+	qsound_default_context.sample_rom = sample_rom;
+	qsound_default_context.volume_shift = volume_shift;
+	return true;
 }
 
 
@@ -318,7 +329,13 @@ READ8_HANDLER( qsound_status_r )
 
 WRITE8_HANDLER( qsound_data_h_w )
 {
-	qsound_data = (qsound_data & 0xff) | (data << 8);
+	qsound_context_data_h_w(&qsound_default_context, data);
+}
+
+void qsound_context_data_h_w(qsound_context_t *context, uint8_t data)
+{
+	if (context)
+		context->data = (context->data & 0xff) | (data << 8);
 }
 
 
@@ -328,7 +345,13 @@ WRITE8_HANDLER( qsound_data_h_w )
 
 WRITE8_HANDLER( qsound_data_l_w )
 {
-	qsound_data = (qsound_data & 0xff00) | data;
+	qsound_context_data_l_w(&qsound_default_context, data);
+}
+
+void qsound_context_data_l_w(qsound_context_t *context, uint8_t data)
+{
+	if (context)
+		context->data = (context->data & 0xff00) | data;
 }
 
 
@@ -338,7 +361,17 @@ WRITE8_HANDLER( qsound_data_l_w )
 
 WRITE8_HANDLER( qsound_cmd_w )
 {
+	qsound_context_cmd_w(&qsound_default_context, data);
+}
+
+void qsound_context_cmd_w(qsound_context_t *context, uint8_t data)
+{
 	int ch, reg;
+	int command_data;
+
+	if (!context)
+		return;
+	command_data = context->data;
 
 	if (data < 0x80)
 	{
@@ -360,56 +393,56 @@ WRITE8_HANDLER( qsound_cmd_w )
 	{
 	case 0: /* Bank */
 		ch = (ch + 1) & 0x0f;	/* strange ... */
-		qsound_channel[ch].bank = (qsound_data & 0x7f) << 16;
+		context->channel[ch].bank = (command_data & 0x7f) << 16;
 		break;
 
 	case 1: /* start */
-		qsound_channel[ch].address = qsound_data;
+		context->channel[ch].address = command_data;
 		break;
 
 	case 2: /* pitch */
 #if QSOUND_STREAM_48KHz
-		qsound_channel[ch].pitch = qsound_data << 3;
+		context->channel[ch].pitch = command_data << 3;
 #else
-		qsound_channel[ch].pitch = qsound_data << 4;
+		context->channel[ch].pitch = command_data << 4;
 #endif
-		if (!qsound_data)
+		if (!command_data)
 		{
 			/* Key off */
-			qsound_channel[ch].key = 0;
+			context->channel[ch].key = 0;
 		}
 		break;
 
 	case 4: /* loop offset */
-		qsound_channel[ch].loop = qsound_data;
+		context->channel[ch].loop = command_data;
 		break;
 
 	case 5: /* end */
-		qsound_channel[ch].end = qsound_data;
+		context->channel[ch].end = command_data;
 		break;
 
 	case 6: /* master volume */
-		if (!qsound_data)
+		if (!command_data)
 		{
 			/* Key off */
-			qsound_channel[ch].key = 0;
+			context->channel[ch].key = 0;
 		}
-		else if (!qsound_channel[ch].key)
+		else if (!context->channel[ch].key)
 		{
 			/* Key on */
-			qsound_channel[ch].key = 1;
-			qsound_channel[ch].offset = 0;
-			qsound_channel[ch].lastdt = 0;
+			context->channel[ch].key = 1;
+			context->channel[ch].offset = 0;
+			context->channel[ch].lastdt = 0;
 		}
-		qsound_channel[ch].vol = qsound_data;
+		context->channel[ch].vol = command_data;
 		break;
 
 	case 8: /* pan and L/R volume */
-		qsound_channel[ch].pan = qsound_data;
-		qsound_data = (qsound_data - 0x10) & 0x3f;
-		if (qsound_data > 32) qsound_data = 32;
-		qsound_channel[ch].rvol = qsound_pan_table[qsound_data];
-		qsound_channel[ch].lvol = qsound_pan_table[32 - qsound_data];
+		context->channel[ch].pan = command_data;
+		command_data = (command_data - 0x10) & 0x3f;
+		if (command_data > 32) command_data = 32;
+		context->channel[ch].rvol = qsound_pan_table[command_data];
+		context->channel[ch].lvol = qsound_pan_table[32 - command_data];
 		break;
 	}
 }
@@ -427,20 +460,20 @@ STATE_SAVE( qsound )
 
 	for (i = 0; i < QSOUND_CHANNELS; i++)
 	{
-		state_save_long(&qsound_channel[i].bank, 1);
-		state_save_long(&qsound_channel[i].address, 1);
-		state_save_long(&qsound_channel[i].pitch, 1);
-		state_save_long(&qsound_channel[i].loop, 1);
-		state_save_long(&qsound_channel[i].end, 1);
-		state_save_long(&qsound_channel[i].vol, 1);
-		state_save_long(&qsound_channel[i].pan, 1);
-		state_save_long(&qsound_channel[i].key, 1);
-		state_save_long(&qsound_channel[i].lvol, 1);
-		state_save_long(&qsound_channel[i].rvol, 1);
-		state_save_long(&qsound_channel[i].lastdt, 1);
-		state_save_long(&qsound_channel[i].offset, 1);
+		state_save_long(&qsound_default_context.channel[i].bank, 1);
+		state_save_long(&qsound_default_context.channel[i].address, 1);
+		state_save_long(&qsound_default_context.channel[i].pitch, 1);
+		state_save_long(&qsound_default_context.channel[i].loop, 1);
+		state_save_long(&qsound_default_context.channel[i].end, 1);
+		state_save_long(&qsound_default_context.channel[i].vol, 1);
+		state_save_long(&qsound_default_context.channel[i].pan, 1);
+		state_save_long(&qsound_default_context.channel[i].key, 1);
+		state_save_long(&qsound_default_context.channel[i].lvol, 1);
+		state_save_long(&qsound_default_context.channel[i].rvol, 1);
+		state_save_long(&qsound_default_context.channel[i].lastdt, 1);
+		state_save_long(&qsound_default_context.channel[i].offset, 1);
 	}
-	state_save_long(&qsound_data, 1);
+	state_save_long(&qsound_default_context.data, 1);
 }
 
 STATE_LOAD( qsound )
@@ -449,20 +482,20 @@ STATE_LOAD( qsound )
 
 	for (i = 0; i < QSOUND_CHANNELS; i++)
 	{
-		state_load_long(&qsound_channel[i].bank, 1);
-		state_load_long(&qsound_channel[i].address, 1);
-		state_load_long(&qsound_channel[i].pitch, 1);
-		state_load_long(&qsound_channel[i].loop, 1);
-		state_load_long(&qsound_channel[i].end, 1);
-		state_load_long(&qsound_channel[i].vol, 1);
-		state_load_long(&qsound_channel[i].pan, 1);
-		state_load_long(&qsound_channel[i].key, 1);
-		state_load_long(&qsound_channel[i].lvol, 1);
-		state_load_long(&qsound_channel[i].rvol, 1);
-		state_load_long(&qsound_channel[i].lastdt, 1);
-		state_load_long(&qsound_channel[i].offset, 1);
+		state_load_long(&qsound_default_context.channel[i].bank, 1);
+		state_load_long(&qsound_default_context.channel[i].address, 1);
+		state_load_long(&qsound_default_context.channel[i].pitch, 1);
+		state_load_long(&qsound_default_context.channel[i].loop, 1);
+		state_load_long(&qsound_default_context.channel[i].end, 1);
+		state_load_long(&qsound_default_context.channel[i].vol, 1);
+		state_load_long(&qsound_default_context.channel[i].pan, 1);
+		state_load_long(&qsound_default_context.channel[i].key, 1);
+		state_load_long(&qsound_default_context.channel[i].lvol, 1);
+		state_load_long(&qsound_default_context.channel[i].rvol, 1);
+		state_load_long(&qsound_default_context.channel[i].lastdt, 1);
+		state_load_long(&qsound_default_context.channel[i].offset, 1);
 	}
-	state_load_long(&qsound_data, 1);
+	state_load_long(&qsound_default_context.data, 1);
 }
 
 #endif /* SAVE_STATE */
