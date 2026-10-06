@@ -33,7 +33,6 @@ struct JoyInfo joyInfo[MAX_CONTROLLERS];
 
 typedef struct ps2_input {
 	uint8_t mtap_opened[PS2_MAX_PORT];
-	uint32_t refresh_counter;
 } ps2_input_t;
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
@@ -206,21 +205,19 @@ static struct JoyInfo *getActiveJoyInfo(ps2_input_t *ps2, uint32_t controller)
 static uint32_t ps2_controllerCount(void *data)
 {
 	ps2_input_t *ps2 = (ps2_input_t *)data;
-	uint32_t count;
 
 	if (!ps2)
 		return 0;
 
-	count = activeJoyInfoCount();
-	/* Periodically refresh slot availability so a multitap attached after
-	 * startup becomes visible without paying device-setup RPC cost every frame. */
-	if (count == 0 || ++ps2->refresh_counter >= 60) {
-		ps2->refresh_counter = 0;
-		refreshJoyInfo(ps2);
-		count = activeJoyInfoCount();
-	}
+	return activeJoyInfoCount();
+}
 
-	return count;
+static void ps2_refresh(void *data)
+{
+	ps2_input_t *ps2 = (ps2_input_t *)data;
+
+	if (ps2)
+		refreshJoyInfo(ps2);
 }
 
 static void *ps2_init(void)
@@ -344,6 +341,7 @@ input_driver_t input_ps2 = {
 	"ps2",
 	ps2_init,
 	ps2_free,
+	ps2_refresh,
 	ps2_controllerCount,
 	ps2_sample,
 };

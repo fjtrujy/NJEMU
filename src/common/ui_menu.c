@@ -3074,6 +3074,10 @@ void showmenu(void)
 #if USE_CACHE
 	cache_sleep(1);
 #endif
+	/* Some platforms require explicit device discovery (for example PS2
+	 * multitaps). Keep that potentially blocking work in the paused UI path,
+	 * never in the per-frame gameplay controller-count query. */
+	refresh_gamepads();
 
 	i = 0;
 	while (mainmenu2[i].label)

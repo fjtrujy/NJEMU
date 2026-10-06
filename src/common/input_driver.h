@@ -16,6 +16,7 @@
 
 bool pad_init(void);
 void pad_exit(void);
+void refresh_gamepads(void);
 uint32_t gamepad_count(void);
 bool sample_gamepad_index(uint32_t controller, input_state_t *state);
 uint32_t poll_gamepad(void);
@@ -41,7 +42,11 @@ typedef struct input_driver
 	void *(*init)(void);
 	/* Stops and frees driver data. */
 	void (*free)(void *data);
-	/* Number of currently usable physical controllers. */
+	/* Refresh controller topology when the caller is outside the latency-sensitive
+	 * gameplay path. Backends may leave this NULL when discovery is always cheap. */
+	void (*refresh)(void *data);
+	/* Number of currently usable physical controllers. This must be a cheap state
+	 * query and must not initiate blocking device discovery. */
 	uint32_t (*controllerCount)(void *data);
 	/* Sample raw physical state by logical controller index. Emulator-specific
 	 * interpretation of analog axes belongs in common/target code. */

@@ -70,6 +70,7 @@ input_driver_t input_psvita = {
 	"psvita",
 	psvita_input_init,
 	psvita_input_free,
+	NULL,
 	psvita_input_controllerCount,
 	psvita_input_sample,
 };

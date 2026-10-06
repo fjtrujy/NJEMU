@@ -51,6 +51,12 @@ void pad_exit(void)
 	input_info = NULL;
 }
 
+void refresh_gamepads(void)
+{
+	if (input_info && input_driver->refresh)
+		input_driver->refresh(input_info);
+}
+
 /*--------------------------------------------------------
 	Get Number of Physical Controllers
 --------------------------------------------------------*/

@@ -234,11 +234,14 @@ static void cps1_run(void)
 
 				autoframeskip_reset();
 			}
-			
+
 			apply_cheat(); //davex cheat
+			/* Sample controls at the emulation-frame boundary, before CPU work and
+			 * presentation pacing. This removes a full frame of avoidable latency and
+			 * keeps input independent from whether the previous frame was presented. */
+			update_inputport();
 			timer_update_cpu();
 			update_screen();
-			update_inputport();
 
 			// printf("Frame: %u\n", global_frame_count++);
 			// if (global_frame_count == 685) {
