@@ -95,7 +95,7 @@ option(PSP_ME_AUDIO "PSP: enable experimental Media Engine audio producer" OFF)
 option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
 option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
 option(PSP_ME_RING_SELFTEST "PSP MVS: run the synthetic ME shared-ring self-test" OFF)
-option(PSP_ME_SOUND_COPROCESSOR "PSP MVS: build the experimental persistent ME sound worker" OFF)
+option(PSP_ME_SOUND_COPROCESSOR "PSP Neo Geo: build the experimental persistent ME sound worker" OFF)
 
 # Official downloadable builds use one stable, feature-complete configuration
 # per platform instead of exposing the CI/developer option matrix. Set future
@@ -118,7 +118,7 @@ if(NJEMU_CANONICAL_RELEASE)
     set(PSP_AUDIO_PROFILE OFF CACHE BOOL "PSP: log audio producer/chip/output timing" FORCE)
     set(PSP_ME_SOUND_PROFILE OFF CACHE BOOL "PSP MVS: log 68000/Z80/scheduler/sound-island timing" FORCE)
     set(PSP_ME_RING_SELFTEST OFF CACHE BOOL "PSP MVS: run the synthetic ME shared-ring self-test" FORCE)
-    set(PSP_ME_SOUND_COPROCESSOR OFF CACHE BOOL "PSP MVS: build the experimental persistent ME sound worker" FORCE)
+    set(PSP_ME_SOUND_COPROCESSOR OFF CACHE BOOL "PSP Neo Geo: build the experimental persistent ME sound worker" FORCE)
     set(CACHE_IO_PROFILE OFF CACHE BOOL "Profile MVS cache I/O" FORCE)
     set(CACHE_IO_FORCE_SEEK OFF CACHE BOOL "Force legacy seek-before-read MVS cache behavior" FORCE)
     set(CACHE_IO_VALIDATE_ACCELERATED OFF CACHE BOOL "Validate accelerated MVS cache reads against POSIX" FORCE)
@@ -171,8 +171,9 @@ endif()
 if(PSP_ME_RING_SELFTEST AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
     message(FATAL_ERROR "PSP_ME_RING_SELFTEST requires PLATFORM=PSP, TARGET=MVS, and PSP_ME_AUDIO=ON")
 endif()
-if(PSP_ME_SOUND_COPROCESSOR AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
-    message(FATAL_ERROR "PSP_ME_SOUND_COPROCESSOR requires PLATFORM=PSP, TARGET=MVS, and PSP_ME_AUDIO=ON")
+if(PSP_ME_SOUND_COPROCESSOR AND NOT (PLATFORM STREQUAL "PSP" AND
+   ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "NCDZ") AND PSP_ME_AUDIO))
+    message(FATAL_ERROR "PSP_ME_SOUND_COPROCESSOR requires PLATFORM=PSP, TARGET=MVS/NCDZ, and PSP_ME_AUDIO=ON")
 endif()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
@@ -1057,7 +1058,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
         )
     endif()
 
-    if(PSP_ME_SOUND_COPROCESSOR)
+    if(PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
         add_executable(psp_me_sound_worker_hardware_test
             tests/psp_me_sound_worker_hardware.c
             src/psp/psp_me_spsc_ring.c
@@ -1729,7 +1730,7 @@ if(PLATFORM STREQUAL "PSP")
             MEMSIZE 1
         )
     endif()
-    if(PSP_ME_SOUND_COPROCESSOR)
+    if(PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
         create_pbp_file(
             TARGET psp_me_sound_worker_hardware_test
             BUILD_PRX
@@ -1902,6 +1903,19 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         endforeach()
     endif()
     if(${TARGET} STREQUAL "NCDZ")
+        find_package(Threads REQUIRED)
+        add_executable(psp_me_sound_worker_ncdz_tests
+            tests/psp_me_sound_worker_ncdz_tests.c
+            src/psp/psp_me_spsc_ring.c
+            src/psp/psp_me_sound_worker.c
+            src/cpu/z80/cz80.c
+            src/sound/ym2610.c)
+        target_include_directories(psp_me_sound_worker_ncdz_tests BEFORE PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/psp_me_host_stubs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_link_libraries(psp_me_sound_worker_ncdz_tests PRIVATE Threads::Threads m)
+        add_test(NAME psp_me_sound_worker_ncdz_tests
+            COMMAND psp_me_sound_worker_ncdz_tests)
         add_executable(resource_source_tests
             tests/resource_source_tests.c
             src/ncdz/resource_source.c

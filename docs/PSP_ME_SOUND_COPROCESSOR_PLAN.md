@@ -3271,7 +3271,7 @@ This plan does not initially attempt to:
 - move graphics/GU submission to ME;
 - call `sceAudio*` from ME;
 - expose arbitrary common emulator globals directly to ME;
-- change CPS1/CPS2/NCDZ audio architecture at the same time;
+- change CPS1/CPS2 audio architecture as part of this Neo Geo experiment;
 - remove the CPU sound implementation;
 - treat PPSSPP as ME validation.
 
@@ -3294,3 +3294,49 @@ The experiment is complete only when all of the following are true:
 - the full sound-coprocessor path beats the existing ADPCM-A-only ME path enough
   to justify its complexity, or the plan explicitly records that it does not and
   retains the simpler implementation.
+
+## 18. Follow-on NCDZ sound-coprocessor extension (2026-10-06) [host validated]
+
+After the MVS persistent-worker architecture was proven, the same ownership model
+was extended to NCDZ as a separate follow-on step rather than being developed in
+parallel with the original MVS experiment.  The shared Allegrex/ME protocol and
+lifecycle remain common, while target-specific machine behavior is described by an
+explicit worker profile.
+
+The two Neo Geo profiles now differ only where the emulated hardware requires it:
+
+- **MVS** keeps the banked Z80 model, 4 Z80 cycles per microsecond, YM IRQ line 0,
+  and the bounded PCM-window transport required by the streaming MVS PCM cache;
+- **NCDZ** uses a flat 64 KiB Z80 address space, 6 Z80 cycles per microsecond,
+  YM IRQ line 1, and direct access to its resident PCM-A memory.
+
+NCDZ hands Z80 scheduling and YM2610 timer ownership to the persistent worker using
+the same autonomous horizon protocol as MVS.  CPU-visible status and sound commands
+remain ordered through the existing protocol.  NCDZ-specific CDDA mailbox accesses
+use small ordered worker memory commands so the per-frame CDDA poll does not force a
+64 KiB recovery/resnapshot.  Bulk Z80/PCM uploads instead cross an explicit nested
+CPU-recovery boundary, mutate the resident data once, then publish one fresh ME
+snapshot.  External-memory byte reads/writes use the same ordered worker access where
+possible, while the CPU mirror remains the fallback after recovery.
+
+Failure recovery is profile-aware: MVS still restores only its 2 KiB visible Z80 RAM
+plus bank state, whereas NCDZ publishes and restores the complete 64 KiB flat Z80
+image.  YM2610 worker clone/restore is also generic: MVS retains PCM-window rebinding,
+while NCDZ preserves the direct PCM-A source.
+
+Validation completed for this extension:
+
+- Desktop MVS: **36/36 CTest green**;
+- Desktop NCDZ: **28/28 CTest green**;
+- the dedicated NCDZ worker test validates the flat-memory machine profile, ordered
+  read/write/read-clear mailbox operations, direct YM rendering, and full 64 KiB
+  recovery snapshots;
+- PSP MVS full-coprocessor and standalone worker-harness builds pass;
+- PSP NCDZ full-coprocessor build passes;
+- PSP NCDZ with ME disabled also builds, preserving the PPSSPP-compatible CPU path;
+- `git diff --check` is clean.
+
+The NCDZ extension is **not yet real-hardware validated**.  Before it can be treated
+as production-equivalent to the MVS path, run representative Neo Geo CD titles on a
+real PSP and verify audio correctness, CDDA mailbox behavior, CD/Z80/PCM loading,
+reset, save/load, suspend/resume, game relaunch, fatal recovery, and performance.

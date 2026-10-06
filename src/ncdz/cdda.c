@@ -10,6 +10,7 @@
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
 #include "common/filer.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include "common/mp3.h"
 #include "common/path_utils.h"
 #include <stdio.h>
@@ -172,8 +173,15 @@ void neogeo_cdda_control(void)
 		if (command <= 7)
 		{
 			offset  = (offset - 0xe00000) >> 1;
-			memory_region_cpu2[offset + 0] = 0;
-			memory_region_cpu2[offset + 1] = 0;
+			{
+				uint8_t mailbox[2];
+				if (!neogeo_me_sound_shadow_z80_memory_read_clear(offset,
+						mailbox, sizeof(mailbox)))
+				{
+					memory_region_cpu2[offset + 0] = 0;
+					memory_region_cpu2[offset + 1] = 0;
+				}
+			}
 		}
 	}
 }
@@ -190,14 +198,22 @@ void neogeo_cdda_check(void)
 	if (offset)
 	{
 		uint8_t command, track;
+		uint8_t mailbox[2];
 
 		offset  = (offset - 0xe00000) >> 1;
-
-		command = memory_region_cpu2[offset + 0];
-		track   = memory_region_cpu2[offset + 1];
-
-		memory_region_cpu2[offset + 0] = 0;
-		memory_region_cpu2[offset + 1] = 0;
+		if (neogeo_me_sound_shadow_z80_memory_read_clear(offset, mailbox,
+				sizeof(mailbox)))
+		{
+			command = mailbox[0];
+			track = mailbox[1];
+		}
+		else
+		{
+			command = memory_region_cpu2[offset + 0];
+			track = memory_region_cpu2[offset + 1];
+			memory_region_cpu2[offset + 0] = 0;
+			memory_region_cpu2[offset + 1] = 0;
+		}
 
 		if (command <= 7)
 		{

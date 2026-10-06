@@ -10,7 +10,9 @@
 
 ******************************************************************************/
 
+#include <limits.h>
 #include "ncdz.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include "common/emulator_runtime.h"
 #include "include/cpuintrf.h"
 
@@ -81,6 +83,12 @@ void (*timer_update_cpu)(void);
 static void timer_update_cpu_normal(void);
 static void timer_update_cpu_raster(void);
 
+static int timer_is_me_owned_ym(int which)
+{
+	return (which == YM2610_TIMERA || which == YM2610_TIMERB) &&
+		neogeo_me_sound_shadow_z80_cpu_suppressed();
+}
+
 
 /******************************************************************************
 	Local Functions
@@ -94,6 +102,18 @@ static void cpu_execute(int cpunum)
 {
 	if (!cpu[cpunum].suspended)
 	{
+		uint64_t z80_start_time = 0;
+		uint64_t z80_end_time = 0;
+		bool skip_cpu = false;
+
+		if (cpunum == CPU_Z80)
+		{
+			z80_start_time = timer_get_time_us();
+			skip_cpu = neogeo_me_sound_shadow_z80_slice_begin(
+				z80_start_time + (uint64_t)(uint32_t)timer_ticks,
+				(uint32_t)timer_left);
+		}
+
 		if (cpunum == CPU_M68000)
 		{
 			sound_poll_pc = 0;
@@ -101,10 +121,20 @@ static void cpu_execute(int cpunum)
 			sound_poll_reads = 0;
 			sound_poll_slice_ended = 0;
 		}
-		active_cpu = cpunum;
 		cpu[cpunum].cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
-		cpu[cpunum].execute(cpu[cpunum].cycles);
-		active_cpu = CPU_NOTACTIVE;
+		if (!skip_cpu)
+		{
+			active_cpu = cpunum;
+			cpu[cpunum].execute(cpu[cpunum].cycles);
+			if (cpunum == CPU_Z80)
+				z80_end_time = timer_get_time_us();
+			active_cpu = CPU_NOTACTIVE;
+		}
+		else if (cpunum == CPU_Z80)
+			z80_end_time = z80_start_time + (uint64_t)(uint32_t)timer_ticks;
+
+		if (cpunum == CPU_Z80)
+			neogeo_me_sound_shadow_z80_slice_completed(z80_end_time);
 	}
 }
 
@@ -251,6 +281,46 @@ int timer_enable(int which, int enable)
 	return old;
 }
 
+bool timer_restore_ym2610_state(const uint8_t enabled[2],
+	const uint64_t remaining_us[2])
+{
+	int channel;
+	int time;
+
+	if (!enabled || !remaining_us || active_cpu != CPU_NOTACTIVE)
+		return false;
+	time = getabsolutetime();
+	for (channel = 0; channel < 2; channel++)
+	{
+		if (remaining_us[channel] > (uint64_t)INT_MAX)
+			return false;
+		timer[channel].enable = enabled[channel] ? 1 : 0;
+		timer[channel].param = channel;
+		timer[channel].callback = timer_callback_2610;
+		timer[channel].expire = time + (int)remaining_us[channel];
+	}
+	return true;
+}
+
+bool timer_get_ym2610_state(uint8_t enabled[2], uint64_t remaining_us[2])
+{
+	int channel;
+	int time;
+
+	if (!enabled || !remaining_us || active_cpu != CPU_NOTACTIVE)
+		return false;
+	time = getabsolutetime();
+	for (channel = 0; channel < 2; channel++)
+	{
+		int remaining = timer[channel].expire - time;
+
+		enabled[channel] = timer[channel].enable ? 1u : 0u;
+		remaining_us[channel] = enabled[channel] && remaining > 0 ?
+			(uint64_t)(uint32_t)remaining : 0u;
+	}
+	return true;
+}
+
 
 /*------------------------------------------------------
 	Set timer
@@ -272,6 +342,9 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 
 		if (duration < timer_left)
 		{
+			if (active_cpu == CPU_Z80 &&
+				(which == YM2610_TIMERA || which == YM2610_TIMERB))
+				neogeo_me_sound_shadow_z80_preempt((uint32_t)which);
 			timer_ticks -= time_left;
 			cpu[active_cpu].cycles -= cycles_left;
 			*cpu[active_cpu].icount = 0;
@@ -315,6 +388,34 @@ float timer_get_time(void)
 	return (float)global_offset + (float)time / 1000000.0;
 }
 
+uint64_t timer_get_time_us(void)
+{
+	return (uint64_t)(uint32_t)global_offset * 1000000ULL +
+		(uint64_t)(uint32_t)getabsolutetime();
+}
+
+static void me_sound_frame_completed(uint64_t frame_end_time)
+{
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+	cz80_state_t checkpoint_state;
+	uint32_t checkpoint_banks[4];
+	const cz80_state_t *state = NULL;
+	const uint32_t *banks = NULL;
+
+	if (neogeo_me_sound_shadow_checkpoint_due())
+	{
+		Cz80_Get_State(&CZ80, &checkpoint_state);
+		neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
+		state = &checkpoint_state;
+		banks = checkpoint_banks;
+	}
+	neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
+	neogeo_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+		pending_command, result_code, state, banks, memory_region_cpu2);
+}
+
 
 /*------------------------------------------------------
 	Get current scanline
@@ -336,18 +437,20 @@ int timer_getscanline(void)
 static void timer_update_cpu_normal(void)
 {
 	int i, time;
+	uint64_t frame_end_time;
 
 	frame_base = 0;
 	timer_left = TICKS_PER_FRAME;
 
 	while (timer_left > 0)
 	{
+		neogeo_me_sound_shadow_scheduler_boundary();
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
 
 		for (i = 0; i < MAX_TIMER; i++)
 		{
-			if (timer[i].enable)
+			if (timer[i].enable && !timer_is_me_owned_ym(i))
 			{
 				if (timer[i].expire - time <= 0)
 				{
@@ -355,7 +458,7 @@ static void timer_update_cpu_normal(void)
 					timer[i].callback(timer[i].param);
 				}
 			}
-			if (timer[i].enable)
+			if (timer[i].enable && !timer_is_me_owned_ym(i))
 			{
 				if (timer[i].expire - time < timer_ticks)
 					timer_ticks = timer[i].expire - time;
@@ -372,6 +475,7 @@ static void timer_update_cpu_normal(void)
 	}
 
 	neogeo_interrupt();
+	frame_end_time = timer_get_time_us();
 
 	base_time += TICKS_PER_FRAME;
 	if (base_time >= 1000000)
@@ -387,6 +491,7 @@ static void timer_update_cpu_normal(void)
 	}
 
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	me_sound_frame_completed(frame_end_time);
 }
 
 
@@ -397,6 +502,7 @@ static void timer_update_cpu_normal(void)
 static void timer_update_cpu_raster(void)
 {
 	int i, time;
+	uint64_t frame_end_time;
 
 	frame_base = 0;
 	timer_left = 0;
@@ -407,12 +513,13 @@ static void timer_update_cpu_raster(void)
 
 		while (timer_left > 0)
 		{
+			neogeo_me_sound_shadow_scheduler_boundary();
 			timer_ticks = timer_left;
 			time = base_time + frame_base;
 
 			for (i = 0; i < MAX_TIMER; i++)
 			{
-				if (timer[i].enable)
+				if (timer[i].enable && !timer_is_me_owned_ym(i))
 				{
 					if (timer[i].expire - time <= 0)
 					{
@@ -420,7 +527,7 @@ static void timer_update_cpu_raster(void)
 						timer[i].callback(timer[i].param);
 					}
 				}
-				if (timer[i].enable)
+				if (timer[i].enable && !timer_is_me_owned_ym(i))
 				{
 					if (timer[i].expire - time < timer_ticks)
 						timer_ticks = timer[i].expire - time;
@@ -438,6 +545,7 @@ static void timer_update_cpu_raster(void)
 
 		neogeo_raster_interrupt(scanline);
 	}
+	frame_end_time = timer_get_time_us();
 
 	base_time += TICKS_PER_FRAME;
 	if (base_time >= 1000000)
@@ -453,6 +561,7 @@ static void timer_update_cpu_raster(void)
 	}
 
 	if (!skip_this_frame()) neogeo_screenrefresh();
+	me_sound_frame_completed(frame_end_time);
 }
 
 
@@ -469,12 +578,13 @@ void timer_update_subcpu(void)
 
 	while (timer_left > 0)
 	{
+		neogeo_me_sound_shadow_scheduler_boundary();
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
 
 		for (i = 0; i < MAX_TIMER; i++)
 		{
-			if (timer[i].enable)
+			if (timer[i].enable && !timer_is_me_owned_ym(i))
 			{
 				if (timer[i].expire - time <= 0)
 				{
@@ -482,7 +592,7 @@ void timer_update_subcpu(void)
 					timer[i].callback(timer[i].param);
 				}
 			}
-			if (timer[i].enable)
+			if (timer[i].enable && !timer_is_me_owned_ym(i))
 			{
 				if (timer[i].expire - time < timer_ticks)
 					timer_ticks = timer[i].expire - time;

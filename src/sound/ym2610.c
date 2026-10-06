@@ -3752,6 +3752,162 @@ void YM2610ContextEnablePcmWindowSource(ym2610_context_t *context,
 }
 #endif
 
+#if (EMU_SYSTEM == NCDZ)
+static bool ym2610_context_rebindable_for_worker(const ym2610_context_t *source)
+{
+	uint32_t channel;
+	uint32_t slot;
+	uint32_t index;
+
+	if (!source)
+		return false;
+	for (channel = 0; channel < 6; channel++)
+	{
+		for (slot = 0; slot < 4; slot++)
+		{
+			const int32_t *source_dt = CTX_YM2610(source).CH[channel].SLOT[slot].DT;
+			bool valid = source_dt == NULL;
+
+			for (index = 0; !valid && index < 8; index++)
+				if (source_dt == CTX_YM2610(source).OPN.ST.dt_tab[index])
+					valid = true;
+			if (!valid)
+				return false;
+		}
+		for (index = 0; index < 4; index++)
+			if (CTX_YM2610(source).adpcma[channel].pan ==
+				&CTX_out_adpcma(source)[index])
+				break;
+		if (index == 4)
+			return false;
+	}
+	return true;
+}
+
+static bool ym2610_context_copy_rebind_for_worker(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+	uint32_t channel;
+	uint32_t slot;
+	uint32_t index;
+
+	if (!destination || !source || destination == source ||
+		!ym2610_context_rebindable_for_worker(source))
+		return false;
+	*destination = *source;
+	CTX_YM2610(destination).OPN.P_CH = CTX_YM2610(destination).CH;
+	for (channel = 0; channel < 6; channel++)
+	{
+		for (slot = 0; slot < 4; slot++)
+		{
+			const int32_t *source_dt = CTX_YM2610(source).CH[channel].SLOT[slot].DT;
+
+			CTX_YM2610(destination).CH[channel].SLOT[slot].DT = NULL;
+			for (index = 0; source_dt && index < 8; index++)
+			{
+				if (source_dt == CTX_YM2610(source).OPN.ST.dt_tab[index])
+				{
+					CTX_YM2610(destination).CH[channel].SLOT[slot].DT =
+						CTX_YM2610(destination).OPN.ST.dt_tab[index];
+					break;
+				}
+			}
+		}
+		setup_connection(destination, &CTX_YM2610(destination).CH[channel],
+			(int)channel);
+		for (index = 0; index < 4; index++)
+		{
+			if (CTX_YM2610(source).adpcma[channel].pan ==
+				&CTX_out_adpcma(source)[index])
+			{
+				CTX_YM2610(destination).adpcma[channel].pan =
+					&CTX_out_adpcma(destination)[index];
+				break;
+			}
+		}
+	}
+	return true;
+}
+#endif
+
+bool YM2610ContextCloneForWorker(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+#if (EMU_SYSTEM == MVS)
+	return YM2610ContextCloneForPcmWindow(destination, source);
+#else
+	if (!ym2610_context_copy_rebind_for_worker(destination, source))
+		return false;
+	CTX_YM2610(destination).OPN.ST.Timer_Handler = ym2610_context_timer_noop;
+	CTX_YM2610(destination).OPN.ST.IRQ_Handler = ym2610_context_irq_noop;
+	CTX_YM2610(destination).OPN.ST.Handler_Opaque = NULL;
+#if YM2610_ADPCMA_ME_JOBS
+	CTX_adpcma_job(destination) = NULL;
+#endif
+	destination->legacy_timer_handler = NULL;
+	destination->legacy_irq_handler = NULL;
+	return true;
+#endif
+}
+
+bool YM2610DefaultCloneForWorker(ym2610_context_t *destination)
+{
+	return YM2610ContextCloneForWorker(destination, &ym2610_default_context);
+}
+
+bool YM2610ContextRestoreFromWorker(ym2610_context_t *destination,
+	const ym2610_context_t *source)
+{
+#if (EMU_SYSTEM == MVS)
+	return YM2610ContextRestoreFromPcmWindow(destination, source);
+#else
+	YM2610_CONTEXT_TIMERHANDLER timer_handler;
+	YM2610_CONTEXT_IRQHANDLER irq_handler;
+	void *handler_opaque;
+	FM_TIMERHANDLER legacy_timer_handler;
+	FM_IRQHANDLER legacy_irq_handler;
+	uint8_t *pcm_a;
+	uint32_t pcm_a_size;
+	uint8_t pcm_cache_enabled;
+#if YM2610_ADPCMA_ME_JOBS
+	ym2610_adpcma_job_t *adpcma_job_state;
+#endif
+
+	if (!destination || !source || destination == source)
+		return false;
+	timer_handler = CTX_YM2610(destination).OPN.ST.Timer_Handler;
+	irq_handler = CTX_YM2610(destination).OPN.ST.IRQ_Handler;
+	handler_opaque = CTX_YM2610(destination).OPN.ST.Handler_Opaque;
+	legacy_timer_handler = destination->legacy_timer_handler;
+	legacy_irq_handler = destination->legacy_irq_handler;
+	pcm_a = CTX_pcmbufA(destination);
+	pcm_a_size = CTX_pcmsizeA(destination);
+	pcm_cache_enabled = CTX_pcm_cache_enabled(destination);
+#if YM2610_ADPCMA_ME_JOBS
+	adpcma_job_state = CTX_adpcma_job(destination);
+#endif
+	if (!ym2610_context_copy_rebind_for_worker(destination, source))
+		return false;
+	CTX_YM2610(destination).OPN.ST.Timer_Handler = timer_handler;
+	CTX_YM2610(destination).OPN.ST.IRQ_Handler = irq_handler;
+	CTX_YM2610(destination).OPN.ST.Handler_Opaque = handler_opaque;
+	destination->legacy_timer_handler = legacy_timer_handler;
+	destination->legacy_irq_handler = legacy_irq_handler;
+	CTX_pcmbufA(destination) = pcm_a;
+	CTX_pcmsizeA(destination) = pcm_a_size;
+	CTX_pcm_cache_enabled(destination) = pcm_cache_enabled;
+#if YM2610_ADPCMA_ME_JOBS
+	CTX_adpcma_job(destination) = adpcma_job_state;
+#endif
+	return true;
+#endif
+}
+
+bool YM2610DefaultRestoreFromWorker(const ym2610_context_t *source)
+{
+	return YM2610ContextRestoreFromWorker(&ym2610_default_context, source);
+}
+
 /* Generate samples for one of the YM2610s. */
 void YM2610ContextUpdate(ym2610_context_t *context, int32_t **buffer, int length)
 {

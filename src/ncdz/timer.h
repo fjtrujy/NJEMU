@@ -9,6 +9,9 @@
 #ifndef TIMER_H
 #define TIMER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #define YM2610_TIMERA			0
 #define YM2610_TIMERB			1
 #define SOUNDLATCH_TIMER		3
@@ -42,7 +45,11 @@ void timer_interleave_sound_poll(uint32_t pc, uint16_t status);
 int timer_enable(int which, int enable);
 void timer_adjust(int which, int duration, int param, void (*callback)(int raram));
 void timer_set(int which, int duration, int param, void (*callback)(int param));
+bool timer_restore_ym2610_state(const uint8_t enabled[2],
+	const uint64_t remaining_us[2]);
+bool timer_get_ym2610_state(uint8_t enabled[2], uint64_t remaining_us[2]);
 float timer_get_time(void);
+uint64_t timer_get_time_us(void);
 int timer_getscanline(void);
 
 #define video_get_vpos()	(timer_getscanline() - (NEOGEO_VBEND + (RASTER_COUNTER_RELOAD - NEOGEO_VBSTART)))

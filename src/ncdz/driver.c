@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include "common/game_metadata.h"
 #include "common/runtime_paths.h"
 #include "common/path_utils.h"
@@ -78,6 +79,7 @@ static uint8_t auto_animation_frame_counter;
 static int sound_code;
 static int result_code;
 static int pending_command;
+static bool z80_reset_sound_prepared;
 
 static int hack_irq;
 
@@ -304,6 +306,7 @@ void neogeo_driver_reset(void)
 	sound_code = 0;
 	result_code = 0;
 	pending_command = 0;
+	z80_reset_sound_prepared = false;
 
 	auto_animation_frame_counter = 0;
 	auto_animation_speed = 0;
@@ -777,6 +780,7 @@ static WRITE16_HANDLER( hardware_upload_w )
 		case UPLOAD_MEMORY:
 			{
 				uint32_t length;
+				bool sound_prepared = false;
 
 				length = upload_length << 1;
 				src = memory_region_cpu1 + upload_offset1;
@@ -804,9 +808,12 @@ static WRITE16_HANDLER( hardware_upload_w )
 					break;
 
 				case Z80_TYPE:
+					sound_prepared = neogeo_sound_state_prepare();
 					dst = memory_region_cpu2;
 					offset = upload_offset2 - 0xe00000;
 					swab(src, dst + (offset >> 1), length);
+					if (sound_prepared)
+						(void)neogeo_sound_state_resume();
 					break;
 
 				case PAL_TYPE:
@@ -979,7 +986,21 @@ static inline WRITE16_HANDLER( exmem_latch_clear_w )
 
 static inline WRITE16_HANDLER( z80_reset_w )
 {
-	z80_set_reset_line(data ? CLEAR_LINE : ASSERT_LINE);
+	if (!data)
+	{
+		if (!z80_reset_sound_prepared)
+			z80_reset_sound_prepared = neogeo_sound_state_prepare();
+		z80_set_reset_line(ASSERT_LINE);
+	}
+	else
+	{
+		z80_set_reset_line(CLEAR_LINE);
+		if (z80_reset_sound_prepared)
+		{
+			(void)neogeo_sound_state_resume();
+			z80_reset_sound_prepared = false;
+		}
+	}
 }
 
 
@@ -1043,14 +1064,59 @@ READ16_HANDLER( neogeo_controller3_r )
 	Read Z80 communication data ($320001)
 ------------------------------------------------------*/
 
+void neogeo_get_z80_shadow_state(uint32_t banks[4], uint8_t *sound_code_out,
+	uint8_t *pending_command_out, uint8_t *result_code_out)
+{
+	if (banks)
+		memset(banks, 0, sizeof(uint32_t) * 4u);
+	if (sound_code_out)
+		*sound_code_out = (uint8_t)sound_code;
+	if (pending_command_out)
+		*pending_command_out = (uint8_t)pending_command;
+	if (result_code_out)
+		*result_code_out = (uint8_t)result_code;
+}
+
+bool neogeo_restore_z80_shadow_state(const cz80_state_t *state,
+	const uint32_t banks[4], const uint8_t *memory, uint32_t memory_size,
+	uint8_t sound_code_in, uint8_t pending_command_in, uint8_t result_code_in)
+{
+	(void)banks;
+	if (!state || !memory || memory_size < 0x10000u || !memory_region_cpu2 ||
+		memory_length_cpu2 < 0x10000u)
+		return false;
+	memcpy(memory_region_cpu2, memory, 0x10000u);
+	Cz80_Set_State(&CZ80, state);
+	sound_code = sound_code_in;
+	pending_command = pending_command_in;
+	result_code = result_code_in;
+	return true;
+}
+
+void neogeo_apply_z80_sound_command(uint8_t command)
+{
+	sound_code = command;
+	pending_command = 1;
+	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
+}
+
 READ16_HANDLER( neogeo_z80_r )
 {
 	uint16_t res = 0x3f;
+	uint8_t visible_pending;
+	uint8_t visible_result;
 
-	res |= result_code << 8;
-	if (pending_command) res &= 0x7fff;
+	if (!neogeo_me_sound_shadow_main_status((uint8_t)sound_code,
+			(uint8_t)pending_command, (uint8_t)result_code,
+			&visible_pending, &visible_result))
+	{
+		visible_pending = (uint8_t)pending_command;
+		visible_result = (uint8_t)result_code;
+	}
+	res |= visible_result << 8;
+	if (visible_pending)
+		res &= 0x7fff;
 	timer_interleave_sound_poll(m68000_get_reg(M68K_PC), res);
-
 	return res;
 }
 
@@ -1060,14 +1126,17 @@ READ16_HANDLER( neogeo_z80_r )
 
 TIMER_CALLBACK( neogeo_sound_write )
 {
+	(void)neogeo_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
 	sound_code = param;
-	z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
+	if (!neogeo_me_sound_shadow_z80_cpu_suppressed())
+		z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
 }
 
 
 WRITE16_HANDLER( neogeo_z80_w )
 {
 	pending_command = 1;
+	neogeo_me_sound_shadow_status_pending();
 	timer_set(SOUNDLATCH_TIMER, TIME_NOW, (data >> 8) & 0xff, neogeo_sound_write);
 }
 
@@ -1207,12 +1276,17 @@ READ16_HANDLER( neogeo_externalmem_r )
 		return memory_region_sound1[offset] | 0xff00;
 
 	case EXMEM_Z80:
-		if (z80_cdda_offset)
 		{
-			if (offset == z80_cdda_offset || offset == z80_cdda_offset + 1)
-				return 0;
+			uint8_t value;
+			if (z80_cdda_offset)
+			{
+				if (offset == z80_cdda_offset || offset == z80_cdda_offset + 1)
+					return 0;
+			}
+			if (neogeo_me_sound_shadow_z80_memory_read(offset, &value, 1u))
+				return value | 0xff00;
+			return memory_region_cpu2[offset] | 0xff00;
 		}
-		return memory_region_cpu2[offset] | 0xff00;
 
 	case EXMEM_FIX:
 		return memory_region_gfx1[offset] | 0xff00;
@@ -1242,7 +1316,8 @@ WRITE16_HANDLER( neogeo_externalmem_w )
 
 	case EXMEM_PCMA:
 		offset += exmem_bank[EXMEM_PCMA] << 19;
-		memory_region_sound1[offset] = data & 0xff;
+		if (!neogeo_me_sound_shadow_pcm_write_byte(offset, (uint8_t)data))
+			memory_region_sound1[offset] = data & 0xff;
 		break;
 
 	case EXMEM_Z80:
@@ -1251,7 +1326,8 @@ WRITE16_HANDLER( neogeo_externalmem_w )
 			if (offset == z80_cdda_offset || offset == z80_cdda_offset + 1)
 				return;
 		}
-		memory_region_cpu2[offset] = data & 0xff;
+		if (!neogeo_me_sound_shadow_z80_memory_write_byte(offset, (uint8_t)data))
+			memory_region_cpu2[offset] = data & 0xff;
 		break;
 
 	case EXMEM_FIX:
@@ -1367,33 +1443,39 @@ WRITE16_HANDLER( neogeo_hardcontrol_w )
 
 uint8_t neogeo_z80_port_r(uint16_t port)
 {
+	uint8_t value = 0;
+
 	switch (port & 0xff)
 	{
 	case 0x00:
 		pending_command = 0;
-		return sound_code;
+		value = (uint8_t)sound_code;
+		break;
 
 	case 0x04:
-		return YM2610_status_port_A_r(0);
+		value = YM2610_status_port_A_r(0);
+		break;
 
 	case 0x05:
-		return YM2610_read_port_r(0);
+		value = YM2610_read_port_r(0);
+		break;
 
 	case 0x06:
-		return YM2610_status_port_B_r(0);
+		value = YM2610_status_port_B_r(0);
+		break;
 
 	case 0x08:
 	case 0x09:
 	case 0x0a:
 	case 0x0b:
-		// set bank
-		return 0;
+		/* Neo Geo CD has a flat 64 KiB Z80 address space. */
+		break;
 
 	default:
 		break;
-	};
-
-	return 0;
+	}
+	neogeo_me_sound_shadow_z80_io_read(port, value);
+	return value;
 }
 
 
@@ -1403,6 +1485,7 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 
 void neogeo_z80_port_w(uint16_t port, uint8_t data)
 {
+	neogeo_me_sound_shadow_z80_io_write(port, data);
 	switch (port & 0xff)
 	{
 	case 0x04:
@@ -1446,6 +1529,8 @@ void neogeo_z80_port_w(uint16_t port, uint8_t data)
 void neogeo_sound_irq(int irq)
 {
 	z80_set_irq_line(1, irq ? ASSERT_LINE : CLEAR_LINE);
+	neogeo_me_sound_shadow_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
+		timer_get_time_us());
 }
 
 

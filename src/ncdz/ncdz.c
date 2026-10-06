@@ -16,10 +16,54 @@
 #include "common/ui.h"
 #include "common/filer.h"
 #include "common/config.h"
+#include "common/neogeo_me_sound_shadow.h"
 #include <string.h>
 #include "common/memory_sizes.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
+
+static uint32_t neogeo_sound_state_depth;
+
+static bool neogeo_sync_me_sound_from_cpu(void)
+{
+	cz80_state_t z80_state;
+	uint32_t z80_banks[4];
+	uint8_t sound_code;
+	uint8_t pending_command;
+	uint8_t result_code;
+
+	Cz80_Get_State(&CZ80, &z80_state);
+	neogeo_get_z80_shadow_state(z80_banks, &sound_code, &pending_command,
+		&result_code);
+	return neogeo_me_sound_shadow_z80_snapshot(&z80_state, memory_region_cpu2,
+		memory_region_cpu2, memory_length_cpu2, z80_banks, sound_code,
+		pending_command, result_code, memory_length_sound1, 0u);
+}
+
+bool neogeo_sound_state_prepare(void)
+{
+	if (neogeo_sound_state_depth != 0)
+	{
+		neogeo_sound_state_depth++;
+		return true;
+	}
+	if (!neogeo_me_sound_shadow_prepare_cpu_state())
+		return false;
+	neogeo_sound_state_depth = 1;
+	return true;
+}
+
+bool neogeo_sound_state_resume(void)
+{
+	if (neogeo_sound_state_depth == 0)
+		return true;
+	neogeo_sound_state_depth--;
+	if (neogeo_sound_state_depth != 0)
+		return true;
+	if (!neogeo_me_sound_shadow_state_resume_requested())
+		return true;
+	return neogeo_sync_me_sound_from_cpu();
+}
 
 /******************************************************************************
 	Global Variables
@@ -166,6 +210,8 @@ static void neogeo_reset(void)
 	m68000_write_memory_8(0x10fd83, neogeo_region);
 
 	cdda_current_track = 0;
+	neogeo_sound_state_depth = 0;
+	(void)neogeo_sync_me_sound_from_cpu();
 
 	Loop = LOOP_EXEC;
 }

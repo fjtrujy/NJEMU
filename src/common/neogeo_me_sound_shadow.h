@@ -20,6 +20,12 @@ bool neogeo_me_sound_shadow_prepare_cpu_state(void);
 bool neogeo_me_sound_shadow_state_resume_requested(void);
 void neogeo_me_sound_shadow_scheduler_boundary(void);
 bool neogeo_me_sound_shadow_z80_cpu_suppressed(void);
+bool neogeo_me_sound_shadow_z80_memory_read(uint32_t offset,
+	uint8_t *data, uint32_t size);
+bool neogeo_me_sound_shadow_z80_memory_read_clear(uint32_t offset,
+	uint8_t *data, uint32_t size);
+bool neogeo_me_sound_shadow_z80_memory_write_byte(uint32_t offset, uint8_t data);
+bool neogeo_me_sound_shadow_pcm_write_byte(uint32_t offset, uint8_t data);
 bool neogeo_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
 	uint32_t scheduler_time_left);
 void neogeo_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value);
@@ -85,6 +91,40 @@ static inline void neogeo_me_sound_shadow_scheduler_boundary(void)
 
 static inline bool neogeo_me_sound_shadow_z80_cpu_suppressed(void)
 {
+	return false;
+}
+
+static inline bool neogeo_me_sound_shadow_z80_memory_read(uint32_t offset,
+	uint8_t *data, uint32_t size)
+{
+	(void)offset;
+	(void)data;
+	(void)size;
+	return false;
+}
+
+static inline bool neogeo_me_sound_shadow_z80_memory_read_clear(uint32_t offset,
+	uint8_t *data, uint32_t size)
+{
+	(void)offset;
+	(void)data;
+	(void)size;
+	return false;
+}
+
+static inline bool neogeo_me_sound_shadow_z80_memory_write_byte(uint32_t offset,
+	uint8_t data)
+{
+	(void)offset;
+	(void)data;
+	return false;
+}
+
+static inline bool neogeo_me_sound_shadow_pcm_write_byte(uint32_t offset,
+	uint8_t data)
+{
+	(void)offset;
+	(void)data;
 	return false;
 }
 

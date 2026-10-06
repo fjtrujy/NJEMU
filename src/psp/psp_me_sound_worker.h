@@ -43,7 +43,10 @@ typedef enum psp_me_sound_worker_command_type
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_CHECKPOINT,
 	PSP_ME_SOUND_WORKER_COMMAND_Z80_ADVANCE_HORIZON,
 	PSP_ME_SOUND_WORKER_COMMAND_FENCE,
-	PSP_ME_SOUND_WORKER_COMMAND_RECOVERY_SNAPSHOT
+	PSP_ME_SOUND_WORKER_COMMAND_RECOVERY_SNAPSHOT,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_MEMORY_READ_CLEAR,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_MEMORY_READ,
+	PSP_ME_SOUND_WORKER_COMMAND_Z80_MEMORY_WRITE_BYTE
 } psp_me_sound_worker_command_type_t;
 
 typedef enum psp_me_sound_worker_event_type
@@ -59,7 +62,9 @@ typedef enum psp_me_sound_worker_event_type
 	PSP_ME_SOUND_WORKER_EVENT_YM_RENDER_PREPARE_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_Z80_CHECKPOINT_ACK,
 	PSP_ME_SOUND_WORKER_EVENT_FENCE_ACK,
-	PSP_ME_SOUND_WORKER_EVENT_RECOVERY_SNAPSHOT_ACK
+	PSP_ME_SOUND_WORKER_EVENT_RECOVERY_SNAPSHOT_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_Z80_MEMORY_READ_CLEAR_ACK,
+	PSP_ME_SOUND_WORKER_EVENT_Z80_MEMORY_READ_ACK
 } psp_me_sound_worker_event_type_t;
 
 typedef enum psp_me_sound_worker_error
@@ -120,6 +125,33 @@ typedef enum psp_me_sound_z80_mode
 	PSP_ME_SOUND_Z80_MODE_AUTONOMOUS = 1
 } psp_me_sound_z80_mode_t;
 
+typedef enum psp_me_sound_z80_memory_mode
+{
+	PSP_ME_SOUND_Z80_MEMORY_MVS_BANKED = 0,
+	PSP_ME_SOUND_Z80_MEMORY_FLAT_64K = 1
+} psp_me_sound_z80_memory_mode_t;
+
+typedef enum psp_me_sound_ym_pcm_mode
+{
+	PSP_ME_SOUND_YM_PCM_WINDOW = 0,
+	PSP_ME_SOUND_YM_PCM_DIRECT = 1
+} psp_me_sound_ym_pcm_mode_t;
+
+typedef struct psp_me_sound_machine_profile
+{
+	uint8_t memory_mode;
+	uint8_t z80_cycles_per_usec;
+	uint8_t ym_irq_line;
+	uint8_t ym_pcm_mode;
+} psp_me_sound_machine_profile_t;
+
+#define PSP_ME_SOUND_MACHINE_PROFILE_MVS \
+	((psp_me_sound_machine_profile_t){ PSP_ME_SOUND_Z80_MEMORY_MVS_BANKED, 4u, 0u, \
+		PSP_ME_SOUND_YM_PCM_WINDOW })
+#define PSP_ME_SOUND_MACHINE_PROFILE_NCDZ \
+	((psp_me_sound_machine_profile_t){ PSP_ME_SOUND_Z80_MEMORY_FLAT_64K, 6u, 1u, \
+		PSP_ME_SOUND_YM_PCM_DIRECT })
+
 typedef struct psp_me_sound_z80_snapshot
 {
 	cz80_state_t state;
@@ -133,7 +165,8 @@ typedef struct psp_me_sound_z80_snapshot
 	uint8_t result_code;
 	uint8_t mode;
 	uint8_t ym_timer_enabled[2];
-	uint8_t reserved8[2];
+	psp_me_sound_machine_profile_t machine;
+	const uint8_t *ym_pcm_a;
 	uint32_t ym_sample_rate;
 	uint32_t ym_pcm_a_size;
 	uint32_t ym_pcm_b_size;
@@ -317,6 +350,7 @@ typedef struct psp_me_sound_worker
 	uint32_t capacity;
 	uint32_t next_token;
 	uint32_t generation;
+	psp_me_sound_machine_profile_t machine;
 	psp_me_sound_worker_shadow_expected_t
 		shadow_expected[PSP_ME_SOUND_WORKER_SHADOW_EXPECTED_CAPACITY];
 	uint32_t shadow_expected_head;
@@ -367,6 +401,12 @@ bool psp_me_sound_worker_read_recovery_snapshot(psp_me_sound_worker_t *worker,
 bool psp_me_sound_worker_read_published_recovery_snapshot(
 	psp_me_sound_worker_t *worker, psp_me_sound_recovery_snapshot_t *snapshot,
 	uint8_t *ram, ym2610_context_t *ym_context);
+bool psp_me_sound_worker_read_recovery_memory(psp_me_sound_worker_t *worker,
+	psp_me_sound_recovery_snapshot_t *snapshot, uint8_t *memory,
+	uint32_t memory_size, ym2610_context_t *ym_context, uint64_t timeout_us);
+bool psp_me_sound_worker_read_published_recovery_memory(
+	psp_me_sound_worker_t *worker, psp_me_sound_recovery_snapshot_t *snapshot,
+	uint8_t *memory, uint32_t memory_size, ym2610_context_t *ym_context);
 psp_me_sound_status_validation_t psp_me_sound_worker_validate_status(
 	const psp_me_sound_status_snapshot_t *status, uint32_t generation,
 	uint64_t required_time, uint8_t sound_code, uint8_t pending_command,
@@ -397,10 +437,20 @@ bool psp_me_sound_worker_z80_snapshot_with_timers(psp_me_sound_worker_t *worker,
 	uint32_t ym_sample_rate, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
 	const uint8_t ym_timer_enabled[2], const uint64_t ym_timer_remaining[2],
 	bool clone_default_ym, psp_me_sound_z80_mode_t mode, uint64_t timeout_us);
+bool psp_me_sound_worker_z80_snapshot_profiled_with_timers(
+	psp_me_sound_worker_t *worker, const cz80_state_t *state,
+	const uint8_t *visible_memory, const uint8_t *source_rom,
+	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
+	uint8_t pending_command, uint8_t result_code, uint32_t ym_sample_rate,
+	const uint8_t *ym_pcm_a, uint32_t ym_pcm_a_size, uint32_t ym_pcm_b_size,
+	const uint8_t ym_timer_enabled[2], const uint64_t ym_timer_remaining[2],
+	bool clone_default_ym, psp_me_sound_z80_mode_t mode,
+	psp_me_sound_machine_profile_t machine, uint64_t timeout_us);
 bool psp_me_sound_worker_z80_irq(psp_me_sound_worker_t *worker,
 	int32_t state, uint64_t emulated_time);
 bool psp_me_sound_worker_ym_timer(psp_me_sound_worker_t *worker,
 	uint32_t channel, uint64_t emulated_time);
+#if (EMU_SYSTEM == MVS)
 bool psp_me_sound_worker_ym_render_prepare(psp_me_sound_worker_t *worker,
 	uint32_t samples, uint64_t emulated_time, ym2610_pcm_window_t *window,
 	uint64_t timeout_us);
@@ -412,6 +462,9 @@ bool psp_me_sound_worker_ym_render_begin(psp_me_sound_worker_t *worker,
 	uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_begin_shared(psp_me_sound_worker_t *worker,
 	uint64_t emulated_time, uint64_t timeout_us);
+#endif
+bool psp_me_sound_worker_ym_render_begin_direct(psp_me_sound_worker_t *worker,
+	uint32_t samples, uint64_t emulated_time, uint64_t timeout_us);
 bool psp_me_sound_worker_ym_render_finish(psp_me_sound_worker_t *worker,
 	const int32_t *expected_left, const int32_t *expected_right,
 	uint32_t samples, uint8_t expected_status_b, uint64_t timeout_us);
@@ -434,6 +487,12 @@ bool psp_me_sound_worker_z80_advance(psp_me_sound_worker_t *worker,
 	uint32_t cycles, uint32_t scheduler_time_left, uint64_t emulated_time);
 bool psp_me_sound_worker_z80_advance_horizon(psp_me_sound_worker_t *worker,
 	uint64_t horizon_time, uint32_t scheduler_time_left);
+bool psp_me_sound_worker_z80_memory_read_clear(psp_me_sound_worker_t *worker,
+	uint32_t offset, uint8_t *data, uint32_t size, uint64_t timeout_us);
+bool psp_me_sound_worker_z80_memory_read(psp_me_sound_worker_t *worker,
+	uint32_t offset, uint8_t *data, uint32_t size, uint64_t timeout_us);
+bool psp_me_sound_worker_z80_memory_write_byte(psp_me_sound_worker_t *worker,
+	uint32_t offset, uint8_t data);
 bool psp_me_sound_worker_z80_checkpoint(psp_me_sound_worker_t *worker,
 	const cz80_state_t *expected_state, const uint32_t banks[4],
 	uint32_t ram_hash, uint64_t emulated_time, uint64_t timeout_us);

@@ -342,6 +342,8 @@ static int load_file(int fileno)
 	struct filelist_t *file = &filelist[fileno];
 	resource_file_t resource = {0};
 	uint32_t length, next = 0;
+	bool sound_prepared = false;
+	bool close_ok;
 
 #ifdef SAVE_STATE
 	switch (file->type)
@@ -352,14 +354,16 @@ static int load_file(int fileno)
 	}
 #endif
 
-	if (file->type == Z80_TYPE)
-		m68000_write_memory_8(0xff0183, 0);
-
 	if (!resource_file_open(&ncdz_game_source, file->name, &resource))
 	{
 		fatalerror(TEXT(COULD_NOT_OPEN_FILE), file->name);
 		return -1;
 	}
+
+	if (file->type == Z80_TYPE || file->type == PCM_TYPE || file->type == PAT_TYPE)
+		sound_prepared = neogeo_sound_state_prepare();
+	if (file->type == Z80_TYPE)
+		m68000_write_memory_8(0xff0183, 0);
 
 	if (neogeo_loadscreen && with_image())
 	{
@@ -379,14 +383,16 @@ static int load_file(int fileno)
 		}
 	}
 
-	if (!resource_file_close(&resource))
+	close_ok = resource_file_close(&resource);
+	if (file->type == Z80_TYPE)
+		m68000_write_memory_8(0xff0183, 0xff);
+	if (sound_prepared)
+		(void)neogeo_sound_state_resume();
+	if (!close_ok)
 	{
 		fatalerror(TEXT(COULD_NOT_OPEN_FILE), file->name);
 		return -1;
 	}
-
-	if (file->type == Z80_TYPE)
-		m68000_write_memory_8(0xff0183, 0xff);
 
 	return 0;
 }
@@ -1270,6 +1276,7 @@ static void cdrom_state_load_file(int type, const char *fname, int bank, uint32_
 	int ftype[3] = { FIX_TYPE, SPR_TYPE, PCM_TYPE };
 	resource_file_t resource = {0};
 	uint32_t next = 0;
+	bool sound_prepared = false;
 
 	if (!resource_file_open(&ncdz_game_source, fname, &resource))
 	{
@@ -1281,6 +1288,8 @@ static void cdrom_state_load_file(int type, const char *fname, int bank, uint32_
 	file->bank   = bank;
 	file->offset = offset;
 	file->length = length;
+	if (file->type == PCM_TYPE)
+		sound_prepared = neogeo_sound_state_prepare();
 
 	while ((length = resource_file_read(&resource, cdrom_cache, 0x800)) != 0)
 	{
@@ -1289,6 +1298,8 @@ static void cdrom_state_load_file(int type, const char *fname, int bank, uint32_
 	}
 
 	resource_file_close(&resource);
+	if (sound_prepared)
+		(void)neogeo_sound_state_resume();
 }
 
 /*------------------------------------------------------

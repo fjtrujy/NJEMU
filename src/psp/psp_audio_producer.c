@@ -5,6 +5,7 @@
 #include <pspkernel.h>
 #include <me-safe-task/me-stask-mist.h>
 #include <me-core-mapper/hw-registers.h>
+#include "emucfg.h"
 #include "common/audio_producer_driver.h"
 #include "common/audio_profile.h"
 #include "common/emulator_options.h"
@@ -15,9 +16,15 @@
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 #include <pspthreadman.h>
+#include "common/neogeo_me_sound_shadow.h"
+#if (EMU_SYSTEM == MVS)
 #include "mvs/timer.h"
 #include "mvs/driver.h"
-#include "common/neogeo_me_sound_shadow.h"
+#elif (EMU_SYSTEM == NCDZ)
+#include "ncdz/timer.h"
+#include "ncdz/driver.h"
+#include "ncdz/memintrf.h"
+#endif
 #include "psp/psp_me_sound_worker.h"
 #include "psp/psp_me_sound_lifecycle.h"
 #include "sound/ym2610.h"
@@ -80,7 +87,12 @@ static uint32_t me_sound_cpu_recovery_attempts;
 static uint32_t me_sound_cpu_recovery_successes;
 static uint32_t me_sound_cpu_recovery_failures;
 static uint8_t me_sound_cpu_replay_command;
-static uint8_t me_sound_recovery_ram[PSP_ME_SOUND_Z80_RAM_SIZE]
+#if (EMU_SYSTEM == NCDZ)
+#define PSP_ME_SOUND_RECOVERY_MEMORY_SIZE PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE
+#else
+#define PSP_ME_SOUND_RECOVERY_MEMORY_SIZE PSP_ME_SOUND_Z80_RAM_SIZE
+#endif
+static uint8_t me_sound_recovery_memory[PSP_ME_SOUND_RECOVERY_MEMORY_SIZE]
 	__attribute__((aligned(64)));
 static bool me_sound_worker_mutex_ready;
 static bool me_sound_ym_gate_ready;
@@ -214,6 +226,7 @@ enum
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_CHECKPOINT,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_COMMAND_LOCK,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_COMMAND_SEND,
+	PSP_ME_SOUND_Z80_LOCAL_FAILURE_MEMORY_ACCESS,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_CONTEXT_SYNC,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_LOCK,
 	PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT,
@@ -329,9 +342,13 @@ static uint32_t psp_me_sound_z80_ram_hash(const uint8_t *visible_memory)
 {
 	uint32_t hash = 2166136261u;
 	uint32_t i;
+#if (EMU_SYSTEM == NCDZ)
+	uint32_t start = 0;
+#else
+	uint32_t start = PSP_ME_SOUND_Z80_RAM_OFFSET;
+#endif
 
-	for (i = PSP_ME_SOUND_Z80_RAM_OFFSET;
-		i < PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE; i++)
+	for (i = start; i < PSP_ME_SOUND_Z80_ADDRESS_SPACE_SIZE; i++)
 	{
 		hash ^= visible_memory[i];
 		hash *= 16777619u;
@@ -410,16 +427,18 @@ static bool psp_me_sound_recover_cpu(void)
 	psp_me_sound_worker_get_stats(&me_sound_worker, &stats);
 	if (stats.fatal_error != PSP_ME_SOUND_WORKER_ERROR_NONE)
 	{
-		if (!psp_me_sound_worker_read_published_recovery_snapshot(&me_sound_worker,
-				&recovery, me_sound_recovery_ram, NULL))
+		if (!psp_me_sound_worker_read_published_recovery_memory(&me_sound_worker,
+				&recovery, me_sound_recovery_memory,
+				PSP_ME_SOUND_RECOVERY_MEMORY_SIZE, NULL))
 		{
 			me_sound_z80_failure_reason =
 				PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT;
 			goto done;
 		}
 	}
-	else if (!psp_me_sound_worker_read_recovery_snapshot(&me_sound_worker,
-			&recovery, me_sound_recovery_ram, NULL, PSP_ME_SOUND_WORKER_TIMEOUT_US))
+	else if (!psp_me_sound_worker_read_recovery_memory(&me_sound_worker,
+			&recovery, me_sound_recovery_memory, PSP_ME_SOUND_RECOVERY_MEMORY_SIZE,
+			NULL, PSP_ME_SOUND_WORKER_TIMEOUT_US))
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_RECOVERY_SNAPSHOT;
 		goto done;
@@ -433,9 +452,10 @@ static bool psp_me_sound_recover_cpu(void)
 		}
 	}
 	if (!neogeo_restore_z80_shadow_state(&recovery.state, recovery.banks,
-			me_sound_recovery_ram, recovery.sound_code,
+			me_sound_recovery_memory, PSP_ME_SOUND_RECOVERY_MEMORY_SIZE,
+			recovery.sound_code,
 			recovery.pending_command, recovery.result_code) ||
-		!YM2610DefaultRestoreFromPcmWindow(
+		!YM2610DefaultRestoreFromWorker(
 			(const ym2610_context_t *)me_sound_worker.ym_context) ||
 		!timer_restore_ym2610_state(recovery.ym_timer_enabled,
 			recovery.ym_timer_remaining))
@@ -481,6 +501,122 @@ void neogeo_me_sound_shadow_scheduler_boundary(void)
 bool neogeo_me_sound_shadow_z80_cpu_suppressed(void)
 {
 	return me_sound_z80_control_authoritative || me_sound_cpu_recovery_required;
+}
+
+static bool psp_me_sound_z80_memory_read_common(uint32_t offset,
+	uint8_t *data, uint32_t size, bool clear)
+{
+	bool result = false;
+	bool gate_locked = false;
+	bool worker_locked = false;
+
+	if (!data || size == 0 || !me_sound_z80_control_authoritative ||
+		me_sound_cpu_recovery_required ||
+		!__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+		return false;
+	if (!psp_me_sound_ym_gate_lock_idle())
+		goto fail;
+	gate_locked = true;
+	if (!psp_me_sound_worker_lock())
+		goto fail;
+	worker_locked = true;
+	if (me_available && me_sound_worker.running &&
+		me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required)
+	{
+		result = clear ?
+			psp_me_sound_worker_z80_memory_read_clear(&me_sound_worker,
+				offset, data, size, PSP_ME_SOUND_WORKER_TIMEOUT_US) :
+			psp_me_sound_worker_z80_memory_read(&me_sound_worker,
+				offset, data, size, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+	}
+	if (result)
+		goto done;
+
+fail:
+	me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_MEMORY_ACCESS;
+	psp_me_sound_z80_mark_failed("Z80 shared-memory access");
+
+done:
+	if (worker_locked)
+		psp_me_sound_worker_unlock();
+	if (gate_locked)
+		psp_me_sound_ym_gate_unlock();
+	if (!result && me_sound_cpu_recovery_required)
+		(void)psp_me_sound_recover_cpu();
+	return result;
+}
+
+bool neogeo_me_sound_shadow_z80_memory_read(uint32_t offset,
+	uint8_t *data, uint32_t size)
+{
+	return psp_me_sound_z80_memory_read_common(offset, data, size, false);
+}
+
+bool neogeo_me_sound_shadow_z80_memory_read_clear(uint32_t offset,
+	uint8_t *data, uint32_t size)
+{
+	return psp_me_sound_z80_memory_read_common(offset, data, size, true);
+}
+
+bool neogeo_me_sound_shadow_z80_memory_write_byte(uint32_t offset, uint8_t data)
+{
+	bool result = false;
+	bool active = me_sound_z80_control_authoritative &&
+		!me_sound_cpu_recovery_required &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
+
+	if (!active)
+		return false;
+	if (psp_me_sound_worker_lock())
+	{
+		if (me_available && me_sound_worker.running &&
+			me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required)
+		{
+			result = psp_me_sound_worker_z80_memory_write_byte(&me_sound_worker,
+				offset, data);
+		}
+		psp_me_sound_worker_unlock();
+	}
+	if (!result)
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_MEMORY_ACCESS;
+		psp_me_sound_z80_mark_failed("Z80 shared-memory write");
+		if (me_sound_cpu_recovery_required)
+			(void)psp_me_sound_recover_cpu();
+	}
+	return result;
+}
+
+bool neogeo_me_sound_shadow_pcm_write_byte(uint32_t offset, uint8_t data)
+{
+#if (EMU_SYSTEM == NCDZ)
+	bool result = false;
+	bool active = me_sound_z80_control_authoritative &&
+		!me_sound_cpu_recovery_required &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
+
+	if (!active || !memory_region_sound1 || offset >= memory_length_sound1)
+		return false;
+	if (psp_me_sound_ym_gate_lock_idle())
+	{
+		memory_region_sound1[offset] = data;
+		sceKernelDcacheWritebackInvalidateRange(memory_region_sound1 + offset, 1);
+		psp_me_sound_ym_gate_unlock();
+		result = true;
+	}
+	if (!result)
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_MEMORY_ACCESS;
+		psp_me_sound_z80_mark_failed("PCM shared-memory write");
+		if (me_sound_cpu_recovery_required)
+			(void)psp_me_sound_recover_cpu();
+	}
+	return result;
+#else
+	(void)offset;
+	(void)data;
+	return false;
+#endif
 }
 
 static void psp_me_sound_shadow_log_window(const char *reason, bool force)
@@ -944,11 +1080,21 @@ bool neogeo_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
 	if (me_available && me_sound_worker.running)
 	{
 		uint32_t ym_sample_rate = 44100u >> (2 - option_samplerate);
+#if (EMU_SYSTEM == NCDZ)
+		(void)pcm_b_size;
+		result = psp_me_sound_worker_z80_snapshot_profiled_with_timers(
+			&me_sound_worker, state, visible_memory, source_rom, source_length, banks,
+			sound_code, pending_command, result_code, ym_sample_rate,
+			memory_region_sound1, pcm_a_size, 0u, ym_timer_enabled,
+			ym_timer_remaining, true, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS,
+			PSP_ME_SOUND_MACHINE_PROFILE_NCDZ, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+#else
 		result = psp_me_sound_worker_z80_snapshot_with_timers(&me_sound_worker, state,
 			visible_memory, source_rom, source_length, banks, sound_code,
 			pending_command, result_code, ym_sample_rate, pcm_a_size, pcm_b_size,
 			ym_timer_enabled, ym_timer_remaining,
 			true, PSP_ME_SOUND_Z80_MODE_AUTONOMOUS, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+#endif
 		if (result)
 		{
 			me_sound_z80_autonomous = true;
@@ -1191,10 +1337,12 @@ void neogeo_me_sound_shadow_ym_timer_completed(void)
 
 bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time)
 {
-	ym2610_pcm_window_t *window = NULL;
 	bool result = false;
-	uint64_t wait_start;
 	uint64_t stage_start;
+#if (EMU_SYSTEM == MVS)
+	ym2610_pcm_window_t *window = NULL;
+	uint64_t wait_start;
+#endif
 
 	if (!me_available || !me_sound_worker.running)
 		return false;
@@ -1213,6 +1361,8 @@ bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_
 		psp_me_sound_z80_mark_failed("YM render sample count");
 		goto fail;
 	}
+
+#if (EMU_SYSTEM == MVS)
 	if (!psp_me_sound_worker_lock())
 	{
 		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK;
@@ -1261,6 +1411,22 @@ bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_
 			emulated_time, PSP_ME_SOUND_WORKER_TIMEOUT_US);
 	}
 	psp_me_sound_worker_unlock();
+#else
+	stage_start = audio_profile_now_us();
+	if (!psp_me_sound_worker_lock())
+	{
+		me_sound_z80_failure_reason = PSP_ME_SOUND_Z80_LOCAL_FAILURE_YM_RENDER_LOCK;
+		psp_me_sound_z80_mark_failed("YM render lock");
+		goto fail;
+	}
+	if (me_available && me_sound_worker.running &&
+		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
+	{
+		result = psp_me_sound_worker_ym_render_begin_direct(&me_sound_worker,
+			samples, emulated_time, PSP_ME_SOUND_WORKER_TIMEOUT_US);
+	}
+	psp_me_sound_worker_unlock();
+#endif
 	audio_profile_add(AUDIO_PROFILE_ME_RENDER_SUBMIT,
 		audio_profile_now_us() - stage_start);
 	if (!result)
@@ -1272,9 +1438,8 @@ bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_
 	__atomic_store_n(&me_sound_ym_render_pending, true, __ATOMIC_RELEASE);
 	if (me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required)
 	{
-		/* The render command is now ordered ahead of any later Z80/YM work by
-		 * the worker FIFO. Release only the coarse YM gate so the emulation
-		 * thread can enqueue work while the ME mixes this block. */
+		/* FIFO ordering lets the emulation thread enqueue later Z80/YM work
+		 * while the ME renders this audio block. */
 		me_sound_ym_render_gate_locked = false;
 		psp_me_sound_ym_gate_unlock();
 	}

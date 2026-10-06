@@ -28,6 +28,8 @@ extern int neogeo_region;
 void neogeo_main(void);
 void neogeo_restart(void);
 void neogeo_bios_exit(void);
+bool neogeo_sound_state_prepare(void);
+bool neogeo_sound_state_resume(void);
 
 enum TEXTURE_LAYER_INDEX {
 	TEXTURE_LAYER_SPR0,
