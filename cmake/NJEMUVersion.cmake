@@ -33,6 +33,20 @@ function(_njemu_git source_dir output_var)
     endif()
 endfunction()
 
+function(_njemu_short_sha value output_var)
+    string(TOLOWER "${value}" _value)
+    string(LENGTH "${_value}" _length)
+    if(_length LESS 7 OR _length GREATER 40 OR NOT "${_value}" MATCHES "^[0-9a-f]+$")
+        set(${output_var} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    if(_length GREATER 8)
+        string(SUBSTRING "${_value}" 0 8 _value)
+    endif()
+    set(${output_var} "${_value}" PARENT_SCOPE)
+endfunction()
+
 function(njemu_derive_version source_dir)
     get_filename_component(_source_dir "${source_dir}" ABSOLUTE)
     _njemu_version_parse_semver("${NJEMU_VERSION_FALLBACK}" _fallback)
@@ -154,13 +168,37 @@ function(njemu_derive_version source_dir)
         endif()
     endif()
 
+    set(_external_sha "")
+    if(DEFINED NJEMU_GIT_SHA_OVERRIDE AND NOT "${NJEMU_GIT_SHA_OVERRIDE}" STREQUAL "")
+        set(_external_sha "${NJEMU_GIT_SHA_OVERRIDE}")
+    elseif(DEFINED ENV{NJEMU_GIT_SHA_OVERRIDE} AND NOT "$ENV{NJEMU_GIT_SHA_OVERRIDE}" STREQUAL "")
+        set(_external_sha "$ENV{NJEMU_GIT_SHA_OVERRIDE}")
+    elseif(DEFINED ENV{GITHUB_SHA} AND NOT "$ENV{GITHUB_SHA}" STREQUAL "")
+        set(_external_sha "$ENV{GITHUB_SHA}")
+    endif()
+
+    set(_build_number "")
+    _njemu_short_sha("${_sha}" _build_number)
+    if("${_build_number}" STREQUAL "" AND NOT "${_external_sha}" STREQUAL "")
+        _njemu_short_sha("${_external_sha}" _build_number)
+        if("${_build_number}" STREQUAL "")
+            message(FATAL_ERROR "NJEMU_GIT_SHA_OVERRIDE/GITHUB_SHA is not a valid Git SHA: '${_external_sha}'")
+        endif()
+    endif()
+    if("${_build_number}" STREQUAL "")
+        set(_build_number "unknown")
+    endif()
+    set(_display_version "${_release_version} (${_build_number})")
+
     foreach(_pair IN ITEMS
             "NJEMU_VERSION;${_version}"
+            "NJEMU_DISPLAY_VERSION;${_display_version}"
             "NJEMU_RELEASE_VERSION;${_release_version}"
             "NJEMU_VERSION_MAJOR;${_major}"
             "NJEMU_VERSION_MINOR;${_minor}"
             "NJEMU_VERSION_PATCH;${_patch}"
             "NJEMU_GIT_SHA;${_sha}"
+            "NJEMU_BUILD_NUMBER;${_build_number}"
             "NJEMU_COMMITS_SINCE_TAG;${_commits}"
             "NJEMU_VERSION_DIRTY;${_dirty}"
             "NJEMU_VERSION_EXACT_TAG;${_exact}"

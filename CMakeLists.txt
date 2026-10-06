@@ -326,13 +326,13 @@ njemu_derive_version("${CMAKE_SOURCE_DIR}")
 set(VERSION_MAJOR ${NJEMU_VERSION_MAJOR})
 set(VERSION_MINOR ${NJEMU_VERSION_MINOR})
 set(VERSION_BUILD ${NJEMU_VERSION_PATCH})
-set(VERSION_STR "${NJEMU_VERSION}")
+set(VERSION_STR "${NJEMU_DISPLAY_VERSION}")
 add_definitions(-DVERSION_MAJOR=${VERSION_MAJOR})
 add_definitions(-DVERSION_MINOR=${VERSION_MINOR})
 add_definitions(-DVERSION_BUILD=${VERSION_BUILD})
 add_definitions(-DVERSION_STR="${VERSION_STR}")
 add_definitions(-DNJEMU_GIT_SHA="${NJEMU_GIT_SHA}")
-message(STATUS "NJEMU version: ${NJEMU_VERSION} (${NJEMU_VERSION_SOURCE})")
+message(STATUS "NJEMU version: ${NJEMU_DISPLAY_VERSION} [artifact ${NJEMU_VERSION}; ${NJEMU_VERSION_SOURCE}]")
 
 set(NJEMU_VERSION_FILE "${CMAKE_BINARY_DIR}/generated/version.txt")
 file(WRITE "${NJEMU_VERSION_FILE}" "${NJEMU_VERSION}\n")
@@ -1529,7 +1529,8 @@ if(PLATFORM STREQUAL "PSP")
         PREVIEW_PATH NULL
         TITLE "${TARGET} ${VERSION_STR} for PSP"
         # PARAM.SFO's application version remains the SDK-friendly numeric
-        # major/minor pair; the title/runtime version carries the full source ID.
+        # major/minor pair; the title/runtime version carries the human-readable
+        # release version and commit build number.
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
         MEMSIZE 1
     )

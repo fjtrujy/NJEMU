@@ -28,7 +28,15 @@ The first stable SemVer release should be tagged `v2.4.0` once the maintainers c
 
 `cmake/NJEMUVersion.cmake` derives the version centrally from Git and is shared by normal builds and release automation.
 
-| Source state | Example |
+The build keeps two related identities:
+
+- a machine-oriented artifact identity used by packaging and release automation;
+- a human-readable runtime identity shown by the emulator as `X.Y.Z (buildnumber)`,
+  where `buildnumber` is the short commit SHA.
+
+Artifact identities remain SemVer-compatible:
+
+| Source state | Artifact identity |
 | --- | --- |
 | Exact clean SemVer tag | `2.4.0` |
 | 12 commits after `v2.4.0` | `2.4.0+12.gabcdef0` |
@@ -36,18 +44,32 @@ The first stable SemVer release should be tagged `v2.4.0` once the maintainers c
 | Git tree before the first SemVer tag | `2.4.0-pre.967+gabcdef0` |
 | Source tree without `.git` | `2.4.0+source` |
 
+For the same Git-backed builds, the runtime/frontend version is simply:
+
+```text
+2.4.0 (abcdef01)
+```
+
+NJEMU currently uses up to eight hexadecimal characters for this short SHA.
+
 Untracked files do not mark a build dirty. This is intentional because local ROMs, BIOS files, caches, saves, and other runtime data can exist beside a development checkout without changing the source revision.
 
-For source snapshots without `.git`, `NJEMU_VERSION_OVERRIDE` can provide a known SemVer identity to the version helper. Otherwise the build uses the documented source-archive fallback rather than failing configuration.
+For source snapshots without `.git`, `NJEMU_VERSION_OVERRIDE` can provide a known
+SemVer identity to the version helper. `NJEMU_GIT_SHA_OVERRIDE` can additionally
+provide the source commit so the runtime still shows `X.Y.Z (short-sha)`.
+GitHub Actions' `GITHUB_SHA` is accepted automatically for this purpose. If no
+commit identity is available at all, the runtime uses `X.Y.Z (unknown)` rather
+than pretending that the snapshot came from a known revision.
 
-The exact derived value is:
+The human-readable `X.Y.Z (short-sha)` value is:
 
 - compiled into `VERSION_STR` and visible in normal application/frontend version displays;
 - printed to the startup log as `<app> <version> [<core>/<platform>]`;
-- installed as `version.txt`;
-- embedded as `version.txt` in Vita VPKs;
 - included in the PSP EBOOT title while the PSP SDK's numeric application-version field keeps its required numeric format;
-- used in release archive names.
+
+The artifact identity remains installed as `version.txt`, embedded as
+`version.txt` in Vita VPKs, and used in release archive names so those machine
+interfaces stay SemVer-safe and uniquely identify development artifacts.
 
 Issue reports should copy this exact version when possible.
 
