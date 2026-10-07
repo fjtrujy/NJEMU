@@ -878,6 +878,7 @@ target_include_directories(${TARGET} PRIVATE
 )
 
 njemu_psp_me_configure_target(${TARGET})
+njemu_psp_me_validate_target_isolation(${TARGET})
 
 # Keep miniz's usage requirements local to implementation files that consume
 # compression/CRC APIs. Public domain headers deliberately do not expose miniz

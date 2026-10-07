@@ -276,6 +276,144 @@ function(njemu_psp_me_configure_target emulator_target)
     endif()
 endfunction()
 
+function(njemu_psp_me_validate_target_isolation emulator_target)
+    if(NOT TARGET ${emulator_target})
+        message(FATAL_ERROR
+            "PSP ME isolation validation requires an existing target: ${emulator_target}")
+    endif()
+
+    get_target_property(_sources ${emulator_target} SOURCES)
+    get_target_property(_target_definitions ${emulator_target} COMPILE_DEFINITIONS)
+    get_target_property(_link_libraries ${emulator_target} LINK_LIBRARIES)
+    get_directory_property(_directory_definitions COMPILE_DEFINITIONS)
+
+    if(NOT _target_definitions OR _target_definitions STREQUAL "_target_definitions-NOTFOUND")
+        set(_target_definitions)
+    endif()
+    if(NOT _link_libraries OR _link_libraries STREQUAL "_link_libraries-NOTFOUND")
+        set(_link_libraries)
+    endif()
+    set(_definitions ${_directory_definitions} ${_target_definitions})
+
+    set(_has_cpu_binding OFF)
+    set(_has_me_producer OFF)
+    set(_has_bounded_backend OFF)
+    set(_has_cps2_backend OFF)
+    set(_has_neogeo_backend OFF)
+    set(_has_cps2_worker OFF)
+    set(_has_neogeo_worker OFF)
+    set(_me_source_leaks)
+
+    foreach(_source IN LISTS _sources)
+        get_filename_component(_source_abs "${_source}" ABSOLUTE
+            BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+        if(_source_abs MATCHES "/src/common/audio_producer_binding_cpu\\.c$")
+            set(_has_cpu_binding ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_audio_producer\\.c$")
+            set(_has_me_producer ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_audio_backend_jobs\\.c$")
+            set(_has_bounded_backend ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_audio_backend_cps2\\.c$")
+            set(_has_cps2_backend ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_audio_backend_neogeo\\.c$")
+            set(_has_neogeo_backend ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_me_qsound_worker\\.c$")
+            set(_has_cps2_worker ON)
+        elseif(_source_abs MATCHES "/src/psp/psp_me_sound_worker\\.c$")
+            set(_has_neogeo_worker ON)
+        endif()
+
+        if(_source_abs MATCHES
+           "/src/psp/psp_(audio_producer|audio_backend_.+|me_.+|cps2_me_sound|neogeo_me_sound)\\.(c|h)$")
+            list(APPEND _me_source_leaks "${_source}")
+        endif()
+    endforeach()
+
+    set(_me_definitions)
+    foreach(_definition IN LISTS _definitions)
+        if(_definition MATCHES
+           "^(PSP_ME_AUDIO|NJEMU_SOUND_OFFLOAD|AUDIO_PRODUCER_JOBS|PSP_ME_RING_SELFTEST|PSP_ME_SOUND_PROFILE|NJEMU_SOUND_OFFLOAD_PROFILE)(=|$)")
+            list(APPEND _me_definitions "${_definition}")
+        endif()
+    endforeach()
+
+    set(_me_libraries)
+    foreach(_library IN LISTS _link_libraries)
+        if("${_library}" MATCHES "me-(stask|core-mapper)")
+            list(APPEND _me_libraries "${_library}")
+        endif()
+    endforeach()
+
+    if(NOT (PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO))
+        if(NOT _has_cpu_binding)
+            message(FATAL_ERROR
+                "${PLATFORM}/${TARGET}: non-ME builds must bind audio_producer_cpu")
+        endif()
+        if(_me_source_leaks)
+            message(FATAL_ERROR
+                "${PLATFORM}/${TARGET}: PSP ME sources leaked into a CPU build: ${_me_source_leaks}")
+        endif()
+        if(_me_definitions)
+            message(FATAL_ERROR
+                "${PLATFORM}/${TARGET}: PSP ME definitions leaked into a CPU build: ${_me_definitions}")
+        endif()
+        if(_me_libraries)
+            message(FATAL_ERROR
+                "${PLATFORM}/${TARGET}: PSP ME libraries leaked into a CPU build: ${_me_libraries}")
+        endif()
+        if(NJEMU_PSP_ME_BOUNDED_JOBS OR NJEMU_PSP_ME_PERSISTENT_SOUND OR
+           NOT NJEMU_PSP_ME_AUDIO_MODE STREQUAL "CPU")
+            message(FATAL_ERROR
+                "${PLATFORM}/${TARGET}: PSP ME policy variables are active in a CPU build")
+        endif()
+        return()
+    endif()
+
+    if(_has_cpu_binding OR NOT _has_me_producer)
+        message(FATAL_ERROR
+            "PSP/${TARGET}: ME builds must use the PSP producer while retaining audio_producer_cpu only as its fallback implementation")
+    endif()
+    if(NOT "PSP_ME_AUDIO" IN_LIST _me_definitions)
+        message(FATAL_ERROR "PSP/${TARGET}: PSP_ME_AUDIO definition is missing")
+    endif()
+    if(NOT _me_libraries)
+        message(FATAL_ERROR "PSP/${TARGET}: ME runtime libraries are missing")
+    endif()
+
+    if(NJEMU_PSP_ME_BOUNDED_JOBS)
+        if(NOT _has_bounded_backend OR _has_cps2_backend OR _has_neogeo_backend OR
+           _has_cps2_worker OR _has_neogeo_worker)
+            message(FATAL_ERROR
+                "PSP/${TARGET}: bounded ME mode selected an unexpected persistent backend")
+        endif()
+        if(NOT "AUDIO_PRODUCER_JOBS" IN_LIST _me_definitions)
+            message(FATAL_ERROR "PSP/${TARGET}: bounded ME job capability is missing")
+        endif()
+    elseif(NJEMU_PSP_ME_PERSISTENT_SOUND AND "${TARGET}" STREQUAL "CPS2")
+        if(NOT _has_cps2_backend OR NOT _has_cps2_worker OR _has_bounded_backend OR
+           _has_neogeo_backend OR _has_neogeo_worker)
+            message(FATAL_ERROR
+                "PSP/CPS2: persistent QSound backend selection is inconsistent")
+        endif()
+        if(NOT "NJEMU_SOUND_OFFLOAD" IN_LIST _me_definitions)
+            message(FATAL_ERROR "PSP/CPS2: sound-offload capability is missing")
+        endif()
+    elseif(NJEMU_PSP_ME_PERSISTENT_SOUND AND
+           ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "NCDZ"))
+        if(NOT _has_neogeo_backend OR NOT _has_neogeo_worker OR _has_bounded_backend OR
+           _has_cps2_backend OR _has_cps2_worker)
+            message(FATAL_ERROR
+                "PSP/${TARGET}: persistent Neo Geo sound backend selection is inconsistent")
+        endif()
+        if(NOT "NJEMU_SOUND_OFFLOAD" IN_LIST _me_definitions)
+            message(FATAL_ERROR "PSP/${TARGET}: sound-offload capability is missing")
+        endif()
+    else()
+        message(FATAL_ERROR
+            "PSP/${TARGET}: ME build does not map to a validated audio backend")
+    endif()
+endfunction()
+
 function(njemu_psp_me_package_hardware_oracles)
     if(NOT PLATFORM STREQUAL "PSP")
         return()
