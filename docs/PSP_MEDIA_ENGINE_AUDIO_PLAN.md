@@ -58,15 +58,23 @@ sound chip callback / mixing / conversion
 
 The common producer contract exposes the lifecycle needed by this work:
 `init`, `shutdown`, `reset`, `suspend`, `resume`, `render`, availability, and
-bounded job-buffer/dispatch/wait operations.  The PSP ME producer owns ME
-synchronization/fallback.  Generic sound-chip code does not contain
-`PSP_ME_AUDIO` conditionals.
+bounded job-buffer/dispatch/wait operations. The PSP producer owns runtime selection
+and central CPU fallback, while private PSP backends own bounded CPS1 jobs, persistent
+CPS2 QSound, and persistent Neo Geo YM2610 orchestration. MIST dispatch/probing and
+shared job storage live in `psp_me_dispatch.c`. Generic sound-chip code does not
+contain `PSP_ME_AUDIO` conditionals.
 
 The CPU producer implementation itself is compiled in both OFF and ON builds.
 OFF binds it directly; ON binds the PSP ME wrapper, which delegates lifecycle
 and PCM rendering to that same CPU producer whenever no proven ME workload is
 active.  This keeps the reference path available as a literal oracle/fallback,
 not a second reimplementation of it.
+
+Persistent target code uses platform-neutral `cps2_sound_offload_*` and
+`neogeo_sound_offload_*` boundaries. The concrete PSP implementations stay under
+`src/psp/`, and the disabled non-PSP forms remain compile-time inline stubs. CPS2 and
+Neo Geo workers deliberately retain separate protocols because their event ordering,
+timeout semantics, recovery payloads, and render ownership are not equivalent.
 
 ## Upstream dependencies investigated
 
@@ -120,7 +128,10 @@ the active PSPDEV toolchain:
 - `libme-stask.a` built with `PRX_FREE=1`;
 - PSP `kubridge` support (`pspkubridge`).
 
-The normal OFF build does not search for or link these libraries.  The PSP
+The normal OFF build does not search for or link these libraries. PSP ME build policy
+is centralized in `cmake/NJEMUPSPMediaEngine.cmake`, including target-mode mapping,
+source/flag selection, dependency discovery, hardware oracles, packaging, and
+configure-time isolation validation. The PSP
 GitHub Actions matrix makes `PSP_ME_AUDIO` explicit in every job/artifact.
 All four emulator targets retain OFF reference artifacts.  ON builds select
 their target-specific implementation automatically: CPS1 bounded jobs,

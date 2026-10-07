@@ -20,7 +20,11 @@ NJEMU builds the same four emulator cores for PSP, PlayStation 2, PlayStation Vi
 - One EBOOT requests the expanded PSP user-memory partition and adapts its allocation policy to the memory actually available at runtime; there is no separate legacy “Slim” build.
 - CPS2 and MVS compile streaming-cache support by default because constrained games may need it.
 - PSP MVS has an optional Ad Hoc build capability.
-- Experimental Media Engine audio support exists behind `PSP_ME_AUDIO`; the canonical release keeps it disabled so the same EBOOT remains usable in PPSSPP.
+- Media Engine audio production is controlled by the single public `PSP_ME_AUDIO`
+  switch. OFF is the CPU-only/PPSSPP reference. ON retains Main CPU fallback and uses
+  bounded jobs for CPS1, persistent Z80 + QSound for CPS2, and persistent Z80 +
+  YM2610 for MVS/NCDZ. Canonical PSP packages enable the capability; explicit OFF CI
+  artifacts preserve the reference path.
 
 ## PlayStation 2
 
@@ -55,5 +59,7 @@ Across supported hosts:
 - the same generated game metadata/database formats are used;
 - save states, per-game settings, NVRAM/memory-card behavior, and ROM/cache lookup are owned by common/core code unless a platform capability genuinely differs;
 - target sprite renderers stay platform-neutral and emit data through the shared video-driver contract.
+- `audio_driver_t` owns native audio output while `audio_producer_driver_t` owns PCM
+  generation/execution; non-PSP platforms are permanently bound to the CPU producer.
 
 See [BUILDING.md](BUILDING.md) for toolchains/options and [RUNTIME_FILES_AUDIT.md](RUNTIME_FILES_AUDIT.md) for the exact external-file layout.

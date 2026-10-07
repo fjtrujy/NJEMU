@@ -2,7 +2,24 @@
 
 ## Status
 
-Planned.
+Implementation complete through A7; final cross-platform/hardware validation pending.
+
+The implementation baseline was `06ed4f2` (`Plan PSP ME architecture cleanup`).
+The structural cleanup landed as focused commits:
+
+- `c9a7606` - `Add QSound context equivalence oracle`;
+- `2a9d2d4` - `Neutralize target sound offload interfaces`;
+- `4517753` - `Split PSP ME audio producer backends`;
+- `1bd4cf2` - `Modularize PSP Media Engine CMake configuration`;
+- `09e5efa` - `Guard non-PSP audio producer isolation`.
+
+A4 intentionally produced no worker-common code. The cache callback/copy helpers are
+only syntactically duplicated, while the workers already diverge in event pumping,
+timeout semantics, asynchronous acknowledgements, recovery payloads, and render
+ownership. In particular, QSound treats a zero timeout as immediately expired while
+the Neo Geo worker uses zero as an unbounded wait. Extracting their wait/lifecycle
+logic would therefore merge unlike invariants rather than create a trustworthy shared
+protocol layer.
 
 This plan starts from the validated PSP Media Engine (ME) audio implementation at
 commit `b3b4e89` (`Document CPS1 ME sound-island benchmark`) on branch

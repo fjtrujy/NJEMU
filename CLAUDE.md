@@ -42,7 +42,9 @@ Useful options include:
 - `COMMAND_LIST=ON/OFF`;
 - `ADHOC=ON/OFF` (PSP where supported);
 - `PSP_ME_AUDIO=ON/OFF` (optional PSP Media Engine audio producer; default OFF;
-  ON exposes persistent Auto/Main CPU/Media Engine runtime selection);
+  ON exposes Auto/Main CPU/Media Engine runtime selection and chooses the validated
+  target policy: CPS1 bounded jobs; CPS2 persistent QSound; MVS/NCDZ persistent
+  YM2610);
 - `PSP_AUDIO_PROFILE=ON/OFF` (PSP-only audio timing log; default OFF);
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
@@ -50,10 +52,10 @@ Useful options include:
 - `PSP_ME_RING_SELFTEST=ON/OFF` (PSP MVS + `PSP_ME_AUDIO=ON` only; default OFF;
   runs the synthetic Allegrex/ME shared-ring transport oracle at startup and
   builds the standalone `psp_me_ring_hardware_test` PRX for psplink validation);
-- `PSP_ME_SOUND_COPROCESSOR=ON/OFF` (PSP MVS/NCDZ + `PSP_ME_AUDIO=ON` only;
-  default OFF; builds the persistent ME sound worker and the target-specific
-  Z80/YM2610 ownership path while preserving CPU recovery/fallback support);
 - `USE_ASAN=ON` (Desktop development).
+
+`PSP_ME_SOUND_COPROCESSOR` is obsolete and must not be restored as a public build
+axis. `PSP_ME_AUDIO` is the only supported ME capability switch.
 
 PSP packages request the large user-memory partition (`MEMSIZE=1`). Platform
 `queryMemoryInfo()` values are telemetry; CPS2/MVS cache capacity is established
@@ -69,6 +71,7 @@ Common contracts live in `src/common/`:
 - `video_driver_t` - presentation, texture/CLUT operations, portable sprite
   submission and low-level UI drawing;
 - `audio_driver_t` - audio output;
+- `audio_producer_driver_t` - audio generation/execution ownership before output;
 - `input_driver_t` - raw physical input sampling;
 - `platform_driver_t` - lifecycle/main loop, memory telemetry and system language;
 - `thread_driver_t` - threading primitives;
@@ -79,6 +82,12 @@ Common contracts live in `src/common/`:
 Each platform binds these globals in `src/<platform>/<platform>_drivers.c`.
 Backend selection is a build/link concern; shared code should not add host-
 platform `#ifdef`s.
+
+`audio_producer_driver_t` is bound separately: Desktop, PS2, Vita, and PSP CPU-only
+builds use `audio_producer_cpu`. PSP ME builds use a PSP-private wrapper that retains
+the CPU producer as fallback. Target code must express persistent sound ownership
+through neutral `*_sound_offload_*` APIs; MIST, cache coherency, PSP synchronization,
+and worker lifecycle stay in `src/psp/`.
 
 ### Rendering
 

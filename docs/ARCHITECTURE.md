@@ -60,6 +60,13 @@ A platform backend is selected at link time and implements the shared contracts 
 
 The bound common services are `audio_driver_t`, `input_driver_t`, `platform_driver_t`, `power_driver_t`, `thread_driver_t`, `ticker_driver_t`, `video_driver_t`, and `ui_draw_driver_t`. `ui_draw_driver_t` is deliberately not a second renderer: low-level drawing belongs to `video_driver_t`, while the UI adapter only handles texture storage/lifetime details that genuinely differ by host.
 
+Audio production has a second, deliberately separate boundary. `audio_driver_t` owns
+native PCM presentation/output, while `audio_producer_driver_t` owns how the next
+emulated PCM buffer is produced. Desktop, PS2, Vita, and PSP builds with
+`PSP_ME_AUDIO=OFF` bind `audio_producer_cpu` directly. PSP ME builds bind the PSP
+producer wrapper, which retains `audio_producer_cpu` as the reference/fallback path
+while delegating target-specific acceleration to private PSP backends.
+
 All four target renderers are shared across platforms. A backend receives logical indexed/direct-color atlas updates plus compact `video_sprite_vertex_t`/`video_point_vertex_t` batches and chooses the fastest native execution path without exposing native GPU objects back to target code.
 
 ### Target Configuration
@@ -996,7 +1003,7 @@ This section provides detailed documentation of the emulator's internal systems,
 
 ### Sound System Architecture
 
-The sound system uses a multi-threaded architecture to ensure smooth audio output without blocking the main emulation loop.
+The sound system uses a multi-threaded architecture to ensure smooth audio output without blocking the main emulation loop. Production and presentation are separate responsibilities: the producer generates/emulates PCM, then the audio driver submits that PCM to the native output API.
 
 #### Sound Thread (`src/common/sound.c`)
 
@@ -1007,13 +1014,36 @@ The sound system uses a multi-threaded architecture to ensure smooth audio outpu
 │  Main Thread                    Sound Thread                 │
 │  ───────────                    ────────────                 │
 │  1. Initialize sound info       1. Wait for enable           │
-│  2. Start sound thread          2. Call sound->update()      │
+│  2. Start sound thread          2. Ask audio producer        │
 │  3. Enable sound output   ───►  3. Fill buffer with samples  │
 │  4. Run emulation               4. Output via audio driver   │
 │  5. Disable on pause      ───►  5. Loop or sleep             │
 │  6. Stop thread on exit         6. Clean exit                │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+`src/common/sound.c` calls `audio_producer_driver->render(sound->update, ...)` and
+then passes the resulting buffer to `audio_driver_t`. On ordinary platforms the
+producer simply executes the CPU callback. PSP ME builds keep the same CPU producer
+compiled and wrap it with target-specific acceleration selected at build time:
+
+- CPS1: bounded QSound/OKIM6295 jobs;
+- CPS2: persistent Z80 + QSound ownership;
+- MVS: persistent Z80 + YM2610 ownership;
+- NCDZ: persistent Z80 + YM2610 ownership using the NCDZ machine profile.
+
+Target code expresses those persistent paths through the neutral
+`cps2_sound_offload_*` and `neogeo_sound_offload_*` contracts. Their disabled
+implementations are inline no-ops so non-PSP scheduler/shared-memory hot paths remain
+compile-time eliminable. PSP-specific MIST, cache coherency, synchronization,
+lifecycle, recovery, and runtime Auto/Main CPU/Media Engine selection stay under
+`src/psp/`.
+
+The CPS2 QSound and Neo Geo YM2610 workers intentionally remain separate protocols.
+Although both use the shared SPSC transport, their event ordering, timeout behavior,
+recovery state, render ownership, and asynchronous event handling differ. The cleanup
+audit therefore kept protocol-local lifecycle/wait code instead of extracting a
+generic worker layer whose apparent reuse would hide those invariants.
 
 | Configuration | CPS2 | MVS/NCDZ/CPS1 |
 |--------------|------|---------------|

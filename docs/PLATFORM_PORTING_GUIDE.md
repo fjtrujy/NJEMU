@@ -49,6 +49,12 @@ The currently bound services are:
 Use `power_unsupported` when the platform has no meaningful battery/performance
 control. Use `null_ui_draw_driver` in GUI-disabled builds.
 
+`audio_producer_driver_t` is a separate compile/link-time production boundary rather
+than part of `<platform>_drivers.c`. A normal port must bind
+`audio_producer_driver` to `audio_producer_cpu`; it should not acquire PSP Media
+Engine dependencies merely because the common sound thread supports an alternate
+producer. The CMake configuration validates this isolation for every non-PSP target.
+
 ## 3. Logical versus physical geometry
 
 `src/common/video_geometry.h` owns NJEMU's logical presentation geometry. Do not
@@ -146,7 +152,17 @@ Texture-update staging is acceptable when it is a cold cache-miss operation and
 measurements show it is not significant. Add a more complex writable-atlas API
 only after profiling demonstrates a real need.
 
-## 6. Audio pause semantics
+## 6. Audio production and pause semantics
+
+`audio_driver_t` presents PCM through the host's native audio API.
+`audio_producer_driver_t` owns generation/execution of that PCM before presentation.
+Keep those responsibilities separate when adding a platform: native queue/channel
+management belongs in the audio driver, while emulated sound execution belongs in
+the CPU producer unless a platform has an explicitly designed acceleration backend.
+
+PSP is currently the only accelerated producer. Its ME implementation and MIST/cache
+details remain private to `src/psp/`; CPS2/MVS/NCDZ target code sees only neutral
+sound-offload semantics. Do not copy the PSP producer into a new platform port.
 
 `audio_driver_t::setPaused()` is an optional backend capability for platforms whose
 native audio API keeps a queued stream running when the emulator enters a menu or

@@ -56,7 +56,7 @@ The current public feature switches include:
 | `PS2_FAST_CACHE` | PS2 accelerated cache I/O | Requires PS2 + `USE_CACHE=ON`; default ON on PS2 |
 | `PS2_EXTERNAL_IRX_IMAGE` | Use the external PS2 driver image/bootstrap path | PS2 only; default OFF |
 | `PS2_VIDEO_MODE` | Initial PS2 output mode (`240p`, `480i`, `480p`) | PS2 only; default `480i`; runtime settings can change mode |
-| `PSP_ME_AUDIO` | Experimental PSP Media Engine audio producer | PSP only; default OFF |
+| `PSP_ME_AUDIO` | PSP Media Engine audio-production capability | PSP only; default OFF; the canonical PSP release enables it |
 | `PSP_AUDIO_PROFILE` | PSP audio timing diagnostics | PSP only; default OFF |
 | `USE_ASAN`, `USE_UBSAN`, `USE_PG` | Development diagnostics | Desktop only |
 | `RELEASE` | Release-only compile behavior used by legacy code paths | Independent of CMake build type |
@@ -111,7 +111,22 @@ cmake --install build-psp-mvs
 
 The PSP package is an `EBOOT.PBP`. NJEMU requests the large user-memory partition (`MEMSIZE=1`) in the package metadata and then sizes game allocations from the memory actually available at runtime. There is no separate PSP-1000/PSP-2000 build.
 
-`PSP_ME_AUDIO` remains experimental and is not part of the canonical downloadable PSP build because PPSSPP cannot execute the Media Engine path. The normal CPU-audio path remains the compatibility baseline.
+`PSP_ME_AUDIO` is the only public Media Engine capability switch. `OFF` binds the
+normal CPU producer directly and is the strongest PPSSPP/reference configuration.
+`ON` keeps the CPU producer as a first-class runtime fallback and selects the measured
+target-specific PSP implementation automatically: CPS1 uses bounded QSound/OKIM6295
+jobs, CPS2 uses persistent Z80 + QSound, and MVS/NCDZ use persistent Z80 + YM2610
+(with the NCDZ machine profile for NCDZ). Runtime selection remains Auto / Main CPU /
+Media Engine; Main CPU skips ME initialization.
+
+Canonical PSP packages enable `PSP_ME_AUDIO`; CI also keeps explicit OFF builds as the
+CPU/PPSSPP reference. `PSP_ME_SOUND_COPROCESSOR` is obsolete and is not a supported
+build axis. Supplying it in an old CMake cache does not enable a second mode.
+
+ME-specific dependency discovery, source selection, compile flags, hardware oracles,
+and packaging are centralized in `cmake/NJEMUPSPMediaEngine.cmake`. Non-PSP builds and
+PSP `PSP_ME_AUDIO=OFF` builds do not search for or link the ME libraries, and CMake
+validates that their executable remains bound to `audio_producer_cpu`.
 
 ## PlayStation 2
 
