@@ -151,7 +151,7 @@ static void mvs_sound_offload_profile_report(uint64_t now_us)
 #ifdef PSP_ME_AUDIO
 	me_available = audio_producer_driver->isAvailable() ? 1u : 0u;
 #endif
-#ifdef PSP_ME_SOUND_COPROCESSOR
+#ifdef NJEMU_SOUND_OFFLOAD
 	me_coprocessor = 1u;
 	me_authoritative = neogeo_sound_offload_authoritative() ? 1u : 0u;
 #endif

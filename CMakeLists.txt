@@ -3,6 +3,7 @@ project(NJEMU)
 
 include(CTest)
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUHostTools.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUPSPMediaEngine.cmake")
 njemu_enable_host_tools()
 
 # Configuration
@@ -91,21 +92,7 @@ option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
-option(PSP_ME_AUDIO "PSP: enable Media Engine audio acceleration" OFF)
-option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
-option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
-option(PSP_ME_RING_SELFTEST "PSP MVS: run the synthetic ME shared-ring self-test" OFF)
-
-# PSP_ME_SOUND_COPROCESSOR used to expose intermediate bring-up combinations.
-# It is intentionally no longer configurable: PSP_ME_AUDIO now selects the
-# validated implementation for the chosen target.
-if(DEFINED PSP_ME_SOUND_COPROCESSOR)
-    message(STATUS
-        "PSP_ME_SOUND_COPROCESSOR is obsolete and ignored; "
-        "PSP_ME_AUDIO now selects the target-specific ME implementation")
-    unset(PSP_ME_SOUND_COPROCESSOR CACHE)
-    unset(PSP_ME_SOUND_COPROCESSOR)
-endif()
+njemu_psp_me_declare_options()
 
 # Official downloadable builds use one stable, feature-complete configuration
 # per platform instead of exposing the CI/developer option matrix. Set future
@@ -172,38 +159,7 @@ endif()
 if((USE_ASAN OR USE_UBSAN OR USE_PG) AND NOT PLATFORM STREQUAL "DESKTOP")
     message(FATAL_ERROR "USE_ASAN, USE_UBSAN, and USE_PG are desktop-only diagnostic capabilities")
 endif()
-if(PSP_ME_AUDIO AND NOT PLATFORM STREQUAL "PSP")
-    message(FATAL_ERROR "PSP_ME_AUDIO requires PLATFORM=PSP")
-endif()
-if(PSP_AUDIO_PROFILE AND NOT PLATFORM STREQUAL "PSP")
-    message(FATAL_ERROR "PSP_AUDIO_PROFILE requires PLATFORM=PSP")
-endif()
-if(PSP_ME_SOUND_PROFILE AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS"))
-    message(FATAL_ERROR "PSP_ME_SOUND_PROFILE requires PLATFORM=PSP and TARGET=MVS")
-endif()
-if(PSP_ME_RING_SELFTEST AND NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
-    message(FATAL_ERROR "PSP_ME_RING_SELFTEST requires PLATFORM=PSP, TARGET=MVS, and PSP_ME_AUDIO=ON")
-endif()
-
-# PSP_ME_AUDIO is the only user-facing ME feature switch. Select the strongest
-# validated implementation for each emulator so production builds cannot drift
-# into stale intermediate combinations from the bring-up work.
-set(NJEMU_PSP_ME_AUDIO_JOBS OFF)
-set(NJEMU_PSP_ME_SOUND_COPROCESSOR OFF)
-set(NJEMU_PSP_ME_AUDIO_MODE "CPU")
-if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-    if("${TARGET}" STREQUAL "CPS1")
-        set(NJEMU_PSP_ME_AUDIO_JOBS ON)
-        set(NJEMU_PSP_ME_AUDIO_MODE "BOUNDED_JOBS")
-    elseif("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "NCDZ" OR
-           "${TARGET}" STREQUAL "CPS2")
-        set(NJEMU_PSP_ME_SOUND_COPROCESSOR ON)
-        set(NJEMU_PSP_ME_AUDIO_MODE "SOUND_COPROCESSOR")
-    endif()
-endif()
-if(PLATFORM STREQUAL "PSP")
-    message(STATUS "PSP ME audio mode for ${TARGET}: ${NJEMU_PSP_ME_AUDIO_MODE}")
-endif()
+njemu_psp_me_configure_policy()
 
 # Streaming cache is a core capability. Keep the compatibility matrix here so
 # C sources only need to ask whether this build has cache support.
@@ -540,115 +496,7 @@ else()
     )
 endif()
 
-if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-    list(APPEND COMMON_SRC
-        psp/psp_audio_backend.h
-        psp/psp_audio_producer.c
-        psp/psp_me_dispatch.h
-        psp/psp_me_dispatch.c
-        psp/psp_me_spsc_ring.h
-        psp/psp_me_spsc_ring.c
-    )
-    if(NJEMU_PSP_ME_AUDIO_JOBS)
-        list(APPEND COMMON_SRC
-            psp/psp_audio_backend_jobs.c
-            common/qsound_mix_job.h
-            common/qsound_mix_job.c
-            common/okim6295_job.h
-            common/okim6295_job.c
-        )
-        add_definitions(-DAUDIO_PRODUCER_JOBS=1)
-    elseif("${TARGET}" STREQUAL "CPS2")
-        list(APPEND COMMON_SRC psp/psp_audio_backend_cps2.c)
-    else()
-        list(APPEND COMMON_SRC psp/psp_audio_backend_neogeo.c)
-    endif()
-    add_definitions(-DPSP_ME_AUDIO=1)
-else()
-    list(APPEND COMMON_SRC common/audio_producer_binding_cpu.c)
-endif()
-
-if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-    # Functions entered directly by the Media Engine must not rely on the
-    # Allegrex application's small-data/global-pointer convention. Match the
-    # upstream ME samples by compiling the ME boundary and workload with -G0
-    # and non-PIC code.
-    set_source_files_properties(
-        src/psp/psp_me_dispatch.c
-        src/psp/psp_me_spsc_ring.c
-        src/psp/psp_me_spsc_ring_mist_test.c
-        PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
-    )
-    if(NJEMU_PSP_ME_AUDIO_JOBS)
-        set_source_files_properties(
-            src/common/qsound_mix_job.c
-            src/common/okim6295_job.c
-            PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
-        )
-    endif()
-endif()
-
-if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
-    if("${TARGET}" STREQUAL "CPS2")
-        set_source_files_properties(
-            src/psp/psp_me_qsound_worker.c
-            src/cpu/z80/cz80.c
-            src/sound/qsound.c
-            PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
-        )
-    else()
-        set_source_files_properties(
-            src/psp/psp_me_sound_worker.c
-            src/cpu/z80/cz80.c
-            src/sound/ym2610.c
-            PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
-        )
-    endif()
-endif()
-
-if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)
-    list(APPEND COMMON_SRC psp/psp_audio_profile.c)
-    add_definitions(-DPSP_AUDIO_PROFILE=1)
-endif()
-
-if(PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_SOUND_PROFILE)
-    list(APPEND COMMON_SRC psp/psp_me_sound_profile.c)
-    add_definitions(
-        -DNJEMU_SOUND_OFFLOAD_PROFILE=1
-        -DPSP_ME_SOUND_PROFILE=1
-    )
-endif()
-
-if(PSP_ME_RING_SELFTEST)
-    list(APPEND COMMON_SRC
-        psp/psp_me_spsc_ring_mist_test.h
-        psp/psp_me_spsc_ring_mist_test.c
-    )
-    add_definitions(-DPSP_ME_RING_SELFTEST=1)
-endif()
-
-if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
-    if("${TARGET}" STREQUAL "CPS2")
-        list(APPEND COMMON_SRC
-            common/cps2_sound_offload.h
-            psp/psp_cps2_me_sound.h
-            psp/psp_cps2_me_sound.c
-            psp/psp_me_qsound_worker.h
-            psp/psp_me_qsound_worker.c
-        )
-    else()
-        list(APPEND COMMON_SRC
-            psp/psp_neogeo_me_sound.h
-            psp/psp_neogeo_me_sound.c
-            psp/psp_me_sound_worker.h
-            psp/psp_me_sound_worker.c
-        )
-    endif()
-    add_definitions(
-        -DNJEMU_SOUND_OFFLOAD=1
-        -DPSP_ME_SOUND_COPROCESSOR=1
-    )
-endif()
+njemu_psp_me_append_sources(COMMON_SRC)
 
 find_package(miniz 3.1.2 CONFIG QUIET)
 if (TARGET miniz::miniz)
@@ -1029,145 +877,7 @@ target_include_directories(${TARGET} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
-if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
-    find_path(PSP_ME_CORE_INCLUDE_DIR
-        NAMES me-core-mapper/me-core-mapper.h
-        HINTS "$ENV{PSPDEV}/psp/include"
-    )
-    find_path(PSP_ME_SAFE_TASK_INCLUDE_DIR
-        NAMES me-safe-task/me-stask-mist.h
-        HINTS "$ENV{PSPDEV}/psp/include"
-    )
-    find_library(PSP_ME_CORE_MAPPER_LIBRARY
-        NAMES me-core-mapper
-        HINTS "$ENV{PSPDEV}/psp/lib"
-    )
-    find_library(PSP_ME_SAFE_TASK_LIBRARY
-        NAMES me-stask
-        HINTS "$ENV{PSPDEV}/psp/lib"
-    )
-
-    if(NOT PSP_ME_CORE_INCLUDE_DIR OR NOT PSP_ME_SAFE_TASK_INCLUDE_DIR OR
-       NOT PSP_ME_CORE_MAPPER_LIBRARY OR NOT PSP_ME_SAFE_TASK_LIBRARY)
-        message(FATAL_ERROR
-            "PSP_ME_AUDIO=ON requires psp-media-engine-custom-core and "
-            "psp-media-engine-safe-task installed in PSPDEV")
-    endif()
-
-    target_include_directories(${TARGET} SYSTEM PRIVATE
-        "${PSP_ME_CORE_INCLUDE_DIR}"
-        "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-    )
-
-    if(BUILD_TESTING AND NJEMU_PSP_ME_AUDIO_JOBS)
-        add_executable(psp_me_audio_jobs_hardware_test
-            tests/psp_me_audio_jobs_hardware.c
-            src/common/qsound_mix_job.c
-            src/common/okim6295_job.c
-            src/common/ym2610_adpcma_job.c
-        )
-        target_include_directories(psp_me_audio_jobs_hardware_test PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/src"
-        )
-        target_include_directories(psp_me_audio_jobs_hardware_test SYSTEM PRIVATE
-            "${PSP_ME_CORE_INCLUDE_DIR}"
-            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-        )
-        target_compile_options(psp_me_audio_jobs_hardware_test PRIVATE
-            ${COMMON_FLAGS}
-            ${WARNING_OPTIONS}
-            -G0
-            -fno-pic
-        )
-        target_link_libraries(psp_me_audio_jobs_hardware_test PRIVATE
-            "${PSP_ME_SAFE_TASK_LIBRARY}"
-            "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspkubridge
-        )
-    endif()
-
-    if(BUILD_TESTING AND PSP_ME_RING_SELFTEST)
-        add_executable(psp_me_ring_hardware_test
-            tests/psp_me_spsc_ring_mist_hardware.c
-            src/psp/psp_me_spsc_ring.c
-            src/psp/psp_me_spsc_ring_mist_test.c
-        )
-        target_include_directories(psp_me_ring_hardware_test PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/src"
-        )
-        target_include_directories(psp_me_ring_hardware_test SYSTEM PRIVATE
-            "${PSP_ME_CORE_INCLUDE_DIR}"
-            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-        )
-        target_compile_options(psp_me_ring_hardware_test PRIVATE
-            ${COMMON_FLAGS}
-            ${WARNING_OPTIONS}
-            -G0
-            -fno-pic
-        )
-        target_link_libraries(psp_me_ring_hardware_test PRIVATE
-            "${PSP_ME_SAFE_TASK_LIBRARY}"
-            "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspkubridge
-        )
-    endif()
-
-    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
-        add_executable(psp_me_sound_worker_hardware_test
-            tests/psp_me_sound_worker_hardware.c
-            src/psp/psp_me_spsc_ring.c
-            src/psp/psp_me_sound_worker.c
-            src/cpu/z80/cz80.c
-            src/sound/ym2610.c
-        )
-        target_include_directories(psp_me_sound_worker_hardware_test PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/src"
-        )
-        target_include_directories(psp_me_sound_worker_hardware_test SYSTEM PRIVATE
-            "${PSP_ME_CORE_INCLUDE_DIR}"
-            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-        )
-        target_compile_options(psp_me_sound_worker_hardware_test PRIVATE
-            ${COMMON_FLAGS}
-            ${WARNING_OPTIONS}
-            -G0
-            -fno-pic
-        )
-        target_link_libraries(psp_me_sound_worker_hardware_test PRIVATE
-            "${PSP_ME_SAFE_TASK_LIBRARY}"
-            "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspkubridge
-        )
-    endif()
-
-    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "NCDZ")
-        add_executable(psp_me_sound_worker_ncdz_hardware_test
-            tests/psp_me_sound_worker_ncdz_hardware.c
-            src/psp/psp_me_spsc_ring.c
-            src/psp/psp_me_sound_worker.c
-            src/cpu/z80/cz80.c
-            src/sound/ym2610.c
-        )
-        target_include_directories(psp_me_sound_worker_ncdz_hardware_test PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/src"
-        )
-        target_include_directories(psp_me_sound_worker_ncdz_hardware_test SYSTEM PRIVATE
-            "${PSP_ME_CORE_INCLUDE_DIR}"
-            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
-        )
-        target_compile_options(psp_me_sound_worker_ncdz_hardware_test PRIVATE
-            ${COMMON_FLAGS}
-            ${WARNING_OPTIONS}
-            -G0
-            -fno-pic
-        )
-        target_link_libraries(psp_me_sound_worker_ncdz_hardware_test PRIVATE
-            "${PSP_ME_SAFE_TASK_LIBRARY}"
-            "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspkubridge
-        )
-    endif()
-endif()
+njemu_psp_me_configure_target(${TARGET})
 
 # Keep miniz's usage requirements local to implementation files that consume
 # compression/CRC APIs. Public domain headers deliberately do not expose miniz
@@ -1642,13 +1352,6 @@ elseif(PLATFORM STREQUAL "PSP")
         pspwlan
         pspdebug
     )
-    if(PSP_ME_AUDIO)
-        target_link_libraries(${TARGET} PRIVATE
-            "${PSP_ME_SAFE_TASK_LIBRARY}"
-            "${PSP_ME_CORE_MAPPER_LIBRARY}"
-            pspkubridge
-        )
-    endif()
     if(ADHOC)
         target_link_libraries(${TARGET} PUBLIC
             pspnet
@@ -1792,46 +1495,7 @@ if(PLATFORM STREQUAL "PSP")
         VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
         MEMSIZE 1
     )
-    if(BUILD_TESTING AND NJEMU_PSP_ME_AUDIO_JOBS)
-        create_pbp_file(
-            TARGET psp_me_audio_jobs_hardware_test
-            BUILD_PRX
-            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_audio_jobs_hardware_package"
-            TITLE "NJEMU PSP ME Audio Jobs Test"
-            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
-            MEMSIZE 1
-        )
-    endif()
-    if(BUILD_TESTING AND PSP_ME_RING_SELFTEST)
-        create_pbp_file(
-            TARGET psp_me_ring_hardware_test
-            BUILD_PRX
-            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_ring_hardware_package"
-            TITLE "NJEMU PSP ME Ring Hardware Test"
-            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
-            MEMSIZE 1
-        )
-    endif()
-    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "MVS")
-        create_pbp_file(
-            TARGET psp_me_sound_worker_hardware_test
-            BUILD_PRX
-            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_sound_worker_hardware_package"
-            TITLE "NJEMU PSP ME Sound Worker Test"
-            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
-            MEMSIZE 1
-        )
-    endif()
-    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "NCDZ")
-        create_pbp_file(
-            TARGET psp_me_sound_worker_ncdz_hardware_test
-            BUILD_PRX
-            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_sound_worker_ncdz_hardware_package"
-            TITLE "NJEMU PSP ME NCDZ Worker Test"
-            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
-            MEMSIZE 1
-        )
-    endif()
+    njemu_psp_me_package_hardware_oracles()
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
