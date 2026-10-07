@@ -116,7 +116,6 @@ if(NJEMU_CANONICAL_RELEASE)
     set(CACHE_IO_PROFILE OFF CACHE BOOL "Profile MVS cache I/O" FORCE)
     set(CACHE_IO_FORCE_SEEK OFF CACHE BOOL "Force legacy seek-before-read MVS cache behavior" FORCE)
     set(CACHE_IO_VALIDATE_ACCELERATED OFF CACHE BOOL "Validate accelerated MVS cache reads against POSIX" FORCE)
-    set(PS2_EXTERNAL_IRX_IMAGE OFF CACHE BOOL "PS2: load ps2_drivers IRXs from an external image" FORCE)
     set(PSVITA_VIDEO_STATS OFF CACHE BOOL "PS Vita: log scenes/draws/quads per frame to ux0:data/njemu_video.log" FORCE)
 
     if((PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PS2") AND
@@ -130,10 +129,22 @@ if(NJEMU_CANONICAL_RELEASE)
         set(USE_DESKTOP_GL ON CACHE BOOL "Desktop: compile the OpenGL 3.3 video backend alongside SDL" FORCE)
     endif()
 
+    # PS2 downloadable CPS2/MVS builds are the fully featured cached variants:
+    # use accelerated cache I/O and the external ps2_drivers IRX image/bootstrap.
+    # CPS1/NCDZ do not use the streaming cache and keep the directly launchable
+    # classic embedded-driver ELF layout.
     if(PLATFORM STREQUAL "PS2" AND USE_CACHE)
         set(PS2_FAST_CACHE ON CACHE BOOL "PS2: enable accelerated cache I/O for cached cores" FORCE)
+        set(PS2_EXTERNAL_IRX_IMAGE ON CACHE BOOL "PS2: load ps2_drivers IRXs from an external image" FORCE)
     else()
         set(PS2_FAST_CACHE OFF CACHE BOOL "PS2: enable accelerated cache I/O for cached cores" FORCE)
+        set(PS2_EXTERNAL_IRX_IMAGE OFF CACHE BOOL "PS2: load ps2_drivers IRXs from an external image" FORCE)
+    endif()
+
+    if(PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
+        set(PS2_DIRTY_SPRITE_UPLOADS ON CACHE BOOL "PS2 MVS: upload sprite atlases only when their pixels change" FORCE)
+    else()
+        set(PS2_DIRTY_SPRITE_UPLOADS OFF CACHE BOOL "PS2 MVS: upload sprite atlases only when their pixels change" FORCE)
     endif()
 
     message(STATUS "NJEMU canonical release configuration enabled")

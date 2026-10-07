@@ -54,7 +54,26 @@ function(_njemu_validate_install core install_dir)
     if(NJEMU_RELEASE_PLATFORM STREQUAL "psp")
         set(_required_binary "EBOOT.PBP")
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "ps2")
-        set(_required_binary "${core}.ELF")
+        # PS2 canonical releases intentionally use two layouts. Cached CPS2/MVS
+        # builds use the external IRX-image bootstrap (BOOT.ELF + extensionless
+        # engine), while CPS1/NCDZ remain directly launchable classic ELFs.
+        if(core STREQUAL "CPS2" OR core STREQUAL "MVS")
+            foreach(_required_file IN ITEMS "BOOT.ELF" "${core}" "ps2_drivers.irximg" "elf_path.ini")
+                if(NOT EXISTS "${install_dir}/${_required_file}" OR IS_DIRECTORY "${install_dir}/${_required_file}")
+                    message(FATAL_ERROR
+                        "release packaging: ${core}: external-IRX release file is missing: ${_required_file}")
+                endif()
+            endforeach()
+            file(READ "${install_dir}/elf_path.ini" _elf_path)
+            string(STRIP "${_elf_path}" _elf_path)
+            if(NOT _elf_path STREQUAL "${core}")
+                message(FATAL_ERROR
+                    "release packaging: ${core}: elf_path.ini points to '${_elf_path}', expected '${core}'")
+            endif()
+            set(_required_binary "${core}")
+        else()
+            set(_required_binary "${core}.ELF")
+        endif()
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "psvita")
         set(_required_binary "${core}.vpk")
     else()
