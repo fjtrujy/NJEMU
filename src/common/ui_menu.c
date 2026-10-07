@@ -14,6 +14,9 @@
 #include "common/cmdlist.h"
 #endif
 #include "common/config.h"
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/cps_orientation.h"
+#endif
 #include "common/emulator_options.h"
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"

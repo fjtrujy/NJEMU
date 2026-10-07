@@ -13,6 +13,7 @@
 #include "cps2.h"
 #include "sprite_common.h"
 #include "common/cache.h"
+#include "common/cps_orientation.h"
 #include "common/emulator_options.h"
 #include "common/display_mode.h"
 #include "common/video_driver.h"
@@ -222,11 +223,13 @@ void blit_start(int start, int end)
 void blit_finish(void)
 {
 	RECT dst_clip;
+	const bool rotates_to_upright = cps_orientation_rotates_to_upright(
+		machine_screen_type == SCREEN_VERTICAL, cps_screen_orientation);
 
 	if (cps2_has_mask)
 		video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
-	if (cps_rotate_screen) {
+	if (rotates_to_upright) {
 		if (cps_flip_screen) {
 			video_driver->copyRectFlip(video_data,
 				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,

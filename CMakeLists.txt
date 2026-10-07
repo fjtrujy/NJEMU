@@ -1871,6 +1871,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	)
 	add_test(NAME input_state_tests COMMAND input_state_tests)
 
+	add_executable(cps_orientation_tests
+		tests/cps_orientation_tests.c
+	)
+	target_include_directories(cps_orientation_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+	)
+	add_test(NAME cps_orientation_tests COMMAND cps_orientation_tests)
+
 	add_executable(power_driver_tests
 		tests/power_driver_tests.c
 		src/common/power_driver.c

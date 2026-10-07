@@ -103,7 +103,8 @@ static cfg_type gamecfg_2buttons_rot[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"RotateScreen",			&cps_rotate_screen,		1,	1	, 0},
+	/* Keep the legacy key so existing 0/1 RotateScreen configs retain their meaning. */
+	{ CFG_INT,	"RotateScreen",			&cps_screen_orientation,	CPS_SCREEN_ORIENTATION_AUTO,	CPS_SCREEN_ORIENTATION_COUNT - 1, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
@@ -234,7 +235,8 @@ static cfg_type gamecfg_3buttons_rot[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"RotateScreen",			&cps_rotate_screen,		1,	1	, 0},
+	/* Keep the legacy key so existing 0/1 RotateScreen configs retain their meaning. */
+	{ CFG_INT,	"RotateScreen",			&cps_screen_orientation,	CPS_SCREEN_ORIENTATION_AUTO,	CPS_SCREEN_ORIENTATION_COUNT - 1, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},

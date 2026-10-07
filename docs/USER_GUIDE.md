@@ -21,7 +21,25 @@ This guide contains the detailed usage, controls, ROM setup, compatibility, and 
 Button layouts automatically flip/rotate when:
 - DIP Switch "Cabinet" is set to Cocktail (2P mode)
 - DIP Switch "Flip Screen" is enabled
-- Vertical games with "Rotate Screen" set to Yes
+- A vertical CPS game uses **Screen Orientation > Rotated Display**
+
+#### Vertical CPS Game Orientation
+
+CPS game metadata defines whether the original arcade raster is horizontal or
+vertical. For vertical games, **Screen Orientation** controls only how that
+native raster is presented on the current display:
+
+- **Auto** (default): present the game upright. With **Original Aspect**, a
+  portrait game is fitted at 3:4 inside a normal horizontal display.
+- **Upright**: explicitly use the same upright portrait presentation.
+- **Rotated Display**: leave the game presentation sideways for a display or
+  handheld that the user intends to rotate physically. Directional and action
+  inputs are transformed consistently with that presentation.
+
+Horizontal games keep their normal presentation and do not expose this option.
+For backward compatibility, existing CPS configuration files still use the
+legacy `RotateScreen` key: `0` maps to **Rotated Display**, `1` maps to
+**Upright**, and new default configurations use `2` for **Auto**.
 
 #### Common Controls (All Emulators)
 

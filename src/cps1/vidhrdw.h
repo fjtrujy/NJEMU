@@ -36,7 +36,7 @@ enum
 	TILE32
 };
 
-extern int cps_rotate_screen;
+extern int cps_screen_orientation;
 extern int cps_flip_screen;
 #if ENABLE_RASTER_OPTION
 extern int cps_raster_enable;

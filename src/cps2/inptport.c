@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #include "cps2.h"
+#include "common/cps_orientation.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -701,69 +702,12 @@ static void update_inputport3(void)
 
 static uint32_t adjust_input(uint32_t buttons)
 {
-	uint32_t buttons2;
+	const bool game_is_vertical = machine_screen_type == SCREEN_VERTICAL;
+	const bool rotates_to_upright = cps_orientation_rotates_to_upright(
+		game_is_vertical, cps_screen_orientation);
 
-	if (!cps_flip_screen && machine_screen_type != SCREEN_VERTICAL)
-		return buttons;
-
-	if (!machine_screen_type)
-	{
-		if (cps_flip_screen)
-		{
-			buttons2 = buttons & (PLATFORM_PAD_START | PLATFORM_PAD_SELECT);
-
-			if (buttons & PLATFORM_PAD_UP)       buttons2 |= PLATFORM_PAD_DOWN;
-			if (buttons & PLATFORM_PAD_DOWN)     buttons2 |= PLATFORM_PAD_UP;
-			if (buttons & PLATFORM_PAD_RIGHT)    buttons2 |= PLATFORM_PAD_LEFT;
-			if (buttons & PLATFORM_PAD_LEFT)     buttons2 |= PLATFORM_PAD_RIGHT;
-			if (buttons & PLATFORM_PAD_B3)   buttons2 |= PLATFORM_PAD_B1;
-			if (buttons & PLATFORM_PAD_B1)   buttons2 |= PLATFORM_PAD_B3;
-			if (buttons & PLATFORM_PAD_B4) buttons2 |= PLATFORM_PAD_B2;
-			if (buttons & PLATFORM_PAD_B2)    buttons2 |= PLATFORM_PAD_B4;
-			if (buttons & PLATFORM_PAD_R) buttons2 |= PLATFORM_PAD_L;
-			if (buttons & PLATFORM_PAD_L) buttons2 |= PLATFORM_PAD_R;
-
-			buttons = buttons2;
-		}
-	}
-	else
-	{
-		if (!cps_rotate_screen)
-		{
-			buttons2 = buttons & (PLATFORM_PAD_START | PLATFORM_PAD_SELECT | PLATFORM_PAD_R | PLATFORM_PAD_L);
-
-			if (buttons & PLATFORM_PAD_UP)       buttons2 |= PLATFORM_PAD_LEFT;
-			if (buttons & PLATFORM_PAD_DOWN)     buttons2 |= PLATFORM_PAD_RIGHT;
-			if (buttons & PLATFORM_PAD_RIGHT)    buttons2 |= PLATFORM_PAD_UP;
-			if (buttons & PLATFORM_PAD_LEFT)     buttons2 |= PLATFORM_PAD_DOWN;
-			if (buttons & PLATFORM_PAD_B4) buttons2 |= PLATFORM_PAD_B3;
-			if (buttons & PLATFORM_PAD_B1)   buttons2 |= PLATFORM_PAD_B4;
-			if (buttons & PLATFORM_PAD_B3)   buttons2 |= PLATFORM_PAD_B2;
-			if (buttons & PLATFORM_PAD_B2)    buttons2 |= PLATFORM_PAD_B1;
-
-			buttons = buttons2;
-		}
-
-		if (cps_flip_screen)
-		{
-			buttons2 = buttons & (PLATFORM_PAD_START | PLATFORM_PAD_SELECT);
-
-			if (buttons & PLATFORM_PAD_UP)       buttons2 |= PLATFORM_PAD_DOWN;
-			if (buttons & PLATFORM_PAD_DOWN)     buttons2 |= PLATFORM_PAD_UP;
-			if (buttons & PLATFORM_PAD_RIGHT)    buttons2 |= PLATFORM_PAD_LEFT;
-			if (buttons & PLATFORM_PAD_LEFT)     buttons2 |= PLATFORM_PAD_RIGHT;
-			if (buttons & PLATFORM_PAD_B3)   buttons2 |= PLATFORM_PAD_B1;
-			if (buttons & PLATFORM_PAD_B1)   buttons2 |= PLATFORM_PAD_B3;
-			if (buttons & PLATFORM_PAD_B4) buttons2 |= PLATFORM_PAD_B2;
-			if (buttons & PLATFORM_PAD_B2)    buttons2 |= PLATFORM_PAD_B4;
-			if (buttons & PLATFORM_PAD_R) buttons2 |= PLATFORM_PAD_L;
-			if (buttons & PLATFORM_PAD_L) buttons2 |= PLATFORM_PAD_R;
-
-			buttons = buttons2;
-		}
-	}
-
-	return buttons;
+	return cps_orientation_adjust_buttons(buttons, game_is_vertical,
+		rotates_to_upright, cps_flip_screen != 0);
 }
 
 

@@ -16,7 +16,7 @@
 ******************************************************************************/
 
 int cps_flip_screen;
-int cps_rotate_screen;
+int cps_screen_orientation;
 #if ENABLE_RASTER_OPTION
 int cps_raster_enable;
 #endif

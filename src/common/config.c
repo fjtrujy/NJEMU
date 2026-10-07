@@ -26,6 +26,9 @@
 #include <string.h>
 #include <unistd.h>
 #include "common/config.h"
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "common/cps_orientation.h"
+#endif
 
 /* Target-specific config fragments below reference target-owned settings and
  * input enums. Make that dependency explicit instead of relying on
@@ -662,7 +665,8 @@ void load_gamecfg(const char *name)
 #undef INCLUDE_SETUP_DIPSWITCH
 
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-	if (!machine_screen_type) cps_rotate_screen = 0;
+	if (!machine_screen_type)
+		cps_screen_orientation = CPS_SCREEN_ORIENTATION_AUTO;
 #endif
 
 	if (load_inifile(path, gamecfg, NULL) == 0)
