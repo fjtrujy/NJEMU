@@ -711,6 +711,7 @@ READ16_HANDLER( neogeo_timer_r )
 
 	res |= result_code << 8;
 	if (pending_command) res &= 0x7fff;
+	timer_interleave_sound_poll(m68000_get_reg(M68K_PC), res);
 
 	return res;
 }

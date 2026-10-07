@@ -67,6 +67,10 @@ static int timer_ticks;
 static int timer_left;
 static int active_cpu;
 static int scanline;
+static uint32_t sound_poll_pc;
+static uint16_t sound_poll_status;
+static uint8_t sound_poll_reads;
+static int sound_poll_slice_ended;
 
 
 /******************************************************************************
@@ -90,6 +94,13 @@ static void cpu_execute(int cpunum)
 {
 	if (!cpu[cpunum].suspended)
 	{
+		if (cpunum == CPU_M68000)
+		{
+			sound_poll_pc = 0;
+			sound_poll_status = 0;
+			sound_poll_reads = 0;
+			sound_poll_slice_ended = 0;
+		}
 		active_cpu = cpunum;
 		cpu[cpunum].cycles = timer_ticks * cpu[cpunum].cycles_per_usec;
 		cpu[cpunum].execute(cpu[cpunum].cycles);
@@ -138,6 +149,10 @@ void timer_reset(void)
 	frame_base    = 0;
 
 	active_cpu = CPU_NOTACTIVE;
+	sound_poll_pc = 0;
+	sound_poll_status = 0;
+	sound_poll_reads = 0;
+	sound_poll_slice_ended = 0;
 	memset(&timer, 0, sizeof(timer));
 
 	cpu[CPU_M68000].execute   = m68000_execute;
@@ -177,6 +192,31 @@ void timer_suspend_cpu(int cpunum, int state, int reason)
 		cpu[cpunum].suspended |= reason;
 	else
 		cpu[cpunum].suspended &= ~reason;
+}
+
+void timer_interleave_sound_poll(uint32_t pc, uint16_t status)
+{
+	if (active_cpu != CPU_M68000 || sound_poll_slice_ended)
+		return;
+
+	if (pc != sound_poll_pc || status != sound_poll_status)
+	{
+		sound_poll_pc = pc;
+		sound_poll_status = status;
+		sound_poll_reads = 1;
+		return;
+	}
+
+	if (sound_poll_reads != 0xffu)
+		sound_poll_reads++;
+	if (sound_poll_reads < 8u || *cpu[CPU_M68000].icount <= 0)
+		return;
+
+	/* The 68000 is polling an unchanged sound status at the same PC. End the
+	 * current CPU slice as idle time; the scheduler still advances the sound
+	 * CPU and all timers across the complete timer_ticks interval. */
+	*cpu[CPU_M68000].icount = 0;
+	sound_poll_slice_ended = 1;
 }
 
 

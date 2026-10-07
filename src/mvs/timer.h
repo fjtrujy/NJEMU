@@ -37,6 +37,7 @@
 void timer_reset(void);
 void timer_set_update_handler(void);
 void timer_suspend_cpu(int cpunum, int state, int reason);
+void timer_interleave_sound_poll(uint32_t pc, uint16_t status);
 int timer_enable(int which, int enable);
 void timer_adjust(int which, int duration, int param, void (*callback)(int raram));
 void timer_set(int which, int duration, int param, void (*callback)(int param));
