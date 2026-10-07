@@ -1520,6 +1520,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "CPS2")
         add_executable(qsound_context_tests
             tests/qsound_context_tests.c
+            tests/state_buffer_test_stub.c
             src/sound/qsound.c)
         target_include_directories(qsound_context_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -1607,6 +1608,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         find_package(Threads REQUIRED)
         add_executable(psp_me_qsound_worker_tests
             tests/psp_me_qsound_worker_tests.c
+            tests/state_buffer_test_stub.c
             src/psp/psp_me_spsc_ring.c
             src/psp/psp_me_qsound_worker.c
             src/cpu/z80/cz80.c
@@ -1638,6 +1640,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_test(NAME ym2610_adpcma_job_tests COMMAND ym2610_adpcma_job_tests)
         add_executable(ym2610_context_tests
             tests/ym2610_context_tests.c
+            tests/state_buffer_test_stub.c
             src/sound/ym2610.c)
         target_include_directories(ym2610_context_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -1654,6 +1657,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         find_package(Threads REQUIRED)
         add_executable(psp_me_sound_worker_tests
             tests/psp_me_sound_worker_tests.c
+            tests/state_buffer_test_stub.c
             src/psp/psp_me_spsc_ring.c
             src/psp/psp_me_sound_worker.c
             src/cpu/z80/cz80.c
@@ -1686,6 +1690,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         find_package(Threads REQUIRED)
         add_executable(psp_me_sound_worker_ncdz_tests
             tests/psp_me_sound_worker_ncdz_tests.c
+            tests/state_buffer_test_stub.c
             src/psp/psp_me_spsc_ring.c
             src/psp/psp_me_sound_worker.c
             src/cpu/z80/cz80.c
