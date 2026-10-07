@@ -542,18 +542,26 @@ endif()
 
 if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     list(APPEND COMMON_SRC
+        psp/psp_audio_backend.h
         psp/psp_audio_producer.c
+        psp/psp_me_dispatch.h
+        psp/psp_me_dispatch.c
         psp/psp_me_spsc_ring.h
         psp/psp_me_spsc_ring.c
     )
     if(NJEMU_PSP_ME_AUDIO_JOBS)
         list(APPEND COMMON_SRC
+            psp/psp_audio_backend_jobs.c
             common/qsound_mix_job.h
             common/qsound_mix_job.c
             common/okim6295_job.h
             common/okim6295_job.c
         )
         add_definitions(-DAUDIO_PRODUCER_JOBS=1)
+    elseif("${TARGET}" STREQUAL "CPS2")
+        list(APPEND COMMON_SRC psp/psp_audio_backend_cps2.c)
+    else()
+        list(APPEND COMMON_SRC psp/psp_audio_backend_neogeo.c)
     endif()
     add_definitions(-DPSP_ME_AUDIO=1)
 else()
@@ -566,7 +574,7 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
     # upstream ME samples by compiling the ME boundary and workload with -G0
     # and non-PIC code.
     set_source_files_properties(
-        src/psp/psp_audio_producer.c
+        src/psp/psp_me_dispatch.c
         src/psp/psp_me_spsc_ring.c
         src/psp/psp_me_spsc_ring_mist_test.c
         PROPERTIES COMPILE_OPTIONS "-G0;-fno-pic"
