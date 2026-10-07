@@ -627,6 +627,8 @@ if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
         )
     else()
         list(APPEND COMMON_SRC
+            psp/psp_neogeo_me_sound.h
+            psp/psp_neogeo_me_sound.c
             psp/psp_me_sound_worker.h
             psp/psp_me_sound_worker.c
         )
