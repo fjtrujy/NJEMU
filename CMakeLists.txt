@@ -1837,6 +1837,16 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${WARNING_OPTIONS})
     add_test(NAME audio_me_job_tests COMMAND audio_me_job_tests)
 
+    if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "CPS2")
+        add_executable(qsound_context_tests
+            tests/qsound_context_tests.c
+            src/sound/qsound.c)
+        target_include_directories(qsound_context_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_compile_options(qsound_context_tests PRIVATE ${WARNING_OPTIONS})
+        add_test(NAME qsound_context_tests COMMAND qsound_context_tests)
+    endif()
+
     add_test(NAME game_metadata_generator_tests
         COMMAND "${NJEMU_HOST_TEST}"
             --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"

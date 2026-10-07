@@ -47,6 +47,10 @@ void qsound_sh_stop(void);
 void qsound_sh_reset(void);
 
 size_t qsound_context_size(void);
+bool qsound_context_clone_for_worker(qsound_context_t *destination,
+	const qsound_context_t *source);
+bool qsound_context_restore_from_worker(qsound_context_t *destination,
+	const qsound_context_t *source);
 bool qsound_default_clone_for_worker(qsound_context_t *destination);
 bool qsound_default_restore_from_worker(const qsound_context_t *source);
 void qsound_context_update(qsound_context_t *context, int32_t **buffer, int length);

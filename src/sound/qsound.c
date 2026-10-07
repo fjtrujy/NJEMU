@@ -289,27 +289,39 @@ size_t qsound_context_size(void)
 	return sizeof(qsound_context_t);
 }
 
-bool qsound_default_clone_for_worker(qsound_context_t *destination)
+bool qsound_context_clone_for_worker(qsound_context_t *destination,
+	const qsound_context_t *source)
 {
-	if (!destination || !qsound_default_context.sample_rom)
+	if (!destination || !source || !source->sample_rom)
 		return false;
-	*destination = qsound_default_context;
+	*destination = *source;
 	return true;
 }
 
-bool qsound_default_restore_from_worker(const qsound_context_t *source)
+bool qsound_context_restore_from_worker(qsound_context_t *destination,
+	const qsound_context_t *source)
 {
 	const int8_t *sample_rom;
 	int volume_shift;
 
-	if (!source)
+	if (!destination || !source || !destination->sample_rom)
 		return false;
-	sample_rom = qsound_default_context.sample_rom;
-	volume_shift = qsound_default_context.volume_shift;
-	qsound_default_context = *source;
-	qsound_default_context.sample_rom = sample_rom;
-	qsound_default_context.volume_shift = volume_shift;
+	sample_rom = destination->sample_rom;
+	volume_shift = destination->volume_shift;
+	*destination = *source;
+	destination->sample_rom = sample_rom;
+	destination->volume_shift = volume_shift;
 	return true;
+}
+
+bool qsound_default_clone_for_worker(qsound_context_t *destination)
+{
+	return qsound_context_clone_for_worker(destination, &qsound_default_context);
+}
+
+bool qsound_default_restore_from_worker(const qsound_context_t *source)
+{
+	return qsound_context_restore_from_worker(&qsound_default_context, source);
 }
 
 
