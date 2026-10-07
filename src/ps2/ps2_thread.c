@@ -154,12 +154,21 @@ static void ps2_sleepThread(void *data) {
 
 static void ps2_yieldThread(void)
 {
+	int thread_id = GetThreadId();
 	ee_thread_status_t status;
+	int yield_priority;
 
-	/* The EE kernel does not time-slice ready threads automatically. Query the
-	 * running thread so this remains correct if its application priority changes. */
-	if (ReferThreadStatus(TH_SELF, &status) >= 0)
-		RotateThreadReadyQueue(status.current_priority);
+	if (thread_id < 0 || ReferThreadStatus(thread_id, &status) < 0)
+		return;
+
+	/* The EE kernel does not time-slice ready threads automatically. Audio runs
+	 * one priority below emulation, so temporarily join that queue and rotate it.
+	 * Restore the caller immediately after background work gets a chance to run. */
+	yield_priority = status.current_priority + 1;
+	if (ChangeThreadPriority(thread_id, yield_priority) < 0)
+		return;
+	RotateThreadReadyQueue(yield_priority);
+	(void)ChangeThreadPriority(thread_id, status.current_priority);
 }
 
 static void ps2_exitThread(void *data, int32_t exitCode) {

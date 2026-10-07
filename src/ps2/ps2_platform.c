@@ -26,7 +26,9 @@
 #include <ps2_drivers_img.h>
 #endif
 
-#define PS2_MAIN_THREAD_PRIORITY 0x20
+#if NJEMU_SOUND_THREAD_PRIORITY <= NJEMU_MAIN_THREAD_PRIORITY
+#error "PS2 sound thread must run below the main emulation thread"
+#endif
 
 typedef struct ps2_platform {
 } ps2_platform_t;
@@ -198,9 +200,9 @@ static void ps2_main(void *data, int argc, char *argv[]) {
 	(void)argv;
 
 	/* PS2SDK's InitThread() promotes the startup thread to priority 1. Restore
-	 * an application priority so NJEMU's audio and worker threads can preempt
-	 * the emulation loop even when neither VSync nor frame limiting blocks it. */
-	priority_result = ChangeThreadPriority(GetThreadId(), PS2_MAIN_THREAD_PRIORITY);
+	 * the shared console main-thread priority so audio stays below emulation and
+	 * runs during blocking waits or explicit cooperative yields. */
+	priority_result = ChangeThreadPriority(GetThreadId(), NJEMU_MAIN_THREAD_PRIORITY);
 	if (priority_result < 0)
 		printf("Failed to set PS2 main thread priority: %d\n", priority_result);
 

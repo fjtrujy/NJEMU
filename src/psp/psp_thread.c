@@ -59,10 +59,23 @@ static void psp_sleepThread(void *data) {
 }
 
 static void psp_yieldThread(void) {
+	SceUID thread_id = sceKernelGetThreadId();
 	int priority = sceKernelGetThreadCurrentPriority();
+	int yield_priority;
 
-	if (priority >= 0)
-		sceKernelRotateThreadReadyQueue(priority);
+	if (thread_id < 0 || priority < 0)
+		return;
+
+	/* RotateThreadReadyQueue() only lets peers at the current priority run.
+	 * NJEMU intentionally keeps background audio one priority below the main
+	 * emulation thread.  Temporarily join that queue so uncapped/no-VSync
+	 * emulation can cooperatively hand over the CPU without an artificial
+	 * sleep; once background work blocks, restore the caller's priority. */
+	yield_priority = priority + 1;
+	if (sceKernelChangeThreadPriority(thread_id, yield_priority) < 0)
+		return;
+	sceKernelRotateThreadReadyQueue(yield_priority);
+	(void)sceKernelChangeThreadPriority(thread_id, priority);
 }
 
 static void psp_exitThread(void *data, int32_t exitCode) {

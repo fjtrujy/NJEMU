@@ -18,6 +18,10 @@
 #include "audio_profile.h"
 #include "audio_producer_driver.h"
 
+#ifndef NJEMU_SOUND_THREAD_PRIORITY
+#define NJEMU_SOUND_THREAD_PRIORITY 0x08
+#endif
+
 
 /******************************************************************************
 	Local Variables
@@ -246,7 +250,8 @@ int sound_thread_start(void)
 	}
 
 	sound_thread = thread_driver->init();
-	if (!thread_driver->createThread(sound_thread, "Sound thread", sound_update_thread, 0x08, sound->stack))
+	if (!thread_driver->createThread(sound_thread, "Sound thread", sound_update_thread,
+		NJEMU_SOUND_THREAD_PRIORITY, sound->stack))
 	{
 		fatalerror(TEXT(COULD_NOT_START_SOUND_THREAD));
 		audio_driver->release(game_audio);

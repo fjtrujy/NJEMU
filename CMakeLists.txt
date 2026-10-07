@@ -256,6 +256,14 @@ endif()
 option(USE_DESKTOP_GL "Desktop: compile the OpenGL 3.3 video backend alongside SDL" ${USE_DESKTOP_GL_DEFAULT})
 
 # Add options to compiler definitions
+if(PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PS2")
+    # Keep audio work one priority below the main emulation thread. Both console
+    # backends provide an explicit cooperative yield when no blocking wait occurs.
+    add_definitions(
+        -DNJEMU_MAIN_THREAD_PRIORITY=32
+        -DNJEMU_SOUND_THREAD_PRIORITY=33)
+endif()
+
 if (GUI)
     add_definitions(-DGUI)
 endif()
