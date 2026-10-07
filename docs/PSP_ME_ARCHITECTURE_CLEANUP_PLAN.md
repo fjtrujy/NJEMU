@@ -2,16 +2,29 @@
 
 ## Status
 
-Implementation complete through A7; final cross-platform/hardware validation pending.
+Implementation and all locally available validation are complete. The remaining hard
+gate is the four-target PS Vita CI build: VitaSDK is not installed locally and this
+branch has not been pushed as part of this work.
 
-The implementation baseline was `06ed4f2` (`Plan PSP ME architecture cleanup`).
+Before final validation, `me_sound_coprocessor` was rebased onto both local `master`
+and `origin/master` at `3eeff53` (`Optimize cross-platform texture synchronization`).
+The rebased implementation baseline is `b48c37d` (`Plan PSP ME architecture cleanup`).
 The structural cleanup landed as focused commits:
 
-- `c9a7606` - `Add QSound context equivalence oracle`;
-- `2a9d2d4` - `Neutralize target sound offload interfaces`;
-- `4517753` - `Split PSP ME audio producer backends`;
-- `1bd4cf2` - `Modularize PSP Media Engine CMake configuration`;
-- `09e5efa` - `Guard non-PSP audio producer isolation`.
+- `077a4f6` - `Add QSound context equivalence oracle`;
+- `220e273` - `Neutralize target sound offload interfaces`;
+- `a1bb3e3` - `Split PSP ME audio producer backends`;
+- `bf941df` - `Modularize PSP Media Engine CMake configuration`;
+- `3b3f30b` - `Guard non-PSP audio producer isolation`;
+- `5d63369` - `Document audio producer and PSP ME architecture`.
+
+Final validation also produced focused integration fixes:
+
+- `03455c0` - `Preserve PSP CPU sound profiling isolation`;
+- `e04caca` - `Fix PS2 fast cache default for uncached targets`;
+- `f409d53` - `Accept valued PSP ME capability definitions`;
+- `d211d73` - `Fix CPS2 ME snapshot cache validation`;
+- `e7896a0` - `Restart Neo Geo ME timeline after state I/O`.
 
 A4 intentionally produced no worker-common code. The cache callback/copy helpers are
 only syntactically duplicated, while the workers already diverge in event pumping,
@@ -21,9 +34,10 @@ the Neo Geo worker uses zero as an unbounded wait. Extracting their wait/lifecyc
 logic would therefore merge unlike invariants rather than create a trustworthy shared
 protocol layer.
 
-### Final local validation status
+### Final validation status
 
-The finalized local tree at `91a1b0e` passed the complete Desktop build/test matrix:
+Production validation was run at `e7896a0`, immediately before the final
+documentation-only update. The complete Desktop build/test matrix passes:
 
 - CPS1: 30/30 tests;
 - CPS2: 32/32 tests;
@@ -41,14 +55,46 @@ non-PSP leakage case. The leakage case fails configuration, while PSP MVS CPU-mo
 profiling with `PSP_ME_SOUND_PROFILE=ON` remains valid and does not acquire ME runtime
 dependencies.
 
-PSPSDK, PS2SDK, VitaSDK, `pspsh`, `usbhostfs_pc`, and a local container runtime are
-not available in the current shell environment. Therefore the post-cleanup PSP CPU/ME builds, PS2
-builds, Vita builds, and focused real-PSP regression remain external validation gates.
-They must be completed through CI and/or the appropriate local SDK/hardware before the
-milestone is marked fully closed. No push was performed as part of this cleanup.
+The current PS2SDK cross-build passes for CPS1, CPS2, MVS, and NCDZ. A representative
+MVS ELF also boots in PCSX2 from `host:`, initializes the IOP, video, audio, and pad
+drivers, loads the BIOS/ROM/cache path, reaches `Done.`, and reports no application
+fatal/assert/error before controlled shutdown.
+
+The current PSPSDK matrix passes all eight reference/capability combinations: CPS1,
+CPS2, MVS, and NCDZ each build with both `PSP_ME_AUDIO=OFF` and `PSP_ME_AUDIO=ON`.
+Focused physical-PSP regression then passed the paths that are most sensitive to this
+cleanup:
+
+- the bounded-job hardware oracle completed QSound, OKIM6295, and YM2610 ADPCM-A with
+  `passed=1`, `init=0`, and no mismatch;
+- CPS1 `ffight` and `punisher` both ran through the ME-capable producer on hardware;
+  the audio profiler records bounded `producer_job_wait` work for the classic
+  OKIM6295 path and for QSound;
+- the persistent MVS worker oracle completed four lifecycle generations with
+  `fatal=0`, no state/RAM/bank/I/O mismatch, and no ring overflow;
+- the NCDZ worker oracle completed two cycles with ordered memory, direct YM render,
+  full 64 KiB recovery, autonomous execution, `fatal=0`, and no ring overflow;
+- CPS2 `ssf2` completed save, load, and orderly stop on the persistent QSound worker;
+  every lifecycle step reported prepare/state/resume success, and the worker remained
+  authoritative with `fatal=0` and no overflow;
+- MVS `mslug3`, rebuilt after the Neo Geo state-I/O timeline fix, completed
+  save -> load -> emulator reset -> orderly stop. Worker generations advanced across
+  the timeline boundaries, remained authoritative, and finished with `fatal=0`, zero
+  mismatch counters, and zero command/event overflow;
+- an ME-capable MVS build forced to runtime `Main CPU` reported
+  `audio_processor=1`, `me_available=0`, and `me_authoritative=0`, created no ME worker
+  log, and still completed save/load lifecycle coverage.
+
+The physical harnesses do not expose a deliberate fatal-error injection. Fatal
+snapshot/recovery behavior remains covered by the host worker suites listed above.
+
+VitaSDK is still unavailable locally. The post-cleanup Vita matrix therefore remains
+the only external hard gate and must be run in CI before the milestone is marked fully
+closed. No push was performed as part of this cleanup, and no file under `resources/`
+was modified, staged, or committed.
 
 This plan starts from the validated PSP Media Engine (ME) audio implementation at
-commit `b3b4e89` (`Document CPS1 ME sound-island benchmark`) on branch
+rebased commit `c20cee8` (`Document CPS1 ME sound-island benchmark`) on branch
 `me_sound_coprocessor`.
 
 The purpose of this milestone is not to add another ME execution mode. The purpose

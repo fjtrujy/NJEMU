@@ -93,7 +93,7 @@ The canonical profile is centralized in `CMakeLists.txt`. It enables the stable 
 | Desktop SDL + OpenGL backends | n/a | n/a | n/a | ON |
 | Vita GXM + VitaGL backends | n/a | n/a | Always built | n/a |
 | PS2 accelerated cache I/O | n/a | ON for cached cores | n/a | n/a |
-| PSP Media Engine audio | OFF | n/a | n/a | n/a |
+| PSP Media Engine audio | ON | n/a | n/a | n/a |
 | PSP MVS Ad Hoc | OFF | n/a | n/a | n/a |
 | PS2 external IRX image | n/a | OFF | n/a | n/a |
 | Profiling/sanitizer diagnostics | OFF | OFF | OFF | OFF |
@@ -101,7 +101,7 @@ The canonical profile is centralized in `CMakeLists.txt`. It enables the stable 
 
 Important policy details:
 
-- `PSP_ME_AUDIO` remains outside official downloads because the path is experimental and PPSSPP cannot execute Media Engine code. The canonical PSP EBOOT keeps the normal CPU-audio path.
+- The canonical PSP package enables `PSP_ME_AUDIO`. The validated target-specific ME path retains Main CPU as a first-class runtime/failure fallback, while CI keeps explicit `PSP_ME_AUDIO=OFF` artifacts as the strongest CPU-only/PPSSPP reference configuration.
 - PSP MVS Ad Hoc remains an optional developer/specialized build capability rather than changing the recommended package for every user.
 - The legacy CMake `RELEASE` option is not the same thing as `CMAKE_BUILD_TYPE=Release`; it filters legacy game/bootleg code paths. Canonical packages leave that content filter disabled.
 - PS2 uses the embedded driver image. The external-IRX-image path remains a validation/developer variant.

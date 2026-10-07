@@ -103,8 +103,9 @@ if(NJEMU_CANONICAL_RELEASE)
     set(SAVE_STATE ON CACHE BOOL "Save State" FORCE)
     set(COMMAND_LIST ON CACHE BOOL "Command List" FORCE)
 
-    # These are diagnostics, experimental capabilities, or alternate bootstrap
-    # paths rather than part of the recommended end-user distribution.
+    # Keep diagnostics and alternate bootstrap paths out of the recommended
+    # distribution. The validated PSP ME audio capability is enabled separately
+    # below and retains the normal CPU producer as its runtime fallback.
     set(KERNEL_MODE OFF CACHE BOOL "Kernel Mode" FORCE)
     set(ADHOC OFF CACHE BOOL "Ad Hoc" FORCE)
     set(RELEASE OFF CACHE BOOL "Release" FORCE)
