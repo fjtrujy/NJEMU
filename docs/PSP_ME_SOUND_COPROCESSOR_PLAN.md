@@ -3507,3 +3507,59 @@ This removes duplicate bounded/full rows while retaining CPU-only coverage and t
 relevant ME-enabled GUI/no-GUI/lifecycle combinations. Existing CMake caches that
 still contain `PSP_ME_SOUND_COPROCESSOR` are migrated automatically and report that
 the option is obsolete.
+
+## 21. CPS1 full-QSound sound-island evaluation (2026-10-07) [rejected]
+
+CPS1 QSound was evaluated on real PSP with the same persistent Z80 + QSound worker
+architecture that is successful on CPS2. The prototype preserved the existing CPU
+fallback, handled both CPS1 shared-RAM windows at Z80 `0xc000-0xcfff` and
+`0xf000-0xffff`, restored Z80 bank/suspend state, and integrated reset, save/load and
+sound rendering with the same recovery model as CPS2.
+
+The prototype was functionally stable on physical hardware. With `slammast`, the
+worker became authoritative immediately after the initial snapshot and stayed
+authoritative over repeated 300-frame windows. Representative steady windows showed
+about 1,850 autonomous Z80 advances, 1,250 sound IRQ commands and 83-84 QSound renders
+per 300 frames, with zero command/event overflow, zero fatal worker errors and zero CPU
+recovery failures.
+
+However, the ownership boundary is materially different from CPS2. The CPS1 M68000
+touches QSound shared RAM during essentially every sound scheduler slice. The lazy
+shared-RAM handoff therefore degenerates into one worker `SYNC` per slice. A steady
+300-frame window contained approximately 5,033 total worker commands:
+
+- 1,850 Z80 `ADVANCE` commands;
+- 1,250 sound IRQ commands;
+- 83 QSound render commands;
+- approximately 1,850 synchronization commands required by main-CPU shared-RAM
+  access.
+
+That synchronization cost makes the full sound island slower than the already
+validated bounded-job architecture. A controlled real-PSP benchmark used `slammast`
+at 333 MHz, VSync off, autoframeskip off, frameskip 0, 60 FPS limiter off, sound on,
+Release optimization and no GUI. A temporary 300-frame wall-clock probe was used for
+all three variants and removed after measurement. Averaging the steady windows from
+frames 900-1800 produced:
+
+- **Main CPU:** 138.110 FPS;
+- **bounded QSound ME job:** **140.335 FPS**;
+- **persistent Z80 + QSound ME sound island:** 108.026 FPS.
+
+The bounded job is therefore about **1.6% faster than Main CPU** in this representative
+run, while the full sound island is about **21.8% slower than Main CPU** and **23.0%
+slower than the bounded ME path**. This directly confirms that the strongest ME
+architecture is target-specific: CPS2 benefits from moving the complete sound island,
+but CPS1 QSound does not because its M68000/Z80 communication pattern forces an
+expensive synchronization boundary.
+
+Classic CPS1 was also rechecked on physical PSP with `ffight` and the ME-enabled
+binary. The persistent QSound worker remained inactive, while the bounded OKIM6295 job
+ran on the ME: a steady 300-buffer audio-profile window reported
+`me_wait_n=300`, `me_wait_avg=25 us`, no persistent-worker log and normal
+33.378 ms audio cadence. This confirms that retaining bounded jobs for CPS1 also keeps
+the non-QSound path accelerated.
+
+The production decision is therefore to **retain CPS1 on bounded QSound/OKIM6295 jobs**
+and not merge the full-QSound prototype. `PSP_ME_AUDIO=ON` continues to select the
+measured faster CPS1 architecture, while `PSP_ME_AUDIO=OFF` remains the CPU-only
+reference/PPSSPP-compatible path.
