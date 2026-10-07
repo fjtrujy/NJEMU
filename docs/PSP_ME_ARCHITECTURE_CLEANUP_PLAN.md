@@ -21,6 +21,32 @@ the Neo Geo worker uses zero as an unbounded wait. Extracting their wait/lifecyc
 logic would therefore merge unlike invariants rather than create a trustworthy shared
 protocol layer.
 
+### Final local validation status
+
+The finalized local tree at `91a1b0e` passed the complete Desktop build/test matrix:
+
+- CPS1: 30/30 tests;
+- CPS2: 32/32 tests;
+- MVS: 37/37 tests;
+- NCDZ: 29/29 tests.
+
+Those suites include the QSound context oracle, CPS2 QSound worker oracle, YM2610
+context oracle, Neo Geo worker oracle, NCDZ worker oracle, SPSC ring tests, and bounded
+audio-job tests. Final Desktop executables also contain no `psp_me_*`, legacy
+`cps2_me_sound*`, or `neogeo_me_sound*` symbols.
+
+The CMake isolation contract was additionally exercised with synthetic CPU, CPS1
+bounded, CPS2 persistent, and Neo Geo persistent targets plus an intentional
+non-PSP leakage case. The leakage case fails configuration, while PSP MVS CPU-mode
+profiling with `PSP_ME_SOUND_PROFILE=ON` remains valid and does not acquire ME runtime
+dependencies.
+
+PSPSDK, PS2SDK, VitaSDK, `pspsh`, `usbhostfs_pc`, and a local container runtime are
+not available in the current shell environment. Therefore the post-cleanup PSP CPU/ME builds, PS2
+builds, Vita builds, and focused real-PSP regression remain external validation gates.
+They must be completed through CI and/or the appropriate local SDK/hardware before the
+milestone is marked fully closed. No push was performed as part of this cleanup.
+
 This plan starts from the validated PSP Media Engine (ME) audio implementation at
 commit `b3b4e89` (`Document CPS1 ME sound-island benchmark`) on branch
 `me_sound_coprocessor`.
