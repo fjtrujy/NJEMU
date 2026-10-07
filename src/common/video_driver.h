@@ -140,7 +140,9 @@ typedef struct video_driver
 	void (*startWorkFrame)(void *data, uint32_t color);
 	void (*transferWorkFrame)(void *data, RECT *src_rect, RECT *dst_rect);
 	void (*copyRect)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	/* Legacy "flip" contract: present the source rotated by 180 degrees. */
 	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
+	/* Rotate the CPS vertical raster upright: destination TL receives source TR. */
 	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	/* Make texture writes issued through write*TextureRect visible to drawing.

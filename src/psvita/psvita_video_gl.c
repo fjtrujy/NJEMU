@@ -1008,9 +1008,9 @@ static bool gl_capture_front_to_scratch(psvita_gl_video_t *gl, const RECT *src,
 		for (int x = 0; x < dw; x++) {
 			float sx, sy, px, py;
 			if (rotate) {
-				/* Inverse of HW_ORIENT_ROTATE: dest TL <- src BL. */
-				sx = src->left + ((y + 0.5f) * sw / dh);
-				sy = src->bottom - ((x + 0.5f) * sh / dw);
+				/* Inverse of HW_ORIENT_ROTATE: dest TL <- src TR. */
+				sx = src->right - ((y + 0.5f) * sw / dh);
+				sy = src->top + ((x + 0.5f) * sh / dw);
 			} else {
 				sx = src->left + ((x + 0.5f) * sw / dw);
 				sy = src->top + ((y + 0.5f) * sh / dh);

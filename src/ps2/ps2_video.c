@@ -1400,7 +1400,7 @@ static void ps2_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 
 
 /*--------------------------------------------------------
-	Copy Rectangular Area with 270-degree Rotation
+	Copy CPS Vertical Raster Upright
 --------------------------------------------------------*/
 
 static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
@@ -1418,7 +1418,7 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	int sh = src_rect->bottom - src_rect->top;
 	int dh = dst_rect->bottom - dst_rect->top;
 
-	/* For 270-degree CCW rotation, source width maps to dest height and vice versa */
+	/* The upright transform swaps the source width/height axes. */
 	srcTex.Filter = (sw == dh && sh == dw) ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
 	if (!ps2_setDestination(ps2, dstIndex))
@@ -1429,14 +1429,16 @@ static void ps2_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src
 	gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	u64 color = GS_SETREG_RGBA(0x80, 0x80, 0x80, 0x80);
-	/* 270-degree CCW (= 90-degree CW) rotation UV mapping:
-	   Dest TL <- Source BL, Dest TR <- Source TL,
-	   Dest BL <- Source BR, Dest BR <- Source TR */
+	/*
+	 * Match the video-driver CPS upright presentation contract.
+	 * gsKit's textured-quad interpolation requires the inverse UV winding
+	 * here for the visible result to match the PSP/reference path.
+	 */
 	gsKit_prim_quad_texture(gsGlobal, &srcTex,
-		dst_rect->left,  dst_rect->top,    src_rect->left,  src_rect->bottom,
-		dst_rect->right, dst_rect->top,    src_rect->left,  src_rect->top,
-		dst_rect->left,  dst_rect->bottom, src_rect->right, src_rect->bottom,
-		dst_rect->right, dst_rect->bottom, src_rect->right, src_rect->top,
+		dst_rect->left,  dst_rect->top,    src_rect->right, src_rect->top,
+		dst_rect->right, dst_rect->top,    src_rect->right, src_rect->bottom,
+		dst_rect->left,  dst_rect->bottom, src_rect->left,  src_rect->top,
+		dst_rect->right, dst_rect->bottom, src_rect->left,  src_rect->bottom,
 		0, color);
 
 	gsGlobal->PrimAlphaEnable = prev_alpha;

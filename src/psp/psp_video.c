@@ -685,7 +685,7 @@ static void psp_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *src_r
 }
 
 /*--------------------------------------------------------
-		Copy Rectangular Area with 270-degree Rotation
+		Copy CPS Vertical Raster Upright
 --------------------------------------------------------*/
 
 static void psp_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect,

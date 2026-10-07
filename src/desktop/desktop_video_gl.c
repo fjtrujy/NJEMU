@@ -1051,8 +1051,8 @@ static int gld_capture_to_scratch(desktop_gl_video_t *g, const RECT *src_rect,
 		for (int x = 0; x < dw; x++) {
 			int sx, sy;
 			if (rotate) {
-				sx = (y * sw) / dh;
-				sy = sh - 1 - (x * sh) / dw;
+				sx = sw - 1 - (y * sw) / dh;
+				sy = (x * sh) / dw;
 			} else {
 				sx = (x * sw) / dw;
 				sy = (y * sh) / dh;

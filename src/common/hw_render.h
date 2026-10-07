@@ -26,7 +26,7 @@ typedef struct hw_vertex {
 enum {
 	HW_ORIENT_NORMAL,
 	HW_ORIENT_FLIP,			/* 180 degrees (cocktail flip) */
-	HW_ORIENT_ROTATE,		/* 270 degrees CCW, as the PS2 backend */
+	HW_ORIENT_ROTATE,		/* CPS vertical raster -> upright presentation */
 	HW_ORIENT_ROTATE_FLIP,
 };
 
@@ -107,13 +107,13 @@ static inline bool hw_present_geometry(const RECT *src, const RECT *dst, int ori
 		                       0.0f, -dh / (float)src_h, dy + sb * dh / src_h };
 		break;
 	case HW_ORIENT_ROTATE:
-		/* Dest TL <- src BL, TR <- TL, BL <- BR, BR <- TR. */
-		*m = (hw_xform_t){ 0.0f, -dw / (float)src_h, dx + sb * dw / src_h,
-		                       dh / (float)src_w, 0.0f, dy - sl * dh / src_w };
-		break;
-	case HW_ORIENT_ROTATE_FLIP:
+		/* Dest TL <- src TR, TR <- BR, BL <- TL, BR <- BL. */
 		*m = (hw_xform_t){ 0.0f, dw / (float)src_h, dx - st * dw / src_h,
 		                       -dh / (float)src_w, 0.0f, dy + sr * dh / src_w };
+		break;
+	case HW_ORIENT_ROTATE_FLIP:
+		*m = (hw_xform_t){ 0.0f, -dw / (float)src_h, dx + sb * dw / src_h,
+		                       dh / (float)src_w, 0.0f, dy - sl * dh / src_w };
 		break;
 	default:
 		*m = (hw_xform_t){ dw / (float)src_w, 0.0f, dx - sl * dw / src_w,

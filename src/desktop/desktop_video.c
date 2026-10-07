@@ -453,9 +453,10 @@ static void desktop_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect
 			free(pixels);
 		}
 	}
-    
-    SDL_SetRenderTarget(desktop->renderer, NULL);
-    SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
+
+	SDL_SetRenderTarget(desktop->renderer, NULL);
+	SDL_RenderSetClipRect(desktop->renderer, NULL);
+	SDL_RenderCopy(desktop->renderer, desktop->sdl_texture_scrbitmap, &src, &dst);
 
 	// if (!desktop->draw_extra_info) {
 	// 	return;
@@ -517,8 +518,8 @@ static int desktop_capture_to_scratch(desktop_video_t *desktop, RECT *src_rect, 
 		for (int x = 0; x < dw; x++) {
 			int sx, sy;
 			if (rotate) {
-				sx = (y * sw) / dh;
-				sy = sh - 1 - (x * sh) / dw;
+				sx = sw - 1 - (y * sw) / dh;
+				sy = (x * sh) / dw;
 			} else {
 				sx = (x * sw) / dw;
 				sy = (y * sh) / dh;
@@ -571,15 +572,87 @@ static void desktop_copyRectFlip(void *data, int srcIndex, int dstIndex, RECT *s
 
 
 /*--------------------------------------------------------
-	Copy Rectangular Area with 270-degree Rotation
+	Copy CPS Vertical Raster Upright
 --------------------------------------------------------*/
 
 static void desktop_copyRectRotate(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect)
 {
 	desktop_video_t *desktop = (desktop_video_t *)data;
 	if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
-		dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER)
+		dstIndex == COMMON_GRAPHIC_OBJECTS_INITIAL_TEXTURE_LAYER) {
 		desktop_capture_to_scratch(desktop, src_rect, dst_rect, 1);
+	} else if (srcIndex == COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP &&
+		dstIndex == COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER) {
+	#if !SDL_VERSION_ATLEAST(2, 0, 18)
+		SDL_Rect src = {
+			src_rect->left,
+			src_rect->top,
+			src_rect->right - src_rect->left,
+			src_rect->bottom - src_rect->top
+		};
+		const int final_width = dst_rect->right - dst_rect->left;
+		const int final_height = dst_rect->bottom - dst_rect->top;
+		const int center_x = dst_rect->left + final_width / 2;
+		const int center_y = dst_rect->top + final_height / 2;
+		SDL_Rect rotated_dst = {
+			center_x - final_height / 2,
+			center_y - final_width / 2,
+			final_height,
+			final_width
+		};
+	#endif
+
+		SDL_SetRenderTarget(desktop->renderer, NULL);
+		SDL_RenderSetClipRect(desktop->renderer, NULL);
+		SDL_SetRenderDrawColor(desktop->renderer, 0, 0, 0, 0xff);
+		SDL_RenderClear(desktop->renderer);
+	#if SDL_VERSION_ATLEAST(2, 0, 18)
+		{
+			int texture_width;
+			int texture_height;
+			SDL_Vertex vertices[4];
+			const int indices[] = { 0, 1, 2, 2, 1, 3 };
+			const SDL_Color white = { 255, 255, 255, 255 };
+			float u0, u1, v0, v1;
+
+			SDL_QueryTexture(desktop->sdl_texture_scrbitmap, NULL, NULL,
+				&texture_width, &texture_height);
+			u0 = (src_rect->left + 0.5f) / texture_width;
+			u1 = (src_rect->right - 0.5f) / texture_width;
+			v0 = (src_rect->top + 0.5f) / texture_height;
+			v1 = (src_rect->bottom - 0.5f) / texture_height;
+
+			/*
+			 * Describe the rotated quad explicitly instead of using
+			 * SDL_RenderCopyEx on a sub-rectangle. The latter can sample beyond
+			 * the CPS source bounds on some SDL renderers, exposing work-frame
+			 * border texels as coloured columns. Half-texel UVs keep filtering
+			 * inside the visible raster.
+			 */
+			vertices[0] = (SDL_Vertex){
+				{ (float)dst_rect->left, (float)dst_rect->top },
+				white, { u1, v0 }
+			};
+			vertices[1] = (SDL_Vertex){
+				{ (float)dst_rect->right, (float)dst_rect->top },
+				white, { u1, v1 }
+			};
+			vertices[2] = (SDL_Vertex){
+				{ (float)dst_rect->left, (float)dst_rect->bottom },
+				white, { u0, v0 }
+			};
+			vertices[3] = (SDL_Vertex){
+				{ (float)dst_rect->right, (float)dst_rect->bottom },
+				white, { u0, v1 }
+			};
+			SDL_RenderGeometry(desktop->renderer, desktop->sdl_texture_scrbitmap,
+				vertices, 4, indices, 6);
+		}
+	#else
+		SDL_RenderCopyEx(desktop->renderer, desktop->sdl_texture_scrbitmap,
+			&src, &rotated_dst, 270.0, NULL, SDL_FLIP_NONE);
+	#endif
+	}
 }
 
 
