@@ -29,7 +29,7 @@
 #include "common/ui.h"
 #include "common/filer.h"
 #include "common/config.h"
-#include "common/neogeo_me_sound_shadow.h"
+#include "common/neogeo_sound_offload.h"
 
 static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
 {
@@ -42,7 +42,7 @@ static void byte_swap_pairs_in_place(uint8_t *data, size_t length)
 	}
 }
 
-static bool neogeo_sync_me_sound_from_cpu(void)
+static bool neogeo_sync_sound_offload_from_cpu(void)
 {
 	cz80_state_t z80_state;
 	uint32_t z80_banks[4];
@@ -53,7 +53,7 @@ static bool neogeo_sync_me_sound_from_cpu(void)
 	Cz80_Get_State(&CZ80, &z80_state);
 	neogeo_get_z80_shadow_state(z80_banks, &sound_code, &pending_command,
 		&result_code);
-	return neogeo_me_sound_shadow_z80_snapshot(&z80_state, memory_region_cpu2,
+	return neogeo_sound_offload_z80_snapshot(&z80_state, memory_region_cpu2,
 		memory_region_cpu2, memory_length_cpu2, z80_banks, sound_code,
 		pending_command, result_code, memory_length_sound1,
 		memory_length_sound2 ? memory_length_sound2 : memory_length_sound1);
@@ -61,14 +61,14 @@ static bool neogeo_sync_me_sound_from_cpu(void)
 
 bool neogeo_sound_state_prepare(void)
 {
-	return neogeo_me_sound_shadow_prepare_cpu_state();
+	return neogeo_sound_offload_prepare_cpu_state();
 }
 
 bool neogeo_sound_state_resume(void)
 {
-	if (!neogeo_me_sound_shadow_state_resume_requested())
+	if (!neogeo_sound_offload_state_resume_requested())
 		return true;
-	return neogeo_sync_me_sound_from_cpu();
+	return neogeo_sync_sound_offload_from_cpu();
 }
 
 /******************************************************************************
@@ -213,7 +213,7 @@ static void neogeo_reset(void)
 	neogeo_video_reset();
 
 	sound_reset();
-	(void)neogeo_sync_me_sound_from_cpu();
+	(void)neogeo_sync_sound_offload_from_cpu();
 	blit_clear_all_sprite();
 	autoframeskip_reset();
 

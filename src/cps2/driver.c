@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "cps2.h"
-#include "common/cps2_me_sound_shadow.h"
+#include "common/cps2_sound_offload.h"
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -249,7 +249,7 @@ READ16_HANDLER( cps2_inputport1_r )
 
 READ16_HANDLER( qsound_sharedram1_r )
 {
-	(void)cps2_me_sound_main_shared_ram_access(false);
+	(void)cps2_sound_offload_main_shared_ram_access(false);
 	offset &= 0xfff;
 	return qsound_sharedram1[offset] | 0xff00;
 }
@@ -258,7 +258,7 @@ WRITE16_HANDLER( qsound_sharedram1_w )
 {
 	if (ACCESSING_LSB)
 	{
-		(void)cps2_me_sound_main_shared_ram_access(true);
+		(void)cps2_sound_offload_main_shared_ram_access(true);
 		offset &= 0xfff;
 		qsound_sharedram1[offset] = data;
 	}

@@ -18,7 +18,7 @@
 #if (EMU_SYSTEM == CPS1)
 #include "cps1/memintrf.h"
 #elif (EMU_SYSTEM == CPS2)
-#include "common/cps2_me_sound_shadow.h"
+#include "common/cps2_sound_offload.h"
 #include "cps2/memintrf.h"
 #endif
 
@@ -46,7 +46,7 @@ static const int ALIGN16_DATA qsound_pan_table[33] =
 };
 
 #if defined(AUDIO_PRODUCER_JOBS)
-static bool qsound_update_me(int32_t **buffer, int length)
+static bool qsound_update_producer_job(int32_t **buffer, int length)
 {
 	uint64_t wait_start;
 	int ch;
@@ -118,7 +118,7 @@ static bool qsound_update_me(int32_t **buffer, int length)
 	{
 		wait_start = audio_profile_now_us();
 		audio_producer_driver->waitJob();
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+		audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT,
 			audio_profile_now_us() - wait_start);
 	}
 
@@ -197,11 +197,11 @@ void qsound_context_update(qsound_context_t *context, int32_t **buffer, int leng
 static void qsound_update(int32_t **buffer, int length)
 {
 #if (EMU_SYSTEM == CPS2)
-	if (cps2_me_sound_render(buffer, (uint32_t)length))
+	if (cps2_sound_offload_render(buffer, (uint32_t)length))
 		return;
 #endif
 #if defined(AUDIO_PRODUCER_JOBS)
-	if (qsound_update_me(buffer, length))
+	if (qsound_update_producer_job(buffer, length))
 		return;
 #endif
 	qsound_context_update(&qsound_default_context, buffer, length);

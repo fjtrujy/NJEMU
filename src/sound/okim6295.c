@@ -199,7 +199,7 @@ void OKIM6295_set_samplerate(void)
 }
 
 #if defined(AUDIO_PRODUCER_JOBS)
-static bool OKIM6295_submit_me_job(int length)
+static bool OKIM6295_submit_producer_job(int length)
 {
 	uint64_t total_decodes;
 	uint32_t voice_index;
@@ -269,14 +269,14 @@ static bool OKIM6295_submit_me_job(int length)
 		okim6295_job, sizeof(*okim6295_job));
 }
 
-static void OKIM6295_finish_me_job(int32_t *buffer, int length)
+static void OKIM6295_finish_producer_job(int32_t *buffer, int length)
 {
 	uint64_t wait_start = audio_profile_now_us();
 	uint32_t voice_index;
 	int sample;
 
 	audio_producer_driver->waitJob();
-	audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+	audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT,
 		audio_profile_now_us() - wait_start);
 	if (!okim6295_job || okim6295_job->error ||
 		okim6295_job->control_generation != okim6295_control_generation)

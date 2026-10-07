@@ -605,7 +605,10 @@ endif()
 
 if(PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_SOUND_PROFILE)
     list(APPEND COMMON_SRC psp/psp_me_sound_profile.c)
-    add_definitions(-DPSP_ME_SOUND_PROFILE=1)
+    add_definitions(
+        -DNJEMU_SOUND_OFFLOAD_PROFILE=1
+        -DPSP_ME_SOUND_PROFILE=1
+    )
 endif()
 
 if(PSP_ME_RING_SELFTEST)
@@ -619,7 +622,7 @@ endif()
 if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
     if("${TARGET}" STREQUAL "CPS2")
         list(APPEND COMMON_SRC
-            common/cps2_me_sound_shadow.h
+            common/cps2_sound_offload.h
             psp/psp_cps2_me_sound.h
             psp/psp_cps2_me_sound.c
             psp/psp_me_qsound_worker.h
@@ -633,7 +636,10 @@ if(NJEMU_PSP_ME_SOUND_COPROCESSOR)
             psp/psp_me_sound_worker.c
         )
     endif()
-    add_definitions(-DPSP_ME_SOUND_COPROCESSOR=1)
+    add_definitions(
+        -DNJEMU_SOUND_OFFLOAD=1
+        -DPSP_ME_SOUND_COPROCESSOR=1
+    )
 endif()
 
 find_package(miniz 3.1.2 CONFIG QUIET)
@@ -840,8 +846,8 @@ if (${TARGET} STREQUAL "MVS")
         common/dip_metadata.c
         mvs/timer.h
         mvs/timer.c
-        mvs/me_sound_profile.h
-        common/neogeo_me_sound_shadow.h
+        mvs/sound_offload_profile.h
+        common/neogeo_sound_offload.h
         mvs/vidhrdw.h
         mvs/vidhrdw.c
         mvs/sprite_common.h
@@ -1826,16 +1832,16 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     add_test(NAME release_packaging_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
 
-    add_executable(audio_me_job_tests
-        tests/audio_me_job_tests.c
+    add_executable(audio_producer_job_tests
+        tests/audio_producer_job_tests.c
         src/common/qsound_mix_job.c
         src/common/okim6295_job.c)
-    target_include_directories(audio_me_job_tests PRIVATE
+    target_include_directories(audio_producer_job_tests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src")
-    target_compile_options(audio_me_job_tests PRIVATE
+    target_compile_options(audio_producer_job_tests PRIVATE
         ${COMMON_FLAGS}
         ${WARNING_OPTIONS})
-    add_test(NAME audio_me_job_tests COMMAND audio_me_job_tests)
+    add_test(NAME audio_producer_job_tests COMMAND audio_producer_job_tests)
 
     if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "CPS2")
         add_executable(qsound_context_tests

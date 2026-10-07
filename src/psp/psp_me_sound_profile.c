@@ -6,35 +6,35 @@
 #include "common/audio_producer_driver.h"
 #include "common/emulator_options.h"
 #include "common/runtime_paths.h"
-#include "common/neogeo_me_sound_shadow.h"
-#include "mvs/me_sound_profile.h"
+#include "common/neogeo_sound_offload.h"
+#include "mvs/sound_offload_profile.h"
 
-#define MVS_ME_SOUND_PROFILE_WINDOW_FRAMES 300u
+#define MVS_SOUND_OFFLOAD_PROFILE_WINDOW_FRAMES 300u
 
-typedef struct mvs_me_sound_profile_stats
+typedef struct mvs_sound_offload_profile_stats
 {
 	uint64_t total_us;
 	uint32_t max_us;
 	uint32_t count;
-} mvs_me_sound_profile_stats_t;
+} mvs_sound_offload_profile_stats_t;
 
-static mvs_me_sound_profile_stats_t
-	profile_stats[MVS_ME_SOUND_PROFILE_METRIC_COUNT];
-static uint32_t profile_events[MVS_ME_SOUND_PROFILE_EVENT_COUNT];
+static mvs_sound_offload_profile_stats_t
+	profile_stats[MVS_SOUND_OFFLOAD_PROFILE_METRIC_COUNT];
+static uint32_t profile_events[MVS_SOUND_OFFLOAD_PROFILE_EVENT_COUNT];
 static uint32_t completed_frames;
 static uint64_t window_start_us;
 static uint64_t last_frame_completed_us;
-static uint32_t frame_samples_us[MVS_ME_SOUND_PROFILE_WINDOW_FRAMES];
-static uint32_t frame_sorted_us[MVS_ME_SOUND_PROFILE_WINDOW_FRAMES];
+static uint32_t frame_samples_us[MVS_SOUND_OFFLOAD_PROFILE_WINDOW_FRAMES];
+static uint32_t frame_sorted_us[MVS_SOUND_OFFLOAD_PROFILE_WINDOW_FRAMES];
 static uint32_t frame_sample_count;
 
-static const char *const metric_names[MVS_ME_SOUND_PROFILE_METRIC_COUNT] = {
+static const char *const metric_names[MVS_SOUND_OFFLOAD_PROFILE_METRIC_COUNT] = {
 	"m68000",
 	"z80",
 	"scheduler",
 };
 
-static const char *const event_names[MVS_ME_SOUND_PROFILE_EVENT_COUNT] = {
+static const char *const event_names[MVS_SOUND_OFFLOAD_PROFILE_EVENT_COUNT] = {
 	"sound_cmd",
 	"sound_latch",
 	"main_status_read",
@@ -52,18 +52,18 @@ static const char *const event_names[MVS_ME_SOUND_PROFILE_EVENT_COUNT] = {
 	"timer_slice",
 };
 
-uint64_t mvs_me_sound_profile_now_us(void)
+uint64_t mvs_sound_offload_profile_now_us(void)
 {
 	return sceKernelGetSystemTimeWide();
 }
 
-static void mvs_me_sound_profile_start_window(void)
+static void mvs_sound_offload_profile_start_window(void)
 {
 	if (window_start_us == 0)
-		window_start_us = mvs_me_sound_profile_now_us();
+		window_start_us = mvs_sound_offload_profile_now_us();
 }
 
-void mvs_me_sound_profile_reset(void)
+void mvs_sound_offload_profile_reset(void)
 {
 	completed_frames = 0;
 	window_start_us = 0;
@@ -74,16 +74,16 @@ void mvs_me_sound_profile_reset(void)
 	memset(frame_samples_us, 0, sizeof(frame_samples_us));
 }
 
-void mvs_me_sound_profile_add_time(mvs_me_sound_profile_metric_t metric,
+void mvs_sound_offload_profile_add_time(mvs_sound_offload_profile_metric_t metric,
 	uint64_t elapsed_us)
 {
-	mvs_me_sound_profile_stats_t *stats;
+	mvs_sound_offload_profile_stats_t *stats;
 	uint32_t sample;
 
-	if ((unsigned int)metric >= MVS_ME_SOUND_PROFILE_METRIC_COUNT)
+	if ((unsigned int)metric >= MVS_SOUND_OFFLOAD_PROFILE_METRIC_COUNT)
 		return;
 
-	mvs_me_sound_profile_start_window();
+	mvs_sound_offload_profile_start_window();
 	stats = &profile_stats[metric];
 	sample = elapsed_us > UINT32_MAX ? UINT32_MAX : (uint32_t)elapsed_us;
 	stats->total_us += sample;
@@ -92,17 +92,17 @@ void mvs_me_sound_profile_add_time(mvs_me_sound_profile_metric_t metric,
 	stats->count++;
 }
 
-void mvs_me_sound_profile_event(mvs_me_sound_profile_event_t event)
+void mvs_sound_offload_profile_event(mvs_sound_offload_profile_event_t event)
 {
-	if ((unsigned int)event >= MVS_ME_SOUND_PROFILE_EVENT_COUNT)
+	if ((unsigned int)event >= MVS_SOUND_OFFLOAD_PROFILE_EVENT_COUNT)
 		return;
 
-	mvs_me_sound_profile_start_window();
+	mvs_sound_offload_profile_start_window();
 	if (profile_events[event] != UINT32_MAX)
 		profile_events[event]++;
 }
 
-static void mvs_me_sound_profile_report(uint64_t now_us)
+static void mvs_sound_offload_profile_report(uint64_t now_us)
 {
 	char path[1024];
 	char line[2048];
@@ -153,7 +153,7 @@ static void mvs_me_sound_profile_report(uint64_t now_us)
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	me_coprocessor = 1u;
-	me_authoritative = neogeo_me_sound_shadow_authoritative() ? 1u : 0u;
+	me_authoritative = neogeo_sound_offload_authoritative() ? 1u : 0u;
 #endif
 
 	written = snprintf(cursor, remaining,
@@ -179,9 +179,9 @@ static void mvs_me_sound_profile_report(uint64_t now_us)
 	cursor += written;
 	remaining -= (size_t)written;
 
-	for (i = 0; i < MVS_ME_SOUND_PROFILE_METRIC_COUNT; i++)
+	for (i = 0; i < MVS_SOUND_OFFLOAD_PROFILE_METRIC_COUNT; i++)
 	{
-		const mvs_me_sound_profile_stats_t *stats = &profile_stats[i];
+		const mvs_sound_offload_profile_stats_t *stats = &profile_stats[i];
 		uint64_t average = stats->count ? stats->total_us / stats->count : 0;
 
 		written = snprintf(cursor, remaining,
@@ -196,7 +196,7 @@ static void mvs_me_sound_profile_report(uint64_t now_us)
 		remaining -= (size_t)written;
 	}
 
-	for (i = 0; i < MVS_ME_SOUND_PROFILE_EVENT_COUNT; i++)
+	for (i = 0; i < MVS_SOUND_OFFLOAD_PROFILE_EVENT_COUNT; i++)
 	{
 		written = snprintf(cursor, remaining, " %s=%lu",
 			event_names[i], (unsigned long)profile_events[i]);
@@ -218,27 +218,27 @@ static void mvs_me_sound_profile_report(uint64_t now_us)
 	}
 }
 
-void mvs_me_sound_profile_frame_completed(void)
+void mvs_sound_offload_profile_frame_completed(void)
 {
 	uint64_t now_us;
 	uint64_t frame_us;
 
-	mvs_me_sound_profile_start_window();
-	now_us = mvs_me_sound_profile_now_us();
+	mvs_sound_offload_profile_start_window();
+	now_us = mvs_sound_offload_profile_now_us();
 	if (last_frame_completed_us == 0)
 		last_frame_completed_us = window_start_us;
 	frame_us = now_us - last_frame_completed_us;
 	last_frame_completed_us = now_us;
-	if (frame_sample_count < MVS_ME_SOUND_PROFILE_WINDOW_FRAMES)
+	if (frame_sample_count < MVS_SOUND_OFFLOAD_PROFILE_WINDOW_FRAMES)
 	{
 		frame_samples_us[frame_sample_count++] =
 			frame_us > UINT32_MAX ? UINT32_MAX : (uint32_t)frame_us;
 	}
 	completed_frames++;
-	if (completed_frames < MVS_ME_SOUND_PROFILE_WINDOW_FRAMES)
+	if (completed_frames < MVS_SOUND_OFFLOAD_PROFILE_WINDOW_FRAMES)
 		return;
 
-	mvs_me_sound_profile_report(now_us);
+	mvs_sound_offload_profile_report(now_us);
 	completed_frames = 0;
 	window_start_us = now_us;
 	frame_sample_count = 0;

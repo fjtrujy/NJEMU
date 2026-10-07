@@ -6,7 +6,7 @@
 #include <pspthreadman.h>
 #include "psp/psp_cps2_me_sound.h"
 #include "common/audio_profile.h"
-#include "common/cps2_me_sound_shadow.h"
+#include "common/cps2_sound_offload.h"
 #include "common/runtime_paths.h"
 #include "cps2/timer.h"
 #include "cps2/driver.h"
@@ -330,7 +330,7 @@ done:
 	return result;
 }
 
-bool cps2_me_sound_snapshot_from_cpu(void)
+bool cps2_sound_offload_snapshot_from_cpu(void)
 {
 	cz80_state_t state;
 	bool result = false;
@@ -367,7 +367,7 @@ bool cps2_me_sound_snapshot_from_cpu(void)
 	return result;
 }
 
-bool cps2_me_sound_prepare_cpu_state(void)
+bool cps2_sound_offload_prepare_cpu_state(void)
 {
 	resume_requested = is_authoritative();
 	if (!is_authoritative() && !recovery_required())
@@ -380,7 +380,7 @@ bool cps2_me_sound_prepare_cpu_state(void)
 	return true;
 }
 
-bool cps2_me_sound_resume_from_cpu(void)
+bool cps2_sound_offload_resume_from_cpu(void)
 {
 	bool resume = resume_requested;
 
@@ -394,15 +394,15 @@ bool cps2_me_sound_resume_from_cpu(void)
 	 * FIFO time-regression guard remains meaningful. */
 	if (!psp_cps2_me_sound_reset_generation())
 		return false;
-	return cps2_me_sound_snapshot_from_cpu();
+	return cps2_sound_offload_snapshot_from_cpu();
 }
 
-bool cps2_me_sound_z80_cpu_suppressed(void)
+bool cps2_sound_offload_z80_cpu_suppressed(void)
 {
 	return is_authoritative() || recovery_required();
 }
 
-bool cps2_me_sound_main_slice_begin(void)
+bool cps2_sound_offload_main_slice_begin(void)
 {
 	main_slice_active = false;
 	main_slice_shared_acquired = false;
@@ -418,7 +418,7 @@ bool cps2_me_sound_main_slice_begin(void)
 	return true;
 }
 
-bool cps2_me_sound_main_shared_ram_access(bool write)
+bool cps2_sound_offload_main_shared_ram_access(bool write)
 {
 	bool result = false;
 	bool locked = false;
@@ -461,7 +461,7 @@ fail:
 	return result;
 }
 
-bool cps2_me_sound_main_slice_finish(uint32_t cycles, uint64_t emulated_time,
+bool cps2_sound_offload_main_slice_finish(uint32_t cycles, uint64_t emulated_time,
 	bool run_z80)
 {
 	bool result = false;
@@ -499,7 +499,7 @@ done:
 	return true;
 }
 
-bool cps2_me_sound_advance(uint32_t cycles, uint64_t emulated_time)
+bool cps2_sound_offload_advance(uint32_t cycles, uint64_t emulated_time)
 {
 	bool result = false;
 
@@ -526,7 +526,7 @@ bool cps2_me_sound_advance(uint32_t cycles, uint64_t emulated_time)
 	return true;
 }
 
-bool cps2_me_sound_irq(int32_t state, uint64_t emulated_time)
+bool cps2_sound_offload_irq(int32_t state, uint64_t emulated_time)
 {
 	bool result = false;
 
@@ -546,7 +546,7 @@ bool cps2_me_sound_irq(int32_t state, uint64_t emulated_time)
 	return result;
 }
 
-bool cps2_me_sound_z80_reset_line(int state, uint64_t emulated_time)
+bool cps2_sound_offload_z80_reset_line(int state, uint64_t emulated_time)
 {
 	bool result = false;
 
@@ -567,7 +567,7 @@ bool cps2_me_sound_z80_reset_line(int state, uint64_t emulated_time)
 	return result;
 }
 
-bool cps2_me_sound_memory_read(uint32_t offset, uint8_t *data, uint32_t size)
+bool cps2_sound_offload_memory_read(uint32_t offset, uint8_t *data, uint32_t size)
 {
 	bool result = false;
 
@@ -588,7 +588,7 @@ bool cps2_me_sound_memory_read(uint32_t offset, uint8_t *data, uint32_t size)
 	return result;
 }
 
-bool cps2_me_sound_memory_write_byte(uint32_t offset, uint8_t data)
+bool cps2_sound_offload_memory_write_byte(uint32_t offset, uint8_t data)
 {
 	bool result = false;
 
@@ -608,7 +608,7 @@ bool cps2_me_sound_memory_write_byte(uint32_t offset, uint8_t data)
 	return result;
 }
 
-bool cps2_me_sound_render(int32_t **buffer, uint32_t samples)
+bool cps2_sound_offload_render(int32_t **buffer, uint32_t samples)
 {
 	uint64_t wait_start;
 	bool submitted = false;
@@ -646,7 +646,7 @@ bool cps2_me_sound_render(int32_t **buffer, uint32_t samples)
 		}
 		if (result == PSP_ME_QSOUND_RENDER_COMPLETE)
 		{
-			audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+			audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT,
 				sceKernelGetSystemTimeWide() - wait_start);
 			return true;
 		}
@@ -661,7 +661,7 @@ bool cps2_me_sound_render(int32_t **buffer, uint32_t samples)
 	return false;
 }
 
-void cps2_me_sound_frame_completed(void)
+void cps2_sound_offload_frame_completed(void)
 {
 	window_frames++;
 	if (window_frames >= 300u)

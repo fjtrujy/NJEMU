@@ -8,7 +8,7 @@
 #include "psp/psp_neogeo_me_sound.h"
 #include "common/audio_profile.h"
 #include "common/emulator_options.h"
-#include "common/neogeo_me_sound_shadow.h"
+#include "common/neogeo_sound_offload.h"
 #include "common/runtime_paths.h"
 #ifdef SAVE_STATE
 #include "common/state.h"
@@ -361,13 +361,13 @@ done:
 	return result;
 }
 
-void neogeo_me_sound_shadow_scheduler_boundary(void)
+void neogeo_sound_offload_scheduler_boundary(void)
 {
 	if (me_sound_cpu_recovery_required)
 		(void)psp_me_sound_recover_cpu();
 }
 
-bool neogeo_me_sound_shadow_z80_cpu_suppressed(void)
+bool neogeo_sound_offload_z80_cpu_suppressed(void)
 {
 	return me_sound_z80_control_authoritative || me_sound_cpu_recovery_required;
 }
@@ -415,19 +415,19 @@ done:
 	return result;
 }
 
-bool neogeo_me_sound_shadow_z80_memory_read(uint32_t offset,
+bool neogeo_sound_offload_z80_memory_read(uint32_t offset,
 	uint8_t *data, uint32_t size)
 {
 	return psp_me_sound_z80_memory_read_common(offset, data, size, false);
 }
 
-bool neogeo_me_sound_shadow_z80_memory_read_clear(uint32_t offset,
+bool neogeo_sound_offload_z80_memory_read_clear(uint32_t offset,
 	uint8_t *data, uint32_t size)
 {
 	return psp_me_sound_z80_memory_read_common(offset, data, size, true);
 }
 
-bool neogeo_me_sound_shadow_z80_memory_write_byte(uint32_t offset, uint8_t data)
+bool neogeo_sound_offload_z80_memory_write_byte(uint32_t offset, uint8_t data)
 {
 	bool result = false;
 	bool active = me_sound_z80_control_authoritative &&
@@ -456,7 +456,7 @@ bool neogeo_me_sound_shadow_z80_memory_write_byte(uint32_t offset, uint8_t data)
 	return result;
 }
 
-bool neogeo_me_sound_shadow_pcm_write_byte(uint32_t offset, uint8_t data)
+bool neogeo_sound_offload_pcm_write_byte(uint32_t offset, uint8_t data)
 {
 #if (EMU_SYSTEM == NCDZ)
 	bool result = false;
@@ -724,7 +724,7 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 }
 
-bool neogeo_me_sound_shadow_command(uint8_t command, uint64_t emulated_time)
+bool neogeo_sound_offload_command(uint8_t command, uint64_t emulated_time)
 {
 	bool result = false;
 	bool active = __atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
@@ -775,7 +775,7 @@ bool neogeo_me_sound_shadow_command(uint8_t command, uint64_t emulated_time)
 	return result;
 }
 
-void neogeo_me_sound_shadow_status_pending(void)
+void neogeo_sound_offload_status_pending(void)
 {
 	if (__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE))
 		__atomic_store_n(&me_sound_status_dirty, true, __ATOMIC_RELEASE);
@@ -802,7 +802,7 @@ static psp_me_sound_status_validation_t psp_me_sound_present_status(
 		presented_pending, presented_result);
 }
 
-bool neogeo_me_sound_shadow_main_status(uint8_t sound_code, uint8_t pending_command,
+bool neogeo_sound_offload_main_status(uint8_t sound_code, uint8_t pending_command,
 	uint8_t result_code, uint8_t *presented_pending, uint8_t *presented_result)
 {
 	psp_me_sound_status_snapshot_t status;
@@ -927,7 +927,7 @@ done:
 	return result;
 }
 
-bool neogeo_me_sound_shadow_z80_snapshot(const cz80_state_t *state,
+bool neogeo_sound_offload_z80_snapshot(const cz80_state_t *state,
 	const uint8_t *visible_memory, const uint8_t *source_rom,
 	uint32_t source_length, const uint32_t banks[4], uint8_t sound_code,
 	uint8_t pending_command, uint8_t result_code, uint32_t pcm_a_size,
@@ -996,7 +996,7 @@ done:
 	return result;
 }
 
-bool neogeo_me_sound_shadow_prepare_cpu_state(void)
+bool neogeo_sound_offload_prepare_cpu_state(void)
 {
 	me_sound_state_resume_me = me_sound_z80_control_authoritative &&
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
@@ -1012,7 +1012,7 @@ bool neogeo_me_sound_shadow_prepare_cpu_state(void)
 	return true;
 }
 
-bool neogeo_me_sound_shadow_state_resume_requested(void)
+bool neogeo_sound_offload_state_resume_requested(void)
 {
 	bool resume = me_sound_state_resume_me;
 
@@ -1020,7 +1020,7 @@ bool neogeo_me_sound_shadow_state_resume_requested(void)
 	return resume;
 }
 
-bool neogeo_me_sound_shadow_z80_slice_begin(uint64_t horizon_time,
+bool neogeo_sound_offload_z80_slice_begin(uint64_t horizon_time,
 	uint32_t scheduler_time_left)
 {
 	bool active = __atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
@@ -1115,17 +1115,17 @@ static void psp_me_sound_z80_record_io(uint16_t port, uint8_t type, uint8_t valu
 		me_sound_z80_io_peak = me_sound_z80_io_count;
 }
 
-void neogeo_me_sound_shadow_z80_io_read(uint16_t port, uint8_t value)
+void neogeo_sound_offload_z80_io_read(uint16_t port, uint8_t value)
 {
 	psp_me_sound_z80_record_io(port, PSP_ME_SOUND_Z80_IO_READ, value);
 }
 
-void neogeo_me_sound_shadow_z80_io_write(uint16_t port, uint8_t value)
+void neogeo_sound_offload_z80_io_write(uint16_t port, uint8_t value)
 {
 	psp_me_sound_z80_record_io(port, PSP_ME_SOUND_Z80_IO_WRITE, value);
 }
 
-void neogeo_me_sound_shadow_z80_preempt(uint32_t timer_channel)
+void neogeo_sound_offload_z80_preempt(uint32_t timer_channel)
 {
 	if (timer_channel > UINT16_MAX)
 	{
@@ -1136,7 +1136,7 @@ void neogeo_me_sound_shadow_z80_preempt(uint32_t timer_channel)
 		PSP_ME_SOUND_Z80_IO_PREEMPT, 0);
 }
 
-void neogeo_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time)
+void neogeo_sound_offload_z80_irq(int32_t state, uint64_t emulated_time)
 {
 	bool result = true;
 
@@ -1166,7 +1166,7 @@ void neogeo_me_sound_shadow_z80_irq(int32_t state, uint64_t emulated_time)
 	}
 }
 
-void neogeo_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time)
+void neogeo_sound_offload_ym_timer(uint32_t channel, uint64_t emulated_time)
 {
 	bool result = true;
 
@@ -1203,7 +1203,7 @@ void neogeo_me_sound_shadow_ym_timer(uint32_t channel, uint64_t emulated_time)
 	}
 }
 
-void neogeo_me_sound_shadow_ym_timer_completed(void)
+void neogeo_sound_offload_ym_timer_completed(void)
 {
 	if (me_sound_ym_timer_gate_locked)
 	{
@@ -1212,7 +1212,7 @@ void neogeo_me_sound_shadow_ym_timer_completed(void)
 	}
 }
 
-bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_time)
+bool neogeo_sound_offload_ym_render_begin(uint32_t samples, uint64_t emulated_time)
 {
 	bool result = false;
 	uint64_t stage_start;
@@ -1253,7 +1253,7 @@ bool neogeo_me_sound_shadow_ym_render_begin(uint32_t samples, uint64_t emulated_
 		result = psp_me_sound_worker_ym_render_prepare_shared(&me_sound_worker,
 			samples, emulated_time, &window, PSP_ME_SOUND_WORKER_TIMEOUT_US);
 		wait_start = audio_profile_now_us() - wait_start;
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+		audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT, wait_start);
 		audio_profile_add(AUDIO_PROFILE_ME_PREPARE_WAIT, wait_start);
 	}
 	psp_me_sound_worker_unlock();
@@ -1336,19 +1336,19 @@ fail:
 	return false;
 }
 
-bool neogeo_me_sound_shadow_ym_authoritative(void)
+bool neogeo_sound_offload_ym_authoritative(void)
 {
 	return me_sound_ym_authoritative && me_sound_z80_autonomous &&
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE);
 }
 
-bool neogeo_me_sound_shadow_authoritative(void)
+bool neogeo_sound_offload_authoritative(void)
 {
-	return neogeo_me_sound_shadow_ym_authoritative() &&
+	return neogeo_sound_offload_ym_authoritative() &&
 		me_sound_z80_control_authoritative && !me_sound_cpu_recovery_required;
 }
 
-bool neogeo_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
+bool neogeo_sound_offload_ym_render_completed_authoritative(int32_t **buffer,
 	uint32_t samples)
 {
 	bool result = false;
@@ -1414,7 +1414,7 @@ bool neogeo_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 	else if (psp_me_sound_worker_lock())
 	{
 		if (psp_neogeo_me_transport_available() && me_sound_worker.running &&
-			neogeo_me_sound_shadow_ym_authoritative())
+			neogeo_sound_offload_ym_authoritative())
 		{
 			result = psp_me_sound_worker_ym_render_finish_authoritative(
 				&me_sound_worker, buffer[0], buffer[1], samples,
@@ -1423,7 +1423,7 @@ bool neogeo_me_sound_shadow_ym_render_completed_authoritative(int32_t **buffer,
 		psp_me_sound_worker_unlock();
 	}
 	wait_start = audio_profile_now_us() - wait_start;
-	audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+	audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT, wait_start);
 	audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
 	if (!result)
 	{
@@ -1441,7 +1441,7 @@ done:
 	return result;
 }
 
-void neogeo_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t samples,
+void neogeo_sound_offload_ym_render_completed(int32_t **buffer, uint32_t samples,
 	uint8_t status_b)
 {
 	bool result = false;
@@ -1462,7 +1462,7 @@ void neogeo_me_sound_shadow_ym_render_completed(int32_t **buffer, uint32_t sampl
 			buffer[0], buffer[1], buffer[0], buffer[1], samples, status_b,
 			PSP_ME_SOUND_WORKER_TIMEOUT_US);
 		wait_start = audio_profile_now_us() - wait_start;
-		audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT, wait_start);
+		audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT, wait_start);
 		audio_profile_add(AUDIO_PROFILE_ME_RENDER_WAIT, wait_start);
 	}
 	psp_me_sound_worker_unlock();
@@ -1481,7 +1481,7 @@ done:
 	}
 }
 
-void neogeo_me_sound_shadow_z80_slice_completed(uint64_t emulated_time)
+void neogeo_sound_offload_z80_slice_completed(uint64_t emulated_time)
 {
 	__atomic_store_n(&me_sound_z80_collecting, false, __ATOMIC_RELEASE);
 	if (me_sound_z80_horizon_queued &&
@@ -1496,14 +1496,14 @@ void neogeo_me_sound_shadow_z80_slice_completed(uint64_t emulated_time)
 	}
 }
 
-bool neogeo_me_sound_shadow_checkpoint_due(void)
+bool neogeo_sound_offload_checkpoint_due(void)
 {
 	return !me_sound_z80_control_authoritative && me_sound_z80_autonomous &&
 		__atomic_load_n(&me_sound_z80_active, __ATOMIC_ACQUIRE) &&
 		__atomic_load_n(&me_sound_shadow_window_frames, __ATOMIC_RELAXED) >= 299u;
 }
 
-void neogeo_me_sound_shadow_frame_completed(uint64_t emulated_time,
+void neogeo_sound_offload_frame_completed(uint64_t emulated_time,
 	uint8_t sound_code, uint8_t pending_command, uint8_t result_code,
 	const cz80_state_t *expected_state, const uint32_t banks[4],
 	const uint8_t *visible_memory)

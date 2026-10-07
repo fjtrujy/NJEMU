@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include "ncdz.h"
 #include "common/emulator_runtime.h"
-#include "common/neogeo_me_sound_shadow.h"
+#include "common/neogeo_sound_offload.h"
 #include "common/game_metadata.h"
 #include "common/runtime_paths.h"
 #include "common/path_utils.h"
@@ -1106,7 +1106,7 @@ READ16_HANDLER( neogeo_z80_r )
 	uint8_t visible_pending;
 	uint8_t visible_result;
 
-	if (!neogeo_me_sound_shadow_main_status((uint8_t)sound_code,
+	if (!neogeo_sound_offload_main_status((uint8_t)sound_code,
 			(uint8_t)pending_command, (uint8_t)result_code,
 			&visible_pending, &visible_result))
 	{
@@ -1126,9 +1126,9 @@ READ16_HANDLER( neogeo_z80_r )
 
 TIMER_CALLBACK( neogeo_sound_write )
 {
-	(void)neogeo_me_sound_shadow_command((uint8_t)param, timer_get_time_us());
+	(void)neogeo_sound_offload_command((uint8_t)param, timer_get_time_us());
 	sound_code = param;
-	if (!neogeo_me_sound_shadow_z80_cpu_suppressed())
+	if (!neogeo_sound_offload_z80_cpu_suppressed())
 		z80_set_irq_line(IRQ_LINE_NMI, PULSE_LINE);
 }
 
@@ -1136,7 +1136,7 @@ TIMER_CALLBACK( neogeo_sound_write )
 WRITE16_HANDLER( neogeo_z80_w )
 {
 	pending_command = 1;
-	neogeo_me_sound_shadow_status_pending();
+	neogeo_sound_offload_status_pending();
 	timer_set(SOUNDLATCH_TIMER, TIME_NOW, (data >> 8) & 0xff, neogeo_sound_write);
 }
 
@@ -1283,7 +1283,7 @@ READ16_HANDLER( neogeo_externalmem_r )
 				if (offset == z80_cdda_offset || offset == z80_cdda_offset + 1)
 					return 0;
 			}
-			if (neogeo_me_sound_shadow_z80_memory_read(offset, &value, 1u))
+			if (neogeo_sound_offload_z80_memory_read(offset, &value, 1u))
 				return value | 0xff00;
 			return memory_region_cpu2[offset] | 0xff00;
 		}
@@ -1316,7 +1316,7 @@ WRITE16_HANDLER( neogeo_externalmem_w )
 
 	case EXMEM_PCMA:
 		offset += exmem_bank[EXMEM_PCMA] << 19;
-		if (!neogeo_me_sound_shadow_pcm_write_byte(offset, (uint8_t)data))
+		if (!neogeo_sound_offload_pcm_write_byte(offset, (uint8_t)data))
 			memory_region_sound1[offset] = data & 0xff;
 		break;
 
@@ -1326,7 +1326,7 @@ WRITE16_HANDLER( neogeo_externalmem_w )
 			if (offset == z80_cdda_offset || offset == z80_cdda_offset + 1)
 				return;
 		}
-		if (!neogeo_me_sound_shadow_z80_memory_write_byte(offset, (uint8_t)data))
+		if (!neogeo_sound_offload_z80_memory_write_byte(offset, (uint8_t)data))
 			memory_region_cpu2[offset] = data & 0xff;
 		break;
 
@@ -1474,7 +1474,7 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 	default:
 		break;
 	}
-	neogeo_me_sound_shadow_z80_io_read(port, value);
+	neogeo_sound_offload_z80_io_read(port, value);
 	return value;
 }
 
@@ -1485,7 +1485,7 @@ uint8_t neogeo_z80_port_r(uint16_t port)
 
 void neogeo_z80_port_w(uint16_t port, uint8_t data)
 {
-	neogeo_me_sound_shadow_z80_io_write(port, data);
+	neogeo_sound_offload_z80_io_write(port, data);
 	switch (port & 0xff)
 	{
 	case 0x04:
@@ -1529,7 +1529,7 @@ void neogeo_z80_port_w(uint16_t port, uint8_t data)
 void neogeo_sound_irq(int irq)
 {
 	z80_set_irq_line(1, irq ? ASSERT_LINE : CLEAR_LINE);
-	neogeo_me_sound_shadow_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
+	neogeo_sound_offload_z80_irq(irq ? ASSERT_LINE : CLEAR_LINE,
 		timer_get_time_us());
 }
 

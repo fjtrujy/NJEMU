@@ -2732,11 +2732,11 @@ static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
 	uint64_t wait_start = audio_profile_now_us();
 
 	audio_producer_driver->waitJob();
-	audio_profile_add(AUDIO_PROFILE_ME_JOB_WAIT,
+	audio_profile_add(AUDIO_PROFILE_PRODUCER_JOB_WAIT,
 		audio_profile_now_us() - wait_start);
 	if (adpcma_job->error)
 	{
-		printf("YM2610 ADPCM-A ME job failed source validation\n");
+		printf("YM2610 ADPCM-A producer job failed source validation\n");
 		return;
 	}
 
@@ -2746,7 +2746,7 @@ static void OPNB_ADPCMA_finish_job(int32_t *bufL, int32_t *bufR, int length)
 		ADPCMA *dst = &YM2610.adpcma[channel];
 		const ym2610_adpcma_channel_job_t *src = &adpcma_job->channel[channel];
 
-		/* A key-on/off issued while the ME was running represents state for the
+		/* A key-on/off issued while the producer job was running represents state for the
 		 * next audio period. Do not overwrite that newer decoder state. */
 		if (src->control_generation != adpcma_control_generation[channel])
 			continue;

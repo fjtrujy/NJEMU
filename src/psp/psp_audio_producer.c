@@ -16,7 +16,7 @@
 #endif
 #ifdef PSP_ME_SOUND_COPROCESSOR
 #if (EMU_SYSTEM == CPS2)
-#include "common/cps2_me_sound_shadow.h"
+#include "common/cps2_sound_offload.h"
 #include "psp/psp_cps2_me_sound.h"
 #else
 #include "psp/psp_neogeo_me_sound.h"
@@ -509,7 +509,7 @@ static void psp_audio_producer_suspend(void)
 	psp_audio_producer_waitJob();
 #ifdef PSP_ME_SOUND_COPROCESSOR
 	#if (EMU_SYSTEM == CPS2)
-	(void)cps2_me_sound_prepare_cpu_state();
+	(void)cps2_sound_offload_prepare_cpu_state();
 	psp_cps2_me_sound_stop();
 	#else
 		psp_neogeo_me_sound_stop();
@@ -532,7 +532,7 @@ static void psp_audio_producer_resume(void)
 
 	enabled = psp_me_enable("resume");
 #if defined(PSP_ME_SOUND_COPROCESSOR) && (EMU_SYSTEM == CPS2)
-	if (enabled && !cps2_me_sound_snapshot_from_cpu())
+	if (enabled && !cps2_sound_offload_snapshot_from_cpu())
 	{
 		printf("[PSP_ME_AUDIO] resume: CPS2 sound snapshot failed; using Main CPU\n");
 		psp_cps2_me_sound_stop();

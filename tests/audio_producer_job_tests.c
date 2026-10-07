@@ -22,7 +22,7 @@ static int test_qsound_mix(void)
 		job.left[2] != 6 || job.right[0] != 1 || job.right[1] != -2 ||
 		job.right[2] != 3)
 	{
-		fprintf(stderr, "QSound ME mixer produced unexpected samples\n");
+		fprintf(stderr, "QSound producer job mixer produced unexpected samples\n");
 		return 0;
 	}
 
@@ -30,7 +30,7 @@ static int test_qsound_mix(void)
 	qsound_mix_job_run(&job);
 	if (!job.error)
 	{
-		fprintf(stderr, "QSound ME mixer accepted an oversized block\n");
+		fprintf(stderr, "QSound producer job mixer accepted an oversized block\n");
 		return 0;
 	}
 	return 1;
@@ -59,7 +59,7 @@ static int test_okim6295_decode(void)
 		job.stream_pos != (1 << 12) || job.prev_sample != 128 ||
 		job.curr_sample != 288 || job.status != 1)
 	{
-		fprintf(stderr, "OKIM6295 ME decoder produced unexpected state\n");
+		fprintf(stderr, "OKIM6295 producer job decoder produced unexpected state\n");
 		return 0;
 	}
 
@@ -67,7 +67,7 @@ static int test_okim6295_decode(void)
 	okim6295_job_run(&job);
 	if (!job.error)
 	{
-		fprintf(stderr, "OKIM6295 ME decoder accepted an oversized block\n");
+		fprintf(stderr, "OKIM6295 producer job decoder accepted an oversized block\n");
 		return 0;
 	}
 	return 1;
@@ -78,6 +78,6 @@ int main(void)
 	if (!test_qsound_mix() || !test_okim6295_decode())
 		return 1;
 
-	printf("audio ME job tests passed\n");
+	printf("audio producer job tests passed\n");
 	return 0;
 }

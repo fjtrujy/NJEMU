@@ -14,8 +14,8 @@
 #include "mvs.h"
 #include "common/emulator_runtime.h"
 #include "include/cpuintrf.h"
-#include "me_sound_profile.h"
-#include "common/neogeo_me_sound_shadow.h"
+#include "sound_offload_profile.h"
+#include "common/neogeo_sound_offload.h"
 
 
 #define CPU_NOTACTIVE	-1
@@ -84,10 +84,10 @@ void (*timer_update_cpu)(void);
 static void timer_update_cpu_normal(void);
 static void timer_update_cpu_raster(void);
 
-static int timer_is_me_owned_ym(int which)
+static int timer_is_sound_offload_owned_ym(int which)
 {
 	return (which == YM2610_TIMERA || which == YM2610_TIMERB) &&
-		neogeo_me_sound_shadow_z80_cpu_suppressed();
+		neogeo_sound_offload_z80_cpu_suppressed();
 }
 
 
@@ -103,7 +103,7 @@ static void cpu_execute(int cpunum)
 {
 	if (!cpu[cpunum].suspended)
 	{
-		uint64_t start = mvs_me_sound_profile_now_us();
+		uint64_t start = mvs_sound_offload_profile_now_us();
 		uint64_t z80_start_time = 0;
 		uint64_t z80_end_time = 0;
 		bool skip_cpu = false;
@@ -112,7 +112,7 @@ static void cpu_execute(int cpunum)
 		if (cpunum == CPU_Z80)
 		{
 			z80_start_time = timer_get_time_us();
-			skip_cpu = neogeo_me_sound_shadow_z80_slice_begin(
+			skip_cpu = neogeo_sound_offload_z80_slice_begin(
 				z80_start_time + (uint64_t)(uint32_t)timer_ticks,
 				(uint32_t)timer_left);
 		}
@@ -136,12 +136,12 @@ static void cpu_execute(int cpunum)
 		}
 		else if (cpunum == CPU_Z80)
 			z80_end_time = z80_start_time + (uint64_t)(uint32_t)timer_ticks;
-		mvs_me_sound_profile_add_time(
-			cpunum == CPU_M68000 ? MVS_ME_SOUND_PROFILE_M68000 : MVS_ME_SOUND_PROFILE_Z80,
-			mvs_me_sound_profile_now_us() - start);
+		mvs_sound_offload_profile_add_time(
+			cpunum == CPU_M68000 ? MVS_SOUND_OFFLOAD_PROFILE_M68000 : MVS_SOUND_OFFLOAD_PROFILE_Z80,
+			mvs_sound_offload_profile_now_us() - start);
 
 		if (cpunum == CPU_Z80)
-			neogeo_me_sound_shadow_z80_slice_completed(z80_end_time);
+			neogeo_sound_offload_z80_slice_completed(z80_end_time);
 	}
 }
 
@@ -181,7 +181,7 @@ static int getabsolutetime(void)
 
 void timer_reset(void)
 {
-	mvs_me_sound_profile_reset();
+	mvs_sound_offload_profile_reset();
 	global_offset = 0;
 	base_time     = 0;
 	frame_base    = 0;
@@ -332,10 +332,10 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 		if (duration < timer_left)
 		{
 			if (which == YM2610_TIMERA || which == YM2610_TIMERB)
-				mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_YM_TIMER_PREEMPT);
+				mvs_sound_offload_profile_event(MVS_SOUND_OFFLOAD_PROFILE_YM_TIMER_PREEMPT);
 			if (active_cpu == CPU_Z80 &&
 				(which == YM2610_TIMERA || which == YM2610_TIMERB))
-				neogeo_me_sound_shadow_z80_preempt((uint32_t)which);
+				neogeo_sound_offload_z80_preempt((uint32_t)which);
 			timer_ticks -= time_left;
 			cpu[active_cpu].cycles -= cycles_left;
 			*cpu[active_cpu].icount = 0;
@@ -343,7 +343,7 @@ void timer_adjust(int which, int duration, int param, void (*callback)(int param
 			if (active_cpu == CPU_Z80)
 			{
 				if (which == YM2610_TIMERA || which == YM2610_TIMERB)
-					mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_Z80_TIMER_PREEMPT_MAIN);
+					mvs_sound_offload_profile_event(MVS_SOUND_OFFLOAD_PROFILE_Z80_TIMER_PREEMPT_MAIN);
 				// If CPU2, stop CPU1 and adjust CPU1's remaining cycles
 				if (!timer[CPUSPIN_TIMER].enable)
 				{
@@ -409,21 +409,21 @@ static void timer_update_cpu_normal(void)
 {
 	int i, time;
 	uint64_t frame_end_time;
-	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
+	uint64_t scheduler_start = mvs_sound_offload_profile_now_us();
 
 	frame_base = 0;
 	timer_left = TICKS_PER_FRAME;
 
 	while (timer_left > 0)
 	{
-		neogeo_me_sound_shadow_scheduler_boundary();
-		mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
+		neogeo_sound_offload_scheduler_boundary();
+		mvs_sound_offload_profile_event(MVS_SOUND_OFFLOAD_PROFILE_TIMER_SLICE);
 		timer_ticks = timer_left;
 		time = base_time + frame_base;
 
 		for (i = 0; i < MAX_TIMER; i++)
 		{
-			if (timer[i].enable && !timer_is_me_owned_ym(i))
+			if (timer[i].enable && !timer_is_sound_offload_owned_ym(i))
 			{
 				if (timer[i].expire - time <= 0)
 				{
@@ -431,7 +431,7 @@ static void timer_update_cpu_normal(void)
 					timer[i].callback(timer[i].param);
 				}
 			}
-			if (timer[i].enable && !timer_is_me_owned_ym(i))
+			if (timer[i].enable && !timer_is_sound_offload_owned_ym(i))
 			{
 				if (timer[i].expire - time < timer_ticks)
 					timer_ticks = timer[i].expire - time;
@@ -440,16 +440,16 @@ static void timer_update_cpu_normal(void)
 
 		if (Loop != LOOP_EXEC)
 		{
-			mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-				mvs_me_sound_profile_now_us() - scheduler_start);
+			mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+				mvs_sound_offload_profile_now_us() - scheduler_start);
 			return;
 		}
 
-		mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-			mvs_me_sound_profile_now_us() - scheduler_start);
+		mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+			mvs_sound_offload_profile_now_us() - scheduler_start);
 		cpu_execute(CPU_M68000);
 		cpu_execute(CPU_Z80);
-		scheduler_start = mvs_me_sound_profile_now_us();
+		scheduler_start = mvs_sound_offload_profile_now_us();
 
 		frame_base += timer_ticks;
 		timer_left -= timer_ticks;
@@ -471,8 +471,8 @@ static void timer_update_cpu_normal(void)
 		}
 	}
 
-	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-		mvs_me_sound_profile_now_us() - scheduler_start);
+	mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+		mvs_sound_offload_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
 	{
 		uint8_t sound_code;
@@ -483,7 +483,7 @@ static void timer_update_cpu_normal(void)
 		const cz80_state_t *state = NULL;
 		const uint32_t *banks = NULL;
 
-		if (neogeo_me_sound_shadow_checkpoint_due())
+		if (neogeo_sound_offload_checkpoint_due())
 		{
 			Cz80_Get_State(&CZ80, &checkpoint_state);
 			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
@@ -492,10 +492,10 @@ static void timer_update_cpu_normal(void)
 		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
-		neogeo_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+		neogeo_sound_offload_frame_completed(frame_end_time, sound_code,
 			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
-	mvs_me_sound_profile_frame_completed();
+	mvs_sound_offload_profile_frame_completed();
 }
 
 
@@ -507,7 +507,7 @@ static void timer_update_cpu_raster(void)
 {
 	int i, time;
 	uint64_t frame_end_time;
-	uint64_t scheduler_start = mvs_me_sound_profile_now_us();
+	uint64_t scheduler_start = mvs_sound_offload_profile_now_us();
 
 	frame_base = 0;
 	timer_left = 0;
@@ -518,14 +518,14 @@ static void timer_update_cpu_raster(void)
 
 		while (timer_left > 0)
 		{
-			neogeo_me_sound_shadow_scheduler_boundary();
-			mvs_me_sound_profile_event(MVS_ME_SOUND_PROFILE_TIMER_SLICE);
+			neogeo_sound_offload_scheduler_boundary();
+			mvs_sound_offload_profile_event(MVS_SOUND_OFFLOAD_PROFILE_TIMER_SLICE);
 			timer_ticks = timer_left;
 			time = base_time + frame_base;
 
 			for (i = 0; i < MAX_TIMER; i++)
 			{
-				if (timer[i].enable && !timer_is_me_owned_ym(i))
+				if (timer[i].enable && !timer_is_sound_offload_owned_ym(i))
 				{
 					if (timer[i].expire - time <= 0)
 					{
@@ -533,7 +533,7 @@ static void timer_update_cpu_raster(void)
 						timer[i].callback(timer[i].param);
 					}
 				}
-				if (timer[i].enable && !timer_is_me_owned_ym(i))
+				if (timer[i].enable && !timer_is_sound_offload_owned_ym(i))
 				{
 					if (timer[i].expire - time < timer_ticks)
 						timer_ticks = timer[i].expire - time;
@@ -542,16 +542,16 @@ static void timer_update_cpu_raster(void)
 
 			if (Loop != LOOP_EXEC)
 			{
-				mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-					mvs_me_sound_profile_now_us() - scheduler_start);
+				mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+					mvs_sound_offload_profile_now_us() - scheduler_start);
 				return;
 			}
 
-			mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-				mvs_me_sound_profile_now_us() - scheduler_start);
+			mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+				mvs_sound_offload_profile_now_us() - scheduler_start);
 			cpu_execute(CPU_M68000);
 			cpu_execute(CPU_Z80);
-			scheduler_start = mvs_me_sound_profile_now_us();
+			scheduler_start = mvs_sound_offload_profile_now_us();
 
 			frame_base += timer_ticks;
 			timer_left -= timer_ticks;
@@ -574,8 +574,8 @@ static void timer_update_cpu_raster(void)
 		}
 	}
 
-	mvs_me_sound_profile_add_time(MVS_ME_SOUND_PROFILE_SCHEDULER,
-		mvs_me_sound_profile_now_us() - scheduler_start);
+	mvs_sound_offload_profile_add_time(MVS_SOUND_OFFLOAD_PROFILE_SCHEDULER,
+		mvs_sound_offload_profile_now_us() - scheduler_start);
 	if (!skip_this_frame()) neogeo_screenrefresh();
 	{
 		uint8_t sound_code;
@@ -586,7 +586,7 @@ static void timer_update_cpu_raster(void)
 		const cz80_state_t *state = NULL;
 		const uint32_t *banks = NULL;
 
-		if (neogeo_me_sound_shadow_checkpoint_due())
+		if (neogeo_sound_offload_checkpoint_due())
 		{
 			Cz80_Get_State(&CZ80, &checkpoint_state);
 			neogeo_get_z80_shadow_state(checkpoint_banks, NULL, NULL, NULL);
@@ -595,10 +595,10 @@ static void timer_update_cpu_raster(void)
 		}
 
 		neogeo_get_z80_shadow_state(NULL, &sound_code, &pending_command, &result_code);
-		neogeo_me_sound_shadow_frame_completed(frame_end_time, sound_code,
+		neogeo_sound_offload_frame_completed(frame_end_time, sound_code,
 			pending_command, result_code, state, banks, memory_region_cpu2);
 	}
-	mvs_me_sound_profile_frame_completed();
+	mvs_sound_offload_profile_frame_completed();
 }
 
 
