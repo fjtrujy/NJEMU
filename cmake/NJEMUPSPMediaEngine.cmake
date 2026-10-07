@@ -324,7 +324,9 @@ function(njemu_psp_me_validate_target_isolation emulator_target)
         endif()
 
         if(_source_abs MATCHES
-           "/src/psp/psp_(audio_producer|audio_backend_.+|me_.+|cps2_me_sound|neogeo_me_sound)\\.(c|h)$")
+           "/src/psp/psp_(audio_producer|audio_backend_.+|me_.+|cps2_me_sound|neogeo_me_sound)\\.(c|h)$" AND
+           NOT (PLATFORM STREQUAL "PSP" AND
+                _source_abs MATCHES "/src/psp/psp_me_sound_profile\\.c$"))
             list(APPEND _me_source_leaks "${_source}")
         endif()
     endforeach()
@@ -332,7 +334,7 @@ function(njemu_psp_me_validate_target_isolation emulator_target)
     set(_me_definitions)
     foreach(_definition IN LISTS _definitions)
         if(_definition MATCHES
-           "^(PSP_ME_AUDIO|NJEMU_SOUND_OFFLOAD|AUDIO_PRODUCER_JOBS|PSP_ME_RING_SELFTEST|PSP_ME_SOUND_PROFILE|NJEMU_SOUND_OFFLOAD_PROFILE)(=|$)")
+           "^(PSP_ME_AUDIO|NJEMU_SOUND_OFFLOAD|AUDIO_PRODUCER_JOBS|PSP_ME_RING_SELFTEST)(=|$)")
             list(APPEND _me_definitions "${_definition}")
         endif()
     endforeach()
