@@ -1125,6 +1125,34 @@ if(PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO)
             pspkubridge
         )
     endif()
+
+    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "NCDZ")
+        add_executable(psp_me_sound_worker_ncdz_hardware_test
+            tests/psp_me_sound_worker_ncdz_hardware.c
+            src/psp/psp_me_spsc_ring.c
+            src/psp/psp_me_sound_worker.c
+            src/cpu/z80/cz80.c
+            src/sound/ym2610.c
+        )
+        target_include_directories(psp_me_sound_worker_ncdz_hardware_test PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        )
+        target_include_directories(psp_me_sound_worker_ncdz_hardware_test SYSTEM PRIVATE
+            "${PSP_ME_CORE_INCLUDE_DIR}"
+            "${PSP_ME_SAFE_TASK_INCLUDE_DIR}"
+        )
+        target_compile_options(psp_me_sound_worker_ncdz_hardware_test PRIVATE
+            ${COMMON_FLAGS}
+            ${WARNING_OPTIONS}
+            -G0
+            -fno-pic
+        )
+        target_link_libraries(psp_me_sound_worker_ncdz_hardware_test PRIVATE
+            "${PSP_ME_SAFE_TASK_LIBRARY}"
+            "${PSP_ME_CORE_MAPPER_LIBRARY}"
+            pspkubridge
+        )
+    endif()
 endif()
 
 # Keep miniz's usage requirements local to implementation files that consume
@@ -1776,6 +1804,16 @@ if(PLATFORM STREQUAL "PSP")
             BUILD_PRX
             OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_sound_worker_hardware_package"
             TITLE "NJEMU PSP ME Sound Worker Test"
+            VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
+            MEMSIZE 1
+        )
+    endif()
+    if(BUILD_TESTING AND NJEMU_PSP_ME_SOUND_COPROCESSOR AND "${TARGET}" STREQUAL "NCDZ")
+        create_pbp_file(
+            TARGET psp_me_sound_worker_ncdz_hardware_test
+            BUILD_PRX
+            OUTPUT_DIR "${CMAKE_BINARY_DIR}/psp_me_sound_worker_ncdz_hardware_package"
+            TITLE "NJEMU PSP ME NCDZ Worker Test"
             VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
             MEMSIZE 1
         )

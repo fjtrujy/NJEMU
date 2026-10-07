@@ -3391,6 +3391,29 @@ physical suspend/resume, same-process game relaunch, NCDZ-specific fatal recover
 end-to-end performance remain outstanding until the independent PSP NCDZ video stall
 is resolved.
 
+A dedicated NCDZ real-hardware worker oracle now covers the operations that cannot be
+observed reliably through the blocked rendered game loop.  The PSP target
+`psp_me_sound_worker_ncdz_hardware_test` runs the NCDZ machine profile directly on the
+physical ME and validates, in FIFO order:
+
+- the flat 64 KiB snapshot with a resident 1 MiB PCM-A source;
+- worker Z80 read, write, read-and-clear, and post-clear read;
+- direct authoritative YM2610 rendering;
+- autonomous Z80 execution that mutates flat Z80 memory;
+- a complete 64 KiB recovery snapshot;
+- recovered YM2610 register state; and
+- a second clean worker generation in the same module launch.
+
+The physical-PSP run completed both generations in **641,307 us**.  Its final
+generation reported one autonomous Z80 slice, one authoritative 128-sample YM render,
+zero YM render errors, zero Z80 send failures, zero command/event overflows and no
+fatal worker error.  The oracle therefore closes the real-hardware validation gap for
+the NCDZ-specific ordered memory operations, direct PCM/YM path and complete flat-memory
+recovery.  The remaining open items are integration-level behavior that the independent
+video stall prevents from exercising normally: audible CDDA during gameplay,
+interactive save/load, physical suspend/resume, same-process game relaunch,
+NCDZ-specific injected-fatal fallback, and a fair end-to-end performance comparison.
+
 ## 19. Follow-on CPS2 Z80 + QSound sound island (2026-10-06) [real-PSP validated]
 
 CPS2 now has a target-specific persistent worker rather than relying only on the
