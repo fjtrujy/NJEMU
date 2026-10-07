@@ -62,6 +62,8 @@ bool neogeo_sound_state_resume(void)
 		return true;
 	if (!neogeo_sound_offload_state_resume_requested())
 		return true;
+	if (!neogeo_sound_offload_state_resume_begin())
+		return false;
 	return neogeo_sync_sound_offload_from_cpu();
 }
 

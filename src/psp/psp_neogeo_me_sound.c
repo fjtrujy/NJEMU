@@ -1020,6 +1020,14 @@ bool neogeo_sound_offload_state_resume_requested(void)
 	return resume;
 }
 
+bool neogeo_sound_offload_state_resume_begin(void)
+{
+	/* A loaded state can rewind emulated time. Start a fresh worker generation
+	 * before publishing the restored CPU state so the FIFO time-regression guard
+	 * continues to reject only stale commands from the current timeline. */
+	return psp_neogeo_me_sound_reset_generation();
+}
+
 bool neogeo_sound_offload_z80_slice_begin(uint64_t horizon_time,
 	uint32_t scheduler_time_left)
 {

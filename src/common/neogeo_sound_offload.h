@@ -18,6 +18,7 @@ bool neogeo_sound_offload_z80_snapshot(const cz80_state_t *state,
 	uint32_t pcm_b_size);
 bool neogeo_sound_offload_prepare_cpu_state(void);
 bool neogeo_sound_offload_state_resume_requested(void);
+bool neogeo_sound_offload_state_resume_begin(void);
 void neogeo_sound_offload_scheduler_boundary(void);
 bool neogeo_sound_offload_z80_cpu_suppressed(void);
 bool neogeo_sound_offload_z80_memory_read(uint32_t offset,
@@ -83,6 +84,11 @@ static inline bool neogeo_sound_offload_prepare_cpu_state(void)
 static inline bool neogeo_sound_offload_state_resume_requested(void)
 {
 	return false;
+}
+
+static inline bool neogeo_sound_offload_state_resume_begin(void)
+{
+	return true;
 }
 
 static inline void neogeo_sound_offload_scheduler_boundary(void)
