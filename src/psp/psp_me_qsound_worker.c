@@ -440,6 +440,8 @@ static void psp_me_qsound_worker_entry(void *param)
 			event.type = PSP_ME_QSOUND_EVENT_RESET_ACK;
 			break;
 		case PSP_ME_QSOUND_COMMAND_SNAPSHOT:
+			meCoreDcacheInvalidateRange(context->snapshot,
+				PSP_ME_QSOUND_CACHE_SIZE(sizeof(*context->snapshot)));
 			if (!context->snapshot->source_rom ||
 				context->snapshot->source_length < PSP_ME_QSOUND_Z80_ADDRESS_SPACE_SIZE ||
 				context->snapshot->generation != command.generation)
