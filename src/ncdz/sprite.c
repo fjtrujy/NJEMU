@@ -172,7 +172,7 @@ void blit_finish_fix(void)
 {
 	if (!fix_vertex_count) return;
 	if (tex_fix_changed) {
-		video_driver->uploadMem(video_data, TEXTURE_LAYER_FIX);
+		video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_FIX);
 		tex_fix_changed = false;
 	}
 	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_FIX,
@@ -242,7 +242,7 @@ void blit_finish_spr(void)
 	texture_layer = (uint8_t)(TEXTURE_LAYER_SPR0 + (flags & 3));
 	clut_tmp = &clut[flags & 0xf00];
 	mem_uploaded[texture_layer] = true;
-	video_driver->uploadMem(video_data, texture_layer);
+	video_driver->commitTextureUpdates(video_data, texture_layer);
 
 	for (sprite = 0; sprite < spr_count; sprite++) {
 		if (flags != *pflags) {
@@ -258,7 +258,7 @@ void blit_finish_spr(void)
 			clut_tmp = &clut[flags & 0xf00];
 			if (!mem_uploaded[texture_layer]) {
 				mem_uploaded[texture_layer] = true;
-				video_driver->uploadMem(video_data, texture_layer);
+				video_driver->commitTextureUpdates(video_data, texture_layer);
 			}
 		}
 

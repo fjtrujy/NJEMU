@@ -39,6 +39,10 @@ typedef struct texture_layer
 	uint16_t height;
 	uint16_t stride; // actual allocated stride (next power of two of width)
 	uint8_t bytes_per_pixel;
+	/* Texture storage lives in EDRAM. Track rows touched by portable atlas
+	 * writes so commitTextureUpdates() only writes back cache lines for changed
+	 * bands rather than the whole atlas for every draw batch. */
+	uint64_t dirty_row_blocks;
 } texture_layer_t;
 
 typedef struct psp_video
@@ -244,6 +248,8 @@ static void psp_beginFrame(void *data)
 	psp_video_t *psp = (psp_video_t *)data;
 	assert(!psp->frame_active && "beginFrame called while frame already active");
 	psp->frame_active = 1;
+	psp->prepared_vertices_start = 0;
+	psp->prepared_vertices_end = 0;
 	sceKernelDcacheWritebackRange(gulist, GULIST_SIZE);
 	sceGuStart(GU_DIRECT, gulist);
 	sceGuDrawBufferList(pixel_format, (void *)psp->draw_frame, BUF_WIDTH);
@@ -816,21 +822,88 @@ static void psp_drawTexture(void *data, int srcIndex, int dstIndex,
 	// sceGuSync(0, GU_SYNC_FINISH);
 }
 
-static void psp_uploadMem(void *data, uint8_t textureIndex)
+#define PSP_ATLAS_DIRTY_BLOCK_HEIGHT 8
+#define PSP_ATLAS_DIRTY_BLOCK_COUNT 64
+
+static void psp_markTextureDirtyRows(texture_layer_t *layer, int y, int height)
+{
+	int first_block = y / PSP_ATLAS_DIRTY_BLOCK_HEIGHT;
+	int last_block = (y + height - 1) / PSP_ATLAS_DIRTY_BLOCK_HEIGHT;
+	int block;
+
+	if (!layer || height <= 0)
+		return;
+	if (first_block < 0)
+		first_block = 0;
+	if (last_block >= PSP_ATLAS_DIRTY_BLOCK_COUNT)
+		last_block = PSP_ATLAS_DIRTY_BLOCK_COUNT - 1;
+	for (block = first_block; block <= last_block; block++)
+		layer->dirty_row_blocks |= (UINT64_C(1) << block);
+}
+
+static void psp_commitTextureUpdates(void *data, uint8_t textureIndex)
 {
 	psp_video_t *psp = (psp_video_t *)data;
-	texture_layer_t *layer = &psp->tex_layers[textureIndex];
-	size_t size = layer->stride * layer->height * layer->bytes_per_pixel;
-	sceKernelDcacheWritebackRange(layer->buffer, size);
+	texture_layer_t *layer;
+	uint64_t dirty;
+
+	if (!psp || textureIndex >= psp->tex_layers_count)
+		return;
+	layer = &psp->tex_layers[textureIndex];
+	dirty = layer->dirty_row_blocks;
+	if (dirty == 0)
+		return;
+
+	while (dirty != 0) {
+		int first_block = 0;
+		int end_block;
+		int first_y;
+		int end_y;
+		uint8_t *start;
+		size_t size;
+
+		while (first_block < PSP_ATLAS_DIRTY_BLOCK_COUNT &&
+		       !(dirty & (UINT64_C(1) << first_block)))
+			first_block++;
+		end_block = first_block + 1;
+		while (end_block < PSP_ATLAS_DIRTY_BLOCK_COUNT &&
+		       (dirty & (UINT64_C(1) << end_block)))
+			end_block++;
+
+		first_y = first_block * PSP_ATLAS_DIRTY_BLOCK_HEIGHT;
+		end_y = end_block * PSP_ATLAS_DIRTY_BLOCK_HEIGHT;
+		if (end_y > layer->height)
+			end_y = layer->height;
+		start = layer->buffer +
+			(size_t)first_y * layer->stride * layer->bytes_per_pixel;
+		size = (size_t)(end_y - first_y) * layer->stride *
+			layer->bytes_per_pixel;
+		sceKernelDcacheWritebackRange(start, size);
+
+		while (first_block < end_block) {
+			dirty &= ~(UINT64_C(1) << first_block);
+			first_block++;
+		}
+	}
+	layer->dirty_row_blocks = 0;
+	/* CPU writes and data-cache writeback make EDRAM contents coherent, but
+	 * the GE can still retain stale texels in its texture page cache. The PSP
+	 * SDK explicitly requires a texture-cache flush after modifying sampled
+	 * texture memory. Do it once per committed dirty set, not per rectangle. */
+	sceGuTexFlush();
 }
 
 static void psp_uploadClut(void *data, uint16_t *clut, uint8_t bank_index)
 {
-	(void)data;
+	psp_video_t *psp = (psp_video_t *)data;
 	(void)bank_index;
-	/* Flush the actual CLUT bank pointer that will be used by sceGuClutLoad */
+	/* Flush the actual CLUT bank pointer that will be used by sceGuClutLoad.
+	 * Also invalidate the pointer cache: palette contents can change while the
+	 * address stays identical, in which case the GE still needs a new load. */
 	size_t size = 256 * sizeof(uint16_t);
 	sceKernelDcacheWritebackRange(clut, size);
+	if (psp)
+		psp->current_clut = NULL;
 }
 
 static size_t psp_swizzled8_offset(uint16_t stride, int x, int y)
@@ -871,6 +944,7 @@ static void psp_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 			column += run;
 		}
 	}
+	psp_markTextureDirtyRows(layer, y, height);
 }
 
 static void psp_writeDirectTextureRect(void *data, uint8_t textureIndex,
@@ -893,6 +967,7 @@ static void psp_writeDirectTextureRect(void *data, uint8_t textureIndex,
 	for (row = 0; row < height; row++)
 		memcpy(dst + (size_t)(y + row) * layer->stride + x,
 			pixels + row * srcPitch, (size_t)width * sizeof(uint16_t));
+	psp_markTextureDirtyRows(layer, y, height);
 }
 
 static void psp_bindSpriteTexture(psp_video_t *psp, uint8_t textureIndex,
@@ -934,20 +1009,34 @@ static void psp_blitSpriteVertices(void *data, uint8_t textureIndex,
 	uint32_t vertices_count, const video_sprite_vertex_t *vertices)
 {
 	psp_video_t *psp = (psp_video_t *)data;
+	const video_sprite_vertex_t *draw_vertices = vertices;
+	uintptr_t start;
+	uintptr_t end;
+	size_t size;
 	(void)bank_index;
 	if (!psp || textureIndex >= psp->tex_layers_count || !vertices ||
 	    vertices_count == 0)
 		return;
 
-	{
-		uintptr_t start = (uintptr_t)vertices;
-		uintptr_t end = start + vertices_count * sizeof(video_sprite_vertex_t);
-		if (start < psp->prepared_vertices_start || end > psp->prepared_vertices_end)
-			sceKernelDcacheWritebackRange(vertices,
-				vertices_count * sizeof(video_sprite_vertex_t));
+	size = vertices_count * sizeof(video_sprite_vertex_t);
+	start = (uintptr_t)vertices;
+	end = start + size;
+	if (start >= psp->prepared_vertices_start &&
+	    end <= psp->prepared_vertices_end) {
+		/* prepareSpriteVertices() guarantees this storage remains immutable
+		 * through endFrame(), so the asynchronous GE may reference it. */
+		draw_vertices = vertices;
+	} else {
+		video_sprite_vertex_t *captured =
+			(video_sprite_vertex_t *)sceGuGetMemory(size);
+		if (!captured)
+			return;
+		memcpy(captured, vertices, size);
+		sceKernelDcacheWritebackRange(captured, size);
+		draw_vertices = captured;
 	}
 	psp_bindSpriteTexture(psp, textureIndex, clut);
-	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, vertices);
+	sceGuDrawArray(GU_SPRITES, TEXTURE_FLAGS, vertices_count, NULL, draw_vertices);
 }
 
 static void psp_blitPointVertices(void *data, uint32_t points_count,
@@ -1315,7 +1404,7 @@ video_driver_t video_psp = {
 	psp_copyRectFlip,
 	psp_copyRectRotate,
 	psp_drawTexture,
-	psp_uploadMem,
+	psp_commitTextureUpdates,
 	psp_uploadClut,
 	psp_writeIndexedTextureRect,
 	psp_writeDirectTextureRect,

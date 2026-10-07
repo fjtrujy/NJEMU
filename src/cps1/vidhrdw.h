@@ -56,6 +56,8 @@ void cps1_video_exit(void);
 void cps1_video_reset(void);
 void cps1_screenrefresh(void);
 void cps1_objram_latch(void);
+int cps1_palette_upload_needed(void);
+void cps1_palette_upload_complete(void);
 
 READ16_HANDLER( cps1_output_r );
 WRITE16_HANDLER( cps1_output_w );

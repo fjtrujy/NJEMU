@@ -149,6 +149,10 @@ static const ps2_output_mode_t *ps2_selected_output_mode(void)
 
 typedef struct texture_layer {
 	GSTEXTURE *texture;
+	/* Portable renderers write atlas rectangles incrementally. Track dirty rows
+	 * in backend-owned state so commitTextureUpdates() can transfer only changed
+	 * bands instead of re-uploading the complete texture. */
+	uint64_t dirty_row_blocks;
 } texture_layer_t;
 
 typedef struct ps2_video {
@@ -1477,19 +1481,153 @@ static void ps2_drawTexture(void *data, int srcIndex, int dstIndex, RECT *src_re
 	gsKit_set_test(gsGlobal, prev_alpha_test ? GS_ATEST_ON : GS_ATEST_OFF);
 }
 
-static void ps2_uploadMem(void *data, uint8_t textureIndex) {
+#define PS2_ATLAS_DIRTY_BLOCK_HEIGHT 8
+#define PS2_ATLAS_DIRTY_BLOCK_COUNT 64
+
+static void ps2_markTextureDirtyRows(texture_layer_t *layer, int y, int height)
+{
+	int first_block = y / PS2_ATLAS_DIRTY_BLOCK_HEIGHT;
+	int last_block = (y + height - 1) / PS2_ATLAS_DIRTY_BLOCK_HEIGHT;
+	int block;
+
+	if (!layer || height <= 0)
+		return;
+	if (first_block < 0)
+		first_block = 0;
+	if (last_block >= PS2_ATLAS_DIRTY_BLOCK_COUNT)
+		last_block = PS2_ATLAS_DIRTY_BLOCK_COUNT - 1;
+	for (block = first_block; block <= last_block; block++)
+		layer->dirty_row_blocks |= (UINT64_C(1) << block);
+}
+
+static bool ps2_uploadTextureRows(ps2_video_t *ps2, GSTEXTURE *tex,
+	int first_y, int row_count)
+{
+	GSGLOBAL *gsGlobal;
+	u64 *p_data;
+	u32 *p_mem;
+	uint8_t *src;
+	size_t size;
+	size_t queue_bytes;
+	int bytes_per_pixel;
+	int qwc;
+	int packets;
+	int remain;
+	int dmasize;
+
+	if (!ps2 || !tex || !tex->Mem || row_count <= 0 ||
+	    first_y < 0 || first_y + row_count > (int)tex->Height)
+		return false;
+
+	if (first_y == 0 && row_count == (int)tex->Height) {
+		size = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
+		SyncDCache(tex->Mem, (uint8_t *)tex->Mem + size);
+		gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height,
+			tex->Vram, tex->PSM, tex->TBW, GS_CLUT_TEXTURE);
+		return true;
+	}
+
+	if (tex->PSM == GS_PSM_T8)
+		bytes_per_pixel = 1;
+	else if (tex->PSM == GS_PSM_CT16)
+		bytes_per_pixel = 2;
+	else
+		return false;
+
+	size = (size_t)tex->Width * row_count * bytes_per_pixel;
+	qwc = (int)((size + 15u) / 16u);
+	packets = qwc / GS_GIF_BLOCKSIZE;
+	remain = qwc % GS_GIF_BLOCKSIZE;
+	dmasize = packets * 3 + (remain ? 3 : 0);
+	/* Four register QWs plus the injected DMA chain and its terminating tag. */
+	queue_bytes = (size_t)(6 + dmasize) * 16u;
+	if (!ps2_reserve_render_queue(ps2, queue_bytes))
+		return false;
+
+	gsGlobal = ps2->gsGlobal;
+	src = (uint8_t *)tex->Mem +
+		(size_t)first_y * tex->Width * bytes_per_pixel;
+	SyncDCache(src, src + size);
+	p_mem = (u32 *)src;
+
+	p_data = gsKit_heap_alloc(gsGlobal, 4, 64, GIF_AD);
+	*p_data++ = GIF_TAG_AD(4);
+	*p_data++ = GIF_AD;
+	*p_data++ = GS_SETREG_BITBLTBUF(0, 0, 0, tex->Vram / 256,
+		tex->TBW, tex->PSM);
+	*p_data++ = GS_BITBLTBUF;
+	*p_data++ = GS_SETREG_TRXPOS(0, 0, 0, first_y, 0);
+	*p_data++ = GS_TRXPOS;
+	*p_data++ = GS_SETREG_TRXREG(tex->Width, row_count);
+	*p_data++ = GS_TRXREG;
+	*p_data++ = GS_SETREG_TRXDIR(0);
+	*p_data++ = GS_TRXDIR;
+
+	p_data = gsKit_heap_alloc_dma(gsGlobal, dmasize, dmasize * 16);
+	while (packets-- > 0) {
+		*p_data++ = DMA_TAG(1, 0, DMA_CNT, 0, 0, 0);
+		*p_data++ = 0;
+		*p_data++ = GIF_TAG(GS_GIF_BLOCKSIZE, 0, 0, 0,
+			GSKIT_GIF_FLG_IMAGE, 0);
+		*p_data++ = 0;
+		*p_data++ = DMA_TAG(GS_GIF_BLOCKSIZE, 0, DMA_REF, 0, (u32)p_mem, 0);
+		*p_data++ = 0;
+		p_mem += GS_GIF_BLOCKSIZE * 4;
+	}
+	if (remain > 0) {
+		*p_data++ = DMA_TAG(1, 0, DMA_CNT, 0, 0, 0);
+		*p_data++ = 0;
+		*p_data++ = GIF_TAG(remain, 0, 0, 0, GSKIT_GIF_FLG_IMAGE, 0);
+		*p_data++ = 0;
+		*p_data++ = DMA_TAG(remain, 0, DMA_REF, 0, (u32)p_mem, 0);
+		*p_data++ = 0;
+	}
+	return true;
+}
+
+static void ps2_commitTextureUpdates(void *data, uint8_t textureIndex) {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
+	GSTEXTURE *tex;
+
 	if (!ps2 || (int)textureIndex >= ps2->tex_layers_count)
 		return;
 
-	GSTEXTURE *tex = ps2->tex_layers[textureIndex].texture;
+	tex = ps2->tex_layers[textureIndex].texture;
 	if (!tex || !tex->Mem || tex->Vram == GSKIT_ALLOC_ERROR)
 		return;
 
-	size_t size = gsKit_texture_size_ee(tex->Width, tex->Height, tex->PSM);
-	SyncDCache(tex->Mem, (uint8_t *)tex->Mem + size);
-	gsKit_texture_send_inline(ps2->gsGlobal, tex->Mem, tex->Width, tex->Height,
-		tex->Vram, tex->PSM, tex->TBW, GS_CLUT_TEXTURE);
+	{
+		texture_layer_t *layer = &ps2->tex_layers[textureIndex];
+		uint64_t dirty = layer->dirty_row_blocks;
+
+		while (dirty != 0) {
+			int first_block = 0;
+			int end_block;
+			int first_y;
+			int end_y;
+
+			while (first_block < PS2_ATLAS_DIRTY_BLOCK_COUNT &&
+			       !(dirty & (UINT64_C(1) << first_block)))
+				first_block++;
+			end_block = first_block + 1;
+			while (end_block < PS2_ATLAS_DIRTY_BLOCK_COUNT &&
+			       (dirty & (UINT64_C(1) << end_block)))
+				end_block++;
+
+			first_y = first_block * PS2_ATLAS_DIRTY_BLOCK_HEIGHT;
+			end_y = end_block * PS2_ATLAS_DIRTY_BLOCK_HEIGHT;
+			if (end_y > (int)tex->Height)
+				end_y = tex->Height;
+			if (!ps2_uploadTextureRows(ps2, tex, first_y, end_y - first_y))
+				return;
+
+			while (first_block < end_block) {
+				dirty &= ~(UINT64_C(1) << first_block);
+				first_block++;
+			}
+		}
+		layer->dirty_row_blocks = 0;
+	}
 }
 
 static void ps2_uploadClut(void *data, uint16_t *clut, uint8_t bank_index) {
@@ -1576,8 +1714,17 @@ static int ps2_reallocate_output_vram(ps2_video_t *ps2)
 
 static void ps2_restore_output_vram_contents(ps2_video_t *ps2)
 {
-	for (int i = 0; i < ps2->tex_layers_count; i++)
-		ps2_uploadMem(ps2, (uint8_t)i);
+	/* A video-mode change reallocates VRAM, so every CPU atlas must be restored
+	 * even when it has not changed since its previous upload. */
+	for (int i = 0; i < ps2->tex_layers_count; i++) {
+		int block_count = (ps2->tex_layers[i].texture->Height +
+			PS2_ATLAS_DIRTY_BLOCK_HEIGHT - 1) / PS2_ATLAS_DIRTY_BLOCK_HEIGHT;
+		int block;
+		ps2->tex_layers[i].dirty_row_blocks = 0;
+		for (block = 0; block < block_count; block++)
+			ps2->tex_layers[i].dirty_row_blocks |= (UINT64_C(1) << block);
+		ps2_commitTextureUpdates(ps2, (uint8_t)i);
+	}
 
 	for (int bank = 0; bank < ps2->clut_bank_count; bank++) {
 		uint16_t *clut = ps2->clut_base +
@@ -1710,6 +1857,7 @@ static void ps2_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 	for (row = 0; row < height; row++)
 		memcpy(dst + (size_t)(y + row) * tex->Width + x,
 			pixels + row * srcPitch, (size_t)width);
+	ps2_markTextureDirtyRows(&ps2->tex_layers[textureIndex], y, height);
 }
 
 static void ps2_writeDirectTextureRect(void *data, uint8_t textureIndex,
@@ -1731,6 +1879,7 @@ static void ps2_writeDirectTextureRect(void *data, uint8_t textureIndex,
 	for (row = 0; row < height; row++)
 		memcpy(dst + (size_t)(y + row) * tex->Width + x,
 			pixels + row * srcPitch, (size_t)width * sizeof(uint16_t));
+	ps2_markTextureDirtyRows(&ps2->tex_layers[textureIndex], y, height);
 }
 
 static GSTEXTURE *ps2_prepareSpriteTexture(ps2_video_t *ps2,
@@ -2347,7 +2496,7 @@ video_driver_t video_ps2 = {
 	ps2_copyRectFlip,
 	ps2_copyRectRotate,
 	ps2_drawTexture,
-	ps2_uploadMem,
+	ps2_commitTextureUpdates,
 	ps2_uploadClut,
 	ps2_writeIndexedTextureRect,
 	ps2_writeDirectTextureRect,

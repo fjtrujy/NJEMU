@@ -1143,7 +1143,7 @@ static void desktop_gl_drawTexture(void *data, int srcIndex, int dstIndex,
 	Driver: drawing
 ******************************************************************************/
 
-static void desktop_gl_uploadMem(void *data, uint8_t textureIndex)
+static void desktop_gl_commitTextureUpdates(void *data, uint8_t textureIndex)
 {
 	/* Every referenced texture is uploaded once per present. */
 	(void)data;
@@ -1438,7 +1438,7 @@ video_driver_t video_desktop_gl = {
 	.copyRectFlip = desktop_gl_copyRectFlip,
 	.copyRectRotate = desktop_gl_copyRectRotate,
 	.drawTexture = desktop_gl_drawTexture,
-	.uploadMem = desktop_gl_uploadMem,
+	.commitTextureUpdates = desktop_gl_commitTextureUpdates,
 	.uploadClut = desktop_gl_uploadClut,
 	.writeIndexedTextureRect = desktop_gl_writeIndexedTextureRect,
 	.writeDirectTextureRect = desktop_gl_writeDirectTextureRect,

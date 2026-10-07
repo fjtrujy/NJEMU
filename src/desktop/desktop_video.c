@@ -727,7 +727,7 @@ static void desktop_blitSpriteVertices(void *data, uint8_t textureIndex,
 	}
 }
 
-static void desktop_uploadMem(void *data, uint8_t textureIndex) {
+static void desktop_commitTextureUpdates(void *data, uint8_t textureIndex) {
 	(void)data; (void)textureIndex;
 }
 
@@ -980,7 +980,7 @@ video_driver_t video_desktop_sdl = {
 	desktop_copyRectFlip,
 	desktop_copyRectRotate,
 	desktop_drawTexture,
-	desktop_uploadMem,
+	desktop_commitTextureUpdates,
 	desktop_uploadClut,
 	desktop_writeIndexedTextureRect,
 	desktop_writeDirectTextureRect,

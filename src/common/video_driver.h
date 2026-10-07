@@ -143,7 +143,10 @@ typedef struct video_driver
 	void (*copyRectFlip)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*copyRectRotate)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
 	void (*drawTexture)(void *data, int srcIndex, int dstIndex, RECT *src_rect, RECT *dst_rect);
-	void (*uploadMem)(void *data, uint8_t textureIndex);
+	/* Make texture writes issued through write*TextureRect visible to drawing.
+	 * Backends own synchronization/coalescing: this may be a no-op for mapped
+	 * GPU storage, a cache writeback, or a partial CPU-to-GPU transfer. */
+	void (*commitTextureUpdates)(void *data, uint8_t textureIndex);
 	void (*uploadClut)(void *data, uint16_t *bank, uint8_t bank_index);
 	/* Portable indexed-atlas update used by target-common renderers.  x/y/w/h
 	 * use logical texture coordinates; the backend owns native/swizzled layout. */
@@ -186,9 +189,11 @@ typedef struct video_driver
 	 * callback above which uses edge coordinates. */
 	void (*setUIScissor)(void *data, int x, int y, int w, int h);
 
-	/* Optional cache-coherency preparation for a contiguous sprite vertex array.
-	 * Backends that require CPU/GPU cache synchronization can flush once before
-	 * a renderer emits many sub-batches from the same array. */
+	/* Optional preparation for a contiguous sprite vertex array whose contents
+	 * remain immutable until endFrame(). Backends may use this both for cache
+	 * coherency and to avoid copying stable arrays into native command storage.
+	 * Calls to blitSpriteVertices() outside the prepared range must therefore
+	 * tolerate source data being reused immediately after the call returns. */
 	void (*prepareSpriteVertices)(void *data, uint32_t vertices_count,
 		const video_sprite_vertex_t *vertices);
 

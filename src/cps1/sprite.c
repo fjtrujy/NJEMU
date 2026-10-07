@@ -246,7 +246,10 @@ void blit_start(int high_layer)
 	video_driver->beginFrame(video_data);
 	video_driver->startWorkFrame(video_data, 0);
 	video_driver->scissor(video_data, 64, 16, 448, 240);
-	video_driver->uploadClut(video_data, clut, 0);
+	if (cps1_palette_upload_needed()) {
+		video_driver->uploadClut(video_data, clut, 0);
+		cps1_palette_upload_complete();
+	}
 }
 
 void blit_finish(void)
@@ -335,7 +338,9 @@ void blit_finish_object(void)
 	if (object_batch_count > 0)
 		object_batches[object_batch_count - 1].count =
 			object_num - object_batches[object_batch_count - 1].start;
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
+	if (video_driver->prepareSpriteVertices)
+		video_driver->prepareSpriteVertices(video_data, object_num, vertices_object);
 	for (i = 0; i < object_batch_count; i++) {
 		if (object_batches[i].count)
 			video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_OBJECT,
@@ -377,13 +382,21 @@ void blit_draw_scroll1(int16_t x, int16_t y, uint32_t code, uint16_t attr,
 void blit_finish_scroll1(void)
 {
 	if (!scroll1_clut0_num && !scroll1_clut1_num) return;
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL1);
-	if (scroll1_clut0_num)
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL1);
+	if (scroll1_clut0_num) {
+		if (video_driver->prepareSpriteVertices)
+			video_driver->prepareSpriteVertices(video_data, scroll1_clut0_num,
+				vertices_scroll1_clut0);
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL1,
 			&clut[32 << 4], 0, scroll1_clut0_num, vertices_scroll1_clut0);
-	if (scroll1_clut1_num)
+	}
+	if (scroll1_clut1_num) {
+		if (video_driver->prepareSpriteVertices)
+			video_driver->prepareSpriteVertices(video_data, scroll1_clut1_num,
+				vertices_scroll1_clut1);
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL1,
 			&clut[48 << 4], 0, scroll1_clut1_num, vertices_scroll1_clut1);
+	}
 }
 
 void blit_set_clip_scroll2(int16_t min_y, int16_t max_y)
@@ -424,7 +437,7 @@ void blit_finish_scroll2(void)
 {
 	if (!scroll2_clut0_num && !scroll2_clut1_num) return;
 	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL2);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL2);
 	if (scroll2_clut0_num)
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2,
 			&clut[64 << 4], 0, scroll2_clut0_num, vertices_scroll2_clut0);
@@ -432,6 +445,12 @@ void blit_finish_scroll2(void)
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2,
 			&clut[80 << 4], 0, scroll2_clut1_num, vertices_scroll2_clut1);
 	video_driver->scissor(video_data, 64, 16, 448, 240);
+	/* Each row-scroll band is an independent draw. Keeping previous bands in
+	 * these arrays makes later bands resubmit all earlier vertices under a new
+	 * scissor rectangle, which grows quadratically on heavy CPS1 row-scroll
+	 * scenes such as SF2 Hyper Fighting's attract-mode floor perspective. */
+	scroll2_clut0_num = 0;
+	scroll2_clut1_num = 0;
 }
 
 void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
@@ -465,13 +484,21 @@ void blit_draw_scroll3(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 void blit_finish_scroll3(void)
 {
 	if (!scroll3_clut0_num && !scroll3_clut1_num) return;
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL3);
-	if (scroll3_clut0_num)
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL3);
+	if (scroll3_clut0_num) {
+		if (video_driver->prepareSpriteVertices)
+			video_driver->prepareSpriteVertices(video_data, scroll3_clut0_num,
+				vertices_scroll3_clut0);
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL3,
 			&clut[96 << 4], 0, scroll3_clut0_num, vertices_scroll3_clut0);
-	if (scroll3_clut1_num)
+	}
+	if (scroll3_clut1_num) {
+		if (video_driver->prepareSpriteVertices)
+			video_driver->prepareSpriteVertices(video_data, scroll3_clut1_num,
+				vertices_scroll3_clut1);
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL3,
 			&clut[112 << 4], 0, scroll3_clut1_num, vertices_scroll3_clut1);
+	}
 }
 
 void blit_draw_scroll1h(int16_t x, int16_t y, uint32_t code, uint16_t attr,
@@ -528,7 +555,7 @@ void blit_draw_scroll2h(int16_t x, int16_t y, uint32_t code, uint16_t attr,
 void blit_finish_scroll2h(void)
 {
 	if (!scrollh_num) return;
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLLH);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLLH);
 	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
 	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLLH,
 		NULL, 0, scrollh_num, vertices_scrollh);
@@ -564,7 +591,7 @@ void blit_draw_scroll3h(int16_t x, int16_t y, uint32_t code, uint16_t attr,
 void blit_finish_scrollh(void)
 {
 	if (!scrollh_num) return;
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLLH);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLLH);
 	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLLH,
 		NULL, 0, scrollh_num, vertices_scrollh);
 }

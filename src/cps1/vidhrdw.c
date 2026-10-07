@@ -72,6 +72,7 @@ static uint16_t cps1_transparency_scroll[4];	/* Transparency pens of scroll laye
 static uint16_t cps1_has_stars;
 static uint16_t cps1_high_layer;
 static uint16_t cps1_kludge;
+static int cps1_palette_upload_pending;
 
 struct cps_scroll2_t
 {
@@ -514,6 +515,7 @@ void cps1_video_reset(void)
 
 	memset(cps1_old_palette, 0, sizeof(cps1_old_palette));
 	memset(video_palette, 0, sizeof(video_palette));
+	cps1_palette_upload_pending = 1;
 
 	for (i = 0; i < CPS1_PALETTE_ENTRIES; i += 16)
 		video_palette[i + 15] = 0x8000;
@@ -562,7 +564,8 @@ static void cps1_build_palette(void)
 			if (palette != cps1_old_palette[offset])
 			{
 				cps1_old_palette[offset] = palette;
-					video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
+				video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
+				cps1_palette_upload_pending = 1;
 			}
 		}
 	}
@@ -576,7 +579,8 @@ static void cps1_build_palette(void)
 			if (palette != cps1_old_palette[offset])
 			{
 				cps1_old_palette[offset] = palette;
-					video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
+				video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
+				cps1_palette_upload_pending = 1;
 				blit_palette_mark_dirty(offset >> 4);
 			}
 		}
@@ -584,13 +588,25 @@ static void cps1_build_palette(void)
 
 	if (cps1_has_stars)
 	{
+		/* Star palettes are not mirrored in cps1_old_palette, so preserve the
+		 * historical behavior and refresh the CLUT on star-capable games. */
+		cps1_palette_upload_pending = 1;
 		for (; offset < 6*32*16; offset++)
 		{
 			palette = cps1_palette[offset];
-
-				video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
+			video_palette[offset] = cps_palette_to_555(cps_color_component_lut, palette);
 		}
 	}
+}
+
+int cps1_palette_upload_needed(void)
+{
+	return cps1_palette_upload_pending;
+}
+
+void cps1_palette_upload_complete(void)
+{
+	cps1_palette_upload_pending = 0;
 }
 
 
@@ -1521,6 +1537,9 @@ STATE_LOAD( video )
 	state_load_byte(cps1_old_palette, sizeof(cps1_old_palette));
 	state_load_byte(video_palette, sizeof(video_palette));
 	cps1_objram_latch();
+	/* The CPU-side palette belongs to the loaded state; force the next frame
+	 * to refresh GS CLUT contents even if the mirrored CPS1 palette matches. */
+	cps1_palette_upload_pending = 1;
 
 	cps1_high_layer = 0;
 	cps1_transparency_scroll[0] = 0;

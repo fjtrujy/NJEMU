@@ -181,7 +181,7 @@ void blit_finish_fix(void)
 	if (video_driver->prepareSpriteVertices)
 		video_driver->prepareSpriteVertices(video_data, fix_vertex_count, vertices_fix);
 	if (tex_fix_changed) {
-		video_driver->uploadMem(video_data, TEXTURE_LAYER_FIX);
+		video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_FIX);
 		tex_fix_changed = false;
 	}
 	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_FIX,
@@ -252,7 +252,7 @@ static void upload_sprite_atlas(uint8_t layer)
 #ifdef MVS_DIRTY_SPRITE_UPLOADS
 	if (!tex_spr_changed[layer]) return;
 #endif
-	video_driver->uploadMem(video_data, layer);
+	video_driver->commitTextureUpdates(video_data, layer);
 #ifdef MVS_DIRTY_SPRITE_UPLOADS
 	tex_spr_changed[layer] = false;
 #endif

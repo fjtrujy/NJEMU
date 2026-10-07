@@ -329,7 +329,7 @@ static void blit_render_object(int start_pri, int end_pri)
 
 	if (!size) return;
 
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 
 	vertices_tmp = vertices = vertices_object_flat;
@@ -378,7 +378,7 @@ static void blit_render_object_zb0(void)
 	OBJECT *object;
 
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->enableDepthTest(video_data);
 
 	vertices_tmp = vertices = vertices_object_flat;
@@ -424,7 +424,7 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 	if (!size) return;
 
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_OBJECT);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->enableDepthTest(video_data);
 
 	vertices_tmp = vertices = vertices_object_flat;
@@ -519,7 +519,7 @@ void blit_finish_scroll1(void)
 
 	if (clut0_num + clut1_num == 0) return;
 
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL1);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL1);
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 
 	if (clut0_num)
@@ -605,7 +605,7 @@ void blit_finish_scroll2(void)
 	if (clut0_num + clut1_num == 0) return;
 
 	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL2);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL2);
 
 	if (clut0_num)
 	{
@@ -681,7 +681,7 @@ void blit_finish_scroll3(void)
 
 	if (clut0_num + clut1_num == 0) return;
 
-	video_driver->uploadMem(video_data, TEXTURE_LAYER_SCROLL3);
+	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL3);
 	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
 
 	if (clut0_num)

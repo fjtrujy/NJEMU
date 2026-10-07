@@ -76,7 +76,7 @@ static void draw(void *data, uint8_t layer, const uint16_t *colors, uint8_t bank
 static video_driver_t mock = {
     .beginFrame = noop, .startWorkFrame = start_work, .scissor = scissor,
     .uploadClut = upload_clut, .writeIndexedTextureRect = write_pixels,
-    .uploadMem = upload, .blitSpriteVertices = draw,
+    .commitTextureUpdates = upload, .blitSpriteVertices = draw,
 };
 video_driver_t *video_driver = &mock;
 

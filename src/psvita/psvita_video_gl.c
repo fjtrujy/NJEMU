@@ -1130,7 +1130,7 @@ static void psvita_gl_drawTexture(void *data, int srcIndex, int dstIndex,
 	Driver: drawing
 ******************************************************************************/
 
-static void psvita_gl_uploadMem(void *data, uint8_t textureIndex)
+static void psvita_gl_commitTextureUpdates(void *data, uint8_t textureIndex)
 {
 	/* The texture rects were written straight into vitaGL's texture storage. */
 	(void)data;
@@ -1537,7 +1537,7 @@ video_driver_t video_psvita_gl = {
 	.copyRectFlip = psvita_gl_copyRectFlip,
 	.copyRectRotate = psvita_gl_copyRectRotate,
 	.drawTexture = psvita_gl_drawTexture,
-	.uploadMem = psvita_gl_uploadMem,
+	.commitTextureUpdates = psvita_gl_commitTextureUpdates,
 	.uploadClut = psvita_gl_uploadClut,
 	.writeIndexedTextureRect = psvita_gl_writeIndexedTextureRect,
 	.writeDirectTextureRect = psvita_gl_writeDirectTextureRect,

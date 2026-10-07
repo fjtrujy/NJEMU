@@ -1916,7 +1916,7 @@ Revision posterior a las pruebas: propuesta de arquitectura, aun no implementada
 `src/mvs/sprite.c:mvs_decode_sprite_tile()` llama a `read_cache(code << 7)` y
 consume inmediatamente los 128 bytes del tile para expandirlos a 256 bytes
 indexados. `blit_draw_spr()` copia el resultado al atlas EE antes de construir
-los vertices. `blit_finish_spr()` llama a `uploadMem()` antes de encolar los
+los vertices. `blit_finish_spr()` llama a `commitTextureUpdates()` antes de encolar los
 sprites. Por tanto, cambiar un RPC a NOWAIT sin cambiar este flujo no es correcto.
 
 El deadline inicial recomendado es resolver las decodificaciones pendientes antes
