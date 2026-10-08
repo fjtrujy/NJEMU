@@ -18,6 +18,7 @@
 #include <malloc.h>
 #include <gsKit.h>
 #include <dmaKit.h>
+#include <ee_regs.h>
 #include <gsToolkit.h>
 #include <screenshot.h>
 
@@ -195,10 +196,12 @@ typedef struct ps2_video {
 	uint32_t clut_vram_size;
 	int32_t finish_callback_id;
 	int32_t vsync_callback_id;
+	int32_t gif_dma_callback_id;
 } ps2_video_t;
 
 static int32_t finish_sema_id = -1;
 static int32_t vsync_sema_id = -1;
+static int32_t gif_dma_sema_id = -1;
 
 /*--------------------------------------------------------
 	Video Processing Initialization
@@ -220,6 +223,16 @@ static int vsync_handler(int reason)
 	(void)reason;
 	if (vsync_sema_id >= 0)
 		iSignalSema(vsync_sema_id);
+
+	ExitHandler();
+	return 0;
+}
+
+static int gif_dma_handler(int channel)
+{
+	(void)channel;
+	if (gif_dma_sema_id >= 0)
+		iSignalSema(gif_dma_sema_id);
 
 	ExitHandler();
 	return 0;
@@ -305,6 +318,11 @@ static void ps2_cleanup_failed_init(ps2_video_t *ps2)
 	if (!ps2)
 		return;
 
+	if (ps2->gif_dma_callback_id >= 0) {
+		DisableDmac(DMA_CHANNEL_GIF);
+		RemoveDmacHandler(DMA_CHANNEL_GIF, ps2->gif_dma_callback_id);
+		ps2->gif_dma_callback_id = -1;
+	}
 	if (ps2->vsync_callback_id >= 0) {
 		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
 		ps2->vsync_callback_id = -1;
@@ -341,6 +359,10 @@ static void ps2_cleanup_failed_init(ps2_video_t *ps2)
 	if (vsync_sema_id >= 0) {
 		DeleteSema(vsync_sema_id);
 		vsync_sema_id = -1;
+	}
+	if (gif_dma_sema_id >= 0) {
+		DeleteSema(gif_dma_sema_id);
+		gif_dma_sema_id = -1;
 	}
 	if (finish_sema_id >= 0) {
 		DeleteSema(finish_sema_id);
@@ -527,10 +549,19 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 	PollSema(finish_sema_id);
 }
 
-/* gsKit_queue_exec_real() spins on GS_CSR_FINISH and GIF DMA. Each submitted
- * queue ends with GS FINISH, so receiving that interrupt also proves that its
- * preceding GIF transfer has finished. Only start the next GIF DMA after the
- * previous FINISH, using the sleepable semaphore above. */
+/* FINISH can arrive while GIF DMA is still active, so it is not a DMA fence.
+ * Sleep on the GIF channel's completion interrupt before the next submission.
+ * Rechecking CHCR handles stale IRQ notifications and other GIF transfers. */
+static void ps2_wait_gif_dma(void)
+{
+	while ((*R_EE_D2_CHCR & 0x100u) != 0)
+		WaitSema(gif_dma_sema_id);
+	PollSema(gif_dma_sema_id);
+}
+
+/* gsKit_queue_exec_real() spins on GS_CSR_FINISH and GIF DMA. Serialize both
+ * independently: GS FINISH protects queued drawing and reuse of its backing,
+ * while the GIF DMA interrupt protects the next channel submission. */
 static void ps2_submit_gs_queue(GSGLOBAL *gsGlobal, GSQUEUE *queue)
 {
 	GSQUEUE previous;
@@ -544,10 +575,11 @@ static void ps2_submit_gs_queue(GSGLOBAL *gsGlobal, GSQUEUE *queue)
 		*(u64 *)queue->last_tag = (u64)queue->same_obj | *(u64 *)queue->last_tag;
 
 	gsKit_wait_finish(gsGlobal);
+	ps2_wait_gif_dma();
 	GS_SETREG_CSR_FINISH(1);
 	dmaKit_send_chain_ucab(DMA_CHANNEL_GIF, queue->pool[queue->dbuf]);
 	/* A first-frame submission may be followed by a second (persistent)
-	 * queue. Its submission must wait for this GIF chain to finish too. */
+	 * queue. Both completion events are required before its submission. */
 	gsGlobal->FirstFrame = GS_SETTING_OFF;
 
 	if (queue->mode == GS_PERSISTENT) {
@@ -589,6 +621,7 @@ static void ps2_flushAndWait(void *video_data)
 		return;
 	ps2_execute_gs_queue(ps2->gsGlobal);
 	gsKit_wait_finish(ps2->gsGlobal);
+	ps2_wait_gif_dma();
 }
 
 /* gsKit's release allocator does not bounds-check the one-shot render queue.
@@ -795,6 +828,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	ps2->finish_callback_id = -1;
 	ps2->vsync_callback_id = -1;
+	ps2->gif_dma_callback_id = -1;
 	ps2->output_mode = ps2_sanitize_output_mode(option_video_output_mode);
 	ps2->output_mode_valid = 1;
 	output_mode = ps2_selected_output_mode();
@@ -960,6 +994,19 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	}
 
+	/* The GIF channel can outlive GS FINISH; its own completion IRQ fences
+	 * submissions without occupying the EE while audio threads are ready. */
+	gif_dma_sema_id = CreateSema(&sema);
+	if (gif_dma_sema_id < 0) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
+	ps2->gif_dma_callback_id = AddDmacHandler(DMA_CHANNEL_GIF, gif_dma_handler, 0);
+	if (ps2->gif_dma_callback_id < 0 || EnableDmac(DMA_CHANNEL_GIF) < 0) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
+
 	/* An interrupt wakes the presentation thread without consuming EE CPU
 	 * time while other threads (notably audio) are ready to run. */
 	vsync_sema_id = CreateSema(&sema);
@@ -995,6 +1042,12 @@ static void ps2_free(void *data)
 	if (!ps2)
 		return;
 
+	ps2_wait_gif_dma();
+	if (ps2->gif_dma_callback_id >= 0) {
+		DisableDmac(DMA_CHANNEL_GIF);
+		RemoveDmacHandler(DMA_CHANNEL_GIF, ps2->gif_dma_callback_id);
+		ps2->gif_dma_callback_id = -1;
+	}
 	if (ps2->vsync_callback_id >= 0) {
 		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
 		ps2->vsync_callback_id = -1;
@@ -1011,6 +1064,10 @@ static void ps2_free(void *data)
 	if (vsync_sema_id >= 0) {
 		DeleteSema(vsync_sema_id);
 		vsync_sema_id = -1;
+	}
+	if (gif_dma_sema_id >= 0) {
+		DeleteSema(gif_dma_sema_id);
+		gif_dma_sema_id = -1;
 	}
 	if (finish_sema_id >= 0)
 	{
@@ -1387,6 +1444,7 @@ static int ps2_readFrame(void *data, int frame_index,
 	ps2_execute_gs_queue(gsGlobal);
 	if (had_pending_queue)
 		gsKit_wait_finish(gsGlobal);
+	ps2_wait_gif_dma();
 
 	/* BITBLTBUF.SBP is expressed in 256-byte units. */
 	result = ps2_screenshot(readback, source.Vram / 256, 0, y,
@@ -1911,6 +1969,12 @@ static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
 	if (had_pending_queue)
 		gsKit_wait_finish(gsGlobal);
 
+	ps2_wait_gif_dma();
+	if (ps2->gif_dma_callback_id >= 0) {
+		DisableDmac(DMA_CHANNEL_GIF);
+		RemoveDmacHandler(DMA_CHANNEL_GIF, ps2->gif_dma_callback_id);
+		ps2->gif_dma_callback_id = -1;
+	}
 	if (ps2->vsync_callback_id >= 0) {
 		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
 		ps2->vsync_callback_id = -1;
@@ -1933,6 +1997,10 @@ static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
 	if (ps2->finish_callback_id < 0)
+		return 0;
+	PollSema(gif_dma_sema_id);
+	ps2->gif_dma_callback_id = AddDmacHandler(DMA_CHANNEL_GIF, gif_dma_handler, 0);
+	if (ps2->gif_dma_callback_id < 0 || EnableDmac(DMA_CHANNEL_GIF) < 0)
 		return 0;
 	ps2->vsync_callback_id = gsKit_add_vsync_handler(vsync_handler);
 	if (ps2->vsync_callback_id < 0)
