@@ -179,8 +179,9 @@ if(USE_CACHE)
 else()
     add_definitions(-DUSE_CACHE=0)
 endif()
-if(USE_CACHE AND (PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PS2") AND
-   "${TARGET}" STREQUAL "MVS")
+# PSP MVS retains 64 KiB reads: real-hardware Metal Slug 3 captures showed
+# pathological C-ROM demand-read stalls with 16 KiB partial fills.
+if(USE_CACHE AND PLATFORM STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
     add_definitions(-DCACHE_DEFAULT_READ_SIZE_KB=16)
 else()
     add_definitions(-DCACHE_DEFAULT_READ_SIZE_KB=64)
