@@ -20,10 +20,11 @@ The v8 binary trace stores 6,000 in-RAM frame records and writes them once at th
 | Main CPU, 32 KiB | 11 | 18 | 70 | 28.6 ms | 2 |
 | Main CPU, 64 KiB | 38 | 59 | 35 | 31.3 ms | 0 |
 | Media Engine, 16 KiB | 2 | 3 | 82 | 9.9 ms | 0 |
+| Media Engine, 64 KiB | 7 | 12 | 17 | 29.7 ms | 0 |
 
 `Work` here is total frame time minus measured VBlank wait and warm-up VSync wait. It is a useful budget estimate, not a standalone CPU utilization measurement. A total frame time around 33 ms is not automatically a VBlank defect: some such frames legitimately missed the current refresh because rendering or storage work exceeded the deadline.
 
-**Controlled comparison:** the Main CPU 16 KiB and 64 KiB captures have identical per-frame sprite atlas miss counts, eviction counts, and atlas occupancy for all 6,000 frames. The dramatically different C-ROM latency is therefore not explained by different sprites or attract-mode scenes in these two captures. The 32 KiB capture diverges in sprite activity from frame 569 and must not be ranked directly against the other runs solely by its frame-time counts. Media Engine and Main CPU also follow differing sprite sequences in the captured windows, so their aggregate timing gap must not be attributed exclusively to offloading audio.
+**Controlled comparison:** the Main CPU 16 KiB and 64 KiB captures have identical per-frame sprite atlas miss counts, eviction counts, and atlas occupancy for all 6,000 frames. The dramatically different C-ROM latency is therefore not explained by different sprites or attract-mode scenes in these two captures. The 32 KiB capture diverges in sprite activity from frame 569 and must not be ranked directly against the other runs solely by its frame-time counts. The Media Engine 16 KiB and 64 KiB runs also diverge from frame 569; both remain within budget for most frames, but their counts are not a strict A/B comparison. Media Engine and Main CPU follow differing sprite sequences in their captured windows, so their aggregate timing gap must not be attributed exclusively to offloading audio.
 
 The 16 KiB behavior is consistent with excessive partial C-ROM demand reads and their storage latency under the tested workload. The trace does not establish whether PSPLink/`host0:` transport specifically amplifies this behavior compared with Memory Stick storage. The runtime choice of 16/32/64 KiB remains available for user tests.
 
