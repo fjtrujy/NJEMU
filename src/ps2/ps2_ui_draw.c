@@ -21,7 +21,6 @@
 #include <gsInline.h>
 #include <gsToolkit.h>
 #include <dmaKit.h>
-#include "ps2/ps2_video.h"
 #include "common/ui_draw_driver.h"
 #include "common/ui_layout.h"
 #include "common/ui_texture_layout.h"
@@ -97,7 +96,11 @@ static void *ps2_ui_draw_init(void *video_data)
 
 	memset(&ps2_ui, 0, sizeof(ps2_ui_data_t));
 	ps2_ui.video_data = video_data;
-	ps2_ui.gsGlobal = (GSGLOBAL *)ps2_video_get_gsGlobal(video_data);
+	if (!video_driver->getNativeContext)
+		return NULL;
+	ps2_ui.gsGlobal = (GSGLOBAL *)video_driver->getNativeContext(video_data);
+	if (!ps2_ui.gsGlobal)
+		return NULL;
 
 	/* CPU staging buffers only need the maximum shape used by each common UI
 	 * texture. The old four 512x512 allocations consumed ~2 MiB of EE RAM even

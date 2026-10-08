@@ -45,6 +45,11 @@ callback when reusing mutable font-upload buffers. The implementation
 `ps2_flushAndWait()` remains private to the PS2 video backend; other video
 drivers leave the callback unimplemented. This does not change frame
 presentation or the `beginFrame`/`endFrame` contract.
+Likewise, the PS2 UI adapter obtains its gsKit `GSGLOBAL` through the
+optional `video_driver_t::getNativeContext` callback, rather than a
+PS2-specific public accessor. Screenshot readback already uses the common
+`video_driver_t::readFrame` callback. Both implementations are private to
+the PS2 video backend, so `ps2_video.h` is no longer needed.
 
 The linked MVS ELF still contains gsKit's blocking queue executor, but an
 objdump caller audit found references only from `gsKit_init_screen()`:

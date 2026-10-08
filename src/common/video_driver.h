@@ -219,6 +219,11 @@ typedef struct video_driver
 	 * Does not present the frame or change its beginFrame/endFrame lifetime. */
 	void (*flushAndWait)(void *data);
 
+	/* Optional platform-native graphics context for a matching native UI
+	 * adapter. The context is owned by the video backend and remains valid
+	 * only while its video data is alive. Common code must not interpret it. */
+	void *(*getNativeContext)(void *data);
+
 } video_driver_t;
 
 typedef struct video_backend_choice

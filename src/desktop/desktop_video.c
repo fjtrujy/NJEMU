@@ -1075,4 +1075,5 @@ video_driver_t video_desktop_sdl = {
 	NULL, // setOutputOffset
 	NULL, // setOutputMode
 	NULL, // flushAndWait
+	NULL, // getNativeContext
 };

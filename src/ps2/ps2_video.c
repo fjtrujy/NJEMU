@@ -24,7 +24,6 @@
 #include <gsInline.h>
 #include <gsCore.h>
 
-#include "ps2/ps2_video.h"
 
 
 /******************************************************************************
@@ -226,8 +225,7 @@ static int vsync_handler(int reason)
 	return 0;
 }
 
-/* Public accessor used by ps2_ui_draw.c. */
-void *ps2_video_get_gsGlobal(void *video_data)
+static void *ps2_getNativeContext(void *video_data)
 {
 	ps2_video_t *ps2 = (ps2_video_t *)video_data;
 	return ps2 ? ps2->gsGlobal : NULL;
@@ -1340,7 +1338,7 @@ static bool ps2_resolveSourceTexture(ps2_video_t *ps2, int index, GSTEXTURE *tex
 	return true;
 }
 
-int ps2_video_read_frame(void *data, int frame_index,
+static int ps2_readFrame(void *data, int frame_index,
 	int x, int y, int width, int height,
 	uint16_t *dst, int dst_pitch)
 {
@@ -2630,7 +2628,7 @@ video_driver_t video_ps2 = {
 	ps2_beginFrame,
 	ps2_endFrame,
 	ps2_frameAddr,
-	ps2_video_read_frame,
+	ps2_readFrame,
 	ps2_getOutputSize,
 	ps2_scissor,
 	ps2_clearScreen,
@@ -2664,4 +2662,5 @@ video_driver_t video_ps2 = {
 	ps2_setOutputOffset,
 	ps2_setOutputMode,
 	ps2_flushAndWait,
+	ps2_getNativeContext,
 };

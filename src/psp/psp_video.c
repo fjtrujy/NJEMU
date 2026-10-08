@@ -1444,4 +1444,5 @@ video_driver_t video_psp = {
 	NULL,
 	NULL,
 	NULL, // flushAndWait
+	NULL, // getNativeContext
 };
