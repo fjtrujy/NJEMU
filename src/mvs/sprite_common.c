@@ -219,7 +219,7 @@ int spr_insert_sprite(uint32_t key, uint8_t preferred_layer)
 	Delete expired sprites from SPR texture
 ------------------------------------------------------------------------*/
 
-void spr_delete_sprite(void)
+static void spr_delete_older_than(uint32_t minimum_age)
 {
 	int i;
 	SPRITE *p, *prev_p;
@@ -231,7 +231,9 @@ void spr_delete_sprite(void)
 
 		while (p)
 		{
-			if (frames_displayed != p->used)
+			uint32_t age = frames_displayed - p->used;
+
+			if (age >= minimum_age)
 			{
 				spr_texture_num--;
 
@@ -257,6 +259,19 @@ void spr_delete_sprite(void)
 			}
 		}
 	}
+}
+
+void spr_delete_sprite(void)
+{
+	/* Preserve the previous frame's working set. Evicting it while the current
+	 * frame is still traversing sprites causes large decode/upload storms in
+	 * scenes whose atlas working set is close to capacity. */
+	spr_delete_older_than(2u);
+
+	/* If two consecutive frames fill the atlas completely, fall back to the
+	 * original current-frame protection so allocation can still progress. */
+	if (spr_texture_num == SPR_TEXTURE_SIZE - 1)
+		spr_delete_older_than(1u);
 }
 
 

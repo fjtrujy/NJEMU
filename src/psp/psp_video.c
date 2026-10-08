@@ -233,7 +233,10 @@ static void psp_flipScreen(void *data, bool vsync)
 {
 	psp_video_t *psp = (psp_video_t *)data;
 
-	if (vsync)
+	/* If rendering completes during VBlank, swap immediately. Waiting for
+	 * another VBlank here would turn an on-time frame into a full-refresh
+	 * stall. */
+	if (vsync && !sceDisplayIsVblank())
 		sceDisplayWaitVblankStart();
 	psp->show_frame = psp->draw_frame;
 	psp->draw_frame = (uintptr_t)sceGuSwapBuffers();
@@ -931,6 +934,21 @@ static void psp_writeIndexedTextureRect(void *data, uint8_t textureIndex,
 	if (!layer->buffer || layer->bytes_per_pixel != 1 ||
 	    x < 0 || y < 0 || x + width > layer->width || y + height > layer->height)
 		return;
+
+	/* A 16-pixel-wide, 8-row-high swizzle block is contiguous in EDRAM.
+	 * MVS sprite tiles are aligned 16x16 rectangles, so copy each tile as
+	 * two 128-byte blocks instead of 16 tiny row copies. */
+	if (width == 16 && (height & 7) == 0 && (x & 15) == 0 &&
+	    (y & 7) == 0 && srcPitch == 16) {
+		int block_row;
+		for (block_row = 0; block_row < height; block_row += 8) {
+			uint8_t *dst = layer->buffer + psp_swizzled8_offset(layer->stride,
+				x, y + block_row);
+			memcpy(dst, pixels + block_row * srcPitch, 16u * 8u);
+		}
+		psp_markTextureDirtyRows(layer, y, height);
+		return;
+	}
 
 	for (row = 0; row < height; row++) {
 		int column = 0;
