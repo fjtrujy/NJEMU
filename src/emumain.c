@@ -472,6 +472,13 @@ void update_screen(void)
 			}
 		}
 	}
+	else
+	{
+		/* Skipped frames still run emulation work. Without a present or
+		 * software-pacing wait, a run of skipped frames can starve the
+		 * lower-priority audio thread on cooperative EE scheduling. */
+		thread_driver->yieldThread();
+	}
 
 	frameskip_counter = (frameskip_counter + 1) % FRAMESKIP_LEVELS;
 }
