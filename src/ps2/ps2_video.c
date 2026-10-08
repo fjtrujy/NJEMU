@@ -195,9 +195,11 @@ typedef struct ps2_video {
 	void *vram_cluts;
 	uint32_t clut_vram_size;
 	int32_t finish_callback_id;
+	int32_t vsync_callback_id;
 } ps2_video_t;
 
 static int32_t finish_sema_id = -1;
+static int32_t vsync_sema_id = -1;
 
 /*--------------------------------------------------------
 	Video Processing Initialization
@@ -212,6 +214,16 @@ static int finish_handler(int reason)
 
    ExitHandler();
    return 0;
+}
+
+static int vsync_handler(int reason)
+{
+	(void)reason;
+	if (vsync_sema_id >= 0)
+		iSignalSema(vsync_sema_id);
+
+	ExitHandler();
+	return 0;
 }
 
 /* Public accessor used by ps2_ui_draw.c. */
@@ -295,6 +307,15 @@ static void ps2_cleanup_failed_init(ps2_video_t *ps2)
 	if (!ps2)
 		return;
 
+	if (ps2->vsync_callback_id >= 0) {
+		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
+		ps2->vsync_callback_id = -1;
+	}
+	if (ps2->finish_callback_id >= 0) {
+		gsKit_remove_finish_handler(ps2->finish_callback_id);
+		ps2->finish_callback_id = -1;
+	}
+
 #if defined(GUI)
 	free(ps2->ui_scratch_mem);
 	ps2->ui_scratch_mem = NULL;
@@ -319,6 +340,10 @@ static void ps2_cleanup_failed_init(ps2_video_t *ps2)
 		ps2->gsGlobal = NULL;
 	}
 
+	if (vsync_sema_id >= 0) {
+		DeleteSema(vsync_sema_id);
+		vsync_sema_id = -1;
+	}
 	if (finish_sema_id >= 0) {
 		DeleteSema(finish_sema_id);
 		finish_sema_id = -1;
@@ -483,10 +508,13 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 	if (finish_sema_id < 0)
 		return;
 
-	if (!GS_CSR_FINISH)
+	/* A late notification for an earlier frame is not a completion for
+	 * the current queue. Recheck hardware state only after being woken. */
+	while (!GS_CSR_FINISH)
 		WaitSema(finish_sema_id);
 
-	while (PollSema(finish_sema_id) >= 0);
+	/* max_count=1, so one nonblocking poll discards any old token. */
+	PollSema(finish_sema_id);
 }
 
 /* gsKit's release allocator does not bounds-check the one-shot render queue.
@@ -692,6 +720,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	if (!ps2)
 		return NULL;
 	ps2->finish_callback_id = -1;
+	ps2->vsync_callback_id = -1;
 	ps2->output_mode = ps2_sanitize_output_mode(option_video_output_mode);
 	ps2->output_mode_valid = 1;
 	output_mode = ps2_selected_output_mode();
@@ -857,6 +886,19 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 		return NULL;
 	}
 
+	/* An interrupt wakes the presentation thread without consuming EE CPU
+	 * time while other threads (notably audio) are ready to run. */
+	vsync_sema_id = CreateSema(&sema);
+	if (vsync_sema_id < 0) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
+	ps2->vsync_callback_id = gsKit_add_vsync_handler(vsync_handler);
+	if (ps2->vsync_callback_id < 0) {
+		ps2_cleanup_failed_init(ps2);
+		return NULL;
+	}
+
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER);
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
@@ -879,6 +921,10 @@ static void ps2_free(void *data)
 	if (!ps2)
 		return;
 
+	if (ps2->vsync_callback_id >= 0) {
+		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
+		ps2->vsync_callback_id = -1;
+	}
 	if (ps2->finish_callback_id >= 0) {
 		gsKit_remove_finish_handler(ps2->finish_callback_id);
 		ps2->finish_callback_id = -1;
@@ -888,6 +934,10 @@ static void ps2_free(void *data)
 	gsKit_clear(ps2->gsGlobal, GS_BLACK);
 	gsKit_vram_clear(ps2->gsGlobal);
 	gsKit_deinit_global(ps2->gsGlobal);
+	if (vsync_sema_id >= 0) {
+		DeleteSema(vsync_sema_id);
+		vsync_sema_id = -1;
+	}
 	if (finish_sema_id >= 0)
 	{
 		DeleteSema(finish_sema_id);
@@ -924,10 +974,20 @@ static void ps2_free(void *data)
 	Wait for VSYNC
 --------------------------------------------------------*/
 
+static void ps2_wait_for_vblank(void)
+{
+	/* Consume an old notification before waiting for a new VBlank.
+	 * max_count=1 makes this a single nonblocking PollSema, not a spin loop. */
+	if (vsync_sema_id >= 0) {
+		PollSema(vsync_sema_id);
+		WaitSema(vsync_sema_id);
+	}
+}
+
 static void ps2_waitVsync(void *data)
 {
 	(void)data;
-	gsKit_vsync_wait();
+	ps2_wait_for_vblank();
 }
 
 
@@ -941,12 +1001,15 @@ static void ps2_flipScreen(void *data, bool vsync)
 
 	gsKit_wait_finish(ps2->gsGlobal);
 	gsKit_queue_exec(ps2->gsGlobal);
+	/* Only expose the back buffer after its GPU commands have completed.
+	 * This wait sleeps, leaving the EE available to audio threads. */
+	gsKit_wait_finish(ps2->gsGlobal);
 
-	if (vsync) {
-		gsKit_sync_flip(ps2->gsGlobal);
-	} else {
-		gsKit_flip(ps2->gsGlobal);
-	}
+	/* gsKit_sync_flip spins on GS_CSR. Use the interrupt-driven, sleepable
+	 * wait instead, preserving gsKit's FirstFrame behavior. */
+	if (vsync && !ps2->gsGlobal->FirstFrame)
+		ps2_wait_for_vblank();
+	gsKit_flip(ps2->gsGlobal);
 }
 
 static void ps2_beginFrame(void *data)
@@ -1245,11 +1308,11 @@ int ps2_video_read_frame(void *data, int frame_index,
 	 * and that FINISH before starting the local-to-host transfer. */
 	had_pending_queue = gsGlobal->Per_Queue->tag_size != 0 ||
 		gsGlobal->Os_Queue->tag_size != 0;
+	/* A previous frame may still be running even with no queued commands. */
+	gsKit_wait_finish(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
-	if (had_pending_queue) {
-		dmaKit_wait_fast();
-		gsKit_finish();
-	}
+	if (had_pending_queue)
+		gsKit_wait_finish(gsGlobal);
 
 	/* BITBLTBUF.SBP is expressed in 256-byte units. */
 	result = ps2_screenshot(readback, source.Vram / 256, 0, y,
@@ -1263,7 +1326,7 @@ int ps2_video_read_frame(void *data, int frame_index,
 		 * queue state to the same one-shot state used before an initial submit.
 		 * The next queue execution automatically switches FirstFrame back off. */
 		if (finish_sema_id >= 0)
-			while (PollSema(finish_sema_id) >= 0);
+			PollSema(finish_sema_id);
 		gsGlobal->FirstFrame = GS_SETTING_ON;
 	}
 
@@ -1771,11 +1834,13 @@ static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
 		gsGlobal->Os_Queue->tag_size != 0;
 	gsKit_wait_finish(gsGlobal);
 	gsKit_queue_exec(gsGlobal);
-	if (had_pending_queue) {
-		dmaKit_wait_fast();
-		gsKit_finish();
-	}
+	if (had_pending_queue)
+		gsKit_wait_finish(gsGlobal);
 
+	if (ps2->vsync_callback_id >= 0) {
+		gsKit_remove_vsync_handler(ps2->vsync_callback_id);
+		ps2->vsync_callback_id = -1;
+	}
 	if (ps2->finish_callback_id >= 0) {
 		gsKit_remove_finish_handler(ps2->finish_callback_id);
 		ps2->finish_callback_id = -1;
@@ -1794,6 +1859,9 @@ static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
 	if (ps2->finish_callback_id < 0)
+		return 0;
+	ps2->vsync_callback_id = gsKit_add_vsync_handler(vsync_handler);
+	if (ps2->vsync_callback_id < 0)
 		return 0;
 
 	if (!ps2_reallocate_output_vram(ps2))
