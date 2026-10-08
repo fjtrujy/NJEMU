@@ -1074,4 +1074,5 @@ video_driver_t video_desktop_sdl = {
 	NULL, // getPresentationViewport
 	NULL, // setOutputOffset
 	NULL, // setOutputMode
+	NULL, // flushAndWait
 };

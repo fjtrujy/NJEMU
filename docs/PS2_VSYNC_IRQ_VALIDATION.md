@@ -39,6 +39,13 @@ wait spins. UI font-ring and scratch-buffer flushes likewise submit the GIF
 queue and sleep until FINISH before reusing CPU-backed upload data. VBlank
 continues to use its independent interrupt/semaphore.
 
+UI synchronization is exposed through the optional, backend-neutral
+`video_driver_t::flushAndWait` contract. The PS2 UI adapter uses this
+callback when reusing mutable font-upload buffers. The implementation
+`ps2_flushAndWait()` remains private to the PS2 video backend; other video
+drivers leave the callback unimplemented. This does not change frame
+presentation or the `beginFrame`/`endFrame` contract.
+
 The linked MVS ELF still contains gsKit's blocking queue executor, but an
 objdump caller audit found references only from `gsKit_init_screen()`:
 initialization/output-mode reinitialization, not normal frame rendering.

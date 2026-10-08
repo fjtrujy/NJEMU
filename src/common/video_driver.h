@@ -214,6 +214,11 @@ typedef struct video_driver
 	 * applied the requested platform mode without requiring an emulator restart. */
 	int (*setOutputMode)(void *data, int mode);
 
+	/* Optional mid-frame synchronization: submit any queued drawing commands
+	 * and wait until the GPU no longer references mutable CPU upload buffers.
+	 * Does not present the frame or change its beginFrame/endFrame lifetime. */
+	void (*flushAndWait)(void *data);
+
 } video_driver_t;
 
 typedef struct video_backend_choice

@@ -579,7 +579,7 @@ static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 				/* The ring's CPU upload buffers cannot be reused until the
 				 * submitted GIF batch completes. Sleep on GS FINISH rather
 				 * than polling the DMA channel. */
-				ps2_video_flush_ui_queue(d->video_data);
+			video_driver->flushAndWait(d->video_data);
 			d->font_ring_next = 0;
 		}
 	}
@@ -588,7 +588,7 @@ static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 		/* Oversized scratch draws (primarily the NJEMU logo) still use the legacy
 		 * single texture, so flush before common/ui_draw.c rewrites that same upload
 		 * buffer. Normal text takes the batched ring path above. */
-			ps2_video_flush_ui_queue(d->video_data);
+		video_driver->flushAndWait(d->video_data);
 	}
 
 	d->prepared_font_ring = 0;

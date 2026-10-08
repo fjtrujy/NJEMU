@@ -15,10 +15,6 @@
  * renderer context handle and therefore receives it opaquely. */
 void *ps2_video_get_gsGlobal(void *video_data);
 
-/* Submit pending GIF commands and sleep until GS FINISH before reusing
- * CPU upload buffers. Used by the UI font staging ring. */
-void ps2_video_flush_ui_queue(void *video_data);
-
 /* Copy a CT16 GS surface into CPU RAM. dst_pitch is expressed in pixels. */
 int ps2_video_read_frame(void *video_data, int frame_index,
 	int x, int y, int width, int height,

@@ -584,7 +584,7 @@ static void ps2_execute_gs_queue(GSGLOBAL *gsGlobal)
 	gsGlobal->FirstFrame = GS_SETTING_OFF;
 }
 
-void ps2_video_flush_ui_queue(void *video_data)
+static void ps2_flushAndWait(void *video_data)
 {
 	ps2_video_t *ps2 = (ps2_video_t *)video_data;
 	if (!ps2 || !ps2->gsGlobal)
@@ -2663,4 +2663,5 @@ video_driver_t video_ps2 = {
 	ps2_getPresentationViewport,
 	ps2_setOutputOffset,
 	ps2_setOutputMode,
+	ps2_flushAndWait,
 };
