@@ -1455,4 +1455,6 @@ video_driver_t video_desktop_gl = {
 	.fillUIRect = desktop_gl_fillUIRect,
 	.fillUIRectGradient = desktop_gl_fillUIRectGradient,
 	.setUIScissor = desktop_gl_setUIScissor,
+	.flushAndWait = NULL,
+	.getNativeContext = NULL,
 };

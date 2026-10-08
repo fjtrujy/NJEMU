@@ -1554,4 +1554,6 @@ video_driver_t video_psvita_gl = {
 	.fillUIRect = psvita_gl_fillUIRect,
 	.fillUIRectGradient = psvita_gl_fillUIRectGradient,
 	.setUIScissor = psvita_gl_setUIScissor,
+	.flushAndWait = NULL,
+	.getNativeContext = NULL,
 };
