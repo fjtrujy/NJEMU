@@ -576,12 +576,10 @@ static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 		d->font_ring_next++;
 		if (d->font_ring_next == PS2_UI_FONT_RING_SIZE)
 		{
-			/* Submit a whole glyph batch at once. gsKit will wait for the
-			 * previous batch's FINISH before these ring slots are reused; only
-			 * the much shorter GIF DMA must complete before CPU buffers can be
-			 * overwritten. */
-			gsKit_queue_exec(gsGlobal);
-			dmaKit_wait_fast();
+				/* The ring's CPU upload buffers cannot be reused until the
+				 * submitted GIF batch completes. Sleep on GS FINISH rather
+				 * than polling the DMA channel. */
+				ps2_video_flush_ui_queue(d->video_data);
 			d->font_ring_next = 0;
 		}
 	}
@@ -590,8 +588,7 @@ static void ps2_ui_draw_finishTextureDraw(void *data, int slot)
 		/* Oversized scratch draws (primarily the NJEMU logo) still use the legacy
 		 * single texture, so flush before common/ui_draw.c rewrites that same upload
 		 * buffer. Normal text takes the batched ring path above. */
-		gsKit_queue_exec(gsGlobal);
-		dmaKit_wait_fast();
+			ps2_video_flush_ui_queue(d->video_data);
 	}
 
 	d->prepared_font_ring = 0;

@@ -487,11 +487,23 @@ static inline void gsKit_flip(GSGLOBAL *gsGlobal)
       }
    }
 
-   /* Keep the render target in lockstep with ActiveBuffer exactly like
-    * gsKit_sync_flip().  This must submit the FRAME/SCISSOR state to the GS;
-    * merely constructing that packet leaves subsequent immediate flips
-    * rendering into the previously active framebuffer. */
-   gsKit_setactive(gsGlobal);
+   /* Enqueue FRAME/SCISSOR updates for the next GIF batch instead of calling
+    * gsKit_setactive(), which spins waiting for the GIF DMA channel. */
+   u64 *p_data = gsKit_heap_alloc(gsGlobal, 4, 4 * 16, GIF_AD);
+   if (p_data == gsGlobal->CurQueue->last_tag) {
+      *p_data++ = GIF_TAG_AD(4);
+      *p_data++ = GIF_AD;
+   }
+   *p_data++ = GS_SETREG_SCISSOR_1(0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1);
+   *p_data++ = GS_SCISSOR_1;
+   *p_data++ = GS_SETREG_FRAME_1(gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192,
+      gsGlobal->Width / 64, gsGlobal->PSM, 0);
+   *p_data++ = GS_FRAME_1;
+   *p_data++ = GS_SETREG_SCISSOR_1(0, gsGlobal->Width - 1, 0, gsGlobal->Height - 1);
+   *p_data++ = GS_SCISSOR_2;
+   *p_data++ = GS_SETREG_FRAME_1(gsGlobal->ScreenBuffer[gsGlobal->ActiveBuffer & 1] / 8192,
+      gsGlobal->Width / 64, gsGlobal->PSM, 0);
+   *p_data++ = GS_FRAME_2;
 }
 
 static inline u32 lzw(u32 val)
@@ -515,6 +527,70 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 
 	/* max_count=1, so one nonblocking poll discards any old token. */
 	PollSema(finish_sema_id);
+}
+
+/* gsKit_queue_exec_real() spins on GS_CSR_FINISH and GIF DMA. Each submitted
+ * queue ends with GS FINISH, so receiving that interrupt also proves that its
+ * preceding GIF transfer has finished. Only start the next GIF DMA after the
+ * previous FINISH, using the sleepable semaphore above. */
+static void ps2_submit_gs_queue(GSGLOBAL *gsGlobal, GSQUEUE *queue)
+{
+	GSQUEUE previous;
+
+	if (!queue->tag_size)
+		return;
+
+	previous = gsKit_set_finish(gsGlobal);
+	*(u64 *)queue->dma_tag = DMA_TAG(queue->tag_size, 0, DMA_END, 0, 0, 0);
+	if (queue->last_type != GIF_AD)
+		*(u64 *)queue->last_tag = (u64)queue->same_obj | *(u64 *)queue->last_tag;
+
+	gsKit_wait_finish(gsGlobal);
+	GS_SETREG_CSR_FINISH(1);
+	dmaKit_send_chain_ucab(DMA_CHANNEL_GIF, queue->pool[queue->dbuf]);
+	/* A first-frame submission may be followed by a second (persistent)
+	 * queue. Its submission must wait for this GIF chain to finish too. */
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
+
+	if (queue->mode == GS_PERSISTENT) {
+		*queue = previous;
+		/* The persistent buffer can be rewritten immediately after dispatch. */
+		gsKit_wait_finish(gsGlobal);
+	} else {
+		queue->dbuf ^= 1;
+		queue->dma_tag = queue->pool[queue->dbuf];
+		queue->pool_cur = queue->dma_tag + 16;
+		queue->last_type = GIF_RESERVED;
+		queue->last_tag = queue->pool_cur;
+		queue->tag_size = 0;
+	}
+}
+
+static void ps2_execute_gs_queue(GSGLOBAL *gsGlobal)
+{
+	GSQUEUE *saved = gsGlobal->CurQueue;
+	if (gsGlobal->DrawOrder == GS_PER_OS) {
+		gsGlobal->CurQueue = gsGlobal->Per_Queue;
+		ps2_submit_gs_queue(gsGlobal, gsGlobal->Per_Queue);
+		gsGlobal->CurQueue = gsGlobal->Os_Queue;
+		ps2_submit_gs_queue(gsGlobal, gsGlobal->Os_Queue);
+	} else {
+		gsGlobal->CurQueue = gsGlobal->Os_Queue;
+		ps2_submit_gs_queue(gsGlobal, gsGlobal->Os_Queue);
+		gsGlobal->CurQueue = gsGlobal->Per_Queue;
+		ps2_submit_gs_queue(gsGlobal, gsGlobal->Per_Queue);
+	}
+	gsGlobal->CurQueue = saved;
+	gsGlobal->FirstFrame = GS_SETTING_OFF;
+}
+
+void ps2_video_flush_ui_queue(void *video_data)
+{
+	ps2_video_t *ps2 = (ps2_video_t *)video_data;
+	if (!ps2 || !ps2->gsGlobal)
+		return;
+	ps2_execute_gs_queue(ps2->gsGlobal);
+	gsKit_wait_finish(ps2->gsGlobal);
 }
 
 /* gsKit's release allocator does not bounds-check the one-shot render queue.
@@ -553,7 +629,7 @@ static bool ps2_reserve_render_queue(ps2_video_t *ps2, size_t required_bytes)
 		 * submitting this partial frame, then continue in gsKit's alternate
 		 * one-shot buffer. GS render state survives the queue boundary. */
 		gsKit_wait_finish(gsGlobal);
-		gsKit_queue_exec(gsGlobal);
+			ps2_execute_gs_queue(gsGlobal);
 
 		queue = gsGlobal->CurQueue;
 		used = (size_t)((uintptr_t)queue->pool_cur -
@@ -1000,7 +1076,7 @@ static void ps2_flipScreen(void *data, bool vsync)
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 
 	gsKit_wait_finish(ps2->gsGlobal);
-	gsKit_queue_exec(ps2->gsGlobal);
+	ps2_execute_gs_queue(ps2->gsGlobal);
 	/* Only expose the back buffer after its GPU commands have completed.
 	 * This wait sleeps, leaving the EE available to audio threads. */
 	gsKit_wait_finish(ps2->gsGlobal);
@@ -1310,7 +1386,7 @@ int ps2_video_read_frame(void *data, int frame_index,
 		gsGlobal->Os_Queue->tag_size != 0;
 	/* A previous frame may still be running even with no queued commands. */
 	gsKit_wait_finish(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	ps2_execute_gs_queue(gsGlobal);
 	if (had_pending_queue)
 		gsKit_wait_finish(gsGlobal);
 
@@ -1833,7 +1909,7 @@ static int ps2_apply_output_mode(ps2_video_t *ps2, int mode_index)
 	had_pending_queue = gsGlobal->Per_Queue->tag_size != 0 ||
 		gsGlobal->Os_Queue->tag_size != 0;
 	gsKit_wait_finish(gsGlobal);
-	gsKit_queue_exec(gsGlobal);
+	ps2_execute_gs_queue(gsGlobal);
 	if (had_pending_queue)
 		gsKit_wait_finish(gsGlobal);
 

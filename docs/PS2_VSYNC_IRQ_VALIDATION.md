@@ -22,8 +22,46 @@ Tested with PCSX2 v2.9.93 on an Apple M1 Max, using an isolated PS2-toolchain bu
 
 Temporary VBlank diagnostic logging was kept outside the source patch, then removed; clean, uninstrumented MVS and NCDZ binaries were rebuilt and launched successfully in PCSX2.
 
+## Normal-frame queue submission (follow-up)
+
+The PS2 backend now submits gsKit's GIF queues through the PS2-local
+`ps2_execute_gs_queue()` rather than calling `gsKit_queue_exec()` during
+emulation. It preserves gsKit's one-shot/persistent queue bookkeeping and
+appends the same GS FINISH packet. Before each new DMA transfer it sleeps on
+the prior queue's GS FINISH semaphore, which also proves that the previous
+GIF chain has completed. Even on the initial frame, a second nonempty queue
+must wait for the first queue's completion. Persistent queue memory is not
+reused before FINISH.
+
+Framebuffer FRAME/SCISSOR updates are enqueued into the next GIF batch
+instead of being submitted immediately by `gsKit_setactive()`, whose DMA
+wait spins. UI font-ring and scratch-buffer flushes likewise submit the GIF
+queue and sleep until FINISH before reusing CPU-backed upload data. VBlank
+continues to use its independent interrupt/semaphore.
+
+The linked MVS ELF still contains gsKit's blocking queue executor, but an
+objdump caller audit found references only from `gsKit_init_screen()`:
+initialization/output-mode reinitialization, not normal frame rendering.
+No direct `gsKit_queue_exec()`, `gsKit_setactive()`, or
+`dmaKit_wait_fast()` calls remain in the PS2 video/UI frame paths.
+
+PCSX2 2.9.93 follow-up on `ps2_vsync_improvements`: MVS Puzzle Bobble 2
+and NCDZ Metal Slug 2 ran with VSync and sound enabled for approximately
+84 and 86 seconds respectively, at about 59.94 FPS on the overlay, with
+no observed graphics stall or application errors. Both use the new
+interrupt-driven queue path. These are emulator observations, not physical
+EE thread-scheduling measurements.
+After correcting the two-nonempty-queues first-frame ordering, the final MVS
+build completed an additional 50-second VSync-on PCSX2 run. The GUI-enabled
+MVS build also displayed its text/font introduction screen correctly.
+
 ## Remaining work and real-hardware checks
 
-**This does not yet guarantee zero busy-waiting in the PS2 graphics stack.** The linked gsKit implementation still polls inside `gsKit_queue_exec_real()` via `gsKit_finish()` and `dmaKit_wait_fast()`. Additional calls to `dmaKit_wait_fast()` exist in `src/ps2/ps2_ui_draw.c`. Eliminating all busy-waits requires a separate review of gsKit GIF DMA submission and completion, including buffer-lifetime guarantees; it cannot be achieved solely by changing VBlank waits.
+**Startup, output-mode reinitialization, and screen readback still use
+gsKit/PS2SDK code which can busy-wait.** Only the normal frame and UI
+submission paths have been migrated. The internal blocking helpers remain
+linked for gsKit initialization and may be used by infrequent operations.
+The GPU's FINISH interrupt is currently also the DMA-completion fence;
+verify this ordering and any throughput/audio tradeoffs on real hardware.
 
 On a real PS2, verify audio continuity under frame pressure, repeated VSync with the FPS overlay, graphical integrity during mode switches (240p, 480i, 480p), menu texture updates and screen capture. PCSX2 runs exercised boot-time mode selection, not live switching between modes. Do not regard emulator FPS as a real-hardware performance measurement.
