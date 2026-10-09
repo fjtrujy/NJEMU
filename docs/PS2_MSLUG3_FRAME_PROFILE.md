@@ -787,3 +787,98 @@ be used for final performance claims.
    The MVS sprite batching/rendering path is a secondary opportunity.
 4. Repeat the same state with an uninstrumented baseline and one
    optimization at a time; do not assume 60 FPS based solely on PCSX2.
+
+### M68000 instruction-family and Z80 slice investigation (2026-10-09)
+
+Following the PS2 MVS main-RAM dispatch optimization, the remaining
+M68000 execution time was examined on the physical PS2 at
+`192.168.1.10`, starting from the same `mslug3.sv0` state. This
+investigation used **diagnostic-only** C68K instruction sampling and
+MVS scheduler counters; no opcode semantics, emulated CPU clocks,
+timer cadence, or production scheduler were changed.
+
+The C68K sampler selected approximately one executed instruction in
+256, recording the top opcode nibble and the emulated program counter
+region. The first attempt timed each sampled instruction through
+`ps2_profile_now_us()`, which converts the hardware timer into
+microseconds. A 4,096-pair clock calibration measured **1.253 us per
+back-to-back timestamp pair**, a large fraction of the apparent
+instruction cost. The follow-up used `GetTimerSystemTime()` raw bus
+ticks and converted only the aggregate. That calibration measured
+**154,112 ticks / 4,096 pairs = 1,045 us total**, approximately
+**0.255 us per pair**. The returned values still have coarse tick
+increments relative to typical single-opcode durations. Reported
+instruction-family costs are therefore *sampled comparative indicators*,
+not reliable absolute per-opcode cycle timings.
+
+Across 14 busy-scene 240-frame windows, the raw-tick capture
+contained **264,935 sampled instructions**. About **93.2%** of their
+program counters fell into the `0x000000-0x01ffff` program-ROM area.
+The most prominent high-nibble groups were:
+
+| Opcode group | Share of samples | Share of summed sampled raw ticks |
+| --- | ---: | ---: |
+| `4`: miscellaneous operations | 17.8% | 18.0% |
+| `6`: branches | 17.4% | 15.1% |
+| `3`: MOVE.W | 11.8% | 13.4% |
+| `0`: immediate/bit operations | 10.9% | 11.5% |
+| `D`: ADD family | 9.4% | 8.5% |
+| `2`: MOVE.L | 7.0% | 8.8% |
+
+The largest sampled time shares mostly follow *instruction frequency*.
+MOVE-family instructions have somewhat higher sampled ticks per
+instruction, but no single high-nibble group dominates the M68000
+execution budget or justifies game-specific opcode shortcuts. These
+broad groups also contain instructions with very different addressing
+modes and memory behavior. The previous direct-RAM optimization already
+addresses an expensive common part of those operations.
+
+Independent counters at the MVS CPU slice dispatcher recorded, over
+the same 14 windows (**3,360 emulated frames**):
+
+- **896,301 M68000 calls and 896,301 Z80 calls**, approximately
+  **266.8 of each per frame**;
+- **zero** suspended M68000 or Z80 calls, **zero** Z80-offload
+  suppressions, and **zero** zero-length slices;
+- every counted CPU slice was at most **64 us** of emulated time,
+  consistent with the raster-scanline timer path.
+
+The PS2 executes both emulated CPUs at fine raster-scanline boundaries.
+Combining CPU slices or suppressing Z80 work could change sound
+commands, YM2610 timer interrupts, raster behavior, and save-state
+reproducibility. It must not be treated as a no-risk performance tweak.
+The PS2 Z80 stage remains around 3.2 ms per demanding frame, so
+lower-overhead, semantics-preserving Z80 execution is a possible
+independent avenue, but it needs a separate oracle and physical A/B.
+
+The earlier unsampled production-logic frame trace also separates
+steady CPU pressure from cache-driven spikes. In 14 busy-scene windows
+(3,360 frames), **11 windows reported zero average C-ROM I/O time**,
+yet **1,609 of their 2,640 frames still exceeded the non-wait work
+budget**. This rules out C-ROM misses as the sole explanation for the
+sustained frame deficit. Across all 14 windows there were **123 PCM
+cache misses**; the largest reported PCM I/O span was approximately
+49 ms and the largest audio-thread interval was approximately 142 ms.
+Those maxima do not identify actual IOP/SPU2 underruns, and the I/O
+span can include scheduling delay. Cache prefetch and audio-buffer
+accounting remain separate concerns from the steady CPU limit.
+
+Sampling perturbs frame timing: in 13 frame-ID-matched windows from
+1200-4320, the raw-tick diagnostic showed about **0.226 ms more
+M68000 time** and **0.375 ms more total emulation time** than the
+preceding unsampled production-logic frame trace. These differences
+also contain normal run-to-run variation. Never interpret the sampled
+run's FPS as evidence that one opcode implementation is faster.
+
+**Decision:** do not change C68K opcode dispatch or batch Z80/raster
+slices without a more specific, independently validated hotspot. The
+next defensible probes are a Z80 execution-versus-callback breakdown
+with minimal timer overhead, and separate PCM/C-ROM cache latency and
+IOP audio-consumer accounting. None of these experiments establish
+actual SPU2 underrun counts.
+
+Ignored physical-PS2 diagnostic captures:
+
+- `build_ms3_ps2_profile/opcode_cost_192_168_1_10.log`
+- `build_ms3_ps2_profile/opcode_calibration_trace.log`
+- `build_ms3_ps2_profile/opcode_rawtick_retry.log`
