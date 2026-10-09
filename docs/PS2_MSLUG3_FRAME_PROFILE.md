@@ -276,6 +276,57 @@ production CPU utilization.
 Logs: `build_ms3_ps2_profile/ps2_mslug3_audio_on_ab.log` and
 `build_ms3_ps2_profile_no_audio/ps2_mslug3_audio_off_yield.log`.
 
+### Rebased ME branch: repeat PS2 hardware benchmark (2026-10-09)
+
+After rebasing `me_sound_coprocessor` onto `ps2_vsync_improvements`,
+the same `mslug3.sv0` was profiled on the physical PS2 through the
+standalone non-IMGIRX MVS ELF. The original diagnostic probes and
+audio-producer-thread-disabled control were integrated with the new
+Neo Geo offload interfaces and timer implementation; no PS2 IOP audio
+offload was enabled. Both versions used the same PS2 build options as
+the earlier comparison. A fresh PS2Link launch and save-state load
+completed for each variant.
+
+The following values are 240-frame averages for the demanding,
+**C-ROM-cache-miss-free** window ending at frame 1440:
+
+| Average elapsed time | Before ME, audio ON | After ME, audio ON | Before ME, audio OFF | After ME, audio OFF |
+| --- | ---: | ---: | ---: | ---: |
+| M68000 | 10.253 ms | 10.057 ms | 9.809 ms | 9.795 ms |
+| Z80 | 3.449 ms | 3.446 ms | 3.444 ms | 3.399 ms |
+| MVS CPU rendering | 2.370 ms | 2.348 ms | 2.347 ms | 2.374 ms |
+| Complete emulation phase | 17.892 ms | 17.508 ms | 17.243 ms | 17.167 ms |
+| Yield wall-clock time | 3.920 ms | 3.027 ms | 0.011 ms | 0.011 ms |
+| Whole frame elapsed | 22.082 ms | 20.807 ms | 17.524 ms | 17.448 ms |
+| Frames exceeding emulation budget | 206/240 | 178/240 | 167/240 | 162/240 |
+
+All four windows recorded **zero C-ROM I/O**. Audio-disabled runs
+recorded zero PCM cache reads and no audio-thread wakeup gaps, confirming
+that the audio producer was not active. The post-ME audio-enabled run
+recorded six PCM cache misses (maximum 39.529 ms), compared with six
+(maximum 37.354 ms) before ME in the same 240-frame window.
+
+The audio-off emulation time improved by just **0.076 ms** (17.243 to
+17.167 ms), which is too small to establish a genuine improvement
+without repeated trials and measurement-overhead calibration. The
+audio-on wall-clock average decreased by **1.275 ms**, mostly through
+a shorter yield interval (3.920 to 3.027 ms), but this interval includes
+audio-thread execution and scheduling, not a kernel yield cost. It is
+not evidence that the PSP Media Engine is accelerating the PS2: the
+PS2 runs the ordinary CPU audio backend and no new IOP worker exists.
+Sound-thread scheduling and cache timing can vary between launches.
+
+The persistent result is that the demanding section still exceeds
+the 16.667 ms emulation budget with audio disabled. A worthwhile next
+experiment is opt-in PS2 audio-producer stage profiling, separating
+sound synthesis, mixing, cache reads, and blocking output, followed
+by an isolated M68000 hotspot audit.
+
+Post-ME raw logs (ignored build outputs):
+
+- `build_ms3_ps2_profile/ps2_mslug3_me_rebased_audio_on.log`
+- `build_ms3_ps2_profile_no_audio/ps2_mslug3_me_rebased_audio_off.log`
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early
