@@ -15,10 +15,15 @@ typedef enum audio_profile_metric
 	AUDIO_PROFILE_ME_RENDER_WAIT,
 	AUDIO_PROFILE_OUTPUT_BLOCK,
 	AUDIO_PROFILE_LOOP_PERIOD,
+#ifdef PS2_AUDIO_PROFILE
+	AUDIO_PROFILE_PS2_VOLUME_MIX,
+	AUDIO_PROFILE_PS2_AUDSRV_WAIT,
+	AUDIO_PROFILE_PS2_AUDSRV_SUBMIT,
+#endif
 	AUDIO_PROFILE_METRIC_COUNT
 } audio_profile_metric_t;
 
-#ifdef PSP_AUDIO_PROFILE
+#if defined(PSP_AUDIO_PROFILE) || defined(PS2_AUDIO_PROFILE)
 uint64_t audio_profile_now_us(void);
 void audio_profile_configure(uint32_t samples, uint32_t frequency, uint32_t channels);
 void audio_profile_add(audio_profile_metric_t metric, uint64_t elapsed_us);

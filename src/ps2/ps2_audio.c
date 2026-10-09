@@ -6,6 +6,9 @@
 #include <audsrv.h>
 
 #include "common/audio_driver.h"
+#ifdef PS2_AUDIO_PROFILE
+#include "common/audio_profile.h"
+#endif
 
 /*
  * PS2 Audio Driver with Software MP3 Mixing
@@ -249,6 +252,9 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 	(void)data;
 	uint32_t sample_count = size / sizeof(int16_t);
 	uint32_t num_samples = size / sizeof(int16_t) / 2; /* Stereo samples */
+#ifdef PS2_AUDIO_PROFILE
+	uint64_t start = audio_profile_now_us();
+#endif
 
 	/* audsrv exposes one global stream/volume. Scale game audio in software so
 	 * NCDZ CDDA can keep its independent volume before both streams are mixed. */
@@ -257,8 +263,19 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 	/* Mix MP3 audio into the output buffer before output. */
 	mix_mp3_audio((int16_t*)buffer, num_samples);
 
+#ifdef PS2_AUDIO_PROFILE
+	audio_profile_add(AUDIO_PROFILE_PS2_VOLUME_MIX, audio_profile_now_us() - start);
+	start = audio_profile_now_us();
+#endif
 	audsrv_wait_audio(size);
+#ifdef PS2_AUDIO_PROFILE
+	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_WAIT, audio_profile_now_us() - start);
+	start = audio_profile_now_us();
+#endif
 	audsrv_play_audio(buffer, size);
+#ifdef PS2_AUDIO_PROFILE
+	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_SUBMIT, audio_profile_now_us() - start);
+#endif
 }
 
 static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {
