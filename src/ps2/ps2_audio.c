@@ -9,6 +9,9 @@
 #ifdef PS2_AUDIO_PROFILE
 #include "common/audio_profile.h"
 #include "ps2/ps2_audio_profile.h"
+#ifndef PS2_AUDIO_PROFILE_QUEUE_INTERVAL
+#define PS2_AUDIO_PROFILE_QUEUE_INTERVAL 128u
+#endif
 #endif
 
 /*
@@ -52,7 +55,7 @@ static volatile bool g_mp3_active = false;
 static int32_t g_mp3_sema_id = -1;
 static volatile uint32_t g_mp3_last_read_pos = 0;
 
-#ifdef PS2_AUDIO_PROFILE
+#if defined(PS2_AUDIO_PROFILE) && PS2_AUDIO_PROFILE_QUEUE_INTERVAL > 0
 static uint32_t profiled_output_blocks;
 #endif
 
@@ -95,7 +98,7 @@ static int32_t ps2_volumeMax(void *data) {
 static bool ps2_chSRCReserve(void *data, uint16_t samples, int32_t frequency, uint8_t channels) {
 	ps2_audio_t *ps2 = (ps2_audio_t*)data;
 	struct audsrv_fmt_t format;
-#ifdef PS2_AUDIO_PROFILE
+#if defined(PS2_AUDIO_PROFILE) && PS2_AUDIO_PROFILE_QUEUE_INTERVAL > 0
 	profiled_output_blocks = 0;
 #endif
 	format.bits = 16;
@@ -266,7 +269,11 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 	int submitted_bytes;
 	int available_before = -1;
 	int queued_after = -1;
-	int sample_queue = (++profiled_output_blocks % 32u) == 0;
+#if PS2_AUDIO_PROFILE_QUEUE_INTERVAL > 0
+	int sample_queue = (++profiled_output_blocks % PS2_AUDIO_PROFILE_QUEUE_INTERVAL) == 0;
+#else
+	int sample_queue = 0;
+#endif
 #endif
 
 	/* audsrv exposes one global stream/volume. Scale game audio in software so

@@ -21,6 +21,7 @@ typedef struct audio_output_stats
     uint32_t wait_failures;
     uint32_t submit_failures;
     uint32_t short_submissions;
+    uint32_t max_shortfall_bytes;
     uint32_t late_periods;
     uint32_t doubled_periods;
     uint32_t free_samples;
@@ -34,6 +35,7 @@ typedef struct audio_output_stats
     uint32_t max_queued;
     uint64_t total_free;
     uint64_t total_queued;
+    uint64_t total_shortfall_bytes;
 } audio_output_stats_t;
 
 static audio_profile_stats_t profile_stats[AUDIO_PROFILE_METRIC_COUNT];
@@ -112,7 +114,14 @@ void ps2_audio_profile_record_output(uint32_t requested_bytes, int wait_status,
     if (submitted_bytes < 0)
         output_stats.submit_failures++;
     else if ((uint32_t)submitted_bytes != requested_bytes)
+    {
+        uint32_t shortfall = submitted_bytes < (int)requested_bytes ?
+            requested_bytes - (uint32_t)submitted_bytes : 0;
         output_stats.short_submissions++;
+        output_stats.total_shortfall_bytes += shortfall;
+        if (shortfall > output_stats.max_shortfall_bytes)
+            output_stats.max_shortfall_bytes = shortfall;
+    }
 
     if (!sampled_queue)
         return;
@@ -187,6 +196,7 @@ static void audio_profile_report(void)
     written = snprintf(line + used, sizeof(line) - used,
         " late_periods=%lu doubled_periods=%lu wait_failures=%lu"
         " submit_failures=%lu short_submissions=%lu"
+        " shortfall_bytes=%llu max_shortfall_bytes=%lu"
         " free_n=%lu free_avg=%llu free_min=%lu free_max=%lu"
         " free_below_request=%lu queued_n=%lu queued_avg=%llu"
         " queued_min=%lu queued_max=%lu queued_empty=%lu query_failures=%lu",
@@ -195,6 +205,8 @@ static void audio_profile_report(void)
         (unsigned long)output_stats.wait_failures,
         (unsigned long)output_stats.submit_failures,
         (unsigned long)output_stats.short_submissions,
+        (unsigned long long)output_stats.total_shortfall_bytes,
+        (unsigned long)output_stats.max_shortfall_bytes,
         (unsigned long)output_stats.free_samples,
         (unsigned long long)(output_stats.free_samples ?
             output_stats.total_free / output_stats.free_samples : 0),

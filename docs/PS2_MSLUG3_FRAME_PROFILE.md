@@ -401,6 +401,71 @@ before considering additional sound synthesis there.
 
 Raw capture: `build_ms3_ps2_profile/ps2_mslug3_audio_stages_fresh.log`.
 
+### audsrv queue and short-submission follow-up (2026-10-09)
+
+The opt-in PS2 audio profiler now records `audsrv_wait_audio()` errors,
+`audsrv_play_audio()` negative/short results, producer periods longer than
+the block playback duration, and sampled IOP audio-ring occupancy. The
+`PS2_AUDIO_PROFILE_QUEUE_INTERVAL` C definition defaults to 128 output
+buffers per sample; setting it to 0 disables the extra ring-query RPCs
+while retaining all timing and submission-result counters. Each sample
+queries available ring bytes before waiting and queued ring bytes after
+submission. These are **IOP audsrv ring snapshots**, not SPU2 hardware
+underrun counters.
+
+The physical PS2 ran the same `mslug3.sv0` save state twice after PS2Link
+resets: first with queue sampling every 32 buffers, then with queue
+sampling disabled. The first 240-buffer window of each run included
+startup/state-loading stalls and is excluded from the following comparison.
+Each column averages five subsequent 240-buffer windows (1,200 buffers):
+
+| Audio-thread metric | Query every 32 | No queue queries |
+| --- | ---: | ---: |
+| YM2610 producer | 8.656 ms | 8.279 ms |
+| `audsrv_wait_audio()` | 18.092 ms | 18.110 ms |
+| `audsrv_play_audio()` | 16.884 ms | 17.142 ms |
+| Complete output call | 36.081 ms | 35.265 ms |
+| Loop period | 44.782 ms | 43.656 ms |
+| Incomplete submissions | 115/1,200 | 117/1,200 |
+| Wait errors / negative submit results | 0 / 0 | 0 / 0 |
+
+Without additional occupancy queries, the incomplete submissions totaled
+**575,264 bytes** across 1,200 requested 5,888-byte chunks. This is
+approximately **8.1% of the requested PCM bytes**, with shortfalls up to
+the entire buffer size. The application currently ignores the positive
+byte count returned by `audsrv_play_audio()`, so any unqueued tail of a
+short submission is not retried. The short submissions reproduce without
+queue probes, which rules out those probes as their sole cause.
+
+With a query every 32 buffers, each extra IOP RPC averaged 17.227 ms.
+The audio-thread period was about 1.126 ms higher than in the no-query
+control, consistent with the additional queries perturbing the run.
+Among 38 sampled pre-wait snapshots, five showed less free space than
+one requested output buffer. None of the 38 post-submit samples reported
+an empty queue. These sparse snapshots cannot establish the actual
+underrun rate or explain the apparent wait-success/short-submit mismatch.
+
+The PS2SDK EE `audsrv_play_audio()` implementation reports the actual
+bytes accepted by the IOP and divides large requests into synchronous
+SIF RPCs. Its IOP implementation caps accepted bytes to the currently
+available ring space. A 5,888-byte NJEMU buffer fits inside one normal
+EE-side RPC packet, so the observed 16-17 ms submit stage is not due to
+multiple packets per buffer. The precise cause of insufficient available
+space *after* a successful wait remains unproven. Consult the
+[PS2SDK EE RPC source](https://ps2dev.github.io/ps2sdk/audsrv__rpc_8c_source.html)
+before changing output semantics.
+
+**Priority:** investigate and handle incomplete submissions correctly,
+then benchmark an overlapped/pipelined `audsrv` output path. Preserve the
+current EE producer and do not move YM2610 to the IOP on the strength of
+these wall-clock measurements alone. The hardware PCM playback cursor and
+true SPU2 underrun count remain unobserved.
+
+Raw captures (ignored diagnostic build output):
+
+- `build_ms3_ps2_profile/ps2_mslug3_audsrv_queue_profile_reset.log`
+- `build_ms3_ps2_profile/ps2_mslug3_audsrv_queue_off_profile.log`
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early
