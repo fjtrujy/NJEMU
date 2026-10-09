@@ -57,6 +57,9 @@ Useful options include:
   `PSP_MVS_NATIVE_WORD_ACCESS=ON/OFF` (same shared helper for PSP MVS;
   default ON for PSP MVS; CPU and ME builds); both default OFF elsewhere.
   Set the corresponding option OFF to compare the portable bytewise path;
+- `PS2_MVS_RAM_FASTPATH=ON/OFF` (PS2 MVS-only early main-RAM routing in
+  M68000 memory callbacks; default ON for PS2 MVS, OFF elsewhere;
+  set OFF for original generic address-switch dispatch);
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
   pair with `PSP_AUDIO_PROFILE` for YM2610/producer/ME-wait timing);

@@ -2206,11 +2206,17 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 	uint16_t mem_mask = ~(0xff << shift);
 
 	offset &= M68K_AMASK;
+#ifdef PS2_MVS_RAM_FASTPATH
+	if ((offset >> 20) == 0x1)
+		return READ_MIRROR_BYTE(neogeo_ram, offset, 0x00ffff);
+#endif
 
 	switch (offset >> 20)
 	{
 	case 0x0: return READ_BYTE(memory_region_cpu1, offset);
+#ifndef PS2_MVS_RAM_FASTPATH
 	case 0x1: return READ_MIRROR_BYTE(neogeo_ram, offset, 0x00ffff);
+#endif
 	case 0xc: return READ_MIRROR_BYTE(memory_region_user1, offset, bios_amask);
 	case 0xd: return READ_MIRROR_BYTE(neogeo_sram, offset, 0x00ffff);
 
@@ -2240,11 +2246,17 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 uint16_t m68000_read_memory_16(uint32_t offset)
 {
 	offset &= M68K_AMASK;
+#ifdef PS2_MVS_RAM_FASTPATH
+	if ((offset >> 20) == 0x1)
+		return READ_MIRROR_WORD(neogeo_ram, offset, 0x00ffff);
+#endif
 
 	switch (offset >> 20)
 	{
 	case 0x0: return READ_WORD(memory_region_cpu1, offset);
+#ifndef PS2_MVS_RAM_FASTPATH
 	case 0x1: return READ_MIRROR_WORD(neogeo_ram, offset, 0x00ffff);
+#endif
 	case 0xc: return READ_MIRROR_WORD(memory_region_user1, offset, bios_amask);
 	case 0xd: return READ_MIRROR_WORD(neogeo_sram, offset, 0x00ffff);
 
@@ -2277,10 +2289,18 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 	uint16_t mem_mask = ~(0xff << shift);
 
 	offset &= M68K_AMASK;
+#ifdef PS2_MVS_RAM_FASTPATH
+	if ((offset >> 20) == 0x1) {
+		WRITE_MIRROR_BYTE(neogeo_ram, offset, data, 0x00ffff);
+		return;
+	}
+#endif
 
 	switch (offset >> 20)
 	{
+#ifndef PS2_MVS_RAM_FASTPATH
 	case 0x1: WRITE_MIRROR_BYTE(neogeo_ram, offset, data, 0x00ffff); return;
+#endif
 
 	case 0x2: (*neogeo_protection_w)(offset >> 1, data << shift, mem_mask); return;
 	case 0x4: neogeo_paletteram_w(offset >> 1, data << shift, mem_mask); return;
@@ -2308,10 +2328,18 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 void m68000_write_memory_16(uint32_t offset, uint16_t data)
 {
 	offset &= M68K_AMASK;
+#ifdef PS2_MVS_RAM_FASTPATH
+	if ((offset >> 20) == 0x1) {
+		WRITE_MIRROR_WORD(neogeo_ram, offset, data, 0x00ffff);
+		return;
+	}
+#endif
 
 	switch (offset >> 20)
 	{
+#ifndef PS2_MVS_RAM_FASTPATH
 	case 0x1: WRITE_MIRROR_WORD(neogeo_ram, offset, data, 0x00ffff); return;
+#endif
 
 	case 0x2: (*neogeo_protection_w)(offset >> 1, data, 0); return;
 	case 0x4: neogeo_paletteram_w(offset >> 1, data, 0); return;

@@ -698,6 +698,68 @@ Raw hardware captures and build output (ignored diagnostic directory):
 - `build_ms3_ps2_profile/c68k_opcode_profile.log`
 - `build_ms3_ps2_profile/c68k_memcpy_profile.log`
 
+### PS2 MVS main-RAM address dispatch A/B (2026-10-09)
+
+After enabling native aligned words, the physical PS2 still spent about
+9.8 ms per demanding frame in the M68000. A temporary
+`PS2_M68K_MEMORY_PROFILE` counter classified 8- and 16-bit reads and
+writes into 1 MiB address banks, collecting aggregate counts once every
+240 emulated frames rather than timing each call. Across 14 busy-scene
+windows, accesses to main RAM (`0x100000-0x1fffff`) represented:
+
+| M68000 memory callback | Main-RAM share | Main-RAM calls |
+| --- | ---: | ---: |
+| Read byte | 90.6% | 4,019,569 |
+| Read word | 81.3% | 13,289,146 |
+| Write byte | 96.3% | 1,730,529 |
+| Write word | 74.9% | 10,494,239 |
+
+These are access counts, **not CPU-time shares**. The general memory
+callback dispatches by the high address nibble; the RAM operation is
+semantically straightforward after that check. A PS2-MVS-only branch
+for this frequent RAM bank, before the generic switch, avoids switch
+dispatch on the predominant case, while leaving all other address-bank
+handlers untouched. `PS2_MVS_RAM_FASTPATH` selects this routing (default
+ON on PS2 MVS, OFF everywhere else). It is independent of the aligned
+word-access switch and can be disabled to reproduce the original path.
+
+Two independent physical PS2 launches at `192.168.1.10` used the same
+`mslug3.sv0` save state, audio settings, cache configuration, and
+240-frame stage profiler, **without the memory-call or opcode sampler**.
+Thirteen gameplay windows present in both logs were joined by identical
+emulated-frame `end=` indices between 1200 and 4320:
+
+| Metric, 3,120 matched frames | Generic dispatch | Early RAM dispatch |
+| --- | ---: | ---: |
+| M68000 stage mean | 9.802 ms | **9.487 ms** |
+| Total MVS emulation mean | 17.092 ms | **16.748 ms** |
+| Z80 stage mean | 3.181 ms | 3.179 ms |
+| Rendering stage mean | 2.327 ms | 2.320 ms |
+| Frames over 16.667 ms non-wait work | 2,218 | **1,960** |
+| Frames over 16.667 ms emulation | 2,027 | **1,567** |
+
+The RAM routing saves roughly **0.315 ms in the M68000 stage** (3.2%)
+and **0.344 ms in overall emulation** in this scene, over and above
+native-word access. The non-wait work-budget miss count falls by 258.
+The profiler subtracts explicit waits and is not a display-frame-loss
+counter; 1,960 of 3,120 frames remain above work budget. This confirms
+a worthwhile optimization but **does not establish consistent 60 FPS**.
+Profiling diagnostics remain opt-in and were not included in the production
+builds. PSP/ME and other platforms continue using the existing generic
+dispatch; only PS2 MVS has the new default.
+
+An earlier exploratory version retained a redundant RAM case in the generic
+switch and measured a slightly larger ~0.38 ms reduction. The figures above
+refer to the **final nonduplicated, CMake-selected production implementation**,
+retested on hardware after that cleanup.
+
+Ignored physical-PS2 diagnostic log files:
+
+- `build_ms3_ps2_profile/ps2_m68k_memory_trace.log`
+- `build_ms3_ps2_profile/ps2_ram_baseline_trace.log`
+- `build_ms3_ps2_profile/ps2_ram_fast_trace.log`
+- `build_ms3_ps2_profile/ps2_ram_final_trace.log`
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early
