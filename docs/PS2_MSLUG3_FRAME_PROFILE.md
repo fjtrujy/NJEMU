@@ -327,6 +327,62 @@ Post-ME raw logs (ignored build outputs):
 - `build_ms3_ps2_profile/ps2_mslug3_me_rebased_audio_on.log`
 - `build_ms3_ps2_profile_no_audio/ps2_mslug3_me_rebased_audio_off.log`
 
+### PS2 audio pipeline timing (2026-10-09)
+
+Commit `f632e025` added the opt-in `PS2_AUDIO_PROFILE=ON` CMake option.
+It reuses the common sound producer/callback/post/output instrumentation
+and adds PS2-specific time buckets for volume/MP3 mixing,
+`audsrv_wait_audio()`, and `audsrv_play_audio()`. Profiling is disabled
+in ordinary builds; the PSP audio metrics retain their existing layout.
+For hardware collection, it was enabled alongside the experimental
+`PS2_FRAME_PROFILE` and save-state auto-load options, launching the
+standalone PS2 ELF through PS2Link after a successful reset.
+
+The audio thread reports each 240 completed output buffers as one
+`[ps2-audio]` record. Six completed windows covered the same
+`mslug3.sv0` gameplay session. Each buffer contained 1,472 stereo
+sample frames at 44,100 Hz (33.378 ms of playback).
+
+| Sound-thread metric | Measured average across six windows |
+| --- | ---: |
+| YM2610 synthesis callback | 7.095-10.238 ms per buffer |
+| Resampling/post-processing | approximately 0.103 ms (one window 0.172 ms) |
+| Volume / MP3 mixing | typically 0.001 ms |
+| `audsrv_wait_audio()` | 17.563-18.505 ms |
+| `audsrv_play_audio()` | 16.553-17.431 ms |
+| **Combined blocking output** | **34.128-35.948 ms** |
+| **Audio-thread loop period** | **41.850-46.384 ms** |
+
+The sound producer itself averaged 7.275-10.349 ms. Large per-buffer
+synthesis spikes were also observed (up to 113.019 ms elapsed), which
+can include PCM cache misses or the audio thread being preempted.
+The output stage's individual maxima reached approximately 54-56 ms.
+
+**These are wall-clock stages, not isolated EE CPU utilization.**
+The `audsrv_wait_audio` time includes backpressure while waiting for
+IOP audio-buffer capacity. `audsrv_play_audio` includes blocking
+SIF RPC calls and transfer/service latency. Their sum therefore
+cannot be interpreted as time spent executing a CPU audio codec.
+Profiling reads the PS2 hardware timer frequently, and emitting a
+summary on the sound thread every 240 buffers can perturb scheduling.
+No actual SPU2 underrun counter was collected.
+
+The 42-46 ms audio-thread loop period is longer than the 33.378 ms
+represented by a block of samples. This is consistent with a
+producer/output pipeline struggling to service real-time playback,
+but needs an explicit underrun counter or output-buffer occupancy
+trace to verify the audible failure mechanism.
+
+This measurement **does not justify immediately moving YM2610 onto the
+IOP**. The existing `audsrv` path already consumes substantial IOP/RPC
+elapsed time. First isolate RPC/transfer from output-ring backpressure,
+measure underruns and buffer occupancy, and benchmark whether asynchronous
+or pipelined output can overlap generation with IOP transfer. Then
+evaluate the available IOP budget against controller and MX4SIO I/O
+before considering additional sound synthesis there.
+
+Raw capture: `build_ms3_ps2_profile/ps2_mslug3_audio_stages_fresh.log`.
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early
