@@ -10,7 +10,7 @@
 
 /* Neo Geo word buffers are stored little-endian and have aligned bases.
  * memcpy keeps C effective types valid. The alignment hint allows the
- * PS2 EE compiler to emit one halfword access on the even-address path. */
+ * MIPS compilers to emit one halfword access on the even-address path. */
 static inline uint16_t mvs_native_read_word(const uint8_t *memory, uint32_t address)
 {
 	if ((address & 1u) == 0) {

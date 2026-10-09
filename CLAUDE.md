@@ -53,8 +53,10 @@ Useful options include:
   default ON) and `PS2_AUDIO_DIRECT_SUBMIT=ON/OFF` (skip unconditional
   audsrv wait; default ON on PS2, OFF elsewhere; requires retries enabled);
 - `PS2_MVS_NATIVE_WORD_ACCESS=ON/OFF` (PS2 MVS-only aligned 16-bit Neo Geo
-  memory access; default ON for PS2 MVS, OFF for other targets/platforms;
-  leave OFF to compare against the portable bytewise path);
+  memory access; default ON for PS2 MVS), and
+  `PSP_MVS_NATIVE_WORD_ACCESS=ON/OFF` (same shared helper for PSP MVS;
+  default ON for PSP MVS; CPU and ME builds); both default OFF elsewhere.
+  Set the corresponding option OFF to compare the portable bytewise path;
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
   pair with `PSP_AUDIO_PROFILE` for YM2610/producer/ME-wait timing);

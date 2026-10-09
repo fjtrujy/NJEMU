@@ -679,9 +679,17 @@ sufficient for consistent 60 FPS.
 
 The isolated host test `mvs_native_word_access_tests` verifies all byte
 offsets across aligned and odd reads, masked mirrored reads, writes,
-and end-of-region wraparound against a bytewise reference. Production
-PSP/Vita/Desktop code and the other emulator targets keep their
-existing memory paths. Both paths remain selectable for regressions.
+and end-of-region wraparound against a bytewise reference. PSP MVS now
+uses the *same* helper with a separate default-ON build switch,
+`PSP_MVS_NATIVE_WORD_ACCESS` (including CPU and optional ME-audio builds).
+Allegrex `-O3` code generation was separately checked: the aligned paths
+compile to `lhu` and `sh`, preserving bytewise odd-address fallbacks.
+Both PSP build variants compile with the optimization enabled and with
+the CPU build explicitly disabled for a fallback check; no PSP hardware
+frame-timing comparison was collected. This is **correct code generation**,
+not yet a demonstrated PSP performance gain. PSVita/Desktop and the other
+emulator targets keep their existing memory paths; PSP/PS2 fallbacks
+remain selectable independently.
 
 Raw hardware captures and build output (ignored diagnostic directory):
 
