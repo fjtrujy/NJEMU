@@ -6,6 +6,7 @@
 #include <audsrv.h>
 
 #include "common/audio_driver.h"
+#include "ps2/ps2_audio_submit.h"
 #ifdef PS2_AUDIO_PROFILE
 #include "common/audio_profile.h"
 #include "ps2/ps2_audio_profile.h"
@@ -259,14 +260,39 @@ static void apply_game_volume(int16_t *buffer, uint32_t sample_count, int32_t vo
 		buffer[i] = (int16_t)(((int32_t)buffer[i] * volume) / MAX_VOLUME);
 }
 
+static int ps2_audsrv_wait(int bytes)
+{
+#ifdef PS2_AUDIO_PROFILE
+	uint64_t start = audio_profile_now_us();
+#endif
+	int result = audsrv_wait_audio(bytes);
+#ifdef PS2_AUDIO_PROFILE
+	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_WAIT,
+		audio_profile_now_us() - start);
+#endif
+	return result;
+}
+
+static int ps2_audsrv_play(const char *buffer, int bytes)
+{
+#ifdef PS2_AUDIO_PROFILE
+	uint64_t start = audio_profile_now_us();
+#endif
+	int result = audsrv_play_audio(buffer, bytes);
+#ifdef PS2_AUDIO_PROFILE
+	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_SUBMIT,
+		audio_profile_now_us() - start);
+#endif
+	return result;
+}
+
 static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint32_t size) {
 	(void)data;
 	uint32_t sample_count = size / sizeof(int16_t);
 	uint32_t num_samples = size / sizeof(int16_t) / 2; /* Stereo samples */
+	ps2_audio_submit_result_t submit_result;
 #ifdef PS2_AUDIO_PROFILE
 	uint64_t start = audio_profile_now_us();
-	int wait_status;
-	int submitted_bytes;
 	int available_before = -1;
 	int queued_after = -1;
 #if PS2_AUDIO_PROFILE_QUEUE_INTERVAL > 0
@@ -291,29 +317,27 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 		audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_QUEUE_QUERY,
 			audio_profile_now_us() - start);
 	}
-	start = audio_profile_now_us();
-	wait_status = audsrv_wait_audio(size);
+#endif
+#ifdef PS2_AUDIO_RETRY_SHORT_WRITES
+	submit_result = ps2_audio_submit_buffer(buffer, size, 1,
+		ps2_audsrv_wait, ps2_audsrv_play);
 #else
-		audsrv_wait_audio(size);
+	submit_result = ps2_audio_submit_buffer(buffer, size, 0,
+		ps2_audsrv_wait, ps2_audsrv_play);
 #endif
 #ifdef PS2_AUDIO_PROFILE
-	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_WAIT, audio_profile_now_us() - start);
-	start = audio_profile_now_us();
-	submitted_bytes = audsrv_play_audio(buffer, size);
-#else
-		audsrv_play_audio(buffer, size);
-#endif
-#ifdef PS2_AUDIO_PROFILE
-	audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_SUBMIT, audio_profile_now_us() - start);
 	if (sample_queue) {
 		start = audio_profile_now_us();
 		queued_after = audsrv_queued();
 		audio_profile_add(AUDIO_PROFILE_PS2_AUDSRV_QUEUE_QUERY,
 			audio_profile_now_us() - start);
 	}
-	ps2_audio_profile_record_output(size, wait_status, submitted_bytes,
+	ps2_audio_profile_record_output(size, submit_result.first_wait_status,
+		submit_result.first_submit_bytes,
 		sample_queue, available_before, queued_after);
+	ps2_audio_profile_record_delivery(&submit_result);
 #endif
+	(void)submit_result;
 }
 
 static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void *buffer, uint32_t size) {

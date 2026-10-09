@@ -93,6 +93,7 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
+option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
 njemu_psp_me_declare_options()
 
 # Official downloadable builds use one stable, feature-complete configuration
@@ -326,6 +327,9 @@ if(PS2_AUDIO_PROFILE AND NOT PLATFORM STREQUAL "PS2")
 endif()
 if(PS2_AUDIO_PROFILE)
     add_definitions(-DPS2_AUDIO_PROFILE=1)
+endif()
+if(PLATFORM STREQUAL "PS2" AND PS2_AUDIO_RETRY_SHORT_WRITES)
+    add_definitions(-DPS2_AUDIO_RETRY_SHORT_WRITES=1)
 endif()
 
 if(PSVITA_VIDEO_STATS AND NOT PLATFORM STREQUAL "PSVITA")
@@ -639,7 +643,7 @@ set(OS_SRC ${OS_SRC}
 )
 
 if (PLATFORM STREQUAL "PS2")
-    list(APPEND OS_SRC ps2/ps2_cache_storage.c)
+    list(APPEND OS_SRC ps2/ps2_cache_storage.c ps2/ps2_audio_submit.c)
     if(PS2_AUDIO_PROFILE)
         list(APPEND OS_SRC ps2/ps2_audio_profile.c)
     endif()
@@ -1797,6 +1801,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME sound_output_contract_tests COMMAND sound_output_contract_tests)
+
+    add_executable(ps2_audio_submit_tests
+        tests/ps2_audio_submit_tests.c
+        src/ps2/ps2_audio_submit.c
+    )
+    target_include_directories(ps2_audio_submit_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME ps2_audio_submit_tests COMMAND ps2_audio_submit_tests)
 
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c

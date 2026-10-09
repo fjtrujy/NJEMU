@@ -36,6 +36,14 @@ typedef struct audio_output_stats
     uint64_t total_free;
     uint64_t total_queued;
     uint64_t total_shortfall_bytes;
+    uint32_t retried_buffers;
+    uint32_t recovered_buffers;
+    uint32_t incomplete_buffers;
+    uint32_t recovery_failures;
+    uint32_t extra_play_calls;
+    uint32_t zero_progress_calls;
+    uint64_t recovered_bytes;
+    uint64_t unaccepted_bytes;
 } audio_output_stats_t;
 
 static audio_profile_stats_t profile_stats[AUDIO_PROFILE_METRIC_COUNT];
@@ -157,6 +165,32 @@ void ps2_audio_profile_record_output(uint32_t requested_bytes, int wait_status,
         output_stats.queue_query_failures++;
 }
 
+void ps2_audio_profile_record_delivery(const ps2_audio_submit_result_t *result)
+{
+    uint32_t original_accepted = result->first_submit_bytes > 0 ?
+        (uint32_t)result->first_submit_bytes : 0;
+
+    if (result->submit_calls > 1)
+    {
+        output_stats.retried_buffers++;
+        output_stats.extra_play_calls += result->submit_calls - 1;
+    }
+    if (result->accepted_bytes > original_accepted)
+        output_stats.recovered_bytes += result->accepted_bytes - original_accepted;
+    if (result->accepted_bytes == result->requested_bytes &&
+        original_accepted < result->requested_bytes)
+        output_stats.recovered_buffers++;
+    if (result->accepted_bytes < result->requested_bytes)
+    {
+        output_stats.incomplete_buffers++;
+        output_stats.unaccepted_bytes +=
+            result->requested_bytes - result->accepted_bytes;
+    }
+    if (result->error != PS2_AUDIO_SUBMIT_OK)
+        output_stats.recovery_failures++;
+    output_stats.zero_progress_calls += result->zero_progress_calls;
+}
+
 static void audio_profile_report(void)
 {
     char line[1536];
@@ -199,7 +233,10 @@ static void audio_profile_report(void)
         " shortfall_bytes=%llu max_shortfall_bytes=%lu"
         " free_n=%lu free_avg=%llu free_min=%lu free_max=%lu"
         " free_below_request=%lu queued_n=%lu queued_avg=%llu"
-        " queued_min=%lu queued_max=%lu queued_empty=%lu query_failures=%lu",
+        " queued_min=%lu queued_max=%lu queued_empty=%lu query_failures=%lu"
+        " retried_buffers=%lu recovered_buffers=%lu extra_play_calls=%lu"
+        " recovered_bytes=%llu incomplete_buffers=%lu unaccepted_bytes=%llu"
+        " recovery_failures=%lu zero_progress_calls=%lu",
         (unsigned long)output_stats.late_periods,
         (unsigned long)output_stats.doubled_periods,
         (unsigned long)output_stats.wait_failures,
@@ -219,7 +256,15 @@ static void audio_profile_report(void)
         (unsigned long)output_stats.min_queued,
         (unsigned long)output_stats.max_queued,
         (unsigned long)output_stats.queued_empty_samples,
-        (unsigned long)output_stats.queue_query_failures);
+        (unsigned long)output_stats.queue_query_failures,
+        (unsigned long)output_stats.retried_buffers,
+        (unsigned long)output_stats.recovered_buffers,
+        (unsigned long)output_stats.extra_play_calls,
+        (unsigned long long)output_stats.recovered_bytes,
+        (unsigned long)output_stats.incomplete_buffers,
+        (unsigned long long)output_stats.unaccepted_bytes,
+        (unsigned long)output_stats.recovery_failures,
+        (unsigned long)output_stats.zero_progress_calls);
     if (written < 0 || (size_t)written >= sizeof(line) - used)
         return;
     used += (size_t)written;
