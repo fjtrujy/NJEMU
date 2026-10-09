@@ -530,6 +530,96 @@ Raw logs (ignored diagnostic build output):
 - `build_ms3_ps2_profile/ps2_mslug3_retry_all.log`
 - `build_ms3_ps2_profile/ps2_mslug3_direct_submit.log`
 
+### Paired physical-PS2 frame pacing and audio continuity (2026-10-09)
+
+To determine whether the faster output path also accelerates MVS emulation,
+the physical PS2 was reset between **two new runs from the identical
+`mslug3.sv0` save state**, both using commit `e1a552dd` and the same
+PS2Link frame diagnostics, cache, VSync/game configuration and opt-in
+`PS2_AUDIO_PROFILE`. Diagnostic queue queries were disabled. Only these
+CMake switches changed:
+
+- Baseline: `PS2_AUDIO_RETRY_SHORT_WRITES=OFF`,
+  `PS2_AUDIO_DIRECT_SUBMIT=OFF`.
+- Optimized: `PS2_AUDIO_RETRY_SHORT_WRITES=ON`,
+  `PS2_AUDIO_DIRECT_SUBMIT=ON`.
+
+The frame tracer accumulates 240 emulated frames per window. The comparison
+joins windows by **identical `end=` frame indices**, between frames 1200
+and 4320, and includes only records present in both PS2Link logs. One
+baseline record (ending at frame 3120) was missing from the captured log;
+it is excluded from *both* sides. Thus there are 12 matched windows,
+covering 2,880 emulated frames. Startup/save-load transients are excluded.
+
+| Metric, matched frame windows | Baseline | Direct + retry |
+| --- | ---: | ---: |
+| Frames whose non-wait work exceeds 16.667 ms | 2,282 / 2,880 | 2,262 / 2,880 |
+| Frames whose emulation exceeds 16.667 ms | 2,039 / 2,880 | 2,024 / 2,880 |
+| Mean MVS emulation elapsed | 17.378 ms | 17.359 ms |
+| Mean M68000 elapsed | 10.008 ms | 9.998 ms |
+| Mean Z80 elapsed | 3.227 ms | 3.217 ms |
+| Mean rendering elapsed | 2.370 ms | 2.370 ms |
+| Mean complete frame elapsed | 20.222 ms | 21.065 ms |
+| Mean explicit scheduler yield | 2.572 ms | 3.434 ms |
+| PCM cache misses observed | 108 | 112 |
+
+The 20 fewer work-over-budget frames are only 0.69 percentage points of
+the sample. This is **not evidence of a meaningful 60 FPS improvement**:
+roughly 79% of measured busy-scene frames still exceed the non-wait work
+budget. The audio optimization does not materially change M68000, Z80 or
+rendering work. The 0.843 ms rise in average complete-frame elapsed time
+closely matches the 0.862 ms rise in explicit scheduler yield: the audio
+thread receives more execution time, rather than the MVS emulator doing
+more work. The tracer's `late_work` subtracts explicit yield/VBlank waits;
+it is not itself a display-present or dropped-frame counter.
+
+The audio-thread windows have a different clock from the emulated-frame
+windows. The following comparison uses the five subsequent 240-buffer
+audio windows from **each** run, excluding the first startup window;
+these are not claimed to be frame-number-aligned:
+
+| Metric, 1,200 completed audio buffers per run | Baseline | Direct + retry |
+| --- | ---: | ---: |
+| Audio producer elapsed per buffer | 8.316 ms | 8.116 ms |
+| Complete audsrv output per buffer | 35.734 ms | **25.941 ms** |
+| Audio loop period | 44.138 ms | **34.113 ms** |
+| Loops longer than 33.378 ms of playback | 1,176 | 618 |
+| Loops longer than 66.756 ms | 70 | **11** |
+| Buffers with unaccepted PCM bytes | 122 | **0** |
+| Unaccepted PCM bytes after all attempts | 589,888 | **0** |
+| Initially short buffers recovered | 0 | **550** |
+| Recovery failures | n/a | **0** |
+
+The old path abandoned about 8.35% of the PCM bytes it requested.
+The direct path recovered 625,952 bytes across 550 initially short
+submissions, with no remaining short buffers. It reduced mean output
+time by 27.4% and the mean audio-loop period by 22.7%. The number of
+audio-loop intervals exceeding **twice the nominal buffer duration** fell
+by about 84% (70 to 11). This is clear evidence of more continuous PCM
+delivery and fewer *observed scheduling-delay risks*, **not** a measured
+reduction in audible SPU2 underrun events.
+
+The installed PS2SDK IOP implementation computes a 44.1 kHz, stereo,
+16-bit ring capacity of approximately 18,800 bytes (about 106.6 ms at
+176,400 bytes/second). Actual play-ahead depends on occupancy, and the
+IOP playback thread does not expose an underflow counter through the
+public `audsrv` API. Some audio-loop maximum gaps still approach or exceed
+that theoretical full-ring duration, and no physical audio capture or
+controlled listening comparison was conducted. Proving actual underrun
+counts would require an opt-in **IOP-side audsrv probe**, with correct
+producer/consumer accounting and a low-overhead way to return aggregated
+events; polling ring occupancy from EE adds substantial RPC overhead.
+
+**Next decision:** retain direct + suffix retry as the PS2 audio default
+for PCM completeness and lower output latency, but optimize the M68000/Z80
+and cache/rendering hotspots separately for frame pacing. Do not justify
+IOP YM2610 offloading or claim glitch-free playback from these results.
+
+Fresh raw console logs (ignored diagnostic build outputs):
+
+- `build_ms3_ps2_profile/frame_ab_legacy.log`
+- `build_ms3_ps2_profile/frame_ab_direct.log`
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early
