@@ -1,9 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <audsrv.h>
 #include <timer.h>
 
 #include "common/audio_profile.h"
+#include "ps2/ps2_audio_profile.h"
 
 #define PS2_AUDIO_PROFILE_WINDOW_BUFFERS 240u
 
@@ -14,7 +16,28 @@ typedef struct audio_profile_stats
     uint32_t count;
 } audio_profile_stats_t;
 
+typedef struct audio_output_stats
+{
+    uint32_t wait_failures;
+    uint32_t submit_failures;
+    uint32_t short_submissions;
+    uint32_t late_periods;
+    uint32_t doubled_periods;
+    uint32_t free_samples;
+    uint32_t queued_samples;
+    uint32_t queue_query_failures;
+    uint32_t queued_empty_samples;
+    uint32_t free_below_request_samples;
+    uint32_t min_free;
+    uint32_t max_free;
+    uint32_t min_queued;
+    uint32_t max_queued;
+    uint64_t total_free;
+    uint64_t total_queued;
+} audio_output_stats_t;
+
 static audio_profile_stats_t profile_stats[AUDIO_PROFILE_METRIC_COUNT];
+static audio_output_stats_t output_stats;
 static uint32_t completed_buffers;
 static uint32_t configured_samples;
 static uint32_t configured_frequency;
@@ -35,6 +58,7 @@ static const char *const metric_names[AUDIO_PROFILE_METRIC_COUNT] = {
     "volume_mix",
     "audsrv_wait",
     "audsrv_submit",
+    "audsrv_queue_query",
 };
 
 uint64_t audio_profile_now_us(void)
@@ -53,6 +77,7 @@ void audio_profile_configure(uint32_t samples, uint32_t frequency, uint32_t chan
     expected_period_us = frequency ? (uint64_t)samples * 1000000ULL / frequency : 0;
     completed_buffers = 0;
     memset(profile_stats, 0, sizeof(profile_stats));
+    memset(&output_stats, 0, sizeof(output_stats));
 }
 
 void audio_profile_add(audio_profile_metric_t metric, uint64_t elapsed_us)
@@ -69,11 +94,63 @@ void audio_profile_add(audio_profile_metric_t metric, uint64_t elapsed_us)
     if (elapsed > stats->max_us)
         stats->max_us = elapsed;
     stats->count++;
+    if (metric == AUDIO_PROFILE_LOOP_PERIOD && expected_period_us != 0)
+    {
+        if (elapsed_us > expected_period_us)
+            output_stats.late_periods++;
+        if (elapsed_us > expected_period_us * 2)
+            output_stats.doubled_periods++;
+    }
+}
+
+void ps2_audio_profile_record_output(uint32_t requested_bytes, int wait_status,
+    int submitted_bytes, int sampled_queue, int available_before,
+    int queued_after)
+{
+    if (wait_status != AUDSRV_ERR_NOERROR)
+        output_stats.wait_failures++;
+    if (submitted_bytes < 0)
+        output_stats.submit_failures++;
+    else if ((uint32_t)submitted_bytes != requested_bytes)
+        output_stats.short_submissions++;
+
+    if (!sampled_queue)
+        return;
+
+    if (available_before >= 0)
+    {
+        uint32_t free_bytes = (uint32_t)available_before;
+        if (!output_stats.free_samples || free_bytes < output_stats.min_free)
+            output_stats.min_free = free_bytes;
+        if (free_bytes > output_stats.max_free)
+            output_stats.max_free = free_bytes;
+        output_stats.total_free += free_bytes;
+        output_stats.free_samples++;
+        if (free_bytes < requested_bytes)
+            output_stats.free_below_request_samples++;
+    }
+    else
+        output_stats.queue_query_failures++;
+
+    if (queued_after >= 0)
+    {
+        uint32_t queued_bytes = (uint32_t)queued_after;
+        if (!output_stats.queued_samples || queued_bytes < output_stats.min_queued)
+            output_stats.min_queued = queued_bytes;
+        if (queued_bytes > output_stats.max_queued)
+            output_stats.max_queued = queued_bytes;
+        output_stats.total_queued += queued_bytes;
+        output_stats.queued_samples++;
+        if (queued_bytes == 0)
+            output_stats.queued_empty_samples++;
+    }
+    else
+        output_stats.queue_query_failures++;
 }
 
 static void audio_profile_report(void)
 {
-    char line[1024];
+    char line[1536];
     size_t used;
     int written;
     unsigned int i;
@@ -107,10 +184,39 @@ static void audio_profile_report(void)
         used += (size_t)written;
     }
 
+    written = snprintf(line + used, sizeof(line) - used,
+        " late_periods=%lu doubled_periods=%lu wait_failures=%lu"
+        " submit_failures=%lu short_submissions=%lu"
+        " free_n=%lu free_avg=%llu free_min=%lu free_max=%lu"
+        " free_below_request=%lu queued_n=%lu queued_avg=%llu"
+        " queued_min=%lu queued_max=%lu queued_empty=%lu query_failures=%lu",
+        (unsigned long)output_stats.late_periods,
+        (unsigned long)output_stats.doubled_periods,
+        (unsigned long)output_stats.wait_failures,
+        (unsigned long)output_stats.submit_failures,
+        (unsigned long)output_stats.short_submissions,
+        (unsigned long)output_stats.free_samples,
+        (unsigned long long)(output_stats.free_samples ?
+            output_stats.total_free / output_stats.free_samples : 0),
+        (unsigned long)output_stats.min_free,
+        (unsigned long)output_stats.max_free,
+        (unsigned long)output_stats.free_below_request_samples,
+        (unsigned long)output_stats.queued_samples,
+        (unsigned long long)(output_stats.queued_samples ?
+            output_stats.total_queued / output_stats.queued_samples : 0),
+        (unsigned long)output_stats.min_queued,
+        (unsigned long)output_stats.max_queued,
+        (unsigned long)output_stats.queued_empty_samples,
+        (unsigned long)output_stats.queue_query_failures);
+    if (written < 0 || (size_t)written >= sizeof(line) - used)
+        return;
+    used += (size_t)written;
+
     line[used] = '\0';
     printf("%s\n", line);
     completed_buffers = 0;
     memset(profile_stats, 0, sizeof(profile_stats));
+    memset(&output_stats, 0, sizeof(output_stats));
 }
 
 void audio_profile_buffer_completed(void)
