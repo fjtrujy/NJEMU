@@ -353,10 +353,28 @@ sample frames at 44,100 Hz (33.378 ms of playback).
 | **Combined blocking output** | **34.128-35.948 ms** |
 | **Audio-thread loop period** | **41.850-46.384 ms** |
 
+Across all six windows (1,440 completed buffers), the mean producer elapsed
+time was **8.702 ms** per buffer: **8.579 ms** in the YM2610 callback and
+**0.115 ms** in resampling/post-processing. Volume/MP3 mixing averaged
+**0.013 ms** (normally about 0.001 ms, with one scheduling outlier).
+The output driver averaged **18.061 ms** in `audsrv_wait_audio()` and
+**17.032 ms** in `audsrv_play_audio()`, or **35.118 ms** for the enclosing
+output call. The mean loop period was **43.913 ms**, about 10.535 ms longer
+than the 33.378 ms of playback represented by one buffer. This is a
+throughput warning, **not** a measured SPU2 underrun count: the current
+profiler does not observe IOP buffer occupancy or the actual playback cursor.
+
 The sound producer itself averaged 7.275-10.349 ms. Large per-buffer
 synthesis spikes were also observed (up to 113.019 ms elapsed), which
 can include PCM cache misses or the audio thread being preempted.
 The output stage's individual maxima reached approximately 54-56 ms.
+
+The YM2610 callback includes FM, SSG, ADPCM-A/B decoding, and sample
+fetches; this opt-in profile cannot yet assign exclusive elapsed or EE CPU
+time to each component. The Z80 is executed by the main MVS emulation
+timeline and is accounted for by the separate frame tracer, not by the
+audio-thread callback. PCM cache-miss durations are recorded by the frame
+diagnostic and may include blocked I/O and unrelated EE thread execution.
 
 **These are wall-clock stages, not isolated EE CPU utilization.**
 The `audsrv_wait_audio` time includes backpressure while waiting for
