@@ -56,7 +56,8 @@ static void test_full_submission(void)
 	const int script[] = {5888};
 	ps2_audio_submit_result_t result;
 	prepare(script, 1);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_OK);
 	assert(result.accepted_bytes == 5888);
 	assert(result.wait_calls == 1 && result.submit_calls == 1);
@@ -68,7 +69,8 @@ static void test_partial_and_zero_recovery(void)
 	const int script[] = {40, 0, 1800, 4048};
 	ps2_audio_submit_result_t result;
 	prepare(script, 4);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_OK);
 	assert(result.accepted_bytes == 5888 && accepted == 5888);
 	assert(result.wait_calls == 4 && result.submit_calls == 4);
@@ -81,7 +83,8 @@ static void test_stalled_producer_is_bounded(void)
 	const int script[] = {0, 0, 0};
 	ps2_audio_submit_result_t result;
 	prepare(script, 3);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_STALLED);
 	assert(result.accepted_bytes == 0);
 	assert(result.wait_calls == 3 && result.submit_calls == 3);
@@ -93,7 +96,8 @@ static void test_wait_error_preserves_accepted_prefix(void)
 	ps2_audio_submit_result_t result;
 	prepare(script, 1);
 	wait_failure_at = 2;
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_WAIT_ERROR);
 	assert(result.accepted_bytes == 100);
 	assert(result.wait_calls == 2 && result.submit_calls == 1);
@@ -105,11 +109,13 @@ static void test_negative_and_invalid_play_results(void)
 	const int oversized[] = {6000};
 	ps2_audio_submit_result_t result;
 	prepare(negative, 1);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_PLAY_ERROR);
 	assert(result.accepted_bytes == 0);
 	prepare(oversized, 1);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_INVALID_REPLY);
 	assert(result.accepted_bytes == 0);
 }
@@ -119,7 +125,8 @@ static void test_legacy_one_shot(void)
 	const int script[] = {40};
 	ps2_audio_submit_result_t result;
 	prepare(script, 1);
-	result = ps2_audio_submit_buffer(sample_data, 5888, 0, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_ONCE, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_OK);
 	assert(result.accepted_bytes == 40);
 	assert(result.submit_calls == 1 && result.partial_calls == 1);
@@ -130,10 +137,37 @@ static void test_large_buffer_chunking(void)
 	const int script[] = {8192, 8192, 4616};
 	ps2_audio_submit_result_t result;
 	prepare(script, 3);
-	result = ps2_audio_submit_buffer(sample_data, TEST_BYTES, 1, fake_wait, fake_play);
+	result = ps2_audio_submit_buffer(sample_data, TEST_BYTES,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT, fake_wait, fake_play);
 	assert(result.error == PS2_AUDIO_SUBMIT_OK);
 	assert(result.accepted_bytes == TEST_BYTES);
 	assert(result.submit_calls == 3 && result.partial_calls == 0);
+}
+
+static void test_direct_submission_and_partial_recovery(void)
+{
+	const int script[] = {40, 5848};
+	ps2_audio_submit_result_t result;
+	prepare(script, 2);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_DIRECT, fake_wait, fake_play);
+	assert(result.error == PS2_AUDIO_SUBMIT_OK);
+	assert(result.accepted_bytes == 5888);
+	assert(result.wait_calls == 0 && result.submit_calls == 2);
+	assert(result.partial_calls == 1);
+}
+
+static void test_direct_zero_requires_wait(void)
+{
+	const int script[] = {0, 5888};
+	ps2_audio_submit_result_t result;
+	prepare(script, 2);
+	result = ps2_audio_submit_buffer(sample_data, 5888,
+		PS2_AUDIO_SUBMIT_RETRY_DIRECT, fake_wait, fake_play);
+	assert(result.error == PS2_AUDIO_SUBMIT_OK);
+	assert(result.accepted_bytes == 5888);
+	assert(result.wait_calls == 1 && result.submit_calls == 2);
+	assert(result.zero_progress_calls == 1);
 }
 
 int main(void)
@@ -145,5 +179,7 @@ int main(void)
 	test_negative_and_invalid_play_results();
 	test_legacy_one_shot();
 	test_large_buffer_chunking();
+	test_direct_submission_and_partial_recovery();
+	test_direct_zero_requires_wait();
 	return 0;
 }

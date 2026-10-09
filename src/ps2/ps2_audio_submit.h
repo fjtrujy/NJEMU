@@ -25,8 +25,15 @@ enum
 	PS2_AUDIO_SUBMIT_STALLED
 };
 
+typedef enum ps2_audio_submit_mode
+{
+	PS2_AUDIO_SUBMIT_ONCE,
+	PS2_AUDIO_SUBMIT_RETRY_WAIT,
+	PS2_AUDIO_SUBMIT_RETRY_DIRECT
+} ps2_audio_submit_mode_t;
+
 ps2_audio_submit_result_t ps2_audio_submit_buffer(const void *buffer,
-	uint32_t bytes, int retry_partial,
+	uint32_t bytes, ps2_audio_submit_mode_t mode,
 	int (*wait_audio)(int), int (*play_audio)(const char *, int));
 
 #endif /* PS2_AUDIO_SUBMIT_H */

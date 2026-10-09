@@ -318,11 +318,17 @@ static void ps2_srcOutputBlocking(void *data, int32_t volume, void *buffer, uint
 			audio_profile_now_us() - start);
 	}
 #endif
-#ifdef PS2_AUDIO_RETRY_SHORT_WRITES
-	submit_result = ps2_audio_submit_buffer(buffer, size, 1,
+#ifdef PS2_AUDIO_DIRECT_SUBMIT
+	submit_result = ps2_audio_submit_buffer(buffer, size,
+		PS2_AUDIO_SUBMIT_RETRY_DIRECT,
+		ps2_audsrv_wait, ps2_audsrv_play);
+#elif defined(PS2_AUDIO_RETRY_SHORT_WRITES)
+	submit_result = ps2_audio_submit_buffer(buffer, size,
+		PS2_AUDIO_SUBMIT_RETRY_WAIT,
 		ps2_audsrv_wait, ps2_audsrv_play);
 #else
-	submit_result = ps2_audio_submit_buffer(buffer, size, 0,
+	submit_result = ps2_audio_submit_buffer(buffer, size,
+		PS2_AUDIO_SUBMIT_ONCE,
 		ps2_audsrv_wait, ps2_audsrv_play);
 #endif
 #ifdef PS2_AUDIO_PROFILE

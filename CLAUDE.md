@@ -49,6 +49,9 @@ Useful options include:
 - `PS2_AUDIO_PROFILE=ON/OFF` (PS2-only sound/audsrv timing log; default OFF;
   `PS2_AUDIO_PROFILE_QUEUE_INTERVAL` defaults to 128, or 0 to disable
   diagnostic queue-query RPCs);
+- `PS2_AUDIO_RETRY_SHORT_WRITES=ON/OFF` (PS2 PCM accepted-prefix retry;
+  default ON) and `PS2_AUDIO_DIRECT_SUBMIT=ON/OFF` (skip unconditional
+  audsrv wait; default ON on PS2, OFF elsewhere; requires retries enabled);
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
   pair with `PSP_AUDIO_PROFILE` for YM2610/producer/ME-wait timing);

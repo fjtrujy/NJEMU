@@ -432,9 +432,9 @@ Each column averages five subsequent 240-buffer windows (1,200 buffers):
 Without additional occupancy queries, the incomplete submissions totaled
 **575,264 bytes** across 1,200 requested 5,888-byte chunks. This is
 approximately **8.1% of the requested PCM bytes**, with shortfalls up to
-the entire buffer size. The application currently ignores the positive
-byte count returned by `audsrv_play_audio()`, so any unqueued tail of a
-short submission is not retried. The short submissions reproduce without
+the entire buffer size. At the time of this measurement the application
+ignored the positive byte count returned by `audsrv_play_audio()`, so any
+unqueued tail of a short submission was not retried. The short submissions reproduce without
 queue probes, which rules out those probes as their sole cause.
 
 With a query every 32 buffers, each extra IOP RPC averaged 17.227 ms.
@@ -465,6 +465,70 @@ Raw captures (ignored diagnostic build output):
 
 - `build_ms3_ps2_profile/ps2_mslug3_audsrv_queue_profile_reset.log`
 - `build_ms3_ps2_profile/ps2_mslug3_audsrv_queue_off_profile.log`
+
+### Completing partial audsrv writes (2026-10-09)
+
+Inspection of the installed PS2SDK EE and IOP `audsrv` sources establishes
+that the IOP caps each play request to currently available ring space and
+returns the accepted byte count. The EE wrapper aggregates accepted counts
+for up to 16,380 bytes per packet. NJEMU now uses PS2-private, testable
+logic to advance by the **accepted prefix**, never by the requested bytes;
+its individual calls are capped at 8,192 bytes to preserve this contract.
+Three consecutive zero-progress replies abort a buffer instead of spinning.
+The ordinary EE synthesis and NCDZ MP3 mixer remain intact.
+
+The three build policies are:
+
+- `PS2_AUDIO_RETRY_SHORT_WRITES=OFF` with `PS2_AUDIO_DIRECT_SUBMIT=OFF`:
+  reproduce the previous single wait and play call (drops a partial tail).
+- `PS2_AUDIO_RETRY_SHORT_WRITES=ON`, `PS2_AUDIO_DIRECT_SUBMIT=OFF`:
+  wait before each partial-tail retry; reliable but slower on hardware.
+- `PS2_AUDIO_RETRY_SHORT_WRITES=ON`, `PS2_AUDIO_DIRECT_SUBMIT=ON`:
+  send directly, retry accepted tails, and wait only after zero progress.
+  This is the new PS2 default. The IOP clamps direct writes to ring capacity.
+
+All physical-PS2 runs launched the same `mslug3.sv0` state through a fresh
+standalone PS2Link ELF; queue queries were disabled to avoid perturbation.
+The legacy and direct figures below cover five subsequent 240-buffer windows
+(1,200 buffers) after startup, while the wait-before-retry trial covers four
+ordinary steady windows (960 buffers); its fifth contained a multi-second
+outlier and is not used in this timing comparison.
+
+| Mean audio-thread elapsed time per block | Legacy | Wait + retry | Direct + retry |
+| --- | ---: | ---: | ---: |
+| Audio producer | 8.279 ms | 7.729 ms | 7.835 ms |
+| Complete audsrv output | **35.265 ms** | **41.977 ms** | **25.836 ms** |
+| Audio loop period | 43.656 ms | 49.791 ms | **33.772 ms** |
+| Previously short buffers | 117 | 127 | 549 |
+| Successfully recovered short buffers | 0 | 127 | **549** |
+| Unaccepted PCM bytes | 575,264 | 0 | **0** |
+| Recovery failures | n/a | 0 | **0** |
+
+The direct path needed 571 additional play RPCs across 1,200 buffers and
+recorded 12 zero-progress calls. They were handled without residual lost
+bytes. It recovered **607,000 bytes** rejected by initial plays. The
+number of initial partial plays increases when the mandatory initial wait
+is removed, but it does not imply missing audio: accepted bytes are retried.
+The audio-loop period is now close to one block's 33.378 ms playback
+duration. There was no SPU2 underrun counter or controlled listening test;
+avoid claiming verified audible perfection or general 60 FPS gameplay.
+
+These measurements are wall-clock timings with the frame/audio profiler
+enabled and can vary with game scene, PCM cache stalls, and main-thread
+scheduling. They demonstrate a substantial reduction in **audio output
+latency**, not yet a causal improvement in emulation frame rate. Persistent
+main CPU emulation hotspots and C-ROM cache misses still require separate
+investigation.
+
+The direct path is selected by default on PS2 only. The other two modes
+remain available for regression comparisons. Desktop host tests exercise
+full, partial, zero-progress, invalid, and failing submissions, including
+accepted-prefix continuity.
+
+Raw logs (ignored diagnostic build output):
+
+- `build_ms3_ps2_profile/ps2_mslug3_retry_all.log`
+- `build_ms3_ps2_profile/ps2_mslug3_direct_submit.log`
 
 ### Audio producer / PCM cache
 
