@@ -882,3 +882,63 @@ Ignored physical-PS2 diagnostic captures:
 - `build_ms3_ps2_profile/opcode_cost_192_168_1_10.log`
 - `build_ms3_ps2_profile/opcode_calibration_trace.log`
 - `build_ms3_ps2_profile/opcode_rawtick_retry.log`
+
+### PS2 MVS Z80 callback breakdown (2026-10-09)
+
+The follow-up used the same physical PS2 at `192.168.1.10` and loaded
+the `mslug3.sv0` state. Diagnostic-only counters and one-in-64 raw-tick
+samples were added around Z80 port callbacks. The MVS Z80 memory-read
+callback was instrumented too, but the CZ80 core's normal
+`READ_MEM8` macro uses `CPU->ReadBase` directly; therefore a zero
+callback count does **not** mean that the guest makes no memory reads.
+
+The 14 busy-scene 240-frame reporting windows (3,360 frames) showed:
+
+| Callback / operation | Total calls | Calls per emulated frame |
+| --- | ---: | ---: |
+| Z80 RAM writes (`0xf800-0xffff`) | 2,778,730 | 827.0 |
+| Z80 memory-read callback | 0 | 0 |
+| Ignored Z80 memory writes | 0 | 0 |
+| YM2610 status A reads (`IN 04`) | 107,677 | 32.0 |
+| YM2610 status B reads (`IN 06`) | 9,472 | 2.8 |
+| ROM-bank selection reads (`IN 08-0b`) | 14,012 | 4.2 |
+| YM2610 control writes (`OUT 04/06`) | 112,828 | 33.6 |
+| YM2610 data writes (`OUT 05/07`) | 103,356 | 30.8 |
+
+The Z80 port profiles are grouped by low eight port bits. The ROM-bank
+reads call `neogeo_set_cpu2_bank()`, which checks the current bank and,
+on changes, copies 2-16 KiB from the backing sound ROM into the Z80
+visible window. Their sampled callback durations are substantially
+higher than common YM2610 status reads and register writes. The raw
+timestamp pair overhead was independently measured at roughly
+0.255 us; the sampled durations include that overhead and are not
+pure `memcpy` measurements.
+
+An experimental `PS2_MVS_Z80_DIRECT_WRITE` build replaced the CZ80
+`Write_Byte` indirect callback for Z80 RAM with a direct store through
+`ReadBase`. It preserved address masking and ignored ROM writes. The
+hardware comparison used the frame profiler but disabled callback
+counters. Nine frame-ID-matched windows (2,160 frames) against the
+preceding unsampled production-logic trace showed:
+
+| Metric | Original callback | Direct Z80 RAM writes |
+| --- | ---: | ---: |
+| Z80 execution mean | 3.205 ms | 3.386 ms |
+| M68000 execution mean | 9.513 ms | 9.382 ms |
+| Total emulation mean | 16.863 ms | 16.720 ms |
+
+Z80 time **did not improve** in this comparison, increasing by about
+0.181 ms/frame. This is one A/B against an earlier baseline and other
+stage times varied, so it is not definitive evidence of a regression.
+However, there is no reason to ship the shared-CZ80 specialization.
+
+**Next step:** count actual Z80 bank changes and copied bytes separately
+from no-op selections, then test equivalent copying on physical PS2.
+Removing the copies entirely could change Z80 fetch, read visibility
+and save-state semantics. YM2610 register paths are a separate target.
+Actual audio underruns still require IOP/SPU2 consumer instrumentation.
+
+Local diagnostic captures (ignored):
+
+- `build_ms3_ps2_profile/z80_callback_profile.log`
+- `build_ms3_ps2_profile/z80_direct_profile.log`
