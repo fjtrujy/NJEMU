@@ -67,6 +67,17 @@
 #define READ_MIRROR_WORD(mem, offset, amask)			mem[offset & amask] | mem[(offset + 1) & amask ] << 8
 #define WRITE_MIRROR_WORD(mem, offset, data, amask)		mem[offset & amask] = data & 0xff; mem[(offset + 1) & amask] = (data >> 8) & 0xff
 
+#if defined(PS2_MVS_NATIVE_WORD_ACCESS)
+#include "mvs/native_word_access.h"
+
+#undef READ_WORD
+#undef READ_MIRROR_WORD
+#undef WRITE_MIRROR_WORD
+#define READ_WORD(mem, offset) mvs_native_read_word(mem, offset)
+#define READ_MIRROR_WORD(mem, offset, amask) mvs_native_read_mirrored_word(mem, offset, amask)
+#define WRITE_MIRROR_WORD(mem, offset, data, amask) mvs_native_write_mirrored_word(mem, offset, data, amask)
+#endif
+
 #define str_cmp(s1, s2)		strncasecmp(s1, s2, strlen(s2))
 
 

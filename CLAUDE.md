@@ -52,6 +52,9 @@ Useful options include:
 - `PS2_AUDIO_RETRY_SHORT_WRITES=ON/OFF` (PS2 PCM accepted-prefix retry;
   default ON) and `PS2_AUDIO_DIRECT_SUBMIT=ON/OFF` (skip unconditional
   audsrv wait; default ON on PS2, OFF elsewhere; requires retries enabled);
+- `PS2_MVS_NATIVE_WORD_ACCESS=ON/OFF` (PS2 MVS-only aligned 16-bit Neo Geo
+  memory access; default ON for PS2 MVS, OFF for other targets/platforms;
+  leave OFF to compare against the portable bytewise path);
 - `PSP_ME_SOUND_PROFILE=ON/OFF` (PSP MVS-only 68000/Z80/scheduler and sound
   protocol timing log for the full ME sound-coprocessor work; default OFF;
   pair with `PSP_AUDIO_PROFILE` for YM2610/producer/ME-wait timing);

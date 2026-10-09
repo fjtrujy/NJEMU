@@ -620,6 +620,76 @@ Fresh raw console logs (ignored diagnostic build outputs):
 - `build_ms3_ps2_profile/frame_ab_legacy.log`
 - `build_ms3_ps2_profile/frame_ab_direct.log`
 
+### PS2 MVS 68000 native-word memory A/B (2026-10-09)
+
+The paired audio experiment above showed about 10 ms per frame in the
+M68000 alone. To determine whether part of that cost came from memory
+access, a temporary `PS2_C68K_OPCODE_PROFILE` sampled one opcode and
+instruction address every 256 executed C68K instructions, reporting only
+every 240 emulated frames. This identified the `0x000000-0x01ffff`
+game-code range as the dominant source of sampled instructions. Instruction
+frequency does **not** measure instruction execution cost, so the sampler
+was **disabled for the final timing comparison**.
+
+The MVS memory interface previously assembled even-address 16-bit words
+from two byte loads and writes. On little-endian PS2 EE, aligned memory
+can instead be loaded/stored as one native halfword. The
+`mvs/native_word_access.h` helpers use `memcpy` with explicit alignment
+assumptions so the MIPS compiler can emit native halfword instructions
+without violating C effective-type aliasing. Odd addresses retain the
+original bytewise behavior; mirrored addresses preserve wraparound.
+An object-code check verified an EE `lhu` instruction for the even-address
+read path. The optimization is confined to **MVS on PS2**, controlled by
+`PS2_MVS_NATIVE_WORD_ACCESS` (default ON for that combination); OFF
+retains the original word-access implementation.
+
+Using the physical PS2 at `192.168.1.10`, the same diagnostic
+`mslug3.sv0` state was loaded after resets in both configurations.
+Identical `PS2_FRAME_PROFILE`, `PS2_AUDIO_PROFILE`, PCM/C-ROM caching,
+audio direct+retry, and game/output settings were maintained. The C68K
+opcode sampler was not compiled into either ELF. An initial OFF startup
+stalled before ROM selection and produced no usable frame data; its
+capture was discarded. A fresh PS2Link reset and OFF relaunch succeeded,
+including `state load result=1`.
+
+The frame logs contain occasional missing 240-frame reports. Only
+**ten common gameplay windows**, selected by their identical `end=`
+frame indices between 1200 and 4320, are included below. This is
+2,400 matched emulated frames, excluding startup and easier attract
+scenes after the gameplay sequence:
+
+| Metric, matched frame windows | Portable bytes (OFF) | Native words (ON) |
+| --- | ---: | ---: |
+| M68000 stage mean | 10.000 ms | **9.803 ms** |
+| Total MVS emulation mean | 17.253 ms | **17.059 ms** |
+| Whole-frame elapsed mean | 20.945 ms | **20.730 ms** |
+| Z80 stage mean | 3.165 ms | 3.169 ms |
+| Rendering stage mean | 2.314 ms | 2.304 ms |
+| Frames over 16.667 ms non-wait work | 1,877 / 2,400 | **1,707 / 2,400** |
+| Frames over 16.667 ms emulation | 1,646 / 2,400 | **1,560 / 2,400** |
+| PCM cache misses | 100 | 99 |
+
+Native-word access saves about **0.197 ms per frame in M68000 execution**
+(1.97%) and **0.194 ms in total emulation** in this state. There are
+170 fewer non-wait work-budget misses, a 7.1 percentage-point difference,
+but **1,707 of 2,400 frames still exceed budget**. The work-budget
+counter excludes explicit scheduler yields/VBlank; it is not a direct
+count of dropped display frames. This improvement is measurable, not
+sufficient for consistent 60 FPS.
+
+The isolated host test `mvs_native_word_access_tests` verifies all byte
+offsets across aligned and odd reads, masked mirrored reads, writes,
+and end-of-region wraparound against a bytewise reference. Production
+PSP/Vita/Desktop code and the other emulator targets keep their
+existing memory paths. Both paths remain selectable for regressions.
+
+Raw hardware captures and build output (ignored diagnostic directory):
+
+- `build_ms3_ps2_profile/word_ab_on_192_168_1_10.log`
+- `build_ms3_ps2_profile/word_ab_off_retry_192_168_1_10.log`
+- `build_ms3_ps2_profile/c68k_opcode_profile.log`
+- `build_ms3_ps2_profile/c68k_memcpy_profile.log`
+
 ### Audio producer / PCM cache
 
 PCM cache miss durations ranged up to 0.88-1.47 s during startup/early

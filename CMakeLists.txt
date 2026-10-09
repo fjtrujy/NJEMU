@@ -94,6 +94,12 @@ option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
 option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
+if("${PLATFORM}" STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
+    set(PS2_MVS_NATIVE_WORD_ACCESS_DEFAULT ON)
+else()
+    set(PS2_MVS_NATIVE_WORD_ACCESS_DEFAULT OFF)
+endif()
+option(PS2_MVS_NATIVE_WORD_ACCESS "PS2 MVS: use aligned native halfword accesses" ${PS2_MVS_NATIVE_WORD_ACCESS_DEFAULT})
 if(PLATFORM STREQUAL "PS2")
     set(PS2_AUDIO_DIRECT_SUBMIT_DEFAULT ON)
 else()
@@ -345,6 +351,12 @@ if(PS2_AUDIO_DIRECT_SUBMIT AND NOT PS2_AUDIO_RETRY_SHORT_WRITES)
 endif()
 if(PS2_AUDIO_DIRECT_SUBMIT)
     add_definitions(-DPS2_AUDIO_DIRECT_SUBMIT=1)
+endif()
+if(PS2_MVS_NATIVE_WORD_ACCESS)
+    if(NOT "${PLATFORM}" STREQUAL "PS2" OR NOT "${TARGET}" STREQUAL "MVS")
+        message(FATAL_ERROR "PS2_MVS_NATIVE_WORD_ACCESS requires PLATFORM=PS2 and TARGET=MVS")
+    endif()
+    add_definitions(-DPS2_MVS_NATIVE_WORD_ACCESS=1)
 endif()
 
 if(PSVITA_VIDEO_STATS AND NOT PLATFORM STREQUAL "PSVITA")
@@ -1825,6 +1837,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ps2_audio_submit_tests COMMAND ps2_audio_submit_tests)
+
+    add_executable(mvs_native_word_access_tests
+        tests/mvs_native_word_access_tests.c
+    )
+    target_include_directories(mvs_native_word_access_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME mvs_native_word_access_tests COMMAND mvs_native_word_access_tests)
 
     add_executable(ui_layout_tests
         tests/ui_layout_tests.c
