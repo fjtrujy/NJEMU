@@ -64,6 +64,15 @@ overhead and allocator/segment effects. That alone does not guarantee one more
 cache block. Whether a boundary case improves must be tested using the runtime
 memory probes on physical PSP/PS2, comparing identical ROMs and settings.
 
+The native `njemu-tool elf-footprint` comparator now also measures all ELF
+`PT_LOAD` segments. Against matched MVS GUI binaries, its load-memory
+measurements decrease by **5,312 bytes on PSP** and **5,120 bytes on PS2**.
+These differ slightly from the original binutils text-column measurements
+because program segments include alignment and initialized/writable regions.
+See `docs/MEMORY_FOOTPRINT_LEDGER.md` for the reproducible baseline and
+cumulative accounting rules. The PS2 MVS Auto read size is 16 KiB, independently
+of the 64 KiB cache allocation unit.
+
 The existing legacy small/large icon arrays also occupy static memory, but
 externalizing them was deliberately excluded from this experiment because
 they are needed outside the in-game menu.

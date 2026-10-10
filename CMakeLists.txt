@@ -1577,6 +1577,11 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_test(NAME elf_footprint_host_tests
+        COMMAND "${NJEMU_HOST_TEST}"
+            --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"
+            --scratch-dir "${CMAKE_BINARY_DIR}/generated/host-tests/elf"
+            --suite elf)
     add_test(NAME version_derivation_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests

@@ -3,6 +3,7 @@
 
 int command_compare_frames(int argc, char **argv);
 int command_dip_metadata(int argc, char **argv);
+int command_elf_footprint(int argc, char **argv);
 int command_font(int argc, char **argv);
 int command_game_database(int argc, char **argv);
 int command_game_metadata(int argc, char **argv);

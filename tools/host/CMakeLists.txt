@@ -9,6 +9,7 @@ add_library(njemu_host_tool_lib STATIC
     c_source.c
     crc32.c
     dip_metadata.c
+    elf_footprint.c
     endian.c
     file.c
     game_database.c
@@ -23,6 +24,7 @@ add_library(njemu_host_tool_lib STATIC
     utf8.c
     command_compare_frames.c
     command_dip_metadata.c
+    command_elf_footprint.c
     command_font.c
     command_game_database.c
     command_game_metadata.c

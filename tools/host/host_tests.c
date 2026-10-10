@@ -1,6 +1,7 @@
 #include "crc32.h"
 #include "dip_metadata.h"
 #include "endian.h"
+#include "elf_footprint.h"
 #include "file.h"
 #include "game_database.h"
 #include "game_metadata.h"
@@ -50,6 +51,102 @@ static int buffer_contains(const host_buffer_t *buffer, const char *needle)
             return 1;
     }
     return 0;
+}
+
+static void write_elf_integer(uint8_t *where, uint64_t value, size_t bytes, int big_endian)
+{
+    size_t i;
+    for (i = 0; i < bytes; ++i) {
+        size_t shift = big_endian ? bytes - 1 - i : i;
+        where[i] = (uint8_t)(value >> (shift * 8));
+    }
+}
+
+static void elf_test_section(uint8_t *data, size_t header, int elf64, int big_endian,
+    uint32_t type, uint64_t flags, uint64_t offset, uint64_t size)
+{
+    write_elf_integer(data + header + 4, type, 4, big_endian);
+    write_elf_integer(data + header + 8, flags, elf64 ? 8 : 4, big_endian);
+    write_elf_integer(data + header + (elf64 ? 24 : 16), offset,
+        elf64 ? 8 : 4, big_endian);
+    write_elf_integer(data + header + (elf64 ? 32 : 20), size,
+        elf64 ? 8 : 4, big_endian);
+}
+
+static int test_elf_footprint(const char *source_dir, const char *scratch_dir)
+{
+    uint8_t bytes[1024];
+    host_buffer_t file;
+    host_elf_footprint_t result;
+    char error[128];
+    int elf64;
+    int big_endian;
+    (void)source_dir;
+    (void)scratch_dir;
+
+    host_buffer_init(&file);
+    file.data = bytes;
+    file.size = sizeof(bytes);
+    file.capacity = sizeof(bytes);
+
+    for (elf64 = 0; elf64 <= 1; ++elf64) {
+        for (big_endian = 0; big_endian <= 1; ++big_endian) {
+            const size_t section_header = 256;
+            const size_t section_stride = elf64 ? 64 : 40;
+            memset(bytes, 0, sizeof(bytes));
+            memcpy(bytes, "\177ELF", 4);
+            bytes[4] = (uint8_t)(elf64 ? 2 : 1);
+            bytes[5] = (uint8_t)(big_endian ? 2 : 1);
+            bytes[6] = 1;
+            write_elf_integer(bytes + (elf64 ? 32 : 28),
+                128, elf64 ? 8 : 4, big_endian);
+            write_elf_integer(bytes + (elf64 ? 54 : 42),
+                elf64 ? 56 : 32, 2, big_endian);
+            write_elf_integer(bytes + (elf64 ? 56 : 44), 1, 2, big_endian);
+            write_elf_integer(bytes + 128, 1, 4, big_endian);
+            write_elf_integer(bytes + 128 + (elf64 ? 8 : 4),
+                64, elf64 ? 8 : 4, big_endian);
+            write_elf_integer(bytes + 128 + (elf64 ? 32 : 16),
+                60, elf64 ? 8 : 4, big_endian);
+            write_elf_integer(bytes + 128 + (elf64 ? 40 : 20),
+                100, elf64 ? 8 : 4, big_endian);
+            write_elf_integer(bytes + (elf64 ? 40 : 32),
+                section_header, elf64 ? 8 : 4, big_endian);
+            write_elf_integer(bytes + (elf64 ? 58 : 46), section_stride, 2, big_endian);
+            write_elf_integer(bytes + (elf64 ? 60 : 48), 5, 2, big_endian);
+            elf_test_section(bytes, section_header + section_stride,
+                elf64, big_endian, 1, 2 | 4, 64, 10);
+            elf_test_section(bytes, section_header + section_stride * 2,
+                elf64, big_endian, 1, 2, 96, 20);
+            elf_test_section(bytes, section_header + section_stride * 3,
+                elf64, big_endian, 1, 2 | 1, 128, 30);
+            elf_test_section(bytes, section_header + section_stride * 4,
+                elf64, big_endian, 8, 2 | 1, 768, 40);
+
+            CHECK(host_elf_footprint_parse(&file, &result, error, sizeof(error)));
+            CHECK(result.elf_class == (unsigned int)(elf64 ? 2 : 1));
+            CHECK(result.byte_order == (unsigned int)(big_endian ? 2 : 1));
+            CHECK(result.file_bytes == sizeof(bytes));
+            CHECK(result.text_bytes == 10);
+            CHECK(result.rodata_bytes == 20);
+            CHECK(result.data_bytes == 30);
+            CHECK(result.bss_bytes == 40);
+            CHECK(result.load_file_bytes == 60);
+            CHECK(result.load_memory_bytes == 100);
+            bytes[0] = 'X';
+            CHECK(!host_elf_footprint_parse(&file, &result, error, sizeof(error)));
+            bytes[0] = 0x7f;
+            write_elf_integer(bytes + (elf64 ? 40 : 32), 1010,
+                elf64 ? 8 : 4, big_endian);
+            CHECK(!host_elf_footprint_parse(&file, &result, error, sizeof(error)));
+            write_elf_integer(bytes + (elf64 ? 40 : 32), section_header,
+                elf64 ? 8 : 4, big_endian);
+            elf_test_section(bytes, section_header + section_stride,
+                elf64, big_endian, 1, 2 | 4, 950, 100);
+            CHECK(!host_elf_footprint_parse(&file, &result, error, sizeof(error)));
+        }
+    }
+    return 1;
 }
 
 static int load_core_metadata(const char *source_dir, const char *core_name,
@@ -742,6 +839,8 @@ int main(int argc, char **argv)
         ok = test_dip(source_dir, scratch_dir);
     else if (strcmp(suite, "translations") == 0)
         ok = test_translations(source_dir, scratch_dir);
+    else if (strcmp(suite, "elf") == 0)
+        ok = test_elf_footprint(source_dir, scratch_dir);
     else {
         fprintf(stderr, "unknown host test suite: %s\n", suite);
         return 2;
