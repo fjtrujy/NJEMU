@@ -43,7 +43,9 @@ int main(void)
 	assert(ADAPTIVE == 406);
 	assert(VIDEO_X_OFFSET == 407);
 	assert(VIDEO_Y_OFFSET == 408);
-	assert(UI_TEXT_MAX == 409);
+	assert(MENU_VIDEO_DISPLAY == 409);
+	assert(MENUHELP_SYSTEM_SETTINGS == 428);
+	assert(UI_TEXT_MAX == 429);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

@@ -1,6 +1,6 @@
 # Menu Icon Inventory and Residency Audit
 
-Status: proposal only (2026-10-10). Menu implementation, icon bitmaps and runtime packaging are unchanged.
+Status: baseline measurements and design decisions from 2026-10-10. The four category icons and reorganized menus have since been implemented; see `docs/MENU_REORGANIZATION.md`. The measurements below describe the **pre-change** PS2 MVS executable.
 
 ## Current icon format and usage
 
@@ -72,6 +72,6 @@ The current icons are `static const` arrays linked into the resident ELF/PRX. Ex
 - Keep bootstrap/error handling viable if an optional asset is missing. Consider one minimal built-in fallback icon while the rest come from an external pack.
 - A new icon asset would have to be included in the explicit packaging/install manifest for PSP, PS2, Desktop and PS Vita, with the same path resolution guarantees as the already external `font/gbk_s14.bin`. No runtime asset should be written into `resources/` by the build.
 
-**Recommendation:** first add/review the four genuinely missing semantic icons using the existing format; they are small. Do not externalize the entire icon pipeline until matched runtime probes show an actual gain in contiguous cache allocations or availability. If experimenting, use a compile-time switch, preserve the embedded fallback, and compare main-RAM/heap use, binary size, cold-start I/O and menu responsiveness on physical PSP/PS2.
+**Decision:** the four missing icons have been added using the existing embedded glyph format. Do not externalize the entire icon pipeline until matched runtime probes show an actual gain in contiguous cache allocations or availability. If experimenting, use a compile-time switch, preserve the embedded fallback, and compare main-RAM/heap use, binary size, cold-start I/O and menu responsiveness on physical PSP/PS2.
 
-No source or deployment changes have been made by this audit.
+The original audit was documentation-only. Subsequent menu work is documented separately in `docs/MENU_REORGANIZATION.md`.

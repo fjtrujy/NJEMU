@@ -1262,6 +1262,30 @@ void textfont_print(int sx, int sy, int r, int g, int b, const char *s, int flag
 	Icon drawing
 ******************************************************************************/
 
+#ifdef GUI
+#include "common/icon/menu_extra.h"
+#endif
+
+static int get_small_menu_icon(struct font_t *font, int id, int light)
+{
+	int result = light ? icon_s_get_light(font, id) : icon_s_get_gryph(font, id);
+#ifdef GUI
+	if (!result)
+		result = menu_icon_small_get(font, id, light);
+#endif
+	return result;
+}
+
+static int get_large_menu_icon(struct font_t *font, int id, int light)
+{
+	int result = light ? icon_l_get_light(font, id) : icon_l_get_gryph(font, id);
+#ifdef GUI
+	if (!result)
+		result = menu_icon_large_get(font, id, light);
+#endif
+	return result;
+}
+
 /*------------------------------------------------------
 	Draw small icon
 ------------------------------------------------------*/
@@ -1274,7 +1298,7 @@ void small_icon(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_s_get_gryph(&font, no))
+	if (get_small_menu_icon(&font, no, 0))
 		internal_font_putc(&font, sx, sy, r, g, b);
 }
 
@@ -1291,7 +1315,7 @@ void small_icon_shadow(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_s_get_gryph(&font, no))
+	if (get_small_menu_icon(&font, no, 0))
 	{
 		internal_shadow_putc(&font, sx, sy);
 		internal_font_putc(&font, sx, sy, r, g, b);
@@ -1312,7 +1336,7 @@ void small_icon_light(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_s_get_gryph(&font, no) && icon_s_get_light(&font_light, no))
+	if (get_small_menu_icon(&font, no, 0) && get_small_menu_icon(&font_light, no, 1))
 	{
 		internal_shadow_putc(&font, sx, sy);
 		internal_light_putc(&font_light, sx - 4, sy - 4);
@@ -1333,7 +1357,7 @@ void large_icon(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_l_get_gryph(&font, no))
+	if (get_large_menu_icon(&font, no, 0))
 		internal_font_putc(&font, sx, sy, r, g, b);
 }
 
@@ -1350,7 +1374,7 @@ void large_icon_shadow(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_l_get_gryph(&font, no))
+	if (get_large_menu_icon(&font, no, 0))
 	{
 		internal_shadow_putc(&font, sx, sy);
 		internal_font_putc(&font, sx, sy, r, g, b);
@@ -1371,7 +1395,7 @@ void large_icon_light(int sx, int sy, int r, int g, int b, int no)
 	g >>= 4;
 	b >>= 4;
 
-	if (icon_l_get_gryph(&font, no) && icon_l_get_light(&font_light, no))
+	if (get_large_menu_icon(&font, no, 0) && get_large_menu_icon(&font_light, no, 1))
 	{
 		internal_shadow_putc(&font, sx, sy);
 		internal_light_putc(&font_light, sx - 4, sy - 4);

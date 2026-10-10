@@ -228,7 +228,48 @@ typedef struct {
 
 #undef INCLUDE_GAMECFG_STRUCT
 
-static int menu_gamecfg(void)
+enum menu_gamecfg_section {
+	MENU_CFG_VIDEO,
+	MENU_CFG_TIMING,
+	MENU_CFG_AUDIO,
+	MENU_CFG_PLAYER,
+	MENU_CFG_EMULATION,
+	MENU_CFG_PERFORMANCE
+};
+
+static int menu_gamecfg_section_for_label(int label)
+{
+	switch (label) {
+	case DISPLAY_MODE:
+	case SCREEN_ORIENTATION:
+		return MENU_CFG_VIDEO;
+	case VIDEO_SYNC:
+	case AUTO_FRAMESKIP:
+	case FRAMESKIP:
+	case FRAME_LIMIT:
+		return MENU_CFG_TIMING;
+	case ENABLE_SOUND:
+	case SAMPLE_RATE:
+	case SOUND_VOLUME:
+	case ENABLE_CDDA:
+	case CDDA_VOLUME:
+		return MENU_CFG_AUDIO;
+	case CONTROLLER:
+		return MENU_CFG_PLAYER;
+	case MACHINE_REGION:
+	case MACHINE_MODE:
+	case RASTER_EFFECTS:
+	case EMULATE_LOAD_SCREEN:
+	case CDROM_SPEED_LIMIT:
+		return MENU_CFG_EMULATION;
+	case CPU_CLOCK:
+		return MENU_CFG_PERFORMANCE;
+	default:
+		return -1;
+	}
+}
+
+static int menu_gamecfg_filtered(int section, int title, int icon)
 {
 	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
 	int i, arrowl, arrowr, prev_sel, update = 1;
@@ -262,6 +303,16 @@ static int menu_gamecfg(void)
 		while (gamecfg2[source].label)
 		{
 			int j;
+
+			/* Retain the original game's capability and disabled-setting rules,
+			 * but display only settings belonging to this category. */
+			if (gamecfg2[source].label == LF ||
+				(gamecfg2[source].label != RETURN_TO_MAIN_MENU &&
+				 menu_gamecfg_section_for_label(gamecfg2[source].label) != section))
+			{
+				source++;
+				continue;
+			}
 
 			if (gamecfg2[source].required_power_capabilities != 0 &&
 				!power_has_capability(gamecfg2[source].required_power_capabilities))
@@ -302,6 +353,13 @@ static int menu_gamecfg(void)
 
 	do
 	{
+		/* Automatic skipping owns the skip decision. Retain the manual value
+		 * in the per-game INI, but prevent editing it while Auto is active. */
+		if (section == MENU_CFG_TIMING) {
+			for (i = 0; i < gamecfg_num; ++i)
+				if (gamecfg[i].value == &option_frameskip)
+					gamecfg[i].enable = !option_autoframeskip;
+		}
 		if (update)
 		{
 			video_driver->beginFrame(video_data);
@@ -317,8 +375,8 @@ static int menu_gamecfg(void)
 				if (cur < gamecfg[sel].value_max) arrowr = 1;
 			}
 
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), icon);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(title));
 			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
 				ui_layout_bottom(1), rows, gamecfg_num, sel);
 
@@ -541,10 +599,12 @@ static int menu_video_backend_settings(void)
 static int menu_fps_overlay_settings(void)
 {
 	static const int labels[] = {
+		SHOW_FPS,
 		FPS_X_OFFSET,
 		FPS_Y_OFFSET
 	};
 	int *values[] = {
+		&option_showfps,
 		&option_fps_offset_x,
 		&option_fps_offset_y
 	};
@@ -567,14 +627,17 @@ static int menu_fps_overlay_settings(void)
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
 				TEXT(FPS_OVERLAY_SETTINGS_MENU));
 
-			for (int i = 0; i < 2; i++)
+			for (int i = 0; i < 3; i++)
 			{
 				char value[16];
 				int y = 40 + i * 17;
 				int active = i == selected;
 				int width;
 
-				snprintf(value, sizeof(value), "%d px", *values[i]);
+				if (i == 0)
+					snprintf(value, sizeof(value), "%s", TEXT(*values[i] ? ON : OFF));
+				else
+					snprintf(value, sizeof(value), "%d px", *values[i]);
 				width = uifont_get_string_width(value);
 				if (active)
 				{
@@ -584,7 +647,7 @@ static int menu_fps_overlay_settings(void)
 						uifont_print_shadow(190, y, UI_COLOR(UI_PAL_SELECT),
 							FONT_LEFTTRIANGLE);
 					uifont_print_shadow(210, y, UI_COLOR(UI_PAL_SELECT), value);
-					if (*values[i] < FPS_OVERLAY_OFFSET_MAX)
+					if (*values[i] < (i == 0 ? 1 : FPS_OVERLAY_OFFSET_MAX))
 						uifont_print_shadow(214 + width, y, UI_COLOR(UI_PAL_SELECT),
 							FONT_RIGHTTRIANGLE);
 				}
@@ -607,7 +670,7 @@ static int menu_fps_overlay_settings(void)
 		update = 0;
 		if (pad_pressed(PLATFORM_PAD_UP) || pad_pressed(PLATFORM_PAD_DOWN))
 		{
-			selected ^= 1;
+			selected = (selected + (pad_pressed(PLATFORM_PAD_DOWN) ? 1 : 2)) % 3;
 			update = 1;
 		}
 		else if (pad_pressed(PLATFORM_PAD_LEFT) && *values[selected] > 0)
@@ -616,7 +679,7 @@ static int menu_fps_overlay_settings(void)
 			update = 1;
 		}
 		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
-			*values[selected] < FPS_OVERLAY_OFFSET_MAX)
+			*values[selected] < (selected == 0 ? 1 : FPS_OVERLAY_OFFSET_MAX))
 		{
 			(*values[selected])++;
 			update = 1;
@@ -3052,6 +3115,90 @@ typedef struct
 	int help;
 } menu2_t;
 
+static int menu_game_video(void) { return menu_gamecfg_filtered(MENU_CFG_VIDEO, MENU_GAME_VIDEO, ICON_VIDEO); }
+static int menu_frame_pacing(void) { return menu_gamecfg_filtered(MENU_CFG_TIMING, MENU_FRAME_PACING, ICON_VIDEO); }
+static int menu_sound_settings(void) { return menu_gamecfg_filtered(MENU_CFG_AUDIO, MENU_SOUND_SETTINGS, ICON_AUDIO); }
+static int menu_player_settings(void) { return menu_gamecfg_filtered(MENU_CFG_PLAYER, MENU_PLAYER_SETTINGS, ICON_KEYCONFIG); }
+#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
+static int menu_machine_settings(void) { return menu_gamecfg_filtered(MENU_CFG_EMULATION, MENU_MACHINE_SETTINGS, ICON_CONFIG); }
+#endif
+static int menu_clock_settings(void) { return menu_gamecfg_filtered(MENU_CFG_PERFORMANCE, MENU_CLOCK_SETTINGS, ICON_PERFORMANCE); }
+
+/* A shared navigable list keeps the same controller behavior across categories.
+ * Entries may be hidden by capabilities without changing the saved settings. */
+static int menu_section(int title, int icon, const menu2_t *items)
+{
+	menu_t entries[MENU_MAX_ITEMS];
+	int count = 0, selected = 0, top = 0;
+	int rows = ui_layout_visible_rows(40, 32);
+	int update = 1;
+
+	for (int i = 0; items[i].label && count < MENU_MAX_ITEMS; ++i) {
+		if (items[i].menu_func == menu_video_backend_settings && video_backend_choice_count() < 2)
+			continue;
+		if (items[i].menu_func == menu_clock_settings && !power_has_capability(POWER_CAP_PERFORMANCE))
+			continue;
+		entries[count].label = TEXT(items[i].label);
+		entries[count].menu_func = items[i].menu_func;
+		entries[count].icon = items[i].icon;
+		entries[count].help = TEXT(items[i].help);
+		count++;
+	}
+
+	pad_wait_clear();
+	load_background(WP_LOGO);
+	ui_popup_reset();
+	do {
+		if (update) {
+			video_driver->beginFrame(video_data);
+			show_background();
+			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), icon);
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(title));
+			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
+				ui_layout_bottom(1), rows, count, selected);
+			for (int i = 0; i < rows && top + i < count; ++i) {
+				int index = top + i;
+				int y = 40 + i * 32;
+				if (index == selected) {
+					large_icon_light(12, y, UI_COLOR(UI_PAL_SELECT), entries[index].icon);
+					uifont_print_shadow(54, y - 3, UI_COLOR(UI_PAL_SELECT), entries[index].label);
+					uifont_print_shadow(54, y + 16, UI_COLOR(UI_PAL_SELECT), entries[index].help);
+				} else {
+					small_icon(16, y + 2, UI_COLOR(UI_PAL_NORMAL), entries[index].icon);
+					uifont_print(56, y + 4, UI_COLOR(UI_PAL_NORMAL), entries[index].label);
+				}
+			}
+			ui_show_popup(1);
+			video_driver->endFrame(video_data);
+			video_driver->flipScreen(video_data, 1);
+		} else {
+			video_driver->waitVsync(video_data);
+		}
+		pad_update();
+		update = 0;
+		if (pad_pressed(PLATFORM_PAD_UP)) {
+			selected = (selected + count - 1) % count;
+			update = 1;
+		} else if (pad_pressed(PLATFORM_PAD_DOWN)) {
+			selected = (selected + 1) % count;
+			update = 1;
+		} else if (pad_pressed(PLATFORM_PAD_B1)) {
+			if (entries[selected].menu_func == NULL)
+				break;
+			if (entries[selected].menu_func())
+				return 1;
+			pad_wait_clear();
+			load_background(WP_LOGO);
+			rows = ui_layout_visible_rows(40, 32);
+			update = 1;
+		}
+		if (selected < top) top = selected;
+		if (selected >= top + rows) top = selected - rows + 1;
+		if (Loop == LOOP_EXIT) break;
+	} while (!pad_pressed(PLATFORM_PAD_B2));
+	return 0;
+}
+
 #if (EMU_SYSTEM == CPS1)
 #define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_CPS1
 #elif (EMU_SYSTEM == CPS2)
@@ -3063,35 +3210,95 @@ typedef struct
 #endif
 
 
-static menu2_t mainmenu2[] =
-{
-	{ MENU_GAME_CONFIGURATION,  menu_gamecfg,   ICON_CONFIG,    MENUHELP_GAME_CONFIGURATION  },
-	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_SYSTEM, MENUHELP_VIDEO_BACKEND_SETTINGS },
-	{ MENU_FPS_OVERLAY_SETTINGS, menu_fps_overlay_settings, ICON_SYSTEM, MENUHELP_FPS_OVERLAY_SETTINGS },
-#ifdef PSP_ME_AUDIO
-	{ MENU_AUDIO_PROCESSOR_SETTINGS, menu_audio_processor_settings, ICON_SYSTEM, MENUHELP_AUDIO_PROCESSOR_SETTINGS },
-#endif
+static const menu2_t video_section[] = {
+	{ MENU_GAME_VIDEO, menu_game_video, ICON_VIDEO, MENU_GAME_VIDEO },
+	{ MENU_FRAME_PACING, menu_frame_pacing, ICON_VIDEO, MENU_FRAME_PACING },
+	{ MENU_FPS_OVERLAY_SETTINGS, menu_fps_overlay_settings, ICON_VIDEO, MENUHELP_FPS_OVERLAY_SETTINGS },
+	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_VIDEO, MENUHELP_VIDEO_BACKEND_SETTINGS },
 #ifdef PS2
-	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_SYSTEM, MENUHELP_SYSTEM_VIDEO_SETTINGS },
+	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_VIDEO, MENUHELP_SYSTEM_VIDEO_SETTINGS },
 #endif
-#if USE_CACHE
-	{ MENU_SYSTEM_PERFORMANCE_SETTINGS, menu_system_performance_settings, ICON_SYSTEM, MENUHELP_SYSTEM_PERFORMANCE_SETTINGS },
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+static const menu2_t audio_section[] = {
+	{ MENU_SOUND_SETTINGS, menu_sound_settings, ICON_AUDIO, MENU_SOUND_SETTINGS },
+#ifdef PSP_ME_AUDIO
+	{ MENU_AUDIO_PROCESSOR_SETTINGS, menu_audio_processor_settings, ICON_AUDIO, MENUHELP_AUDIO_PROCESSOR_SETTINGS },
 #endif
-	{ MENU_KEY_CONFIGURATION,   menu_keycfg,    ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION   },
-#ifdef COMMAND_LIST
-	{ MENU_COMMAND_LIST,        menu_cmdlist,   ICON_CMDLIST,   MENUHELP_COMMAND_LIST        },
-#endif
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+static const menu2_t control_section[] = {
+	{ MENU_PLAYER_SETTINGS, menu_player_settings, ICON_KEYCONFIG, MENU_PLAYER_SETTINGS },
+	{ MENU_KEY_CONFIGURATION, menu_keycfg, ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION },
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
+static const menu2_t emulation_section[] = {
+	{ MENU_MACHINE_SETTINGS, menu_machine_settings, ICON_CONFIG, MENU_MACHINE_SETTINGS },
 #if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
 	{ MENU_DIP_SWITCH_SETTINGS, menu_dipswitch, ICON_DIPSWITCH, MENUHELP_DIP_SWITCH_SETTINGS },
 #endif
-	{ MENU_RESET_EMULATION,		menu_reset,		 ICON_SYSTEM,		MENUHELP_RESET_EMULATION_ID  },
-	{ MENU_RETURN_TO_BROWSER,	menu_browser,	 ICON_FOLDER,		MENUHELP_RETURN_TO_BROWSER   },
-	{ MENU_RETURN_TO_GAME,		NULL,			 ICON_RETURN,		MENUHELP_RETURN_TO_GAME      },
-	{ MENU_CHEAT_CONFIGURATION,	menu_cheatcfg,	 ICON_DIPSWITCH,	MENUHELP_CHEAT_CONFIGURATION },
-/*
-	{ MENU_MEM_FREE_DAVEX,  	menu_cheatcfg_memfree,   ICON_FOLDER,    MENUAYUDA_MEM_FREE_DAVEX  },
-*/
-	{ MENU_EXIT_EMULATOR,		menu_exit,      ICON_EXIT,      MENUHELP_EXIT_EMULATOR       },
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+#endif
+
+static const menu2_t performance_section[] = {
+	{ MENU_CLOCK_SETTINGS, menu_clock_settings, ICON_PERFORMANCE, MENU_CLOCK_SETTINGS },
+#if USE_CACHE
+	{ MENU_SYSTEM_PERFORMANCE_SETTINGS, menu_system_performance_settings, ICON_PERFORMANCE, MENUHELP_SYSTEM_PERFORMANCE_SETTINGS },
+#endif
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+static const menu2_t tools_section[] = {
+#ifdef SAVE_STATE
+	{ SAVE_LOAD_STATE, menu_state, ICON_CONFIG, SAVE_LOAD_STATE },
+#endif
+	{ MENU_CHEAT_CONFIGURATION, menu_cheatcfg, ICON_DIPSWITCH, MENUHELP_CHEAT_CONFIGURATION },
+#ifdef COMMAND_LIST
+	{ MENU_COMMAND_LIST, menu_cmdlist, ICON_CMDLIST, MENUHELP_COMMAND_LIST },
+#endif
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+static const menu2_t system_section[] = {
+	{ MENU_RESET_EMULATION, menu_reset, ICON_SYSTEM, MENUHELP_RESET_EMULATION_ID },
+	{ MENU_RETURN_TO_BROWSER, menu_browser, ICON_FOLDER, MENUHELP_RETURN_TO_BROWSER },
+	{ MENU_EXIT_EMULATOR, menu_exit, ICON_EXIT, MENUHELP_EXIT_EMULATOR },
+	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	MENU_END
+};
+
+static int menu_video_section(void) { return menu_section(MENU_VIDEO_DISPLAY, ICON_VIDEO, video_section); }
+static int menu_audio_section(void) { return menu_section(MENU_AUDIO_SETTINGS, ICON_AUDIO, audio_section); }
+static int menu_controls_section(void) { return menu_section(MENU_CONTROLS_SETTINGS, ICON_KEYCONFIG, control_section); }
+#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
+static int menu_emulation_section(void) { return menu_section(MENU_EMULATION_SETTINGS, ICON_CONFIG, emulation_section); }
+#endif
+static int menu_performance_section(void) { return menu_section(MENU_PERFORMANCE, ICON_PERFORMANCE, performance_section); }
+static int menu_tools_section(void) { return menu_section(MENU_TOOLS, ICON_TOOLS, tools_section); }
+static int menu_system_section(void) { return menu_section(MENU_SYSTEM_SETTINGS, ICON_SYSTEM, system_section); }
+
+static const menu2_t mainmenu2[] = {
+	{ MENU_RETURN_TO_GAME, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+	{ MENU_VIDEO_DISPLAY, menu_video_section, ICON_VIDEO, MENUHELP_VIDEO_DISPLAY },
+	{ MENU_AUDIO_SETTINGS, menu_audio_section, ICON_AUDIO, MENUHELP_AUDIO_SETTINGS },
+	{ MENU_CONTROLS_SETTINGS, menu_controls_section, ICON_KEYCONFIG, MENUHELP_CONTROLS_SETTINGS },
+#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
+	{ MENU_EMULATION_SETTINGS, menu_emulation_section, ICON_CONFIG, MENUHELP_EMULATION_SETTINGS },
+#endif
+	{ MENU_PERFORMANCE, menu_performance_section, ICON_PERFORMANCE, MENUHELP_PERFORMANCE },
+	{ MENU_TOOLS, menu_tools_section, ICON_TOOLS, MENUHELP_TOOLS },
+	{ MENU_SYSTEM_SETTINGS, menu_system_section, ICON_SYSTEM, MENUHELP_SYSTEM_SETTINGS },
 	MENU_END
 };
 
@@ -3126,6 +3333,11 @@ void showmenu(void)
 	i = 0;
 	while (mainmenu2[i].label)
 	{
+		if (mainmenu2[i].menu_func == menu_performance_section &&
+			!USE_CACHE && !power_has_capability(POWER_CAP_PERFORMANCE)) {
+			i++;
+			continue;
+		}
 		mainmenu[i].label     = TEXT(mainmenu2[i].label);
 		mainmenu[i].menu_func = mainmenu2[i].menu_func;
 		mainmenu[i].icon      = mainmenu2[i].icon;

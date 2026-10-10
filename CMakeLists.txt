@@ -677,6 +677,7 @@ if (NOT GUI)
 else()
     # Interactive GUI sources.
     set(COMMON_SRC ${COMMON_SRC}
+        common/icon/menu_extra.c
         common/ui.c
         common/ui_menu.c
         common/png.c
@@ -993,6 +994,7 @@ add_custom_command(
         ${UI_EXTRA_UNICODE_ARGS}
     DEPENDS
         ${NJEMU_HOST_TOOL_TARGET}
+        "${NJEMU_HOST_TOOL}"
         ${UI_EXTRA_UNICODE_DEPENDS}
         "${CMAKE_SOURCE_DIR}/src/common/font/gbk_tbl.c"
         "${CMAKE_SOURCE_DIR}/translations/messages.def"
@@ -1880,6 +1882,15 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ui_layout_tests COMMAND ui_layout_tests)
+
+    add_executable(menu_icon_tests
+        tests/menu_icon_tests.c
+        src/common/icon/menu_extra.c
+    )
+    target_include_directories(menu_icon_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME menu_icon_tests COMMAND menu_icon_tests)
 
     add_executable(ui_texture_layout_tests
         tests/ui_texture_layout_tests.c

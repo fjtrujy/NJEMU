@@ -50,6 +50,10 @@ function(njemu_enable_host_tools)
         INSTALL_DIR "${_host_install}"
         CMAKE_ARGS ${_host_cmake_args}
         BUILD_BYPRODUCTS "${_host_tool}" "${_host_test}"
+        # Incremental target builds must recheck the native generator sources.
+        # Otherwise a previously installed host tool can keep generating packs
+        # with an obsolete translation schema while the emulator is rebuilt.
+        BUILD_ALWAYS TRUE
         UPDATE_COMMAND ""
         TEST_COMMAND ""
     )
