@@ -3307,7 +3307,7 @@ void showmenu(void)
 {
 	static int sel = 0, prev_sel = 0, top = 0;
 	int rows = ui_layout_visible_rows(40, 32);
-	int i, update = 1;
+	int i, source, update = 1;
 	int mainmenu_num = 0;
 #ifdef SAVE_STATE
 	char buf[128];
@@ -3331,17 +3331,19 @@ void showmenu(void)
 	refresh_gamepads();
 
 	i = 0;
-	while (mainmenu2[i].label)
+	source = 0;
+	while (mainmenu2[source].label)
 	{
-		if (mainmenu2[i].menu_func == menu_performance_section &&
+		if (mainmenu2[source].menu_func == menu_performance_section &&
 			!USE_CACHE && !power_has_capability(POWER_CAP_PERFORMANCE)) {
-			i++;
+			source++;
 			continue;
 		}
-		mainmenu[i].label     = TEXT(mainmenu2[i].label);
-		mainmenu[i].menu_func = mainmenu2[i].menu_func;
-		mainmenu[i].icon      = mainmenu2[i].icon;
-		mainmenu[i].help      = TEXT(mainmenu2[i].help);
+		mainmenu[i].label     = TEXT(mainmenu2[source].label);
+		mainmenu[i].menu_func = mainmenu2[source].menu_func;
+		mainmenu[i].icon      = mainmenu2[source].icon;
+		mainmenu[i].help      = TEXT(mainmenu2[source].help);
+		source++;
 		i++;
 	}
 	mainmenu_num = i;

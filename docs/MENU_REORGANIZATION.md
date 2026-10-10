@@ -61,3 +61,12 @@ This is **6,624 extra bytes** of static glyph art, smaller than NJEMU's 64 KiB m
 Build/test targets include all four Desktop core GUIs, PS2 MVS GUI, PSP MVS GUI with ME enabled, and PSP MVS GUI with ME disabled. `tests/menu_icon_tests.c` checks the new glyphs in both sizes and normal/highlight states. Translation and UI tests verify new IDs and the translation schema.
 
 Physical PSP/PS2 visual and input-device walkthroughs are still recommended before a public release, especially low-resolution PS2 video changes and loading save states from the nested Tools page. The existing PSP/Vita performance-value labels are inherited from the earlier game configuration tables and can be improved in a separate localized labels pass.
+
+## Emulator GUI validation (2026-10-10)
+
+- **PPSSPP / PSP MVS (CPU audio GUI):** booted the packaged `EBOOT.PBP`, selected and launched *Fatal Fury: King of Fighters*, opened the in-game menu with Start+Select, navigated into Video & Display, verified that unsupported PS2 output/backend controls were omitted, checked the FPS Overlay page (Show FPS plus X/Y offsets), checked Frame Pacing, and confirmed the cancel/back path to the parent menu.
+- **PCSX2 / PS2 MVS:** booted the GUI-enabled `MVS.ELF`, selected and launched *Metal Slug 3*, opened the in-game menu, and checked the main menu and Video & Display section. The PS2 Video Settings page included output mode and both offsets. Switching 480i -> 240p preserved visible UI rendering and selection; switching back through 480i to 480p also redrew the menu.
+- **Follow-up needed on PS2 480p:** after the live change to 480p, the menu remained visible, but subsequent Back and D-pad inputs did not produce a visible response in PCSX2. The cause was not established; a VBlank/GS synchronization stall after the live mode switch is one hypothesis. **Do not count 480p interaction as validated**, and retest this separately on PCSX2 and real PS2 hardware before release. The emulator-mode implementation was deliberately left unchanged during this menu/icons task.
+- The earlier FPS-overlay description extended beyond the PSP viewport in the highlighted submenu row. Its localized help string was shortened without removing the dedicated FPS X/Y controls.
+
+The emulator sessions were launched from build directories. No ROMs, BIOS, caches, or user settings under `resources/` were modified or committed. These checks supplement, rather than replace, physical PSP/PS2 validation.
