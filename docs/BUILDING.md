@@ -54,7 +54,7 @@ The current public feature switches include:
 | `USE_CACHE` | Streaming cache fallback | Valid for CPS2/MVS; default ON on PSP/PS2 and OFF on Desktop/Vita |
 | `USE_DESKTOP_GL` | Compile Desktop OpenGL backend alongside SDL | Desktop only; default ON |
 | `PS2_FAST_CACHE` | PS2 accelerated cache I/O | Requires PS2 + `USE_CACHE=ON`; default ON on PS2 |
-| `PS2_EXTERNAL_IRX_IMAGE` | Use the external PS2 driver image/bootstrap path | PS2 only; default OFF |
+| `PS2_EXTERNAL_IRX_IMAGE` | Use the external PS2 driver image/bootstrap path | PS2 only; default OFF for ordinary builds; canonical releases enable it for cached CPS2/MVS |
 | `PS2_VIDEO_MODE` | Initial PS2 output mode (`240p`, `480i`, `480p`) | PS2 only; default `480i`; runtime settings can change mode |
 | `PSP_ME_AUDIO` | PSP Media Engine audio-production capability | PSP only; default OFF; the canonical PSP release enables it |
 | `PSP_AUDIO_PROFILE` | PSP audio timing diagnostics | PSP only; default OFF |
@@ -150,7 +150,7 @@ cmake --build build-ps2-mvs --parallel
 cmake --install build-ps2-mvs
 ```
 
-The normal PS2 build embeds the platform driver image and installs the target ELF directly. `PS2_EXTERNAL_IRX_IMAGE=ON` remains a developer/validation variant rather than the canonical distribution configuration.
+Without `NJEMU_CANONICAL_RELEASE=ON`, the default PS2 build embeds its IRX drivers and installs the directly launchable core ELF. Canonical PS2 releases instead enable `PS2_EXTERNAL_IRX_IMAGE=ON` for cached CPS2/MVS builds and ship `BOOT.ELF`, `ps2_drivers.irximg`, the extensionless core executable, and `elf_path.ini`. CPS1/NCDZ releases retain the classic embedded-driver ELF layout. The external-image bootstrap and size measurements are documented in `docs/BINARY_SIZE_AUDIT.md`.
 
 ## PlayStation Vita
 

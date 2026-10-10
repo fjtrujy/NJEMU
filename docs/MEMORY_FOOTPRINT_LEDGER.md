@@ -77,12 +77,12 @@ and 5,320 bytes saved in its text column. Do **not** add those values to the
 PT_LOAD savings: they describe the same change, using different accounting.
 The full ELF file may even grow because of debug information.
 
-### Cumulative accounting
+### New experiment accounting (excluding earlier optimizations)
 
 | Optimization | PSP image saving | PS2 image saving | Production status |
 | --- | ---: | ---: | --- |
 | External menu-category icons | 5,312 B | 5,120 B | Experimental, default OFF |
-| **Realized production savings** | **0 B** | **0 B** | Not yet enabled |
+| **Realized savings from this icon experiment** | **0 B** | **0 B** | Not yet enabled |
 | **Validated linked-image potential** | **5,312 B** | **5,120 B** | No runtime-cache claim |
 
 Each future optimization should add its own row with a commit, build
@@ -90,6 +90,32 @@ configuration, `load_memory_total` delta, and runtime result. Recompute the
 cumulative total against the **same original baseline** when multiple
 optimizations are combined; individually measured deltas may overlap or
 change with link layout.
+
+## Previously completed: PS2 external IRX images
+
+The PS2 IRX optimization is **already implemented**, not a future candidate.
+`PS2_EXTERNAL_IRX_IMAGE=ON` links against `ps2_drivers_img` instead of
+embedding the large IRX payload arrays in the game ELF. The standalone
+bootstrap provides the filesystem drivers needed to read
+`ps2_drivers.irximg` before NJEMU performs its IOP reset.
+
+The earlier representative MVS audit in `docs/BINARY_SIZE_AUDIT.md`
+reported a **375,408-byte reduction** in the GNU `size` runtime-image
+summary (3,218,336 down to 2,842,928 bytes). This is a *historical,
+separately measured* improvement, not an additional saving from the recent
+menu-icon experiment. Its measurement method and build configuration differ
+from the PT_LOAD baseline above: do not sum the numbers without rebuilding
+a common baseline.
+
+`NJEMU_CANONICAL_RELEASE=ON` already forces this external-driver format for
+cached PS2 **CPS2 and MVS** releases, whereas **CPS1 and NCDZ** continue to
+ship their classic embedded-driver ELFs. The normal developer-build default
+remains OFF. See `cmake/NJEMUReleasePackage.cmake` and
+`.github/workflows/release.yml` for the deployed formats.
+
+No new IRX externalization work is necessary. Future work in this area
+should focus on runtime-cache and boot-loader validation, not duplicating
+the existing implementation.
 
 ## Runtime cache validation (a separate gate)
 
@@ -113,12 +139,7 @@ can guide tests, but physical PSP and PS2 measurements are preferred.
 
 ## Candidates for future audits
 
-Large statically linked PS2 IOP driver images (`*_irx`) are worth inspecting
-before any externalization. Some are essential for device startup/reload,
-and the existing embedded-driver configuration must remain reliable.
-Do **not** remove them solely based on symbol size.
-
-Similarly, large renderer/CPU tables and persistent buffers should be
+Large renderer/CPU tables and persistent buffers should be
 assessed for actual lifetime and alignment before changing their ownership.
 Avoid trading link-time data for equivalent permanent heap allocations.
 
