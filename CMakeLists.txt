@@ -670,14 +670,20 @@ set(COMMON_SRC ${COMMON_SRC}
     common/icon/${ICON_PREFIX}_l.c
 )
 
+option(NJEMU_EXTERNAL_MENU_ICONS "Experimental external category icon pack" OFF)
 if (NOT GUI)
     set(COMMON_SRC ${COMMON_SRC}
         common/no_gui.c
     )
 else()
     # Interactive GUI sources.
+    if (NJEMU_EXTERNAL_MENU_ICONS)
+        set(COMMON_SRC ${COMMON_SRC} common/icon/menu_extra_external.c)
+        add_compile_definitions(NJEMU_EXTERNAL_MENU_ICONS=1)
+    else()
+        set(COMMON_SRC ${COMMON_SRC} common/icon/menu_extra.c)
+    endif()
     set(COMMON_SRC ${COMMON_SRC}
-        common/icon/menu_extra.c
         common/ui.c
         common/ui_menu.c
         common/png.c
@@ -1891,6 +1897,44 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME menu_icon_tests COMMAND menu_icon_tests)
+
+    add_executable(menu_icon_pack_tool
+        tools/menu_icon_pack.c
+        src/common/icon/menu_extra.c
+    )
+    target_include_directories(menu_icon_pack_tool PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_library(menu_icon_embedded_oracle OBJECT src/common/icon/menu_extra.c)
+    target_include_directories(menu_icon_embedded_oracle PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_definitions(menu_icon_embedded_oracle PRIVATE
+        menu_icon_small_get=embedded_small_get
+        menu_icon_large_get=embedded_large_get
+    )
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/menu_icons_test.bin
+        COMMAND $<TARGET_FILE:menu_icon_pack_tool> ${CMAKE_CURRENT_BINARY_DIR}/menu_icons_test.bin
+        DEPENDS menu_icon_pack_tool
+        VERBATIM
+    )
+    add_custom_target(menu_icon_pack_test_data
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/menu_icons_test.bin
+    )
+    add_executable(menu_icon_pack_tests
+        tests/menu_icon_pack_tests.c
+        src/common/icon/menu_extra_external.c
+        $<TARGET_OBJECTS:menu_icon_embedded_oracle>
+    )
+    target_compile_definitions(menu_icon_pack_tests PRIVATE NJEMU_EXTERNAL_MENU_ICONS=1)
+    target_include_directories(menu_icon_pack_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_dependencies(menu_icon_pack_tests menu_icon_pack_test_data)
+    add_test(NAME menu_icon_pack_tests
+        COMMAND menu_icon_pack_tests ${CMAKE_CURRENT_BINARY_DIR}/menu_icons_test.bin
+    )
 
     add_executable(menu_section_rules_tests
         tests/menu_section_rules_tests.c

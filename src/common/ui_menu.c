@@ -44,6 +44,7 @@
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
+#include "common/icon/menu_extra.h"
 #include "common/menu/section_rules.h"
 
 /* The menu definitions below are target-domain code compiled into this common
@@ -1779,6 +1780,15 @@ void showmenu(void)
 #endif
 	menu_t mainmenu[MENU_MAX_ITEMS];
 
+#ifdef NJEMU_EXTERNAL_MENU_ICONS
+	/* The pack is resident only while the in-game menu is active. */
+	{
+		char icon_path[PATH_MAX];
+		if (path_format(icon_path, sizeof(icon_path), "%smenu_icons.bin", launchDir))
+			menu_icon_pack_load(icon_path);
+	}
+#endif
+
 #ifdef SAVE_STATE
 	state_make_thumbnail();
 #endif
@@ -1983,6 +1993,10 @@ void showmenu(void)
 
 	autoframeskip_reset();
 	blit_clear_all_sprite();
+
+#ifdef NJEMU_EXTERNAL_MENU_ICONS
+	menu_icon_pack_unload();
+#endif
 
 #ifdef SAVE_STATE
 	state_release_thumbnail();
