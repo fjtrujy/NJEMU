@@ -44,6 +44,7 @@
 #include "common/ui.h"
 #include "common/ui_draw.h"
 #include "common/ui_layout.h"
+#include "common/menu/section_rules.h"
 
 /* The menu definitions below are target-domain code compiled into this common
  * UI shell.  Depend on the selected target explicitly instead of inheriting
@@ -217,13 +218,6 @@ typedef struct {
 #endif
 
 #undef INCLUDE_GAMECFG_STRUCT
-
-enum menu_gamecfg_section {
-	MENU_CFG_VIDEO,
-	MENU_CFG_AUDIO,
-	MENU_CFG_EMULATION,
-	MENU_CFG_PERFORMANCE
-};
 
 #ifdef PS2
 static int menu_apply_live_video_output_mode(int previous_mode)
@@ -921,12 +915,14 @@ static int menu_keycfg(void)
 
 			for (i = 0; i < rows; i++)
 			{
-				int value = keycfg[top + i].value;
+				int value;
 				char temp[16];
 				const char *name;
-				const char *label = keycfg[top + i].label;
+				const char *label;
 
 				if ((top + i) >= keycfg_num) break;
+				value = keycfg[top + i].value;
+				label = keycfg[top + i].label;
 
 				if (label[0] == '\n')
 					continue;
@@ -1804,7 +1800,8 @@ void showmenu(void)
 	while (mainmenu2[source].label)
 	{
 		if (mainmenu2[source].menu_func == menu_performance_section &&
-			!USE_CACHE && !power_has_capability(POWER_CAP_PERFORMANCE)) {
+			!menu_has_performance_settings(USE_CACHE,
+				power_has_capability(POWER_CAP_PERFORMANCE))) {
 			source++;
 			continue;
 		}

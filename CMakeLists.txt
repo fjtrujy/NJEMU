@@ -1892,6 +1892,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME menu_icon_tests COMMAND menu_icon_tests)
 
+    add_executable(menu_section_rules_tests
+        tests/menu_section_rules_tests.c
+    )
+    target_include_directories(menu_section_rules_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME menu_section_rules_tests COMMAND menu_section_rules_tests)
+
     add_executable(ui_texture_layout_tests
         tests/ui_texture_layout_tests.c
     )

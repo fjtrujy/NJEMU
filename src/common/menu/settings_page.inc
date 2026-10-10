@@ -1,6 +1,6 @@
 /* One-level category settings, compiled in the shared menu translation unit.
  * Platform and core-specific settings remain provided by the existing tables. */
-#define MENU_SETTING_MAX (GAMECFG_MAX_ITEMS + MAX_DIPSWITCHS + MAX_CHEATS + 16)
+#define MENU_SETTING_MAX (GAMECFG_MAX_ITEMS + MAX_DIPSWITCHS + MAX_CHEATS)
 
 enum menu_setting_kind {
     SETTING_GAME,
@@ -117,74 +117,19 @@ static const char *menu_setting_text(const menu_setting_row_t *row,
     case SETTING_DIP:
         return row->dip->values_label[value];
     case SETTING_CHEAT:
+        if (value < row->min_value || value > row->max_value ||
+            !row->cheat->cheat_option[value])
+            return "";
         return row->cheat->cheat_option[value]->label;
     }
     return "";
 }
 
-static int menu_setting_group_for_label(int label)
-{
-    switch (label) {
-    case DISPLAY_MODE:
-    case SCREEN_ORIENTATION:
-    case VIDEO_SYNC:
-    case AUTO_FRAMESKIP:
-    case FRAMESKIP:
-    case FRAME_LIMIT:
-    case SHOW_FPS:
-        return MENU_CFG_VIDEO;
-    case ENABLE_SOUND:
-    case SAMPLE_RATE:
-    case SOUND_VOLUME:
-    case ENABLE_CDDA:
-    case CDDA_VOLUME:
-        return MENU_CFG_AUDIO;
-    case MACHINE_REGION:
-    case MACHINE_MODE:
-    case RASTER_EFFECTS:
-    case EMULATE_LOAD_SCREEN:
-    case CDROM_SPEED_LIMIT:
-        return MENU_CFG_EMULATION;
-    case CPU_CLOCK:
-        return MENU_CFG_PERFORMANCE;
-    default:
-        return -1;
-    }
-}
-
-static int menu_setting_order(int section, int label)
-{
-    if (section == MENU_CFG_VIDEO) {
-        switch (label) {
-        case DISPLAY_MODE: return 0;
-        case SCREEN_ORIENTATION: return 1;
-        case VIDEO_BACKEND: return 2;
-        case VIDEO_OUTPUT_MODE: return 3;
-        case VIDEO_X_OFFSET: return 4;
-        case VIDEO_Y_OFFSET: return 5;
-        case VIDEO_SYNC: return 10;
-        case FRAME_LIMIT: return 11;
-        case AUTO_FRAMESKIP: return 12;
-        case FRAMESKIP: return 13;
-        case SHOW_FPS: return 20;
-        case FPS_X_OFFSET: return 21;
-        case FPS_Y_OFFSET: return 22;
-        }
-    } else if (section == MENU_CFG_AUDIO) {
-        switch (label) {
-        case ENABLE_SOUND: return 0;
-        case SAMPLE_RATE: return 1;
-        case SOUND_VOLUME: return 2;
-        case AUDIO_PROCESSOR: return 3;
-        case ENABLE_CDDA: return 4;
-        case CDDA_VOLUME: return 5;
-        }
-    }
-    return 100;
-}
-
 static int menu_settings_page(int section, int title, int icon)
 {
+    /* Only Emulation can contain the potentially large DIP and cheat lists. */
+    const int capacity = section == MENU_CFG_EMULATION ?
+        MENU_SETTING_MAX : GAMECFG_MAX_ITEMS + 8;
     int selected = 0, top = 0, update = 1;
     int rows_visible = ui_layout_visible_rows(40, 17);
     int count = 0;
@@ -199,7 +144,7 @@ static int menu_settings_page(int section, int title, int icon)
     int output_mode_before = option_video_output_mode;
     gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
     gamecfg2_t *gamecfg2 = NULL;
-    menu_setting_row_t *items = calloc(MENU_SETTING_MAX, sizeof(*items));
+    menu_setting_row_t *items = calloc((size_t)capacity, sizeof(*items));
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == MVS)
     dipswitch_t *dipswitch = NULL;
     int dip_count = 0;
@@ -287,7 +232,9 @@ static int menu_settings_page(int section, int title, int icon)
         if (dipswitch) {
             while (dip_count < MAX_DIPSWITCHS && dipswitch[dip_count].label[0]) {
                 dipswitch_t *dip = &dipswitch[dip_count++];
-                if (dip->label[0] == '\n')
+                /* DIP metadata can contain a non-editable return row from the
+                 * original standalone menu; the page owns its own return. */
+                if (dip->label[0] == '\n' || !dip->mask)
                     continue;
                 menu_setting_add(items, &count, SETTING_DIP, DIP_SWITCH_SETTINGS_MENU,
                                  NULL, 0, dip->value_max);
@@ -305,7 +252,7 @@ static int menu_settings_page(int section, int title, int icon)
                 access(path, F_OK) == 0)
                 cheats_load();
         }
-        for (int i = 0; i < cheat_num && count < MENU_SETTING_MAX; ++i) {
+        for (int i = 0; i < cheat_num && count < capacity; ++i) {
             gamecheat_t *cheat = gamecheat[i];
             if (!cheat || !cheat->cheat_name || cheat->num_cheat_options <= 0)
                 continue;
@@ -313,6 +260,9 @@ static int menu_settings_page(int section, int title, int icon)
                              NULL, 0, cheat->num_cheat_options - 1);
             items[count - 1].label = cheat->cheat_name;
             items[count - 1].cheat = cheat;
+            if (cheat->curr_option < 0 || cheat->curr_option >= cheat->num_cheat_options ||
+                !cheat->cheat_option[cheat->curr_option])
+                cheat->curr_option = 0;
         }
     }
 
@@ -408,8 +358,12 @@ static int menu_settings_page(int section, int title, int icon)
             selected = selected + rows_visible <= count ? selected + rows_visible : count;
         else if (selected == count && pad_pressed(PLATFORM_PAD_B1))
             break;
+        else if (pad_pressed(PLATFORM_PAD_SELECT)) {
+            help(HELP_GAMECONFIG);
+            update = 1;
+        }
         else if (selected < count && (pad_pressed(PLATFORM_PAD_LEFT) || pad_pressed(PLATFORM_PAD_RIGHT) ||
-                                       pad_pressed(PLATFORM_PAD_B1))) {
+                                       (items[selected].kind == SETTING_CHEAT && pad_pressed(PLATFORM_PAD_B1)))) {
             menu_setting_row_t *row = &items[selected];
             int direction = pad_pressed(PLATFORM_PAD_LEFT) ? -1 : 1;
             int current = menu_setting_value(row);
