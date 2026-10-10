@@ -27,6 +27,23 @@ static void test_digital_buttons_preserved(void)
 		(PLATFORM_PAD_B1 | PLATFORM_PAD_START));
 }
 
+static void test_simultaneous_direction_and_attack_buttons(void)
+{
+	input_state_t state;
+	const uint32_t chord = PLATFORM_PAD_RIGHT | PLATFORM_PAD_B1 |
+		PLATFORM_PAD_B2 | PLATFORM_PAD_B3;
+
+	input_state_reset(&state);
+	state.buttons = chord;
+	assert(input_state_digital_buttons(&state) == chord);
+
+	/* An analog-derived direction adds to the existing button mask. */
+	state.axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
+	state.lx = INPUT_ANALOG_NEUTRAL;
+	state.ly = INPUT_ANALOG_LOW_THRESHOLD;
+	assert(input_state_digital_buttons(&state) == (chord | PLATFORM_PAD_UP));
+}
+
 static void test_axis_thresholds(void)
 {
 	input_state_t state = {0};
@@ -60,6 +77,7 @@ int main(void)
 {
 	test_reset();
 	test_digital_buttons_preserved();
+	test_simultaneous_direction_and_attack_buttons();
 	test_axis_thresholds();
 	test_missing_axes_are_ignored();
 	return 0;

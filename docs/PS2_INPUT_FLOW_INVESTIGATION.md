@@ -192,5 +192,60 @@ presses. The reporter's original human-speed missed-attack behavior was
 Evidence: `build_issue15_pcsx2_dino/pcsx2_input.log` and local PCSX2
 screenshots (build artifacts, not committed).
 
+## PCSX2 simultaneous-button follow-up (2026-10-10)
+
+The PS2 input profiler now also reports Right, Cross, and Circle pressed
+edges and the number of polls containing full button combinations. Counts
+are reported as `raw/delivered`; a full-chord frame means all mask bits were
+set in the same pad sample, not merely pressed within the same test interval.
+
+Used the same CPS1 NO_GUI diagnostic build and `dino.zip` in PCSX2
+2.9.93. The host delivered near-simultaneous key-down events for the
+configured virtual keys (`Right`, `Z`=Square, `X`=Cross, `C`=Circle),
+held them, then released in reverse order. Events were sent directly to
+the PCSX2 process; this did **not** use a physical DualShock controller.
+
+| Held combination | Injected cycles | Raw/delivered edges | Full-chord sample frames |
+| --- | ---: | --- | ---: |
+| Right + Square, 180 ms down / 240 ms up | 12 | Right 12/12, Square 12/12 | 129/129 |
+| Square + Cross, 180 ms down / 240 ms up | 12 | Square 12/12, Cross 12/12 | 132/132 |
+| Square + Cross + Circle, 180 ms down / 240 ms up | 12 | Each button 12/12 | 132/132 |
+| Right + Square + Cross, 180 ms down / 240 ms up | 12 | Each button 12/12 | Right+Square 131/131, Cross+Square 131/131 |
+| Hold Right continuously, tap Square 20 times (100 ms down / 200 ms up) | 20 | Right 1/1, Square 20/20 | Right+Square 124/124 |
+| Right + Square + Cross, **12 ms down / 32 ms up** | 40 | Right 27/27, Square 25/25, Cross 24/24 | Right+Square 25/25, Cross+Square 24/24 |
+
+Each edge-count pair above means *raw stage count/delivered stage count*;
+the press/release pairs in these tests were balanced. Where individual
+sequences crossed the 600-poll reporting boundary, consecutive windows
+were combined. In every tested window there were **zero** `read_fail`,
+`unavailable`, `mode_wait`, and `cached` observations after startup.
+
+**Findings:** CPS1's default button mapping preserves simultaneously held
+attack and movement bits. PCSX2 captured all the tested human-duration
+combinations, including holding a direction while repeatedly attacking.
+The shortest three-key pulses did **not** always arrive as the same
+button set: only 27 Right, 25 Square, and 24 Cross presses were observed
+from 40 injected cycles. The differences were visible in the **raw pad
+samples** already; no further losses occurred in the PS2 delivery path.
+
+The host injected the individual key events sequentially, even though
+their press intervals overlapped. PCSX2's virtual-pad event timing may
+therefore contribute to the short-pulse losses. A 60 Hz polling path can
+also miss pulses shorter than one emulated frame, or capture only part of
+a non-atomically delivered chord. These results do not establish physical
+keyboard ghosting or a physical DualShock defect.
+
+**Intentional combos:** Start+Select invokes the in-game menu. Holding
+L+R with Start or Select invokes the existing emulator service controls.
+These are not ordinary action chords and should not be mistaken for
+missing game input.
+
+**Still unverified:** the exact CPU-visible CPS1 port register transitions,
+the number of resulting attack animations, and simultaneous-button
+behavior on a real PS2 with a physical controller. Before changing
+polling frequency or buffering press edges, compare real-hardware traces
+for a held direction plus repeated Attack, and confirm the actual
+mapping/autofire settings used by the issue reporter.
+
 All changes are PS2-local except the build option and portable host test.
 No `resources/` content was modified, and no GitHub issue comment was posted.

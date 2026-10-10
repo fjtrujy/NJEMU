@@ -41,6 +41,8 @@ typedef struct ps2_input_profile {
 	uint32_t samples, fresh, unavailable, read_fail, mode_wait, cached;
 	uint32_t square_raw_down, square_raw_up;
 	uint32_t square_delivered_down, square_delivered_up;
+	uint32_t other_raw_down[3], other_delivered_down[3];
+	uint32_t chord_raw_frames[4], chord_delivered_frames[4];
 	uint32_t previous_raw, previous_delivered;
 } ps2_input_profile_t;
 
@@ -51,13 +53,30 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 	uint32_t raw_buttons, bool delivered, uint32_t delivered_buttons,
 	bool cached)
 {
+	/* Right, Cross, Circle; include Square in all chord counters. */
+	static const uint32_t other_bits[3] = {
+		PLATFORM_PAD_RIGHT, PLATFORM_PAD_B2, PLATFORM_PAD_B1
+	};
+	static const uint32_t chord_bits[4] = {
+		PLATFORM_PAD_RIGHT | PLATFORM_PAD_B3,
+		PLATFORM_PAD_B2 | PLATFORM_PAD_B3,
+		PLATFORM_PAD_B1 | PLATFORM_PAD_B3,
+		PLATFORM_PAD_B1 | PLATFORM_PAD_B2 | PLATFORM_PAD_B3
+	};
 	uint32_t raw_change;
 	uint32_t delivered_change;
+	unsigned int i;
 
 	p->samples++;
 	if (reason == INPUT_PROFILE_FRESH) {
 		p->fresh++;
 		raw_change = raw_buttons ^ p->previous_raw;
+		for (i = 0; i < 3; ++i)
+			if ((raw_change & raw_buttons & other_bits[i]) != 0)
+				p->other_raw_down[i]++;
+		for (i = 0; i < 4; ++i)
+			if ((raw_buttons & chord_bits[i]) == chord_bits[i])
+				p->chord_raw_frames[i]++;
 		if ((raw_change & PLATFORM_PAD_B3) != 0) {
 			if ((raw_buttons & PLATFORM_PAD_B3) != 0)
 				p->square_raw_down++;
@@ -77,6 +96,12 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 	if (!delivered)
 		delivered_buttons = 0;
 	delivered_change = delivered_buttons ^ p->previous_delivered;
+	for (i = 0; i < 3; ++i)
+		if ((delivered_change & delivered_buttons & other_bits[i]) != 0)
+			p->other_delivered_down[i]++;
+	for (i = 0; i < 4; ++i)
+		if ((delivered_buttons & chord_bits[i]) == chord_bits[i])
+			p->chord_delivered_frames[i]++;
 	if ((delivered_change & PLATFORM_PAD_B3) != 0) {
 		if ((delivered_buttons & PLATFORM_PAD_B3) != 0)
 			p->square_delivered_down++;
@@ -94,6 +119,16 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 			(unsigned int)p->square_raw_up,
 			(unsigned int)p->square_delivered_down,
 			(unsigned int)p->square_delivered_up);
+		printf("[ps2_chords] right=%u/%u cross=%u/%u circle=%u/%u "
+			"frames_right_square=%u/%u frames_cross_square=%u/%u "
+			"frames_circle_square=%u/%u frames_three_faces=%u/%u\n",
+			(unsigned int)p->other_raw_down[0], (unsigned int)p->other_delivered_down[0],
+			(unsigned int)p->other_raw_down[1], (unsigned int)p->other_delivered_down[1],
+			(unsigned int)p->other_raw_down[2], (unsigned int)p->other_delivered_down[2],
+			(unsigned int)p->chord_raw_frames[0], (unsigned int)p->chord_delivered_frames[0],
+			(unsigned int)p->chord_raw_frames[1], (unsigned int)p->chord_delivered_frames[1],
+			(unsigned int)p->chord_raw_frames[2], (unsigned int)p->chord_delivered_frames[2],
+			(unsigned int)p->chord_raw_frames[3], (unsigned int)p->chord_delivered_frames[3]);
 		/* Preserve edge continuity when starting the next window. */
 		raw_change = p->previous_raw;
 		delivered_change = p->previous_delivered;
