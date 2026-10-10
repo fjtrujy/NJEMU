@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <libpad.h>
@@ -9,6 +10,7 @@
 #endif
 #include "common/input_driver.h"
 #include "ps2/ps2_input_sample_cache.h"
+#include "ps2/ps2_pad_presence.h"
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -27,14 +29,86 @@ struct JoyInfo
     uint8_t port;
     uint8_t slot;
     uint8_t analog_mode_configured;
+    uint8_t was_ready;
     int8_t rumble_ready;
     int8_t opened;
 } __attribute__((aligned(64)));
 
 struct JoyInfo joyInfo[MAX_CONTROLLERS];
 
+#ifdef PS2_INPUT_PROFILE
+typedef struct ps2_input_profile {
+	uint32_t samples, fresh, unavailable, read_fail, mode_wait, cached;
+	uint32_t square_raw_down, square_raw_up;
+	uint32_t square_delivered_down, square_delivered_up;
+	uint32_t previous_raw, previous_delivered;
+} ps2_input_profile_t;
+
+enum { INPUT_PROFILE_FRESH, INPUT_PROFILE_UNAVAILABLE,
+	INPUT_PROFILE_READ_FAIL, INPUT_PROFILE_MODE_WAIT };
+
+static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
+	uint32_t raw_buttons, bool delivered, uint32_t delivered_buttons,
+	bool cached)
+{
+	uint32_t raw_change;
+	uint32_t delivered_change;
+
+	p->samples++;
+	if (reason == INPUT_PROFILE_FRESH) {
+		p->fresh++;
+		raw_change = raw_buttons ^ p->previous_raw;
+		if ((raw_change & PLATFORM_PAD_B3) != 0) {
+			if ((raw_buttons & PLATFORM_PAD_B3) != 0)
+				p->square_raw_down++;
+			else
+				p->square_raw_up++;
+		}
+		p->previous_raw = raw_buttons;
+	} else if (reason == INPUT_PROFILE_UNAVAILABLE)
+		p->unavailable++;
+	else if (reason == INPUT_PROFILE_READ_FAIL)
+		p->read_fail++;
+	else
+		p->mode_wait++;
+
+	if (cached)
+		p->cached++;
+	if (!delivered)
+		delivered_buttons = 0;
+	delivered_change = delivered_buttons ^ p->previous_delivered;
+	if ((delivered_change & PLATFORM_PAD_B3) != 0) {
+		if ((delivered_buttons & PLATFORM_PAD_B3) != 0)
+			p->square_delivered_down++;
+		else
+			p->square_delivered_up++;
+	}
+	p->previous_delivered = delivered_buttons;
+
+	if (p->samples == 600) {
+		printf("[ps2_input] polls=600 fresh=%u unavailable=%u read_fail=%u "
+			"mode_wait=%u cached=%u square_raw=%u/%u square_sent=%u/%u\n",
+			(unsigned int)p->fresh, (unsigned int)p->unavailable,
+			(unsigned int)p->read_fail, (unsigned int)p->mode_wait,
+			(unsigned int)p->cached, (unsigned int)p->square_raw_down,
+			(unsigned int)p->square_raw_up,
+			(unsigned int)p->square_delivered_down,
+			(unsigned int)p->square_delivered_up);
+		/* Preserve edge continuity when starting the next window. */
+		raw_change = p->previous_raw;
+		delivered_change = p->previous_delivered;
+		memset(p, 0, sizeof(*p));
+		p->previous_raw = raw_change;
+		p->previous_delivered = delivered_change;
+	}
+}
+#endif
+
 typedef struct ps2_input {
 	uint8_t mtap_opened[PS2_MAX_PORT];
+#ifdef PS2_INPUT_PROFILE
+	ps2_input_profile_t profile;
+#endif
 } ps2_input_t;
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
@@ -50,6 +124,7 @@ static void closeJoyInfo(struct JoyInfo *info)
 	padPortClose(info->port, info->slot);
 	info->sample_cache.valid = 0;
 	info->sample_cache.missed = 0;
+	info->was_ready = 0;
 	info->analog_mode_configured = 0;
 	info->opened = 0;
 }
@@ -90,21 +165,39 @@ static void refreshJoyInfo(ps2_input_t *ps2)
 	}
 }
 
-static bool joyInfoReady(struct JoyInfo *info)
+static int32_t joyInfoState(struct JoyInfo *info)
 {
 	int32_t state;
 
 	if (!info->opened)
-		return false;
+		return PAD_STATE_DISCONN;
 
 	state = padGetState(info->port, info->slot);
-	if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR)
+	if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR ||
+		state == PAD_STATE_FINDPAD)
 	{
 		info->analog_mode_configured = 0;
 		info->sample_cache.valid = 0;
 		info->sample_cache.missed = 0;
+		info->was_ready = 0;
 	}
+	return state;
+}
+
+static bool joyInfoReady(struct JoyInfo *info)
+{
+	int32_t state = joyInfoState(info);
 	return state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1;
+}
+
+static bool joyInfoSelectable(struct JoyInfo *info)
+{
+	int32_t state = joyInfoState(info);
+	bool ready = state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1;
+	return ps2_pad_presence_update(&info->was_ready, info->opened,
+		ready, state == PAD_STATE_EXECCMD,
+		state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR ||
+		state == PAD_STATE_FINDPAD);
 }
 
 static bool configureJoyInfoAnalogMode(struct JoyInfo *info)
@@ -162,7 +255,7 @@ static uint32_t activeJoyInfoCount(void)
 
 		for (port = 0; port < PS2_MAX_PORT; port++) {
 			struct JoyInfo *info = getJoyInfo(port, slot);
-			if (joyInfoReady(info))
+			if (joyInfoSelectable(info))
 				count++;
 		}
 	}
@@ -170,7 +263,7 @@ static uint32_t activeJoyInfoCount(void)
 	return count;
 }
 
-static struct JoyInfo *getActiveJoyInfo(ps2_input_t *ps2, uint32_t controller)
+static struct JoyInfo *getActiveJoyInfo(uint32_t controller)
 {
 	uint32_t active_index = 0;
 	uint32_t slot;
@@ -182,24 +275,7 @@ static struct JoyInfo *getActiveJoyInfo(ps2_input_t *ps2, uint32_t controller)
 
 		for (port = 0; port < PS2_MAX_PORT; port++) {
 			struct JoyInfo *info = getJoyInfo(port, slot);
-			if (joyInfoReady(info)) {
-				if (active_index == controller)
-					return info;
-				active_index++;
-			}
-		}
-	}
-
-	/* The requested pad may have appeared since the last refresh. */
-	refreshJoyInfo(ps2);
-	active_index = 0;
-
-	for (slot = 0; slot < PS2_MAX_SLOT; slot++) {
-		uint32_t port;
-
-		for (port = 0; port < PS2_MAX_PORT; port++) {
-			struct JoyInfo *info = getJoyInfo(port, slot);
-			if (joyInfoReady(info)) {
+			if (joyInfoSelectable(info)) {
 				if (active_index == controller)
 					return info;
 				active_index++;
@@ -298,6 +374,7 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
 	struct padButtonStatus paddata = {0};
 	input_state_t fresh;
+	bool valid;
 	uint32_t buttons = 0;
 	int32_t pressed_buttons, ret;
 	struct JoyInfo *info = NULL;
@@ -305,17 +382,40 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	if (ps2 == NULL || state == NULL)
 		return false;
 
-	info = getActiveJoyInfo(ps2, controller);
-	if (info == NULL)
+	info = getActiveJoyInfo(controller);
+	if (info == NULL) {
+#ifdef PS2_INPUT_PROFILE
+		if (controller == 0)
+			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_UNAVAILABLE,
+				0, false, 0, false);
+#endif
 		return false;
-	if (!configureJoyInfoAnalogMode(info))
-		return ps2_input_sample_cache_update(&info->sample_cache, true,
+	}
+	if (!configureJoyInfoAnalogMode(info)) {
+		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
+#ifdef PS2_INPUT_PROFILE
+		if (controller == 0)
+			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_MODE_WAIT,
+				0, valid, valid ? state->buttons : 0, valid);
+#endif
+		return valid;
+	}
 
 	ret = padRead(info->port, info->slot, &paddata);
-	if (ret <= 0)
-		return ps2_input_sample_cache_update(&info->sample_cache, true,
+	/* A positive short packet must not turn zero-initialized btns into
+	 * a spurious 0xffff set of pressed buttons. */
+	if (ret < (int)(offsetof(struct padButtonStatus, btns) +
+		sizeof(paddata.btns))) {
+		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
+#ifdef PS2_INPUT_PROFILE
+		if (controller == 0)
+			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_READ_FAIL,
+				0, valid, valid ? state->buttons : 0, valid);
+#endif
+		return valid;
+	}
 
 	pressed_buttons = 0xffff ^ paddata.btns;
 
@@ -345,8 +445,14 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		fresh.axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
 	}
 
-	return ps2_input_sample_cache_update(&info->sample_cache, true,
+	valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 		true, &fresh, state);
+#ifdef PS2_INPUT_PROFILE
+	if (controller == 0)
+		ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_FRESH, buttons,
+			valid, valid ? state->buttons : 0, false);
+#endif
+	return valid;
 }
 
 
