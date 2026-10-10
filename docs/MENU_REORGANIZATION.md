@@ -4,22 +4,23 @@ Status: implemented on the `me_sound_coprocessor` working branch (2026-10-10).
 
 ## Navigation
 
-The in-game main menu is organized by task:
+The in-game main menu has five configuration categories and four direct actions:
 
 1. **Resume Game:** immediately return to gameplay.
-2. **Video & Display:** Game Display, Frame Pacing, FPS Overlay, Video Backend (only if multiple backends exist), PS2 Output Settings (PS2 only).
-3. **Audio:** Sound Settings, Audio Processor (only with `PSP_ME_AUDIO`).
-4. **Controls:** Active Controller, Button Configuration.
-5. **Emulation:** Machine Settings, DIP Switches (if supported). The entire category is hidden for CPS2 builds without any applicable emulation settings.
-6. **Performance:** Performance Level (capability-gated PSP/Vita) and Cache Read Size (only under `USE_CACHE`). The category itself disappears if neither entry is applicable.
-7. **Tools:** Save/Load State (`SAVE_STATE`), Cheat Configuration, Command List (`COMMAND_LIST`).
-8. **System:** Reset Emulation, Return to Browser, Exit Emulator.
+2. **Video & Display:** one scrollable screen with display mode, orientation, VSync, frame skipping/limiting, FPS overlay and X/Y offsets, video backend (if selectable), and PS2 output mode/offsets on PS2.
+3. **Audio:** one screen with sound, sample rate, volume, NCDZ CDDA, and PSP Media Engine processor selection where supported.
+4. **Controls:** directly opens the game-specific button-binding editor with layout, analog sensitivity, autofire, hotkeys, active player/controller, and the optional command-list *viewer* action.
+5. **Emulation:** one screen with region/machine mode, raster, NCDZ disc/loading options, per-game DIP switches and available cheat values.
+6. **Performance:** one screen with PSP/Vita performance level and cache read size when supported; the root item disappears if neither applies.
+7. **Reset Emulation:** direct confirmed action.
+8. **Return to Game Browser:** direct confirmed action.
+9. **Exit Emulator:** direct confirmed action.
 
-Every submenu has an explicit return entry, and the standard cancel/back button remains functional. The legacy R-trigger save-state shortcut remains available from the main menu. The MVS BIOS selector and NCDZ BIOS boot action remain in the ROM browser.
+There are no intermediate settings submenus: **Main Menu -> settings page -> Back**. Confirmation dialogs and the command-list informational viewer are not navigation categories. Save/Load State remains a separate **R-trigger shortcut from Main Menu**, including its existing slot operations; it is not duplicated among settings. The MVS BIOS selector and NCDZ BIOS boot action remain in the ROM browser.
 
 ## Existing settings and behavior
 
-The new menu reuses the original `gamecfg2_t` option arrays through a common category filter in `src/common/ui_menu.c`, preserving each core's special choices, per-game disabling rules, and reset/restart behavior.
+The new menu reuses the original `gamecfg2_t` option arrays through a shared row adapter in `src/common/menu/settings_page.inc` (included from `src/common/ui_menu.c`), preserving each core's special choices, per-game disabling rules, and reset/restart behavior. Specialized options use the same scrolling and left/right editing loop rather than launching another menu.
 
 - **Video/Game Display:** display mode, CPS vertical screen orientation.
 - **Video/Frame Pacing:** VSync, automatic frame skip, manual frame skip, frame limit.
@@ -60,9 +61,9 @@ This is **6,624 extra bytes** of static glyph art, smaller than NJEMU's 64 KiB m
 
 Build/test targets include all four Desktop core GUIs, PS2 MVS GUI, PSP MVS GUI with ME enabled, and PSP MVS GUI with ME disabled. `tests/menu_icon_tests.c` checks the new glyphs in both sizes and normal/highlight states. Translation and UI tests verify new IDs and the translation schema.
 
-Physical PSP/PS2 visual and input-device walkthroughs are still recommended before a public release, especially low-resolution PS2 video changes and loading save states from the nested Tools page. The existing PSP/Vita performance-value labels are inherited from the earlier game configuration tables and can be improved in a separate localized labels pass.
+Physical PSP/PS2 visual and input-device walkthroughs are still recommended before a public release, especially low-resolution PS2 video changes and save/load state access through R trigger. The existing PSP/Vita performance-value labels are inherited from the earlier game configuration tables and can be improved in a separate localized labels pass.
 
-## Emulator GUI validation (2026-10-10)
+## Earlier emulator GUI validation of the former nested menu (2026-10-10)
 
 - **PPSSPP / PSP MVS (CPU audio GUI):** booted the packaged `EBOOT.PBP`, selected and launched *Fatal Fury: King of Fighters*, opened the in-game menu with Start+Select, navigated into Video & Display, verified that unsupported PS2 output/backend controls were omitted, checked the FPS Overlay page (Show FPS plus X/Y offsets), checked Frame Pacing, and confirmed the cancel/back path to the parent menu.
 - **PCSX2 / PS2 MVS:** booted the GUI-enabled `MVS.ELF`, selected and launched *Metal Slug 3*, opened the in-game menu, and checked the main menu and Video & Display section. The PS2 Video Settings page included output mode and both offsets. Switching 480i -> 240p preserved visible UI rendering and selection; switching back through 480i to 480p also redrew the menu.
@@ -70,3 +71,9 @@ Physical PSP/PS2 visual and input-device walkthroughs are still recommended befo
 - The earlier FPS-overlay description extended beyond the PSP viewport in the highlighted submenu row. Its localized help string was shortened without removing the dedicated FPS X/Y controls.
 
 The emulator sessions were launched from build directories. No ROMs, BIOS, caches, or user settings under `resources/` were modified or committed. These checks supplement, rather than replace, physical PSP/PS2 validation.
+
+## One-level navigation follow-up (2026-10-10)
+
+- **PPSSPP, MVS CPU audio:** verified the new one-level main menu while *Art of Fighting 2* was running. Video & Display opened directly to display/timing/FPS controls on a single scrolling page; Audio opened directly to sound/sample rate/volume; Controls opened directly to the game-specific key bindings. The Return to File Browser action was reachable directly from the main menu by scrolling, and the R-trigger save-state shortcut was left unchanged.
+- All Desktop core GUI builds, PSP MVS CPU/ME GUI builds, and PS2 MVS GUI builds compiled with the final one-level structure. The shared Desktop test suite passed 35/35 checks during development.
+- A fresh, comprehensive PCSX2 navigation walkthrough of the one-level code is still recommended before public release; the shared Mac desktop had simultaneous GUI activity during part of the test. The existing 480p live-switch caveat above remains open.

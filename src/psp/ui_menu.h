@@ -20,7 +20,6 @@ int cheat_clear(void);
 int axtoi(char *str_num);
 int parse_cheat_option_line(char *line, gamecheat_t* cheat );
 int cheats_init(void);
-int menu_cheatcfg(void);
 void cheats_load(void);
 void cheats_load_file(char *fn);
 

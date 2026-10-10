@@ -14,6 +14,7 @@
 #include "common/cmdlist.h"
 #endif
 #include "common/config.h"
+#include "common/dip_menu.h"
 #if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 #include "common/cps_orientation.h"
 #endif
@@ -180,17 +181,6 @@ static int menu_cmdlist(void)
 ------------------------------------------------------*/
 
 #define GAMECFG_MAX_ITEMS	32
-#define CHEATCFG_MAX_ITEMS	MAX_CHEATS //davex cheats
-
-typedef struct {
-	const char *label;
-	int *value;
-	int enable;
-	int flag;
-	int old_value;
-	int value_max;
-	const char *values_label[MAX_CHEAT_OPTION];
-} cheatcfg_t;
 
 typedef struct {
 	const char *label;
@@ -230,534 +220,10 @@ typedef struct {
 
 enum menu_gamecfg_section {
 	MENU_CFG_VIDEO,
-	MENU_CFG_TIMING,
 	MENU_CFG_AUDIO,
-	MENU_CFG_PLAYER,
 	MENU_CFG_EMULATION,
 	MENU_CFG_PERFORMANCE
 };
-
-static int menu_gamecfg_section_for_label(int label)
-{
-	switch (label) {
-	case DISPLAY_MODE:
-	case SCREEN_ORIENTATION:
-		return MENU_CFG_VIDEO;
-	case VIDEO_SYNC:
-	case AUTO_FRAMESKIP:
-	case FRAMESKIP:
-	case FRAME_LIMIT:
-		return MENU_CFG_TIMING;
-	case ENABLE_SOUND:
-	case SAMPLE_RATE:
-	case SOUND_VOLUME:
-	case ENABLE_CDDA:
-	case CDDA_VOLUME:
-		return MENU_CFG_AUDIO;
-	case CONTROLLER:
-		return MENU_CFG_PLAYER;
-	case MACHINE_REGION:
-	case MACHINE_MODE:
-	case RASTER_EFFECTS:
-	case EMULATE_LOAD_SCREEN:
-	case CDROM_SPEED_LIMIT:
-		return MENU_CFG_EMULATION;
-	case CPU_CLOCK:
-		return MENU_CFG_PERFORMANCE;
-	default:
-		return -1;
-	}
-}
-
-static int menu_gamecfg_filtered(int section, int title, int icon)
-{
-	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
-	int i, arrowl, arrowr, prev_sel, update = 1;
-	gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
-	gamecfg2_t *gamecfg2;
-	int source_enable[GAMECFG_MAX_ITEMS];
-	int gamecfg_num;
-
-	for (i = 0; i < GAMECFG_MAX_ITEMS; i++)
-		gamecfg[i].enable = 1;
-
-#define INCLUDE_GAMECFG_MENU
-
-#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
-#include "common/menu/cps.c"
-#elif (EMU_SYSTEM == MVS)
-#include "common/menu/mvs.c"
-#elif (EMU_SYSTEM == NCDZ)
-#include "common/menu/ncdz.c"
-#endif
-
-#undef INCLUDE_GAMECFG_MENU
-
-	for (i = 0; i < GAMECFG_MAX_ITEMS; i++)
-		source_enable[i] = gamecfg[i].enable;
-
-	{
-		int source = 0;
-		int dest = 0;
-
-		while (gamecfg2[source].label)
-		{
-			int j;
-
-			/* Retain the original game's capability and disabled-setting rules,
-			 * but display only settings belonging to this category. */
-			if (gamecfg2[source].label == LF ||
-				(gamecfg2[source].label != RETURN_TO_MAIN_MENU &&
-				 menu_gamecfg_section_for_label(gamecfg2[source].label) != section))
-			{
-				source++;
-				continue;
-			}
-
-			if (gamecfg2[source].required_power_capabilities != 0 &&
-				!power_has_capability(gamecfg2[source].required_power_capabilities))
-			{
-				source++;
-				continue;
-			}
-
-			gamecfg[dest].label     = TEXT(gamecfg2[source].label);
-			gamecfg[dest].value     = gamecfg2[source].value;
-			gamecfg[dest].enable    = source_enable[source];
-			gamecfg[dest].flag      = gamecfg2[source].flag;
-			gamecfg[dest].value_max = gamecfg2[source].value_max;
-
-			for (j = 0; j <= gamecfg2[source].value_max; j++)
-				gamecfg[dest].values_label[j] = TEXT(gamecfg2[source].values_label[j]);
-
-			if (gamecfg[dest].value)
-			{
-				if (*gamecfg[dest].value < 0)
-					*gamecfg[dest].value = 0;
-				if (*gamecfg[dest].value > gamecfg[dest].value_max)
-					*gamecfg[dest].value = gamecfg[dest].value_max;
-
-				gamecfg[dest].old_value = *gamecfg[dest].value;
-			}
-
-			source++;
-			dest++;
-		}
-
-		gamecfg_num = dest;
-	}
-
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-
-	do
-	{
-		/* Automatic skipping owns the skip decision. Retain the manual value
-		 * in the per-game INI, but prevent editing it while Auto is active. */
-		if (section == MENU_CFG_TIMING) {
-			for (i = 0; i < gamecfg_num; ++i)
-				if (gamecfg[i].value == &option_frameskip)
-					gamecfg[i].enable = !option_autoframeskip;
-		}
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-
-			arrowl = 0;
-			arrowr = 0;
-			if (gamecfg[sel].value)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur > 0) arrowl = 1;
-				if (cur < gamecfg[sel].value_max) arrowr = 1;
-			}
-
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), icon);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(title));
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, gamecfg_num, sel);
-
-			for (i = 0; i < rows; i++)
-			{
-				if (top + i >= gamecfg_num) break;
-
-				if (gamecfg[top + i].label[0] == '\n')
-					continue;
-
-				if (gamecfg[top + i].enable)
-				{
-					if ((top + i) == sel)
-					{
-						uifont_print_shadow(16, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), gamecfg[top + i].label);
-						if (arrowl)
-						{
-							uifont_print_shadow(190, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-						}
-					}
-					else
-						uifont_print(16, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), gamecfg[top + i].label);
-				}
-				else
-				{
-					if ((top + i) == sel)
-						uifont_print_shadow(16, 40 + i * 17, COLOR_GRAY, gamecfg[top + i].label);
-					else
-						uifont_print(16, 40 + i * 17, COLOR_DARKGRAY, gamecfg[top + i].label);
-				}
-
-				if (gamecfg[top + i].value)
-				{
-					int val = *gamecfg[top + i].value;
-
-					if (gamecfg[top + i].enable)
-					{
-						if ((top + i) == sel)
-						{
-							uifont_print_shadow(210, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), gamecfg[top + i].values_label[val]);
-							if (arrowr)
-							{
-								int width = uifont_get_string_width(gamecfg[top + i].values_label[val]);
-								uifont_print_shadow(214 + width, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-							}
-						}
-						else
-							uifont_print(210, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), gamecfg[top + i].values_label[val]);
-					}
-					else
-					{
-						if ((top + i) == sel)
-							uifont_print_shadow(210, 40 + i * 17, COLOR_GRAY, gamecfg[top + i].values_label[val]);
-						else
-							uifont_print(210, 40 + i * 17, COLOR_DARKGRAY, gamecfg[top + i].values_label[val]);
-					}
-				}
-			}
-
-			update  = draw_battery_status(1);
-			update |= ui_show_popup(1);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			update  = draw_battery_status(0);
-			update |= ui_show_popup(0);
-			video_driver->waitVsync(video_data);
-		}
-
-		/* Sample after the potentially expensive redraw so this iteration handles
-		 * the newest controller state instead of the previous frame's state. */
-		pad_update();
-		prev_sel = sel;
-
-		if (pad_pressed(PLATFORM_PAD_UP))
-		{
-			sel--;
-			if (sel < 0) sel = gamecfg_num - 1;
-			if (gamecfg[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			sel++;
-			if (sel > gamecfg_num - 1) sel = 0;
-			if (gamecfg[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_L))
-		{
-			sel -= rows;
-			if (sel < 0) sel = 0;
-			if (gamecfg[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_R))
-		{
-			sel += rows;
-			if (sel >= gamecfg_num) sel = gamecfg_num - 1;
-			if (gamecfg[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT))
-		{
-			if (gamecfg[sel].value && gamecfg[sel].enable)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur > 0)
-				{
-					*gamecfg[sel].value = cur - 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
-		{
-			if (gamecfg[sel].value && gamecfg[sel].enable)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur < gamecfg[sel].value_max)
-				{
-					*gamecfg[sel].value = cur + 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_B1))
-		{
-			if (sel == gamecfg_num - 1)
-				break;
-		}
-		else if (pad_pressed(PLATFORM_PAD_SELECT))
-		{
-			help(HELP_GAMECONFIG);
-			update = 1;
-		}
-
-		if (top > gamecfg_num - rows) top = gamecfg_num - rows;
-		if (top < 0) top = 0;
-		if (sel >= gamecfg_num) sel = 0;
-		if (sel < 0) sel = gamecfg_num - 1;
-		if (sel >= top + rows) top = sel - rows + 1;
-		if (sel < top) top = sel;
-
-		if (prev_sel != sel) update = 1;
-
-		if (Loop == LOOP_EXIT) break;
-
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-	for (i = 0; i < gamecfg_num; i++)
-	{
-		if (gamecfg[i].value && gamecfg[i].flag == CFG_RESTART)
-		{
-			if (gamecfg[i].old_value != *gamecfg[i].value)
-			{
-				menu_restart();
-				return 1;
-			}
-		}
-	}
-
-	return 0;
-}
-
-static int menu_video_backend_settings(void)
-{
-	int update = 1;
-	int original_backend = option_video_backend;
-	int count = video_backend_choice_count();
-	int selected = 0;
-
-	for (int i = 0; i < count; i++)
-		if (video_backend_choice_at(i).id == option_video_backend)
-			selected = i;
-	/* Auto may intentionally be hidden on single-backend platforms. Keep the
-	 * persisted policy unchanged while displaying the effective native backend. */
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-	do
-	{
-		if (update)
-		{
-			video_backend_choice_t choice = video_backend_choice_at(selected);
-			int width = uifont_get_string_width(choice.name);
-			int editable = count > 1;
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(MENU_VIDEO_BACKEND_SETTINGS));
-			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(VIDEO_BACKEND));
-			if (editable && selected > 0)
-				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), choice.name);
-			if (editable && selected + 1 < count)
-				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-			video_driver->waitVsync(video_data);
-		pad_update();
-		update = 0;
-		if (count > 1 && pad_pressed(PLATFORM_PAD_LEFT) && selected > 0) {
-			selected--; option_video_backend = video_backend_choice_at(selected).id; update = 1;
-		} else if (count > 1 && pad_pressed(PLATFORM_PAD_RIGHT) && selected + 1 < count) {
-			selected++; option_video_backend = video_backend_choice_at(selected).id; update = 1;
-		}
-	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
-
-	if (option_video_backend != original_backend) {
-		save_settings();
-		menu_restart();
-		return 1;
-	}
-	return 0;
-}
-
-static int menu_fps_overlay_settings(void)
-{
-	static const int labels[] = {
-		SHOW_FPS,
-		FPS_X_OFFSET,
-		FPS_Y_OFFSET
-	};
-	int *values[] = {
-		&option_showfps,
-		&option_fps_offset_x,
-		&option_fps_offset_y
-	};
-	int original_x = option_fps_offset_x;
-	int original_y = option_fps_offset_y;
-	int selected = 0;
-	int update = 1;
-
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-
-	do
-	{
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
-				TEXT(FPS_OVERLAY_SETTINGS_MENU));
-
-			for (int i = 0; i < 3; i++)
-			{
-				char value[16];
-				int y = 40 + i * 17;
-				int active = i == selected;
-				int width;
-
-				if (i == 0)
-					snprintf(value, sizeof(value), "%s", TEXT(*values[i] ? ON : OFF));
-				else
-					snprintf(value, sizeof(value), "%d px", *values[i]);
-				width = uifont_get_string_width(value);
-				if (active)
-				{
-					uifont_print_shadow(16, y, UI_COLOR(UI_PAL_SELECT),
-						TEXT(labels[i]));
-					if (*values[i] > 0)
-						uifont_print_shadow(190, y, UI_COLOR(UI_PAL_SELECT),
-							FONT_LEFTTRIANGLE);
-					uifont_print_shadow(210, y, UI_COLOR(UI_PAL_SELECT), value);
-					if (*values[i] < (i == 0 ? 1 : FPS_OVERLAY_OFFSET_MAX))
-						uifont_print_shadow(214 + width, y, UI_COLOR(UI_PAL_SELECT),
-							FONT_RIGHTTRIANGLE);
-				}
-				else
-				{
-					uifont_print(16, y, UI_COLOR(UI_PAL_NORMAL), TEXT(labels[i]));
-					uifont_print(210, y, UI_COLOR(UI_PAL_NORMAL), value);
-				}
-			}
-
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			video_driver->waitVsync(video_data);
-		}
-
-		pad_update();
-		update = 0;
-		if (pad_pressed(PLATFORM_PAD_UP) || pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			selected = (selected + (pad_pressed(PLATFORM_PAD_DOWN) ? 1 : 2)) % 3;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT) && *values[selected] > 0)
-		{
-			(*values[selected])--;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
-			*values[selected] < (selected == 0 ? 1 : FPS_OVERLAY_OFFSET_MAX))
-		{
-			(*values[selected])++;
-			update = 1;
-		}
-
-		if (Loop == LOOP_EXIT)
-			break;
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-	if (option_fps_offset_x != original_x || option_fps_offset_y != original_y)
-		save_settings();
-	return 0;
-}
-
-#ifdef PSP_ME_AUDIO
-static int menu_audio_processor_settings(void)
-{
-	static const int value_labels[] = {
-		AUDIO_PROCESSOR_AUTO_LABEL,
-		AUDIO_PROCESSOR_MAIN_CPU_LABEL,
-		AUDIO_PROCESSOR_MEDIA_ENGINE_LABEL
-	};
-	int update = 1;
-	int original_processor = option_audio_processor;
-
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-	do
-	{
-		if (update)
-		{
-			const char *value = TEXT(value_labels[option_audio_processor]);
-			int width = uifont_get_string_width(value);
-			int arrowl = option_audio_processor > AUDIO_PROCESSOR_AUTO;
-			int arrowr = option_audio_processor < AUDIO_PROCESSOR_MEDIA_ENGINE;
-
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
-				TEXT(MENU_AUDIO_PROCESSOR_SETTINGS));
-			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(AUDIO_PROCESSOR));
-			if (arrowl)
-				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
-			if (arrowr)
-				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-			video_driver->waitVsync(video_data);
-
-		pad_update();
-		update = 0;
-		if (pad_pressed(PLATFORM_PAD_LEFT) && option_audio_processor > AUDIO_PROCESSOR_AUTO)
-		{
-			option_audio_processor--;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT) &&
-			option_audio_processor < AUDIO_PROCESSOR_MEDIA_ENGINE)
-		{
-			option_audio_processor++;
-			update = 1;
-		}
-	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
-
-	if (option_audio_processor != original_processor)
-	{
-		save_settings();
-		menu_restart();
-		return 1;
-	}
-	return 0;
-}
-#endif
 
 #ifdef PS2
 static int menu_apply_live_video_output_mode(int previous_mode)
@@ -794,218 +260,6 @@ static int menu_apply_live_video_output_mode(int previous_mode)
 	return 0;
 }
 
-static int menu_system_video_settings(void)
-{
-	static const int value_labels[] = {
-		VIDEO_OUTPUT_240P_LABEL,
-		VIDEO_OUTPUT_480I_LABEL,
-		VIDEO_OUTPUT_480P_LABEL
-	};
-	static const int row_labels[] = {
-		VIDEO_OUTPUT_MODE,
-		VIDEO_X_OFFSET,
-		VIDEO_Y_OFFSET
-	};
-	int update = 1;
-	int original_mode = option_video_output_mode;
-	int original_x = option_video_offset_x;
-	int original_y = option_video_offset_y;
-	int selected = 0;
-
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-
-	do
-	{
-		int mode_before_input;
-
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
-				TEXT(SYSTEM_VIDEO_SETTINGS_MENU));
-
-			for (int i = 0; i < 3; i++)
-			{
-				char numeric_value[16];
-				const char *value;
-				int current;
-				int min_value;
-				int max_value;
-				int y = 40 + i * 17;
-				int active = i == selected;
-				int width;
-
-				if (i == 0) {
-					current = option_video_output_mode;
-					min_value = VIDEO_OUTPUT_240P;
-					max_value = VIDEO_OUTPUT_480P;
-					value = TEXT(value_labels[current]);
-				} else {
-					current = i == 1 ? option_video_offset_x : option_video_offset_y;
-					min_value = -VIDEO_OUTPUT_OFFSET_MAX;
-					max_value = VIDEO_OUTPUT_OFFSET_MAX;
-					snprintf(numeric_value, sizeof(numeric_value), "%+d px", current);
-					value = numeric_value;
-				}
-				width = uifont_get_string_width(value);
-
-				if (active) {
-					uifont_print_shadow(16, y, UI_COLOR(UI_PAL_SELECT), TEXT(row_labels[i]));
-					if (current > min_value)
-						uifont_print_shadow(190, y, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-					uifont_print_shadow(210, y, UI_COLOR(UI_PAL_SELECT), value);
-					if (current < max_value)
-						uifont_print_shadow(214 + width, y, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-				} else {
-					uifont_print(16, y, UI_COLOR(UI_PAL_NORMAL), TEXT(row_labels[i]));
-					uifont_print(210, y, UI_COLOR(UI_PAL_NORMAL), value);
-				}
-			}
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			video_driver->waitVsync(video_data);
-		}
-
-		pad_update();
-		update = 0;
-		mode_before_input = option_video_output_mode;
-		if (pad_pressed(PLATFORM_PAD_UP))
-		{
-			selected--;
-			if (selected < 0) selected = 2;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			selected++;
-			if (selected > 2) selected = 0;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT))
-		{
-			if (selected == 0 && option_video_output_mode > VIDEO_OUTPUT_240P) {
-				option_video_output_mode--;
-				update = 1;
-			} else if (selected == 1 && option_video_offset_x > -VIDEO_OUTPUT_OFFSET_MAX) {
-				option_video_offset_x--;
-				update = 1;
-			} else if (selected == 2 && option_video_offset_y > -VIDEO_OUTPUT_OFFSET_MAX) {
-				option_video_offset_y--;
-				update = 1;
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
-		{
-			if (selected == 0 && option_video_output_mode < VIDEO_OUTPUT_480P) {
-				option_video_output_mode++;
-				update = 1;
-			} else if (selected == 1 && option_video_offset_x < VIDEO_OUTPUT_OFFSET_MAX) {
-				option_video_offset_x++;
-				update = 1;
-			} else if (selected == 2 && option_video_offset_y < VIDEO_OUTPUT_OFFSET_MAX) {
-				option_video_offset_y++;
-				update = 1;
-			}
-		}
-
-		if (option_video_output_mode != mode_before_input)
-		{
-			menu_apply_live_video_output_mode(mode_before_input);
-			/* Rebuilding the GS and UI can take long enough for the normal menu
-			 * key-repeat timer to fire while the same direction is still held.
-			 * Consume the release so one deliberate tap always selects exactly one
-			 * video mode rather than skipping directly across multiple modes. */
-			pad_wait_clear();
-			update = 1;
-		}
-
-		if (update && selected != 0 && video_driver->setOutputOffset)
-			video_driver->setOutputOffset(video_data,
-				option_video_offset_x, option_video_offset_y);
-
-		if (Loop == LOOP_EXIT)
-			break;
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-	if (option_video_output_mode != original_mode ||
-		option_video_offset_x != original_x || option_video_offset_y != original_y)
-		save_settings();
-	return 0;
-}
-#endif
-
-#if USE_CACHE
-static int menu_system_performance_settings(void)
-{
-	int update = 1;
-	int original_size = option_cache_read_size;
-
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-	do
-	{
-		if (update)
-		{
-			char value[32];
-			int width;
-			int arrowl = option_cache_read_size > CACHE_READ_SIZE_AUTO;
-			int arrowr = option_cache_read_size < CACHE_READ_SIZE_64K;
-
-			if (option_cache_read_size == CACHE_READ_SIZE_AUTO)
-				snprintf(value, sizeof(value), TEXT(CACHE_READ_SIZE_AUTO_LABEL),
-					(unsigned int)(cache_resolved_read_size() / 1024));
-			else
-				snprintf(value, sizeof(value), "%u KiB",
-					16u << (option_cache_read_size - CACHE_READ_SIZE_16K));
-			width = uifont_get_string_width(value);
-
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_SYSTEM);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE),
-				TEXT(SYSTEM_PERFORMANCE_SETTINGS_MENU));
-			uifont_print_shadow(16, 40, UI_COLOR(UI_PAL_SELECT), TEXT(CACHE_READ_SIZE));
-			if (arrowl)
-				uifont_print_shadow(190, 40, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-			uifont_print_shadow(210, 40, UI_COLOR(UI_PAL_SELECT), value);
-			if (arrowr)
-				uifont_print_shadow(214 + width, 40, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-			video_driver->waitVsync(video_data);
-
-		pad_update();
-		update = 0;
-		if (pad_pressed(PLATFORM_PAD_LEFT) && option_cache_read_size > CACHE_READ_SIZE_AUTO)
-		{
-			option_cache_read_size--;
-			update = 1;
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT) && option_cache_read_size < CACHE_READ_SIZE_64K)
-		{
-			option_cache_read_size++;
-			update = 1;
-		}
-	} while (Loop != LOOP_EXIT && !pad_pressed(PLATFORM_PAD_B2));
-
-	if (option_cache_read_size != original_size)
-	{
-		save_settings();
-		menu_restart();
-		return 1;
-	}
-	return 0;
-}
 #endif
 
 /*------------------------------------------------------
@@ -1038,7 +292,7 @@ int add_new_cheat(int type, char *cheat_name, gamecheat_t** new_cheat){
 
 	for( i = 0; i< MAX_CHEAT_OPTION; i++)
 		cheat->cheat_option[i] = NULL;
-	
+
     //Se agrega el cheat al arreglo de cheats
     gamecheat[cheat_num++] = cheat;
 
@@ -1053,33 +307,33 @@ const char *ENABLED_LABEL = "Enabled";
 int add_new_cheat_option(char *label, gamecheat_t* cheat,cheat_option_t** new_cheat_option){
 	int i;
 	cheat_option_t *cheat_option;
-	
+
 	//Se verifican indices
 	//if( cheat->num_cheat_options >= MAX_CHEAT_OPTION  ) return -1;
 	if( cheat == NULL){ *(new_cheat_option) = NULL; return -1;}
 	if( cheat->num_cheat_options >= MAX_CHEAT_OPTION  ){ *(new_cheat_option) = NULL;  return -1; }
-		
-	
+
+
 	cheat_option = (cheat_option_t*) malloc( sizeof(cheat_option_t) );
 	if( cheat_option == NULL)
 		return -10;
-		
+
 	 //Se verifica si se puede ahorrar memoria usando etiquetas fijas para 'Enabled' y 'Disabled'
 	if( (strncmp(label, "Disabled", 8 ) == 0 ) || (strncmp(label, "Enabled", 7) == 0 )   ){
 		if(  strncmp(label, "Disabled", 8 ) == 0 )
 			cheat_option->label = (char *)DISABLED_LABEL;
 		else
 			cheat_option->label = (char *)ENABLED_LABEL;
-	
+
 	}else{ //No coincide, reservar memoria
-		
+
 		//Se reserva memoria para la etiqueta y se copia
 		cheat_option->label =  (char *) malloc( strlen(label) + 1);
 		if( cheat_option->label == NULL)
 			return -20;
 
 		strcpy(cheat_option->label, label);
-		
+
 	}
 
 	//se inicializan los cheat_values
@@ -1096,12 +350,12 @@ int add_new_cheat_option(char *label, gamecheat_t* cheat,cheat_option_t** new_ch
 
 int add_new_cheat_value(int cpu, int address, int value, cheat_option_t *cheat_option){
 	(void)cpu;
-	
+
 	cheat_value_t *cheat_value;
-	
+
 	if( cheat_option == NULL) return -200;
-	if( cheat_option->num_cheat_values >= MAX_CHEAT_VALUE) return -201;	
-	
+	if( cheat_option->num_cheat_values >= MAX_CHEAT_VALUE) return -201;
+
 
 	cheat_value = (cheat_value_t *) malloc( sizeof(cheat_value_t) );
 	if( cheat_value == NULL)
@@ -1137,7 +391,7 @@ int cheat_clear(void)
 			for(  j = 0; j< a_cheat_option->num_cheat_values; j++)
 			{
                 a_cheat_value = a_cheat_option->cheat_value[j];
-                free( a_cheat_value);	
+                free( a_cheat_value);
 			}
             //aqui ya se puede eliminar el cheat_option
             free( a_cheat_option);
@@ -1148,7 +402,7 @@ int cheat_clear(void)
         free( a_cheat);
     }
 
-    cheat_num = 0; //se pone el numero de cheats a 0 
+    cheat_num = 0; //se pone el numero de cheats a 0
 
     return 0;
 }
@@ -1161,7 +415,7 @@ int axtoi(char *str_num){
 
 int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
 
-    //se analiza una linea de tipo 
+    //se analiza una linea de tipo
     //1 "Blanka - Rolling Attack", 0, 0xFF8456, 0x06, 0, 0xFF8458, 0x06
     cheat_option_t* new_cheat_option = NULL;
     char buff[512] = {0};
@@ -1175,7 +429,7 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
     int address = 0;
     int value = 0;
     int i = 0;
-    
+
 
     const int MIN_CPU = 0;
     const int MAX_CPU = 3;
@@ -1183,8 +437,8 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
     const int MAX_ADDRESS = 0xFFFFFF;
     const int MIN_VALUE = 0x00;
     const int MAX_VALUE = 0xFF;
-    
-    
+
+
 
     ptrTok = strtok(buff, ","); //se parten los gdes bloques por el caracter ','
     while(ptrTok != NULL){
@@ -1192,7 +446,7 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
         tmpPtr = ptrTok; //depuracion
 
         if( primTok == 0){ //Se verifica que contega el label
-            
+
 
             tmpPtr = ptrTok;
             tmpPtrDest = buff;
@@ -1212,11 +466,11 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
             i = 0;
             while( 1){
                 if( *tmpPtr == '"' || *tmpPtr == '\0' || *tmpPtr == '\r' || *tmpPtr == '\n'  )break;
-                
-                if( i > 23 ) break; //las opciones tienen limite fijo de 23 caracteres	
+
+                if( i > 23 ) break; //las opciones tienen limite fijo de 23 caracteres
                 *(tmpPtrDest++) = *(tmpPtr++);
                 i++;
-                 
+
             }
             *tmpPtrDest = '\0'; //se termina la cadena
 
@@ -1259,7 +513,7 @@ int parse_cheat_option_line(char *line, gamecheat_t* cheat ){
 
 	    ptrTok = strtok(NULL, ","); //siguiente token
     }
-        
+
     return 0;
 }
 
@@ -1412,20 +666,20 @@ int get_free_memory()
   };
   void *mem_reserv[chunks];
   int total_mem = 0, i;
- 
-  /* Initialize */	
+
+  /* Initialize */
   for (i = 0; i < chunks; i++)
     mem_reserv[i] = NULL;
- 
+
   /* Allocate */
   for (i = 0; i < chunks; i++)
   {
     if (!(mem_reserv[i] = malloc(chunk_size)))
       break;
- 
+
     total_mem += chunk_size;
   }
- 
+
   /* Free */
   for (i = 0; i < chunks; i++)
   {
@@ -1433,7 +687,7 @@ int get_free_memory()
       break;
     free(mem_reserv[i]);
   }
- 
+
 	return total_mem;
 }
 /*------------------------------------------------------
@@ -1441,506 +695,11 @@ int get_free_memory()
 ------------------------------------------------------*/
 //menu que se llena a partir de los cheatgame
 //static int menu_gamecfg_davex(void)
-int menu_cheatcfg(void)
-{
-	static int sel = 0, prev_sel = 0;//keep sel
-	static int top = 0;
-	int rows = ui_layout_visible_rows(40, 17);
-	int i, arrowl, arrowr, update = 1;
-	cheatcfg_t cheatcfg[CHEATCFG_MAX_ITEMS];
-	int cheatcfg_num;
-	int c;
-
-	gamecheat_t *a_cheat = NULL;
-	cheat_option_t *a_cheat_option = NULL;
-	
-	
-	//Advertencia:limite de menus a GAMECFG_MAX_ITEMS
-	for (i = 0; i < CHEATCFG_MAX_ITEMS; i++)
-		cheatcfg[i].enable = 1;
-		
-	//Inicializar los cheats	
-	cheats_load();
-
-
-	for( c = 0; c < cheat_num; c++)
-	{
-		a_cheat = gamecheat[c];
-
-		if (a_cheat->cheat_name == NULL)
-		{
-			return 0;
-		}
-
-		cheatcfg[c].label     = (const char*)a_cheat->cheat_name;
-		cheatcfg[c].value     = &(a_cheat->curr_option);
-		cheatcfg[c].flag      = CFG_CONTINUE;
-		cheatcfg[c].value_max = (int) (a_cheat->num_cheat_options - 1);
-
-			//ADVERTENCIA: el limite es MAX_CHEAT_OPTION
-			int z = 0;
-			for( z = 0; z< a_cheat->num_cheat_options; z++)
-			{
-				a_cheat_option = a_cheat->cheat_option[z];
-				
-				if(a_cheat_option->label == NULL)
-					return 0;
-				else
-					cheatcfg[c].values_label[z] = a_cheat_option->label;
-				
-			}
-			
-			
-			if (cheatcfg[c].value)
-			{
-				if (*cheatcfg[c].value < 0) *cheatcfg[c].value = 0;
-				if (*cheatcfg[c].value > cheatcfg[c].value_max)*cheatcfg[c].value = cheatcfg[c].value_max;
-					
-				cheatcfg[c].old_value = *cheatcfg[c].value;
-			}
-	}
-	cheatcfg_num = cheat_num;
-	
-	if( cheat_num <= 0)
-		return 0;
-
-	
-	pad_wait_clear();
-	load_background(WP_DIPSW);
-	ui_popup_reset();
-
-	do
-	{
-	int cur = *cheatcfg[sel].value;
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-
-			arrowl = 0;
-			arrowr = 0;
-			if (cheatcfg[sel].value)
-			{
-				if (cur > 0) arrowl = 1;
-				if (cur < cheatcfg[sel].value_max) arrowr = 1;
-			}
-
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(CHEAT_CONFIGURATION_MENU));
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, cheatcfg_num, sel);
-
-			for (i = 0; i < rows; i++)
-			{
-				if (top + i >= cheatcfg_num) break;
-
-				if (cheatcfg[top + i].label[0] == '\n')
-					continue;
-
-				if (cheatcfg[top + i].enable)
-				{
-					int inc = 0;
-					if ((top + i) == sel)
-					{
-						uifont_print_shadow(16, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), cheatcfg[top + i].label);
-						if (arrowl)
-						{
-							uifont_print_shadow(190 + inc, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-						}
-					}
-					else
-						uifont_print(16, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), cheatcfg[top + i].label);
-				}
-				else
-				{
-					if ((top + i) == sel)
-						uifont_print_shadow(16, 40 + i * 17, COLOR_GRAY, cheatcfg[top + i].label);
-					else
-						uifont_print(16, 40 + i * 17, COLOR_DARKGRAY, cheatcfg[top + i].label);
-				}
-
-				if (cheatcfg[top + i].value)
-				{
-					int val = *cheatcfg[top + i].value;
-					int inc = 0;
-
-					if (cheatcfg[top + i].enable)
-					{
-						if ((top + i) == sel)
-						{
-							uifont_print_shadow(210 + inc, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), cheatcfg[top + i].values_label[val]);
-							if (arrowr)
-							{
-								int width = uifont_get_string_width(cheatcfg[top + i].values_label[val]);
-								uifont_print_shadow(214 + width + inc, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-							}
-						}
-						else
-							uifont_print(210 + inc, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), cheatcfg[top + i].values_label[val]);
-						
-					}
-					else
-					{
-						if ((top + i) == sel)
-							uifont_print_shadow(210 + inc, 40 + i * 17, COLOR_GRAY, cheatcfg[top + i].values_label[val]);
-						else
-							uifont_print(210 + inc, 40 + i * 17, COLOR_DARKGRAY, cheatcfg[top + i].values_label[val]);
-					}
-				}
-			}
-
-			update  = draw_battery_status(1);
-			update |= ui_show_popup(1);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			update  = draw_battery_status(0);
-			update |= ui_show_popup(0);
-			video_driver->waitVsync(video_data);
-		}
-
-		pad_update();
-		prev_sel = sel;
-
-		if (pad_pressed(PLATFORM_PAD_UP))
-		{
-			sel--;
-			if (sel < 0) sel = cheatcfg_num - 1;
-			if (cheatcfg[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			sel++;
-			if (sel > cheatcfg_num - 1) sel = 0;
-			if (cheatcfg[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_L))
-		{
-			sel -= rows;
-			if (sel < 0) sel = 0;
-			if (cheatcfg[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_R))
-		{
-			sel += rows;
-			if (sel >= cheatcfg_num) sel = cheatcfg_num - 1;
-			if (cheatcfg[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT))
-		{
-			if (cheatcfg[sel].value && cheatcfg[sel].enable)
-			{
-				if (cur > 0)
-				{
-					*cheatcfg[sel].value = cur - 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
-		{
-			if (cheatcfg[sel].value && cheatcfg[sel].enable)
-			{
-				if (cur < cheatcfg[sel].value_max)
-				{
-					*cheatcfg[sel].value = cur + 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_B1))
-		{
-			if (cheatcfg[sel].value && cheatcfg[sel].enable)
-			{
-				if (cur > 0)
-				{
-					*cheatcfg[sel].value = 0;
-					update = 1;
-				}
-			}
-		}/*
-		else if (pad_pressed(PLATFORM_PAD_B3))
-		{
-			if (cheatcfg[sel].value && cheatcfg[sel].enable)
-			{
-				if (cur > 0)
-				{
-					*cheatcfg[sel].value = 0;
-					update = 1;
-				}
-			}
-		}*/
-		else if (pad_pressed(PLATFORM_PAD_SELECT))
-		{
-			help(HELP_CHEATCONFIG);
-			update = 1;
-		}
-		if (top > cheatcfg_num - rows) top = cheatcfg_num - rows;
-		if (top < 0) top = 0;
-		if (sel >= cheatcfg_num) sel = 0;
-		if (sel < 0) sel = cheatcfg_num - 1;
-		if (sel >= top + rows) top = sel - rows + 1;
-		if (sel < top) top = sel;
-
-		if (prev_sel != sel) update = 1;
-
-		if (Loop == LOOP_EXIT) break;
-
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-/*
-	for (i = 0; i < cheatcfg_num; i++)
-	{
-		if (cheatcfg[i].value && cheatcfg[i].flag == CFG_RESTART)
-		{
-			if (cheatcfg[i].old_value != *cheatcfg[i].value)
-			{
-				menu_restart();
-				return 1;
-			}
-		}
-	}
-*/
-	return 0;
-}
-/*------------------------------------------------------
-	menu que crea estructuras dinamicas
-------------------------------------------------------*/
-/*int menu_cheatcfg_memfree(void)
-{
-	
-	int sel = 0, rows = 13, top = 0;
-	int i, arrowl, arrowr, prev_sel, update = 1;
-	gamecfg_t gamecfg[GAMECFG_MAX_ITEMS];
-	int gamecfg_num;
-	int mem_free = 0;
-	mem_free = get_free_memory();
-
-	//Advertencia:limite de menus a GAMECFG_MAX_ITEMS
-	for (i = 0; i < GAMECFG_MAX_ITEMS; i++)
-		gamecfg[i].enable = 1;
-
-
-	//Inicia la parte para copiar de gamecfg2 a gamecfg
-	//Crear unos menus de forma dinamica
-	int MAX_MENUS = 3;
-	char *label_menus[MAX_MENUS];
-	int  menu_values[MAX_MENUS];
-	const char *menu_op0 = "MENU OP_A";
-	const char *menu_op1 = "MENU OP_B";
-	const char *menu_op2 = "MENU OP_C";
-	
-	for( i = 0; i< MAX_MENUS; i++){ //reservar memoria y crear cadenas
-			label_menus[i] = (char *) malloc(30); //limite fijo para etiqueta de menu
-			if( i == 0)
-				sprintf( label_menus[i], "MFree:%d", mem_free);
-			else
-				sprintf( label_menus[i], "MENU DYN_%d", i);
-				
-			menu_values[i] = 0;
-			
-			gamecfg[i].label     = label_menus[i];
-			gamecfg[i].value     = &menu_values[i];
-			gamecfg[i].flag      = CFG_CONTINUE;
-			gamecfg[i].value_max = 2;
-			
-			gamecfg[i].values_label[0] = menu_op0;
-			gamecfg[i].values_label[1] = menu_op1;
-			gamecfg[i].values_label[2] = menu_op2;
-			
-			if (gamecfg[i].value){
-				if (*gamecfg[i].value < 0)
-						*gamecfg[i].value = 0;
-				if (*gamecfg[i].value > gamecfg[i].value_max)
-					*gamecfg[i].value = gamecfg[i].value_max;
-
-			gamecfg[i].old_value = *gamecfg[i].value;
-		}
-	}
-	gamecfg_num = MAX_MENUS;
-	
-	pad_wait_clear();
-	load_background(WP_GAMECFG);
-	ui_popup_reset();
-
-	do
-	{
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-
-			arrowl = 0;
-			arrowr = 0;
-			if (gamecfg[sel].value)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur > 0) arrowl = 1;
-				if (cur < gamecfg[sel].value_max) arrowr = 1;
-			}
-
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_CONFIG);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(GAME_CONFIGURATION_MENU));
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, gamecfg_num, sel);
-
-			for (i = 0; i < rows; i++)
-			{
-				if (top + i >= gamecfg_num) break;
-
-				if (gamecfg[top + i].label[0] == '\n')
-					continue;
-
-				if (gamecfg[top + i].enable)
-				{
-					if ((top + i) == sel)
-					{
-						uifont_print_shadow(16, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), gamecfg[top + i].label);
-						if (arrowl)
-						{
-							uifont_print_shadow(180, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-						}
-					}
-					else
-						uifont_print(16, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), gamecfg[top + i].label);
-				}
-				else
-				{
-					if ((top + i) == sel)
-						uifont_print_shadow(16, 40 + i * 17, COLOR_GRAY, gamecfg[top + i].label);
-					else
-						uifont_print(16, 40 + i * 17, COLOR_DARKGRAY, gamecfg[top + i].label);
-				}
-
-				if (gamecfg[top + i].value)
-				{
-					int val = *gamecfg[top + i].value;
-
-					if (gamecfg[top + i].enable)
-					{
-						if ((top + i) == sel)
-						{
-							uifont_print_shadow(200, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), gamecfg[top + i].values_label[val]);
-							if (arrowr)
-							{
-								int width = uifont_get_string_width(gamecfg[top + i].values_label[val]);
-								uifont_print_shadow(204 + width, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-							}
-						}
-						else
-							uifont_print(200, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), gamecfg[top + i].values_label[val]);
-					}
-					else
-					{
-						if ((top + i) == sel)
-							uifont_print_shadow(200, 40 + i * 17, COLOR_GRAY, gamecfg[top + i].values_label[val]);
-						else
-							uifont_print(200, 40 + i * 17, COLOR_DARKGRAY, gamecfg[top + i].values_label[val]);
-					}
-				}
-			}
-
-			update  = draw_battery_status(1);
-			update |= ui_show_popup(1);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			update  = draw_battery_status(0);
-			update |= ui_show_popup(0);
-			video_driver->waitVsync(video_data);
-		}
-
-		prev_sel = sel;
-
-		if (pad_pressed(PLATFORM_PAD_UP))
-		{
-			sel--;
-			if (sel < 0) sel = gamecfg_num - 1;
-			if (gamecfg[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			sel++;
-			if (sel > gamecfg_num - 1) sel = 0;
-			if (gamecfg[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT))
-		{
-			if (gamecfg[sel].value && gamecfg[sel].enable)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur > 0)
-				{
-					*gamecfg[sel].value = cur - 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
-		{
-			if (gamecfg[sel].value && gamecfg[sel].enable)
-			{
-				int cur = *gamecfg[sel].value;
-
-				if (cur < gamecfg[sel].value_max)
-				{
-					*gamecfg[sel].value = cur + 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_B1))
-		{
-			if (sel == gamecfg_num - 1)
-				break;
-		}
-		else if (pad_pressed(PLATFORM_PAD_R))
-		{
-			help(HELP_GAMECONFIG);
-			update = 1;
-		}
-
-		if (top > gamecfg_num - rows) top = gamecfg_num - rows;
-		if (top < 0) top = 0;
-		if (sel >= gamecfg_num) sel = 0;
-		if (sel < 0) sel = gamecfg_num - 1;
-		if (sel >= top + rows) top = sel - rows + 1;
-		if (sel < top) top = sel;
-
-		if (prev_sel != sel) update = 1;
-
-		pad_update();
-
-		if (Loop == LOOP_EXIT) break;
-
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-	for (i = 0; i < gamecfg_num; i++)
-	{
-		if (gamecfg[i].value && gamecfg[i].flag == CFG_RESTART)
-		{
-			if (gamecfg[i].old_value != *gamecfg[i].value)
-			{
-				menu_restart();
-				return 1;
-			}
-		}
-	}
-
-	return 0;
-}
-
-*/
 /*------------------------------------------------------
 	ボタン設定メニュー
 ------------------------------------------------------*/
 
-#define KEYCFG_MAX_ITEMS	40
+#define KEYCFG_MAX_ITEMS	48
 
 static const int button_value[13] =
 {
@@ -1987,6 +746,8 @@ enum
 #define KEYCFG_NUMBER  2
 #define KEYCFG_ANALOG  3
 #define KEYCFG_LAYOUT  4
+#define KEYCFG_CONTROLLER 5
+#define KEYCFG_ACTION  6
 
 #define INCLUDE_KEYCFG_STRUCT
 
@@ -2083,6 +844,24 @@ static int menu_keycfg(void)
 		i++;
 	}
 	keycfg_num = i;
+	/* The player selector and command-list viewer are rows of Controls, not
+	 * another submenu. Preserve the original game-specific button indices. */
+	if (keycfg_num + 2 < KEYCFG_MAX_ITEMS)
+	{
+		keycfg_t back = keycfg[keycfg_num - 1];
+		keycfg[keycfg_num - 1].label = TEXT(CONTROLLER);
+		keycfg[keycfg_num - 1].type = KEYCFG_CONTROLLER;
+		keycfg[keycfg_num - 1].value = option_controller;
+		keycfg[keycfg_num - 1].code = 0;
+#ifdef COMMAND_LIST
+		keycfg[keycfg_num].label = TEXT(MENU_COMMAND_LIST);
+		keycfg[keycfg_num].type = KEYCFG_ACTION;
+		keycfg[keycfg_num].value = 0;
+		keycfg[keycfg_num].code = 0;
+		keycfg_num++;
+#endif
+		keycfg[keycfg_num++] = back;
+	}
 
 #if (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
 	if (keycfg[6].value == 6 && keycfg[7].value == 5 && keycfg[8].value == 7 && keycfg[9].value == 8)
@@ -2115,7 +894,7 @@ static int menu_keycfg(void)
 			show_background();
 
 			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_KEYCONFIG);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(KEY_CONFIGURATION_MENU));
+			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(MENU_CONTROLS_SETTINGS));
 			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
 				ui_layout_bottom(1), rows, keycfg_num, sel);
 
@@ -2127,6 +906,14 @@ static int menu_keycfg(void)
 				if (keycfg[sel].type == KEYCFG_BUTTON && keycfg[sel].value < 12) arrowr = 1;
 				if (keycfg[sel].type == KEYCFG_NUMBER && keycfg[sel].value < 10) arrowr = 1;
 				if (keycfg[sel].type == KEYCFG_ANALOG && keycfg[sel].value < 2) arrowr = 1;
+				if (keycfg[sel].type == KEYCFG_CONTROLLER &&
+					keycfg[sel].value <
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+					(input_max_players - 1)
+#else
+					1
+#endif
+					) arrowr = 1;
 #if (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
 				if (keycfg[sel].type == KEYCFG_LAYOUT && keycfg[sel].value < 1) arrowr = 1;
 #endif
@@ -2164,6 +951,10 @@ static int menu_keycfg(void)
 
 				case KEYCFG_ANALOG:
 					name = sensitivity[value];
+					break;
+
+				case KEYCFG_CONTROLLER:
+					name = TEXT(CONTROLLER1 + value);
 					break;
 
 #if (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
@@ -2277,7 +1068,7 @@ static int menu_keycfg(void)
 			}
 #endif
 		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
+			else if (pad_pressed(PLATFORM_PAD_RIGHT))
 		{
 			if (keycfg[sel].type == KEYCFG_BUTTON)
 			{
@@ -2298,6 +1089,19 @@ static int menu_keycfg(void)
 			else if (keycfg[sel].type == KEYCFG_ANALOG)
 			{
 				if (keycfg[sel].value < 2)
+				{
+					keycfg[sel].value++;
+					update = 1;
+				}
+			}
+			else if (keycfg[sel].type == KEYCFG_CONTROLLER)
+			{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+				int max_controller = input_max_players - 1;
+#else
+				int max_controller = 1;
+#endif
+				if (keycfg[sel].value < max_controller)
 				{
 					keycfg[sel].value++;
 					update = 1;
@@ -2332,6 +1136,15 @@ static int menu_keycfg(void)
 		{
 			if (sel == keycfg_num - 1)
 				break;
+#ifdef COMMAND_LIST
+			if (keycfg[sel].type == KEYCFG_ACTION)
+			{
+				if (menu_cmdlist()) break;
+				pad_wait_clear();
+				load_background(WP_KEYCFG);
+				update = 1;
+			}
+#endif
 		}
 		else if (pad_pressed(PLATFORM_PAD_SELECT))
 		{
@@ -2388,6 +1201,10 @@ static int menu_keycfg(void)
 		{
 			analog_sensitivity = keycfg[i].value;
 		}
+		else if (keycfg[i].type == KEYCFG_CONTROLLER)
+		{
+			option_controller = keycfg[i].value;
+		}
 	}
 
 	return 0;
@@ -2397,218 +1214,6 @@ static int menu_keycfg(void)
 /*------------------------------------------------------
 	ディップスイッチ設定メニュー
 ------------------------------------------------------*/
-
-#if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
-
-static int menu_dipswitch(void)
-{
-	int sel = 0, rows = ui_layout_visible_rows(40, 17), top = 0;
-	int sx = ui_layout_center_x();
-	int i, arrowl, arrowr, prev_sel, update = 1;
-	dipswitch_t *dipswitch;
-	int dipswitch_num = 0;
-
-#define INCLUDE_LOAD_DIPSWITCH
-
-#if (EMU_SYSTEM == CPS1)
-#include "common/menu/cps.c"
-#elif (EMU_SYSTEM == MVS)
-#include "common/menu/mvs.c"
-#endif
-
-#undef INCLUDE_LOAD_DIPSWITCH
-
-	while (dipswitch[dipswitch_num].label[0])
-		dipswitch_num++;
-
-	pad_wait_clear();
-	load_background(WP_DIPSW);
-	ui_popup_reset();
-
-	do
-	{
-		if (update)
-		{
-			video_driver->beginFrame(video_data);
-			show_background();
-
-			arrowl = 0;
-			arrowr = 0;
-			if (dipswitch[sel].mask)
-			{
-				int cur = dipswitch[sel].value;
-
-				if (cur > 0) arrowl = 1;
-				if (cur < dipswitch[sel].value_max) arrowr = 1;
-			}
-
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), ICON_DIPSWITCH);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(DIP_SWITCH_SETTINGS_MENU));
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, dipswitch_num, sel);
-
-			for (i = 0; i < rows; i++)
-			{
-				if ((top + i) >= dipswitch_num) break;
-
-				if (dipswitch[top + i].label[0] == '\n')
-					continue;
-
-				if (top + i == sel)
-				{
-					if (!dipswitch[top + i].enable)
-					{
-						uifont_print_shadow(16, 40 + i * 17, COLOR_GRAY, dipswitch[top + i].label);
-					}
-					else
-					{
-						uifont_print_shadow(16, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), dipswitch[top + i].label);
-						if (arrowl)
-							uifont_print_shadow(sx - 20, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_LEFTTRIANGLE);
-					}
-				}
-				else
-				{
-					if (!dipswitch[top + i].enable)
-						uifont_print(16, 40 + i * 17, COLOR_DARKGRAY, dipswitch[top + i].label);
-					else
-						uifont_print(16, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), dipswitch[top + i].label);
-				}
-
-				if (dipswitch[top + i].mask)
-				{
-					int val = dipswitch[top + i].value;
-
-					if (top + i == sel)
-					{
-						if (!dipswitch[top + i].enable)
-						{
-							uifont_print_shadow(sx, 40 + i * 17, COLOR_GRAY, dipswitch[top + i].values_label[val]);
-						}
-						else
-						{
-							uifont_print_shadow(sx, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), dipswitch[top + i].values_label[val]);
-							if (arrowr)
-							{
-								int width = uifont_get_string_width(dipswitch[top + i].values_label[val]);
-								uifont_print_shadow(sx + 4 + width, 40 + i * 17, UI_COLOR(UI_PAL_SELECT), FONT_RIGHTTRIANGLE);
-							}
-						}
-					}
-					else
-					{
-						if (!dipswitch[top + i].enable)
-							uifont_print(sx, 40 + i * 17, COLOR_DARKGRAY, dipswitch[top + i].values_label[val]);
-						else
-							uifont_print(sx, 40 + i * 17, UI_COLOR(UI_PAL_NORMAL), dipswitch[top + i].values_label[val]);
-					}
-				}
-			}
-
-			update  = draw_battery_status(1);
-			update |= ui_show_popup(1);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		}
-		else
-		{
-			update  = draw_battery_status(0);
-			update |= ui_show_popup(0);
-			video_driver->waitVsync(video_data);
-		}
-
-		pad_update();
-		prev_sel = sel;
-
-		if (pad_pressed(PLATFORM_PAD_UP))
-		{
-			sel--;
-			if (sel < 0) sel = dipswitch_num - 1;
-			if (dipswitch[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_DOWN))
-		{
-			sel++;
-			if (sel > dipswitch_num - 1) sel = 0;
-			if (dipswitch[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_L))
-		{
-			sel -= rows;
-			if (sel < 0) sel = 0;
-			if (dipswitch[sel].label[0] == '\n') sel--;
-		}
-		else if (pad_pressed(PLATFORM_PAD_R))
-		{
-			sel += rows;
-			if (sel >= dipswitch_num) sel = dipswitch_num - 1;
-			if (dipswitch[sel].label[0] == '\n') sel++;
-		}
-		else if (pad_pressed(PLATFORM_PAD_LEFT))
-		{
-			if (dipswitch[sel].mask)
-			{
-				int cur = dipswitch[sel].value;
-
-				if (cur > 0)
-				{
-					dipswitch[sel].value = cur - 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_RIGHT))
-		{
-			if (dipswitch[sel].mask)
-			{
-				int cur = dipswitch[sel].value;
-
-				if (cur < dipswitch[sel].value_max)
-				{
-					dipswitch[sel].value = cur + 1;
-					update = 1;
-				}
-			}
-		}
-		else if (pad_pressed(PLATFORM_PAD_B1))
-		{
-			if (sel == dipswitch_num - 1)
-				break;
-		}
-		else if (pad_pressed(PLATFORM_PAD_SELECT))
-		{
-			help(HELP_DIPSWITCH);
-			update = 1;
-		}
-
-		if (top > dipswitch_num - rows) top = dipswitch_num - rows;
-		if (top < 0) top = 0;
-		if (sel >= dipswitch_num) sel = 0;
-		if (sel < 0) sel = dipswitch_num - 1;
-		if (sel >= top + rows) top = sel - rows + 1;
-		if (sel < top) top = sel;
-
-		if (prev_sel != sel) update = 1;
-
-		if (Loop == LOOP_EXIT) break;
-
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-#define INCLUDE_SAVE_DIPSWITCH
-
-#if (EMU_SYSTEM == CPS1)
-#include "common/menu/cps.c"
-#elif (EMU_SYSTEM == MVS)
-#include "common/menu/mvs.c"
-#endif
-
-#undef INCLUDE_SAVE_DIPSWITCH
-
-	return 0;
-}
-
-#endif
-
 
 /*------------------------------------------------------
 	セーブ/ロードステート
@@ -3093,6 +1698,9 @@ static int menu_state(void)
 #endif
 
 
+/* Category rows share the existing per-core configuration declarations. */
+#include "common/menu/settings_page.inc"
+
 /*------------------------------------------------------
 	メインメニュー
 ------------------------------------------------------*/
@@ -3115,88 +1723,27 @@ typedef struct
 	int help;
 } menu2_t;
 
-static int menu_game_video(void) { return menu_gamecfg_filtered(MENU_CFG_VIDEO, MENU_GAME_VIDEO, ICON_VIDEO); }
-static int menu_frame_pacing(void) { return menu_gamecfg_filtered(MENU_CFG_TIMING, MENU_FRAME_PACING, ICON_VIDEO); }
-static int menu_sound_settings(void) { return menu_gamecfg_filtered(MENU_CFG_AUDIO, MENU_SOUND_SETTINGS, ICON_AUDIO); }
-static int menu_player_settings(void) { return menu_gamecfg_filtered(MENU_CFG_PLAYER, MENU_PLAYER_SETTINGS, ICON_KEYCONFIG); }
-#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
-static int menu_machine_settings(void) { return menu_gamecfg_filtered(MENU_CFG_EMULATION, MENU_MACHINE_SETTINGS, ICON_CONFIG); }
-#endif
-static int menu_clock_settings(void) { return menu_gamecfg_filtered(MENU_CFG_PERFORMANCE, MENU_CLOCK_SETTINGS, ICON_PERFORMANCE); }
-
-/* A shared navigable list keeps the same controller behavior across categories.
- * Entries may be hidden by capabilities without changing the saved settings. */
-static int menu_section(int title, int icon, const menu2_t *items)
+static int menu_video_section(void)
 {
-	menu_t entries[MENU_MAX_ITEMS];
-	int count = 0, selected = 0, top = 0;
-	int rows = ui_layout_visible_rows(40, 32);
-	int update = 1;
-
-	for (int i = 0; items[i].label && count < MENU_MAX_ITEMS; ++i) {
-		if (items[i].menu_func == menu_video_backend_settings && video_backend_choice_count() < 2)
-			continue;
-		if (items[i].menu_func == menu_clock_settings && !power_has_capability(POWER_CAP_PERFORMANCE))
-			continue;
-		entries[count].label = TEXT(items[i].label);
-		entries[count].menu_func = items[i].menu_func;
-		entries[count].icon = items[i].icon;
-		entries[count].help = TEXT(items[i].help);
-		count++;
-	}
-
-	pad_wait_clear();
-	load_background(WP_LOGO);
-	ui_popup_reset();
-	do {
-		if (update) {
-			video_driver->beginFrame(video_data);
-			show_background();
-			small_icon_shadow(8, 3, UI_COLOR(UI_PAL_TITLE), icon);
-			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), TEXT(title));
-			draw_scrollbar(ui_layout_right(10), 26, ui_layout_right(0),
-				ui_layout_bottom(1), rows, count, selected);
-			for (int i = 0; i < rows && top + i < count; ++i) {
-				int index = top + i;
-				int y = 40 + i * 32;
-				if (index == selected) {
-					large_icon_light(12, y, UI_COLOR(UI_PAL_SELECT), entries[index].icon);
-					uifont_print_shadow(54, y - 3, UI_COLOR(UI_PAL_SELECT), entries[index].label);
-					uifont_print_shadow(54, y + 16, UI_COLOR(UI_PAL_SELECT), entries[index].help);
-				} else {
-					small_icon(16, y + 2, UI_COLOR(UI_PAL_NORMAL), entries[index].icon);
-					uifont_print(56, y + 4, UI_COLOR(UI_PAL_NORMAL), entries[index].label);
-				}
-			}
-			ui_show_popup(1);
-			video_driver->endFrame(video_data);
-			video_driver->flipScreen(video_data, 1);
-		} else {
-			video_driver->waitVsync(video_data);
-		}
-		pad_update();
-		update = 0;
-		if (pad_pressed(PLATFORM_PAD_UP)) {
-			selected = (selected + count - 1) % count;
-			update = 1;
-		} else if (pad_pressed(PLATFORM_PAD_DOWN)) {
-			selected = (selected + 1) % count;
-			update = 1;
-		} else if (pad_pressed(PLATFORM_PAD_B1)) {
-			if (entries[selected].menu_func == NULL)
-				break;
-			if (entries[selected].menu_func())
-				return 1;
-			pad_wait_clear();
-			load_background(WP_LOGO);
-			rows = ui_layout_visible_rows(40, 32);
-			update = 1;
-		}
-		if (selected < top) top = selected;
-		if (selected >= top + rows) top = selected - rows + 1;
-		if (Loop == LOOP_EXIT) break;
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-	return 0;
+    return menu_settings_page(MENU_CFG_VIDEO, MENU_VIDEO_DISPLAY, ICON_VIDEO);
+}
+static int menu_audio_section(void)
+{
+    return menu_settings_page(MENU_CFG_AUDIO, MENU_AUDIO_SETTINGS, ICON_AUDIO);
+}
+static int menu_controls_section(void)
+{
+    return menu_keycfg();
+}
+#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
+static int menu_emulation_section(void)
+{
+    return menu_settings_page(MENU_CFG_EMULATION, MENU_EMULATION_SETTINGS, ICON_CONFIG);
+}
+#endif
+static int menu_performance_section(void)
+{
+    return menu_settings_page(MENU_CFG_PERFORMANCE, MENU_PERFORMANCE, ICON_PERFORMANCE);
 }
 
 #if (EMU_SYSTEM == CPS1)
@@ -3209,97 +1756,19 @@ static int menu_section(int title, int icon, const menu2_t *items)
 #define MENUHELP_RESET_EMULATION_ID MENUHELP_RESET_EMULATION_NCDZ
 #endif
 
-
-static const menu2_t video_section[] = {
-	{ MENU_GAME_VIDEO, menu_game_video, ICON_VIDEO, MENU_GAME_VIDEO },
-	{ MENU_FRAME_PACING, menu_frame_pacing, ICON_VIDEO, MENU_FRAME_PACING },
-	{ MENU_FPS_OVERLAY_SETTINGS, menu_fps_overlay_settings, ICON_VIDEO, MENUHELP_FPS_OVERLAY_SETTINGS },
-	{ MENU_VIDEO_BACKEND_SETTINGS, menu_video_backend_settings, ICON_VIDEO, MENUHELP_VIDEO_BACKEND_SETTINGS },
-#ifdef PS2
-	{ MENU_SYSTEM_VIDEO_SETTINGS, menu_system_video_settings, ICON_VIDEO, MENUHELP_SYSTEM_VIDEO_SETTINGS },
-#endif
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-static const menu2_t audio_section[] = {
-	{ MENU_SOUND_SETTINGS, menu_sound_settings, ICON_AUDIO, MENU_SOUND_SETTINGS },
-#ifdef PSP_ME_AUDIO
-	{ MENU_AUDIO_PROCESSOR_SETTINGS, menu_audio_processor_settings, ICON_AUDIO, MENUHELP_AUDIO_PROCESSOR_SETTINGS },
-#endif
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-static const menu2_t control_section[] = {
-	{ MENU_PLAYER_SETTINGS, menu_player_settings, ICON_KEYCONFIG, MENU_PLAYER_SETTINGS },
-	{ MENU_KEY_CONFIGURATION, menu_keycfg, ICON_KEYCONFIG, MENUHELP_KEY_CONFIGURATION },
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
-static const menu2_t emulation_section[] = {
-	{ MENU_MACHINE_SETTINGS, menu_machine_settings, ICON_CONFIG, MENU_MACHINE_SETTINGS },
-#if (EMU_SYSTEM != CPS2 && EMU_SYSTEM != NCDZ)
-	{ MENU_DIP_SWITCH_SETTINGS, menu_dipswitch, ICON_DIPSWITCH, MENUHELP_DIP_SWITCH_SETTINGS },
-#endif
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-#endif
-
-static const menu2_t performance_section[] = {
-	{ MENU_CLOCK_SETTINGS, menu_clock_settings, ICON_PERFORMANCE, MENU_CLOCK_SETTINGS },
-#if USE_CACHE
-	{ MENU_SYSTEM_PERFORMANCE_SETTINGS, menu_system_performance_settings, ICON_PERFORMANCE, MENUHELP_SYSTEM_PERFORMANCE_SETTINGS },
-#endif
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-static const menu2_t tools_section[] = {
-#ifdef SAVE_STATE
-	{ SAVE_LOAD_STATE, menu_state, ICON_CONFIG, SAVE_LOAD_STATE },
-#endif
-	{ MENU_CHEAT_CONFIGURATION, menu_cheatcfg, ICON_DIPSWITCH, MENUHELP_CHEAT_CONFIGURATION },
-#ifdef COMMAND_LIST
-	{ MENU_COMMAND_LIST, menu_cmdlist, ICON_CMDLIST, MENUHELP_COMMAND_LIST },
-#endif
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-static const menu2_t system_section[] = {
-	{ MENU_RESET_EMULATION, menu_reset, ICON_SYSTEM, MENUHELP_RESET_EMULATION_ID },
-	{ MENU_RETURN_TO_BROWSER, menu_browser, ICON_FOLDER, MENUHELP_RETURN_TO_BROWSER },
-	{ MENU_EXIT_EMULATOR, menu_exit, ICON_EXIT, MENUHELP_EXIT_EMULATOR },
-	{ RETURN_TO_MAIN_MENU, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	MENU_END
-};
-
-static int menu_video_section(void) { return menu_section(MENU_VIDEO_DISPLAY, ICON_VIDEO, video_section); }
-static int menu_audio_section(void) { return menu_section(MENU_AUDIO_SETTINGS, ICON_AUDIO, audio_section); }
-static int menu_controls_section(void) { return menu_section(MENU_CONTROLS_SETTINGS, ICON_KEYCONFIG, control_section); }
-#if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
-static int menu_emulation_section(void) { return menu_section(MENU_EMULATION_SETTINGS, ICON_CONFIG, emulation_section); }
-#endif
-static int menu_performance_section(void) { return menu_section(MENU_PERFORMANCE, ICON_PERFORMANCE, performance_section); }
-static int menu_tools_section(void) { return menu_section(MENU_TOOLS, ICON_TOOLS, tools_section); }
-static int menu_system_section(void) { return menu_section(MENU_SYSTEM_SETTINGS, ICON_SYSTEM, system_section); }
-
 static const menu2_t mainmenu2[] = {
-	{ MENU_RETURN_TO_GAME, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
-	{ MENU_VIDEO_DISPLAY, menu_video_section, ICON_VIDEO, MENUHELP_VIDEO_DISPLAY },
-	{ MENU_AUDIO_SETTINGS, menu_audio_section, ICON_AUDIO, MENUHELP_AUDIO_SETTINGS },
-	{ MENU_CONTROLS_SETTINGS, menu_controls_section, ICON_KEYCONFIG, MENUHELP_CONTROLS_SETTINGS },
+    { MENU_RETURN_TO_GAME, NULL, ICON_RETURN, MENUHELP_RETURN_TO_GAME },
+    { MENU_VIDEO_DISPLAY, menu_video_section, ICON_VIDEO, MENUHELP_VIDEO_DISPLAY },
+    { MENU_AUDIO_SETTINGS, menu_audio_section, ICON_AUDIO, MENUHELP_AUDIO_SETTINGS },
+    { MENU_CONTROLS_SETTINGS, menu_controls_section, ICON_KEYCONFIG, MENUHELP_CONTROLS_SETTINGS },
 #if (EMU_SYSTEM != CPS2 || ENABLE_RASTER_OPTION)
-	{ MENU_EMULATION_SETTINGS, menu_emulation_section, ICON_CONFIG, MENUHELP_EMULATION_SETTINGS },
+    { MENU_EMULATION_SETTINGS, menu_emulation_section, ICON_CONFIG, MENUHELP_EMULATION_SETTINGS },
 #endif
-	{ MENU_PERFORMANCE, menu_performance_section, ICON_PERFORMANCE, MENUHELP_PERFORMANCE },
-	{ MENU_TOOLS, menu_tools_section, ICON_TOOLS, MENUHELP_TOOLS },
-	{ MENU_SYSTEM_SETTINGS, menu_system_section, ICON_SYSTEM, MENUHELP_SYSTEM_SETTINGS },
-	MENU_END
+    { MENU_PERFORMANCE, menu_performance_section, ICON_PERFORMANCE, MENUHELP_PERFORMANCE },
+    { MENU_RESET_EMULATION, menu_reset, ICON_SYSTEM, MENUHELP_RESET_EMULATION_ID },
+    { MENU_RETURN_TO_BROWSER, menu_browser, ICON_FOLDER, MENUHELP_RETURN_TO_BROWSER },
+    { MENU_EXIT_EMULATOR, menu_exit, ICON_EXIT, MENUHELP_EXIT_EMULATOR },
+    MENU_END
 };
 
 
