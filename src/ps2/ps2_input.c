@@ -5,12 +5,19 @@
 #include <libpad.h>
 #include <libmtap.h>
 #include <ps2_joystick_driver.h>
+#ifdef PS2_INPUT_THREADED
+#include <kernel.h>
+#include <delaythread.h>
+#endif
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
 #endif
 #include "common/input_driver.h"
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
+#ifdef PS2_INPUT_THREADED
+#include "ps2/ps2_input_capture.h"
+#endif
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -141,10 +148,142 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 
 typedef struct ps2_input {
 	uint8_t mtap_opened[PS2_MAX_PORT];
+#ifdef PS2_INPUT_THREADED
+	ps2_input_capture_t capture;
+	int32_t capture_thread_id;
+	int32_t capture_done_sema;
+	void *capture_stack;
+	volatile int capture_stop;
+#ifdef PS2_INPUT_PROFILE
+	uint32_t capture_frames, capture_previous_square, capture_sent_square;
+#endif
+#endif
 #ifdef PS2_INPUT_PROFILE
 	ps2_input_profile_t profile;
 #endif
 } ps2_input_t;
+
+static uint32_t decodePadButtons(uint16_t pad_buttons)
+{
+	uint32_t buttons = 0;
+	uint32_t pressed = 0xffffu ^ pad_buttons;
+	buttons |= (pressed & PAD_UP) ? PLATFORM_PAD_UP : 0;
+	buttons |= (pressed & PAD_DOWN) ? PLATFORM_PAD_DOWN : 0;
+	buttons |= (pressed & PAD_LEFT) ? PLATFORM_PAD_LEFT : 0;
+	buttons |= (pressed & PAD_RIGHT) ? PLATFORM_PAD_RIGHT : 0;
+	buttons |= (pressed & PAD_CIRCLE) ? PLATFORM_PAD_B1 : 0;
+	buttons |= (pressed & PAD_CROSS) ? PLATFORM_PAD_B2 : 0;
+	buttons |= (pressed & PAD_SQUARE) ? PLATFORM_PAD_B3 : 0;
+	buttons |= (pressed & PAD_TRIANGLE) ? PLATFORM_PAD_B4 : 0;
+	buttons |= (pressed & PAD_L1) ? PLATFORM_PAD_L : 0;
+	buttons |= (pressed & PAD_R1) ? PLATFORM_PAD_R : 0;
+	buttons |= (pressed & PAD_START) ? PLATFORM_PAD_START : 0;
+	buttons |= (pressed & PAD_SELECT) ? PLATFORM_PAD_SELECT : 0;
+	return buttons;
+}
+
+static void decodePadState(const struct padButtonStatus *pad, input_state_t *out)
+{
+	input_state_reset(out);
+	out->buttons = decodePadButtons(pad->btns);
+	if (pad->ljoy_h || pad->ljoy_v || pad->rjoy_h || pad->rjoy_v) {
+		out->lx = pad->ljoy_h;
+		out->ly = pad->ljoy_v;
+		out->axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
+	}
+}
+
+#ifdef PS2_INPUT_THREADED
+enum { PS2_INPUT_CAPTURE_PERIOD_US = 4000, PS2_INPUT_CAPTURE_STACK = 8192 };
+
+/* The worker reads only the IOP-updated port-0 DMA buffer. Topology and
+ * analog-mode RPCs stay on the main thread. It is stopped before refresh/close. */
+static int ps2_capture_worker(void *arg)
+{
+	ps2_input_t *ps2 = (ps2_input_t *)arg;
+	while (!ps2->capture_stop) {
+		struct padButtonStatus pad = {0};
+		int state = padGetState(0, 0);
+		if (state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1 ||
+			state == PAD_STATE_EXECCMD) {
+			int ret = padRead(0, 0, &pad);
+			if (ret >= (int)(offsetof(struct padButtonStatus, btns) +
+				sizeof(pad.btns))) {
+				input_state_t fresh;
+				decodePadState(&pad, &fresh);
+				DI();
+				ps2_input_capture_record(&ps2->capture, &fresh);
+				EI();
+			}
+		} else {
+			DI();
+			ps2_input_capture_reset(&ps2->capture);
+			EI();
+		}
+		DelayThread(PS2_INPUT_CAPTURE_PERIOD_US);
+	}
+	SignalSema(ps2->capture_done_sema);
+	ExitThread();
+	return 0;
+}
+
+static void ps2_capture_stop(ps2_input_t *ps2)
+{
+	if (ps2->capture_thread_id < 0)
+		return;
+	ps2->capture_stop = 1;
+	WaitSema(ps2->capture_done_sema);
+	DeleteThread(ps2->capture_thread_id);
+	DeleteSema(ps2->capture_done_sema);
+	free(ps2->capture_stack);
+	ps2->capture_thread_id = -1;
+	ps2->capture_done_sema = -1;
+	ps2->capture_stack = NULL;
+	ps2_input_capture_reset(&ps2->capture);
+}
+
+static void ps2_capture_start(ps2_input_t *ps2)
+{
+	ee_thread_t thread = {0};
+	ee_sema_t sema = {0};
+	if (ps2->capture_thread_id >= 0)
+		return;
+	ps2->capture_stack = malloc(PS2_INPUT_CAPTURE_STACK);
+	if (!ps2->capture_stack) {
+		printf("[ps2_input] async capture stack unavailable; using frame polling\n");
+		return;
+	}
+	thread.func = ps2_capture_worker;
+	thread.stack = ps2->capture_stack;
+	thread.stack_size = PS2_INPUT_CAPTURE_STACK;
+	thread.gp_reg = &_gp;
+	/* Priority 31 preempts the emulation thread (32), then sleeps.
+	 * Audio priority (8) remains higher. */
+	thread.initial_priority = NJEMU_MAIN_THREAD_PRIORITY - 1;
+	ps2->capture_thread_id = CreateThread(&thread);
+	if (ps2->capture_thread_id < 0)
+		goto fail;
+	sema.init_count = 0;
+	sema.max_count = 1;
+	ps2->capture_done_sema = CreateSema(&sema);
+	if (ps2->capture_done_sema < 0) {
+		DeleteThread(ps2->capture_thread_id);
+		goto fail;
+	}
+	ps2->capture_stop = 0;
+	ps2_input_capture_reset(&ps2->capture);
+	if (StartThread(ps2->capture_thread_id, ps2) >= 0)
+		return;
+	DeleteSema(ps2->capture_done_sema);
+	DeleteThread(ps2->capture_thread_id);
+fail:
+	free(ps2->capture_stack);
+	ps2->capture_stack = NULL;
+	ps2->capture_thread_id = -1;
+	ps2->capture_done_sema = -1;
+	printf("[ps2_input] async capture unavailable; using frame polling\n");
+}
+#endif
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
 {
@@ -335,8 +474,15 @@ static void ps2_refresh(void *data)
 {
 	ps2_input_t *ps2 = (ps2_input_t *)data;
 
-	if (ps2)
+	if (ps2) {
+#ifdef PS2_INPUT_THREADED
+		ps2_capture_stop(ps2);
+#endif
 		refreshJoyInfo(ps2);
+#ifdef PS2_INPUT_THREADED
+		ps2_capture_start(ps2);
+#endif
+	}
 }
 
 static void *ps2_init(void)
@@ -346,6 +492,10 @@ static void *ps2_init(void)
 
 	if (ps2 == NULL)
 		return NULL;
+#ifdef PS2_INPUT_THREADED
+	ps2->capture_thread_id = -1;
+	ps2->capture_done_sema = -1;
+#endif
 
 	if (init_joystick_driver(true) < 0) {
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
@@ -378,6 +528,9 @@ static void *ps2_init(void)
 		ps2->mtap_opened[port] = (mtapPortOpen(port) == 1);
 
 	refreshJoyInfo(ps2);
+#ifdef PS2_INPUT_THREADED
+	ps2_capture_start(ps2);
+#endif
 
 	return ps2;
 }
@@ -390,6 +543,9 @@ static void ps2_free(void *data)
 	if (ps2 == NULL)
 		return;
 
+#ifdef PS2_INPUT_THREADED
+	ps2_capture_stop(ps2);
+#endif
 	for (i = 0; i < MAX_CONTROLLERS; i++) {
 		struct JoyInfo *info = &joyInfo[i];
 		closeJoyInfo(info);
@@ -410,8 +566,7 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	struct padButtonStatus paddata = {0};
 	input_state_t fresh;
 	bool valid;
-	uint32_t buttons = 0;
-	int32_t pressed_buttons, ret;
+	int32_t ret;
 	struct JoyInfo *info = NULL;
 
 	if (ps2 == NULL || state == NULL)
@@ -437,6 +592,39 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		return valid;
 	}
 
+#ifdef PS2_INPUT_THREADED
+	if (controller == 0 && info == getJoyInfo(0, 0) &&
+		ps2->capture_thread_id >= 0) {
+		uint32_t samples;
+		uint32_t square_presses;
+		DI();
+		valid = ps2_input_capture_consume(&ps2->capture, state);
+		samples = ps2->capture.samples;
+		square_presses = ps2->capture.square_presses;
+		EI();
+		if (valid) {
+#ifdef PS2_INPUT_PROFILE
+			uint32_t square = state->buttons & PLATFORM_PAD_B3;
+			if (square && !ps2->capture_previous_square)
+				ps2->capture_sent_square++;
+			ps2->capture_previous_square = square;
+			if (++ps2->capture_frames == 600) {
+				printf("[ps2_capture] frames=600 reads=%u square_raw=%u square_sent=%u\n",
+					(unsigned int)samples, (unsigned int)square_presses,
+					(unsigned int)ps2->capture_sent_square);
+				ps2->capture_frames = 0;
+				ps2->capture_sent_square = 0;
+				DI();
+				ps2->capture.samples = 0;
+				ps2->capture.square_presses = 0;
+				EI();
+			}
+#endif
+			return true;
+		}
+	}
+#endif
+
 	ret = padRead(info->port, info->slot, &paddata);
 	/* A positive short packet must not turn zero-initialized btns into
 	 * a spurious 0xffff set of pressed buttons. */
@@ -452,39 +640,13 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		return valid;
 	}
 
-	pressed_buttons = 0xffff ^ paddata.btns;
-
-	buttons |= (pressed_buttons & PAD_UP) ? PLATFORM_PAD_UP : 0;
-	buttons |= (pressed_buttons & PAD_DOWN) ? PLATFORM_PAD_DOWN : 0;
-	buttons |= (pressed_buttons & PAD_LEFT) ? PLATFORM_PAD_LEFT : 0;
-	buttons |= (pressed_buttons & PAD_RIGHT) ? PLATFORM_PAD_RIGHT : 0;
-
-	buttons |= (pressed_buttons & PAD_CIRCLE) ? PLATFORM_PAD_B1 : 0;
-	buttons |= (pressed_buttons & PAD_CROSS) ? PLATFORM_PAD_B2 : 0;
-	buttons |= (pressed_buttons & PAD_SQUARE) ? PLATFORM_PAD_B3 : 0;
-	buttons |= (pressed_buttons & PAD_TRIANGLE) ? PLATFORM_PAD_B4 : 0;
-
-	buttons |= (pressed_buttons & PAD_L1) ? PLATFORM_PAD_L : 0;
-	buttons |= (pressed_buttons & PAD_R1) ? PLATFORM_PAD_R : 0;
-
-	buttons |= (pressed_buttons & PAD_START) ? PLATFORM_PAD_START : 0;
-	buttons |= (pressed_buttons & PAD_SELECT) ? PLATFORM_PAD_SELECT : 0;
-
-	input_state_reset(&fresh);
-	fresh.buttons = buttons;
-	/* Zeroed analog bytes mean the pad is not reporting analog-stick data.
-	 * Leave the common neutral axes untouched in that case. */
-	if (paddata.ljoy_h || paddata.ljoy_v || paddata.rjoy_h || paddata.rjoy_v) {
-		fresh.lx = paddata.ljoy_h;
-		fresh.ly = paddata.ljoy_v;
-		fresh.axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
-	}
+	decodePadState(&paddata, &fresh);
 
 	valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 		true, &fresh, state);
 #ifdef PS2_INPUT_PROFILE
 	if (controller == 0)
-		ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_FRESH, buttons,
+		ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_FRESH, fresh.buttons,
 			valid, valid ? state->buttons : 0, false);
 #endif
 	return valid;

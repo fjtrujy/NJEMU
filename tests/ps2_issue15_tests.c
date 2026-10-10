@@ -7,6 +7,7 @@
 #include "common/input_state.h"
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
+#include "ps2/ps2_input_capture.h"
 #include "ps2/ps2_video_filter_policy.h"
 
 static void test_single_transport_gap(void)
@@ -81,11 +82,55 @@ static void test_240p_filter_policy(void)
     assert(!ps2_presentation_uses_nearest_filter(1, 384, 0, 656, 224));
 }
 
+static void test_async_capture_short_taps_and_chords(void)
+{
+    ps2_input_capture_t capture = {0};
+    input_state_t source, output;
+    input_state_reset(&source);
+    ps2_input_capture_record(&capture, &source);
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == 0);
+
+    /* Entire Square press/release happens between two game frames. */
+    source.buttons = PLATFORM_PAD_RIGHT | PLATFORM_PAD_B3;
+    ps2_input_capture_record(&capture, &source);
+    source.buttons = PLATFORM_PAD_RIGHT;
+    ps2_input_capture_record(&capture, &source);
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == (PLATFORM_PAD_RIGHT | PLATFORM_PAD_B3));
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == PLATFORM_PAD_RIGHT);
+
+    /* A short two-button chord survives together, with no held direction. */
+    source.buttons = PLATFORM_PAD_B3 | PLATFORM_PAD_B2;
+    ps2_input_capture_record(&capture, &source);
+    source.buttons = 0;
+    ps2_input_capture_record(&capture, &source);
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == (PLATFORM_PAD_B3 | PLATFORM_PAD_B2));
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == 0);
+
+    /* Never latch a transient menu combo or movement in the same way. */
+    source.buttons = PLATFORM_PAD_SELECT | PLATFORM_PAD_START | PLATFORM_PAD_LEFT;
+    ps2_input_capture_record(&capture, &source);
+    source.buttons = 0;
+    ps2_input_capture_record(&capture, &source);
+    assert(ps2_input_capture_consume(&capture, &output));
+    assert(output.buttons == 0);
+
+    source.buttons = PLATFORM_PAD_B1;
+    ps2_input_capture_record(&capture, &source);
+    ps2_input_capture_reset(&capture);
+    assert(!ps2_input_capture_consume(&capture, &output));
+}
+
 int main(void)
 {
     test_single_transport_gap();
     test_disconnect_does_not_stick_buttons();
     test_pad_command_does_not_change_controller_order();
     test_240p_filter_policy();
+    test_async_capture_short_taps_and_chords();
     return 0;
 }

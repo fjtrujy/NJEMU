@@ -249,3 +249,15 @@ mapping/autofire settings used by the issue reporter.
 
 All changes are PS2-local except the build option and portable host test.
 No `resources/` content was modified, and no GitHub issue comment was posted.
+
+## Independent EE input-thread experiment
+
+An optional `PS2_INPUT_THREADED=ON` CPS1/PS2 build now samples the
+PADMAN DMA buffer approximately every 4 ms, preserving observed face-button
+press edges until the next emulated frame. PCSX2 showed no measurable
+improvement for 12 ms Square presses: 27/40 and 23/40 across two runs,
+compared with a previous 31/40 frame-polling run. Ordinary 100 ms presses
+still registered 20/20. This remains disabled by default because faster
+EE reads do not necessarily mean newer IOP controller packets. Full design,
+measurement caveats and physical-hardware validation requirements are in
+`docs/PS2_INPUT_CAPTURE_THREAD_EXPERIMENT.md`.
