@@ -8,6 +8,7 @@
 #include <ps2_drivers_img.h>
 #endif
 #include "common/input_driver.h"
+#include "ps2/ps2_input_sample_cache.h"
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -20,6 +21,7 @@
 struct JoyInfo
 {
     uint8_t padBuf[256];
+    ps2_input_sample_cache_t sample_cache;
     uint16_t btns;
     uint8_t analog_state[PS2_TOTAL_AXIS];
     uint8_t port;
@@ -46,6 +48,8 @@ static void closeJoyInfo(struct JoyInfo *info)
 		return;
 
 	padPortClose(info->port, info->slot);
+	info->sample_cache.valid = 0;
+	info->sample_cache.missed = 0;
 	info->analog_mode_configured = 0;
 	info->opened = 0;
 }
@@ -95,7 +99,11 @@ static bool joyInfoReady(struct JoyInfo *info)
 
 	state = padGetState(info->port, info->slot);
 	if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR)
+	{
 		info->analog_mode_configured = 0;
+		info->sample_cache.valid = 0;
+		info->sample_cache.missed = 0;
+	}
 	return state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1;
 }
 
@@ -289,6 +297,7 @@ static void ps2_free(void *data)
 static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	ps2_input_t *ps2 = (ps2_input_t*)data;
 	struct padButtonStatus paddata = {0};
+	input_state_t fresh;
 	uint32_t buttons = 0;
 	int32_t pressed_buttons, ret;
 	struct JoyInfo *info = NULL;
@@ -300,11 +309,13 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	if (info == NULL)
 		return false;
 	if (!configureJoyInfoAnalogMode(info))
-		return false;
+		return ps2_input_sample_cache_update(&info->sample_cache, true,
+			false, NULL, state);
 
 	ret = padRead(info->port, info->slot, &paddata);
-	if (ret == 0)
-		return false;
+	if (ret <= 0)
+		return ps2_input_sample_cache_update(&info->sample_cache, true,
+			false, NULL, state);
 
 	pressed_buttons = 0xffff ^ paddata.btns;
 
@@ -324,16 +335,18 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	buttons |= (pressed_buttons & PAD_START) ? PLATFORM_PAD_START : 0;
 	buttons |= (pressed_buttons & PAD_SELECT) ? PLATFORM_PAD_SELECT : 0;
 
-	state->buttons = buttons;
+	input_state_reset(&fresh);
+	fresh.buttons = buttons;
 	/* Zeroed analog bytes mean the pad is not reporting analog-stick data.
 	 * Leave the common neutral axes untouched in that case. */
 	if (paddata.ljoy_h || paddata.ljoy_v || paddata.rjoy_h || paddata.rjoy_v) {
-		state->lx = paddata.ljoy_h;
-		state->ly = paddata.ljoy_v;
-		state->axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
+		fresh.lx = paddata.ljoy_h;
+		fresh.ly = paddata.ljoy_v;
+		fresh.axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
 	}
 
-	return true;
+	return ps2_input_sample_cache_update(&info->sample_cache, true,
+		true, &fresh, state);
 }
 
 

@@ -10,6 +10,7 @@
 #include "common/emulator_options.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
+#include "ps2/ps2_video_filter_policy.h"
 #include <string.h>
 
 #include <stdlib.h>
@@ -1311,10 +1312,11 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	int src_height = src_rect->bottom - src_rect->top;
 	int dst_width = dst_rect->right - dst_rect->left;
 	int dst_height = dst_rect->bottom - dst_rect->top;
-	int integer_upscale = src_width > 0 && src_height > 0 &&
-		dst_width >= src_width && dst_height >= src_height &&
-		(dst_width % src_width) == 0 && (dst_height % src_height) == 0;
-	int filter = integer_upscale ? GS_FILTER_NEAREST : GS_FILTER_LINEAR;
+	int output_is_240p = ps2->gsGlobal->Mode == GS_MODE_NTSC &&
+		ps2->gsGlobal->Interlace == GS_NONINTERLACED;
+	int filter = ps2_presentation_uses_nearest_filter(output_is_240p,
+		src_width, src_height, dst_width, dst_height) ?
+		GS_FILTER_NEAREST : GS_FILTER_LINEAR;
 
 	uint8_t textureVertexCount = 2;
 	GSPRIMUVPOINTFLAT textureVertex[textureVertexCount];
@@ -1330,10 +1332,9 @@ static void ps2_transferWorkFrame(void *data, RECT *src_rect, RECT *dst_rect)
 	ps2->gsGlobal->PrimAlphaEnable = GS_SETTING_OFF;
 
 	gsKit_renderToScreen(ps2->gsGlobal);
-	/* Preserve exact texel sampling for pixel-accurate 1:1 and integer-upscaled
-	 * presentation, but filter fractional scaling. Fractional nearest-neighbour
-	 * scaling makes moving source pixels alternate between uneven destination
-	 * widths, which appears as shimmer during scrolling. */
+	/* On 240p output, use sharp texel sampling even when the physical
+	 * non-square pixel aspect requires fractional horizontal scaling.
+	 * Other modes retain linear filtering for fractional presentation. */
 	gsKit_set_texfilter(ps2->gsGlobal, filter);
 	gskit_prim_list_sprite_texture_uv_flat_color2(ps2->gsGlobal, ps2->scrbitmap, ps2->vertexColor, textureVertexCount, textureVertex);
 	ps2->gsGlobal->PrimAlphaEnable = prev_alpha;

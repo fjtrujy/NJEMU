@@ -2053,6 +2053,13 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	)
 	add_test(NAME input_state_tests COMMAND input_state_tests)
 
+	add_executable(ps2_issue15_tests
+		tests/ps2_issue15_tests.c
+		src/common/input_state.c)
+	target_include_directories(ps2_issue15_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src)
+	add_test(NAME ps2_issue15_tests COMMAND ps2_issue15_tests)
+
 	add_executable(cps_orientation_tests
 		tests/cps_orientation_tests.c
 	)
