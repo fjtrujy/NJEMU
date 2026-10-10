@@ -161,6 +161,15 @@ Reading the buffer 250 times a second does not produce 250 distinct
 controller publications, explaining why the 4 ms EE-thread experiment
 did not improve short-tap detection.
 
+The expanded PCSX2 tests also reproduce a second limitation:
+80 ms Square presses separated by only a **5-10 ms release** can merge
+into a continuous press if the release is not sampled. This is observed
+in both normal and threaded configurations, and across dino and sf2hf.
+The CPS1 68000 reads the presented input register each frame, so an
+IOP event queue at unchanged polling cadence cannot recover transitions
+that were never sampled. See
+`docs/PS2_CPS1_INPUT_PCSX2_TEST_MATRIX.md` for the full controls.
+
 The corresponding ignored local logs are:
 `build_issue15_pcsx2_dino/pcsx2_padman_cadence.log` and
 `build_issue15_async_cps1/pcsx2_padman_cadence_thread.log`.

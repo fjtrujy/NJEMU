@@ -261,3 +261,16 @@ still registered 20/20. This remains disabled by default because faster
 EE reads do not necessarily mean newer IOP controller packets. Full design,
 measurement caveats and physical-hardware validation requirements are in
 `docs/PS2_INPUT_CAPTURE_THREAD_EXPERIMENT.md`.
+
+## Expanded PCSX2 matrix and CPU register-read tracing
+
+The larger 2026-10-10 study, including multiple press durations,
+**short releases between long presses**, simultaneous chords, 240p/480i/
+480p, a second CPS1 game, and emulated CPU register-read instrumentation,
+is recorded in `docs/PS2_CPS1_INPUT_PCSX2_TEST_MATRIX.md`.
+
+The additional optional `[cps1_cpu_input]` counters show 1,200 reads
+of CPS1 port 1 and 600 emulated frames with a read in each steady 600-frame
+window of dino. No tested frame with Attack asserted was unread. Lost
+transitions occur before CPS1 register exposure in these trials, although
+actual game attack-animation acceptance remains unverified.
