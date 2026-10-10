@@ -52,6 +52,14 @@ PCSX2 2.9.93, CPS1 `dino.zip`, 240p, GUI OFF, synthetic host
 
 The worker reported roughly **2,479-2,480 PADMAN reads per 600 emulated
 frames** (about four reads per frame), with PCSX2 running at 60 FPS.
+The follow-up `[ps2_padman_worker]` counter now confirms that during a
+steady 600-frame window, **2,479 reads contained only 598 distinct IOP
+DMA publications**; the other 1,881 reads were duplicates. The normal
+once-per-frame input path independently observed 598 distinct
+publications from 600 reads. This is direct evidence that repeated EE
+reads do not increase the IOP's published input cadence in PCSX2.
+For the complete measurement and hardware-validation steps, see
+`docs/PS2_PADMAN_IOP_EVENT_BUFFER_RESEARCH.md`.
 The 40-press repetitions were separate runs with different timing
 alignment and are not a statistically controlled proof of regression.
 However, **no improvement has been demonstrated** by the worker.

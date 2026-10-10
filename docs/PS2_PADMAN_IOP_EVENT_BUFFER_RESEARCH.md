@@ -120,17 +120,63 @@ in a test-only PADMAN build after the baseline is characterized.
 ### Stage 1: Measure actual fresh packet delivery (no gameplay change)
 
 Instrument the stock IOP/EE path to record per-controller frame sequence,
-valid fresh reads, duplicates, skipped sequences, and wall-clock timing.
-PADMAN already increments an internal per-port frame and embeds it in
-its EE DMA buffers. Expose that number through a *diagnostic* accessor
-in a development libpad build (or a compatible diagnostic IRX), rather
-than treating a repeated `padRead()` result as a new hardware sample.
-Compare PS2 physical DualShock data against PCSX2 with the exact same
-ROM/game configuration and basic test pulses.
+valid reads, duplicates and skipped publications. PADMAN already increments
+an internal per-port frame and embeds it in its EE DMA buffers. The
+`PS2_INPUT_PROFILE=ON` build now reads this counter **diagnostically**
+from the existing double-buffered new-PADMAN DMA area, after libpad's
+`padRead()` performs the necessary cache synchronization. This avoids
+patching libpad or changing the IOP's published API.
 
-Questions answered: Does IOP publish ~60 distinct packets/s? Are there
-missed EE frames? Are different face-button edges already missing at the
-IOP level? Does PAL/NTSC output alter the cadence?
+The decoder is specifically for PS2SDK's newer 128-byte PADMAN records
+(frame at byte offset 88, record offsets 0 and 128), verified by
+synthetic wrapped/duplicate/skipped-sequence tests. Older 64-byte ROM
+PADMAN records have a different layout and are **not** supported by
+this diagnostic.
+
+`[ps2_padman]` prints `reads`, `advanced`, `repeated`, `skipped`,
+`backward`, and the last frame after every 600 CPS1 input samples.
+With `PS2_INPUT_THREADED=ON` and `PS2_INPUT_PROFILE=ON`,
+`[ps2_padman_worker]` reports those metrics from the 4 ms EE worker
+over 600 CPS1 frames. These count IOP-to-EE **publications**, not
+physical SIO2 transactions.
+
+#### Measured PCSX2 cadence (CPS1 dino, NO_GUI, 240p)
+
+| Steady-state metric over 600 emulation frames | Normal PS2 driver | 4 ms EE worker |
+| --- | ---: | ---: |
+| Valid reads | 600 | 2,479 |
+| Distinct new DMA frames | 598 | 598 |
+| Repeated DMA frames | 2 | 1,881 |
+| Skipped frame sequence values | 0 | 0 |
+| Backward frame sequences | 0 | 0 |
+
+Additional steady worker windows observed 599, 598, 598 and 599 new
+publications over approximately ten seconds each. Normal PS2 sampling
+reported 598, 597 and 599, with one skipped value in the 597 window.
+The **initial startup window** must be excluded: asynchronous
+initialization/boot scheduling yielded 779 frame advances and 16 skips.
+
+The observed steady PCSX2 publication rate is about **59.8-59.9 Hz**.
+Reading the buffer 250 times a second does not produce 250 distinct
+controller publications, explaining why the 4 ms EE-thread experiment
+did not improve short-tap detection.
+
+The corresponding ignored local logs are:
+`build_issue15_pcsx2_dino/pcsx2_padman_cadence.log` and
+`build_issue15_async_cps1/pcsx2_padman_cadence_thread.log`.
+The physical PS2 did not respond at its previous network address
+during this investigation. PCSX2 results alone cannot establish the
+real DualShock polling period or physical button acquisition rate.
+
+To repeat: use `-DPS2_INPUT_PROFILE=ON` on a CPS1 PS2 build, and
+optionally `-DPS2_INPUT_THREADED=ON` on a second comparable build.
+Allow the DualShock mode handshake to finish, then capture at least
+three steady 600-frame windows with the same game/configuration.
+Do not mix startup and steady windows.
+
+Remaining questions: Does a physical PS2 show the same publication
+cadence? Are individual face-button edges absent from actual IOP
+acquisition? How do PAL and NTSC output modes affect polling?
 
 ### Stage 2: Prototype IOP edge recording at the existing cadence
 

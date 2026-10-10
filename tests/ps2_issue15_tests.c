@@ -8,6 +8,7 @@
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
 #include "ps2/ps2_input_capture.h"
+#include "ps2/ps2_padman_frame_probe.h"
 #include "ps2/ps2_video_filter_policy.h"
 
 static void test_single_transport_gap(void)
@@ -125,6 +126,48 @@ static void test_async_capture_short_taps_and_chords(void)
     assert(!ps2_input_capture_consume(&capture, &output));
 }
 
+static void test_padman_dma_publication_cadence(void)
+{
+    uint8_t dma[PS2_PADMAN_NEW_DMA_SIZE] = {0};
+    ps2_padman_frame_probe_t probe = {0};
+    uint32_t frame;
+    uint32_t first = 41, second = 42;
+
+    assert(!ps2_padman_dma_newest_frame(dma, sizeof(dma) - 1, &frame));
+    assert(!ps2_padman_dma_newest_frame(NULL, sizeof(dma), &frame));
+    memcpy(dma + PS2_PADMAN_NEW_FRAME_OFFSET, &first, sizeof(first));
+    memcpy(dma + PS2_PADMAN_NEW_RECORD_SIZE +
+        PS2_PADMAN_NEW_FRAME_OFFSET, &second, sizeof(second));
+    assert(ps2_padman_dma_newest_frame(dma, sizeof(dma), &frame));
+    assert(frame == 42);
+
+    ps2_padman_frame_probe_observe(&probe, frame);
+    ps2_padman_frame_probe_observe(&probe, frame);
+    assert(probe.reads == 2 && probe.repeats == 1 && probe.advances == 0);
+
+    ps2_padman_frame_probe_observe(&probe, 45);
+    assert(probe.advances == 1 && probe.skipped == 2);
+    ps2_padman_frame_probe_reset_window(&probe);
+    assert(probe.reads == 0 && probe.previous == 45);
+    ps2_padman_frame_probe_observe(&probe, 46);
+    assert(probe.advances == 1 && probe.skipped == 0);
+    ps2_padman_frame_probe_observe(&probe, 44);
+    assert(probe.backwards == 1 && probe.previous == 44);
+
+    /* Difference arithmetic handles 32-bit sequence wrap correctly. */
+    ps2_padman_frame_probe_reset_window(&probe);
+    probe.previous = UINT32_MAX - 1;
+    first = UINT32_MAX;
+    second = 0;
+    memcpy(dma + PS2_PADMAN_NEW_FRAME_OFFSET, &first, sizeof(first));
+    memcpy(dma + PS2_PADMAN_NEW_RECORD_SIZE +
+        PS2_PADMAN_NEW_FRAME_OFFSET, &second, sizeof(second));
+    assert(ps2_padman_dma_newest_frame(dma, sizeof(dma), &frame));
+    assert(frame == 0);
+    ps2_padman_frame_probe_observe(&probe, frame);
+    assert(probe.advances == 1 && probe.skipped == 1);
+}
+
 int main(void)
 {
     test_single_transport_gap();
@@ -132,5 +175,6 @@ int main(void)
     test_pad_command_does_not_change_controller_order();
     test_240p_filter_policy();
     test_async_capture_short_taps_and_chords();
+    test_padman_dma_publication_cadence();
     return 0;
 }

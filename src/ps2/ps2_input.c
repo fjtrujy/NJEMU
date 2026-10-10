@@ -15,6 +15,9 @@
 #include "common/input_driver.h"
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
+#ifdef PS2_INPUT_PROFILE
+#include "ps2/ps2_padman_frame_probe.h"
+#endif
 #ifdef PS2_INPUT_THREADED
 #include "ps2/ps2_input_capture.h"
 #endif
@@ -51,6 +54,7 @@ typedef struct ps2_input_profile {
 	uint32_t other_raw_down[3], other_delivered_down[3];
 	uint32_t chord_raw_frames[4], chord_delivered_frames[4];
 	uint32_t previous_raw, previous_delivered;
+	ps2_padman_frame_probe_t padman_frames;
 } ps2_input_profile_t;
 
 enum { INPUT_PROFILE_FRESH, INPUT_PROFILE_UNAVAILABLE,
@@ -136,12 +140,23 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 			(unsigned int)p->chord_raw_frames[1], (unsigned int)p->chord_delivered_frames[1],
 			(unsigned int)p->chord_raw_frames[2], (unsigned int)p->chord_delivered_frames[2],
 			(unsigned int)p->chord_raw_frames[3], (unsigned int)p->chord_delivered_frames[3]);
+		printf("[ps2_padman] frames=600 reads=%u advanced=%u repeated=%u "
+			"skipped=%u backward=%u last_frame=%u\n",
+			(unsigned int)p->padman_frames.reads,
+			(unsigned int)p->padman_frames.advances,
+			(unsigned int)p->padman_frames.repeats,
+			(unsigned int)p->padman_frames.skipped,
+			(unsigned int)p->padman_frames.backwards,
+			(unsigned int)p->padman_frames.previous);
 		/* Preserve edge continuity when starting the next window. */
 		raw_change = p->previous_raw;
 		delivered_change = p->previous_delivered;
+		ps2_padman_frame_probe_t old_probe = p->padman_frames;
 		memset(p, 0, sizeof(*p));
 		p->previous_raw = raw_change;
 		p->previous_delivered = delivered_change;
+		p->padman_frames.previous = old_probe.previous;
+		p->padman_frames.have_previous = old_probe.have_previous;
 	}
 }
 #endif
@@ -156,6 +171,7 @@ typedef struct ps2_input {
 	volatile int capture_stop;
 #ifdef PS2_INPUT_PROFILE
 	uint32_t capture_frames, capture_previous_square, capture_sent_square;
+	ps2_padman_frame_probe_t capture_padman_frames;
 #endif
 #endif
 #ifdef PS2_INPUT_PROFILE
@@ -213,6 +229,13 @@ static int ps2_capture_worker(void *arg)
 				decodePadState(&pad, &fresh);
 				DI();
 				ps2_input_capture_record(&ps2->capture, &fresh);
+			#ifdef PS2_INPUT_PROFILE
+				uint32_t frame;
+				if (ps2_padman_dma_newest_frame(joyInfo[0].padBuf,
+					sizeof(joyInfo[0].padBuf), &frame))
+					ps2_padman_frame_probe_observe(
+						&ps2->capture_padman_frames, frame);
+			#endif
 				EI();
 			}
 		} else {
@@ -604,6 +627,7 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		EI();
 		if (valid) {
 #ifdef PS2_INPUT_PROFILE
+			ps2_padman_frame_probe_t window;
 			uint32_t square = state->buttons & PLATFORM_PAD_B3;
 			if (square && !ps2->capture_previous_square)
 				ps2->capture_sent_square++;
@@ -615,9 +639,20 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 				ps2->capture_frames = 0;
 				ps2->capture_sent_square = 0;
 				DI();
+				window = ps2->capture_padman_frames;
+				ps2_padman_frame_probe_reset_window(
+					&ps2->capture_padman_frames);
 				ps2->capture.samples = 0;
 				ps2->capture.square_presses = 0;
 				EI();
+				printf("[ps2_padman_worker] frames=600 reads=%u advanced=%u "
+					"repeated=%u skipped=%u backward=%u last_frame=%u\n",
+					(unsigned int)window.reads,
+					(unsigned int)window.advances,
+					(unsigned int)window.repeats,
+					(unsigned int)window.skipped,
+					(unsigned int)window.backwards,
+					(unsigned int)window.previous);
 			}
 #endif
 			return true;
@@ -645,9 +680,15 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 		true, &fresh, state);
 #ifdef PS2_INPUT_PROFILE
-	if (controller == 0)
+	if (controller == 0) {
+		uint32_t frame;
+		if (ps2_padman_dma_newest_frame(info->padBuf,
+			sizeof(info->padBuf), &frame))
+			ps2_padman_frame_probe_observe(
+				&ps2->profile.padman_frames, frame);
 		ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_FRESH, fresh.buttons,
 			valid, valid ? state->buttons : 0, false);
+	}
 #endif
 	return valid;
 }
