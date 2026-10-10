@@ -147,5 +147,50 @@ physical PADMAN timing.
 - PS2 CPS1 with `PS2_INPUT_PROFILE=ON`: compiled.
 - Real PS2 raw-button and animation capture: **not yet performed**.
 
+## PCSX2 synthetic Square-button test (2026-10-10)
+
+Launched **PCSX2 2.9.93** with a dedicated CPS1 **NO_GUI** PS2 build
+(`PS2_INPUT_PROFILE=ON`, 240p output) and `game_name.ini=dino`.
+The emulator log confirmed `ROM set "dino"`, the game rendered, the
+controller completed DualShock 2 setup, and Coin/Start/Square reached the
+game. PCSX2 ran at 60 FPS. CPS1 does not use ROM caching.
+
+Host-side test code under `build_issue15_pcsx2_dino/` sent targeted
+macOS keyboard events directly to the PCSX2 PID, avoiding shared-desktop
+foreground-focus interference. `Keyboard/Z` was bound to PS2 Square.
+These were *synthetic keyboard events*, not a physical DualShock test.
+
+| Sequence | Sent down/up events | Raw sampled Square down/up | Delivered Square down/up |
+| --- | ---: | ---: | ---: |
+| 100 ms held, 300 ms released | 20/20 | 20/20 | 20/20 |
+| 35 ms held, 65 ms released | 30/30 | 30/30 | 30/30 |
+| 25 ms held, 50 ms released | 30/30 | 29/29 | 29/29 |
+| 12 ms held, 32 ms released | 40/40 | 31/31 | 31/31 |
+
+Results sum complete 600-poll log windows where a sequence spanned a
+report boundary. All reporting windows during these tests showed
+`read_fail=0`, `unavailable=0`, `mode_wait=0`, `cached=0`,
+and `fresh=600`.
+
+**Interpretation:** for these runs, raw and delivered Square transitions
+always matched. The missing 1/30 and 9/40 very short presses were already
+absent from the sampled pad state, rather than disappearing in the CPS1
+mapping layer or the one-sample fallback cache. The emulator samples at
+roughly 60 Hz, so a button pulse shorter than one frame can fall between
+polls. This is a plausible explanation for *very short* missing taps;
+additional timing jitter or PCSX2's host keyboard-to-virtual-pad sampling
+can also explain losses. The results do not prove where an event was lost
+before the PS2 input driver and cannot be extrapolated directly to physical
+DualShock polling on a real PS2.
+
+The character-selection screen and an active playable character were
+visually confirmed. However, there was **no frame-by-frame count of attack
+animations**, so these tests do not prove the game accepted all delivered
+presses. The reporter's original human-speed missed-attack behavior was
+**not** reproduced in the 100 ms and 35 ms held sequences.
+
+Evidence: `build_issue15_pcsx2_dino/pcsx2_input.log` and local PCSX2
+screenshots (build artifacts, not committed).
+
 All changes are PS2-local except the build option and portable host test.
 No `resources/` content was modified, and no GitHub issue comment was posted.
