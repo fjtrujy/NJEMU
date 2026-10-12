@@ -19,6 +19,7 @@ static const char *inifile_name = "njemu.ini";
 #endif
 
 #elif defined(INCLUDE_CONFIG_STRUCT)
+#include "common/display_mode_options.h"
 
 #if (EMU_SYSTEM == CPS1)
 #define DEFAULT_SAMPLERATE	0	// 11025Hz
@@ -41,7 +42,7 @@ static cfg_type gamecfg_2buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -105,7 +106,7 @@ static cfg_type gamecfg_2buttons_rot[] =
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	/* Keep the legacy key so existing 0/1 RotateScreen configs retain their meaning. */
 	{ CFG_INT,	"RotateScreen",			&cps_screen_orientation,	CPS_SCREEN_ORIENTATION_AUTO,	CPS_SCREEN_ORIENTATION_COUNT - 1, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -167,7 +168,7 @@ static cfg_type gamecfg_3buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -237,7 +238,7 @@ static cfg_type gamecfg_3buttons_rot[] =
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	/* Keep the legacy key so existing 0/1 RotateScreen configs retain their meaning. */
 	{ CFG_INT,	"RotateScreen",			&cps_screen_orientation,	CPS_SCREEN_ORIENTATION_AUTO,	CPS_SCREEN_ORIENTATION_COUNT - 1, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -296,7 +297,7 @@ static cfg_type gamecfg_4buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -365,7 +366,7 @@ static cfg_type gamecfg_6buttons[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -436,7 +437,7 @@ static cfg_type gamecfg_quiz[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -510,7 +511,7 @@ static cfg_type gamecfg_forgottn[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -569,7 +570,7 @@ static cfg_type gamecfg_sfzch[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -638,7 +639,7 @@ static cfg_type gamecfg_wofch[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -704,7 +705,7 @@ static cfg_type gamecfg_wofch3p[] =
 #endif
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -768,7 +769,7 @@ static cfg_type gamecfg_progear[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -828,7 +829,7 @@ static cfg_type gamecfg_pzloop2[] =
 	{ CFG_INT,	"RasterEnable",			&cps_raster_enable,		1,	1	, 0},
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},

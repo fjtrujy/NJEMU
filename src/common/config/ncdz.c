@@ -15,6 +15,7 @@
 static const char *inifile_name = "njemu.ini";
 
 #elif defined(INCLUDE_CONFIG_STRUCT)
+#include "common/display_mode_options.h"
 
 #define DEFAULT_SAMPLERATE	1	// 22050Hz
 
@@ -33,7 +34,7 @@ static cfg_type gamecfg_ncdz[] =
 	{ CFG_BOOL,	"CDROMSpeedLimit",		&neogeo_cdspeed_limit,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},

@@ -15,6 +15,7 @@
 #include "common/input_driver.h"
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
+#include "ps2/ps2_pad_packet.h"
 #ifdef PS2_INPUT_PROFILE
 #include "ps2/ps2_padman_frame_probe.h"
 #endif
@@ -48,7 +49,7 @@ struct JoyInfo joyInfo[MAX_CONTROLLERS];
 
 #ifdef PS2_INPUT_PROFILE
 typedef struct ps2_input_profile {
-	uint32_t samples, fresh, unavailable, read_fail, mode_wait, cached;
+	uint32_t samples, fresh, unavailable, read_fail, mode_wait, cached, invalid;
 	uint32_t square_raw_down, square_raw_up;
 	uint32_t square_delivered_down, square_delivered_up;
 	uint32_t other_raw_down[3], other_delivered_down[3];
@@ -58,7 +59,7 @@ typedef struct ps2_input_profile {
 } ps2_input_profile_t;
 
 enum { INPUT_PROFILE_FRESH, INPUT_PROFILE_UNAVAILABLE,
-	INPUT_PROFILE_READ_FAIL, INPUT_PROFILE_MODE_WAIT };
+	INPUT_PROFILE_READ_FAIL, INPUT_PROFILE_MODE_WAIT, INPUT_PROFILE_INVALID };
 
 static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 	uint32_t raw_buttons, bool delivered, uint32_t delivered_buttons,
@@ -99,6 +100,8 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 		p->unavailable++;
 	else if (reason == INPUT_PROFILE_READ_FAIL)
 		p->read_fail++;
+	else if (reason == INPUT_PROFILE_INVALID)
+		p->invalid++;
 	else
 		p->mode_wait++;
 
@@ -123,9 +126,10 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 
 	if (p->samples == 600) {
 		printf("[ps2_input] polls=600 fresh=%u unavailable=%u read_fail=%u "
-			"mode_wait=%u cached=%u square_raw=%u/%u square_sent=%u/%u\n",
+			"mode_wait=%u invalid=%u cached=%u square_raw=%u/%u square_sent=%u/%u\n",
 			(unsigned int)p->fresh, (unsigned int)p->unavailable,
 			(unsigned int)p->read_fail, (unsigned int)p->mode_wait,
+			(unsigned int)p->invalid,
 			(unsigned int)p->cached, (unsigned int)p->square_raw_down,
 			(unsigned int)p->square_raw_up,
 			(unsigned int)p->square_delivered_down,
@@ -223,8 +227,9 @@ static int ps2_capture_worker(void *arg)
 		if (state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1 ||
 			state == PAD_STATE_EXECCMD) {
 			int ret = padRead(0, 0, &pad);
-			if (ret >= (int)(offsetof(struct padButtonStatus, btns) +
-				sizeof(pad.btns))) {
+			if (ps2_pad_packet_valid(ret,
+				offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
+				pad.mode, pad.btns)) {
 				input_state_t fresh;
 				decodePadState(&pad, &fresh);
 				DI();
@@ -670,6 +675,19 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 #ifdef PS2_INPUT_PROFILE
 		if (controller == 0)
 			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_READ_FAIL,
+				0, valid, valid ? state->buttons : 0, valid);
+#endif
+		return valid;
+	}
+
+	if (!ps2_pad_packet_valid(ret,
+		offsetof(struct padButtonStatus, btns) + sizeof(paddata.btns),
+		paddata.mode, paddata.btns)) {
+		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
+			false, NULL, state);
+#ifdef PS2_INPUT_PROFILE
+		if (controller == 0)
+			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_INVALID,
 				0, valid, valid ? state->buttons : 0, valid);
 #endif
 		return valid;

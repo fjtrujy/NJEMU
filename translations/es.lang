@@ -432,3 +432,4 @@ MENUHELP_EMULATION_SETTINGS=Hardware y ajustes DIP del juego.
 MENUHELP_PERFORMANCE=Velocidad de CPU y ajustes de caché.
 MENUHELP_TOOLS=Estados guardados, trucos y comandos.
 MENUHELP_SYSTEM_SETTINGS=Reiniciar, cambiar de juego o salir.
+DISPLAY_NATIVE_PIXELS=Píxeles nativos (1:1)

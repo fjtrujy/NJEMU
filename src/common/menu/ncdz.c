@@ -7,6 +7,7 @@
 ******************************************************************************/
 
 #if defined(INCLUDE_GAMECFG_STRUCT)
+#include "common/display_mode_options.h"
 
 /*-----------------------------------------------------------------------------
 	gamecfg ˜‹ÔìÌå
@@ -19,7 +20,7 @@ static gamecfg2_t gamecfg_ncdz[] =
 	{ EMULATE_LOAD_SCREEN, &neogeo_loadscreen,    CFG_RESTART,  1,  { NO, YES } , 0},
 	{ CDROM_SPEED_LIMIT,   &neogeo_cdspeed_limit, CFG_CONTINUE, 1,  { NO, YES } , 0},
 	MENU_BLANK,
-	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, 3, { DISPLAY_ORIGINAL_SIZE, DISPLAY_ORIGINAL_ASPECT, DISPLAY_4_3, DISPLAY_FULLSCREEN }, 0},
+	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, DISPLAY_MENU_MAX, DISPLAY_MENU_VALUES, 0},
 	{ VIDEO_SYNC,          &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP,      &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,           &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},

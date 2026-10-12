@@ -168,6 +168,16 @@ static void test_cps1_240p_display_modes(void)
 	assert(width == 657);
 	assert(height == 224);
 
+	/* Explicit native-pixel mode never stretches 384 CPS pixels to 657. */
+	display_mode_size_aspect(DISPLAY_MODE_NATIVE_PIXELS, 704, 224, 384, 224,
+		4, 3, &width, &height);
+	assert(width == 384);
+	assert(height == 224);
+	display_mode_size_aspect(DISPLAY_MODE_NATIVE_PIXELS, 704, 224, 224, 384,
+		3, 4, &width, &height);
+	assert(width == 130);
+	assert(height == 224);
+
 	display_mode_size_aspect(DISPLAY_MODE_ORIGINAL_ASPECT, 704, 224, 384, 224,
 		4, 3,
 		&width, &height);
@@ -262,6 +272,13 @@ static void test_cps1_240p_presentation_rect(void)
 	assert(rect.left == 23);
 	assert(rect.top == 8);
 	assert(rect.right == 680);
+	assert(rect.bottom == 232);
+
+	rect = display_mode_presentation_rect_aspect(
+		DISPLAY_MODE_NATIVE_PIXELS, 384, 224, 4, 3);
+	assert(rect.left == 160);
+	assert(rect.top == 8);
+	assert(rect.right == 544);
 	assert(rect.bottom == 232);
 
 	rect = display_mode_presentation_rect_aspect(

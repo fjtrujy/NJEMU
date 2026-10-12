@@ -10,6 +10,7 @@ typedef enum display_mode
 	DISPLAY_MODE_ORIGINAL_ASPECT,
 	DISPLAY_MODE_4_3,
 	DISPLAY_MODE_FULLSCREEN,
+	DISPLAY_MODE_NATIVE_PIXELS,
 	DISPLAY_MODE_COUNT
 } display_mode_t;
 
@@ -25,6 +26,27 @@ static inline void display_mode_size(display_mode_t mode,
 	if (mode == DISPLAY_MODE_FULLSCREEN) {
 		*width = output_width;
 		*height = output_height;
+		return;
+	}
+	if (mode == DISPLAY_MODE_NATIVE_PIXELS) {
+		/* One-to-one whenever the native image fits. If it cannot fit
+		 * (for example a rotated 224x384 CPS image on 240p), scale both
+		 * axes together rather than distorting or clipping the frame. */
+		if (native_width > output_width || native_height > output_height) {
+			if ((long long)native_width * output_height >
+				(long long)native_height * output_width) {
+				*width = output_width;
+				*height = (int)((long long)native_height * output_width /
+					native_width);
+			} else {
+				*height = output_height;
+				*width = (int)((long long)native_width * output_height /
+					native_height);
+			}
+		} else {
+			*width = native_width;
+			*height = native_height;
+		}
 		return;
 	}
 	if (mode == DISPLAY_MODE_ORIGINAL_SIZE) {
@@ -57,6 +79,13 @@ static inline void display_mode_size_aspect(display_mode_t mode,
 	int pixel_aspect_num = 1;
 	int pixel_aspect_den = 1;
 
+	/* Explicit one-source-pixel-per-output-pixel view. Unlike Original Size,
+	 * this does not compensate for the non-square pixel aspect of PS2 video. */
+	if (mode == DISPLAY_MODE_NATIVE_PIXELS) {
+		display_mode_size(mode, output_width, output_height,
+			native_width, native_height, width, height);
+		return;
+	}
 	/* Original Size means one source scanline per output scanline. On outputs
 	 * with non-square pixels, preserve that vertical 1:1 mapping while sizing
 	 * the horizontal extent to the content's intended display aspect. This is

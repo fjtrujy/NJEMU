@@ -7,6 +7,7 @@
 #include "common/input_state.h"
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
+#include "ps2/ps2_pad_packet.h"
 #include "ps2/ps2_input_capture.h"
 #include "ps2/ps2_padman_frame_probe.h"
 #include "ps2/ps2_video_filter_policy.h"
@@ -42,6 +43,32 @@ static void test_disconnect_does_not_stick_buttons(void)
     assert(ps2_input_sample_cache_update(&cache, true, true, &sample, &out));
     assert(!ps2_input_sample_cache_update(&cache, false, false, NULL, &out));
     assert(!ps2_input_sample_cache_update(&cache, true, false, NULL, &out));
+}
+
+static void test_invalid_pad_packet_is_not_all_buttons(void)
+{
+    ps2_input_sample_cache_t cache = {0};
+    input_state_t sample = {0}, output = {0};
+    const size_t button_end = 4;
+
+    assert(!ps2_pad_packet_valid(3, button_end, 0x73, 0xffef));
+    assert(!ps2_pad_packet_valid(4, button_end, 0, 0xffef));
+    assert(!ps2_pad_packet_valid(4, button_end, 0x73, 0));
+    assert(ps2_pad_packet_valid(4, button_end, 0x41, 0xffff));
+    assert(ps2_pad_packet_valid(4, button_end, 0x73, 0xffef));
+
+    sample.buttons = PLATFORM_PAD_B3 | PLATFORM_PAD_RIGHT;
+    assert(ps2_input_sample_cache_update(&cache, true, true, &sample, &output));
+    assert(ps2_input_sample_cache_update(&cache, true,
+        ps2_pad_packet_valid(4, button_end, 0, 0),
+        NULL, &output));
+    assert(output.buttons == sample.buttons);
+    assert(!ps2_input_sample_cache_update(&cache, true,
+        ps2_pad_packet_valid(4, button_end, 0, 0),
+        NULL, &output));
+    sample.buttons = 0;
+    assert(ps2_input_sample_cache_update(&cache, true, true, &sample, &output));
+    assert(output.buttons == 0);
 }
 
 static void test_pad_command_does_not_change_controller_order(void)
@@ -172,6 +199,7 @@ int main(void)
 {
     test_single_transport_gap();
     test_disconnect_does_not_stick_buttons();
+    test_invalid_pad_packet_is_not_all_buttons();
     test_pad_command_does_not_change_controller_order();
     test_240p_filter_policy();
     test_async_capture_short_taps_and_chords();

@@ -15,6 +15,7 @@
 static const char *inifile_name = "njemu.ini";
 
 #elif defined(INCLUDE_CONFIG_STRUCT)
+#include "common/display_mode_options.h"
 
 #define DEFAULT_SAMPLERATE	1	// 22050Hz
 
@@ -33,7 +34,7 @@ static cfg_type gamecfg_mvs[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -105,7 +106,7 @@ static cfg_type gamecfg_irrmaze[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -178,7 +179,7 @@ static cfg_type gamecfg_popbounc[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -251,7 +252,7 @@ static cfg_type gamecfg_vliner[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -326,7 +327,7 @@ static cfg_type gamecfg_jockeygp[] =
 	{ CFG_INT,	"RasterEnable",			&neogeo_raster_enable,	0,	1	, 0},
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
-	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	3	, 0},
+	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
