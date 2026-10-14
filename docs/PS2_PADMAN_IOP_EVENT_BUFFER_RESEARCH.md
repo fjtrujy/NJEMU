@@ -161,6 +161,20 @@ Reading the buffer 250 times a second does not produce 250 distinct
 controller publications, explaining why the 4 ms EE-thread experiment
 did not improve short-tap detection.
 
+### Direct IOP acquisition measurement (2026-10-14)
+
+The publication counter is incremented in `DmaSendEE()`, rather than
+directly inside `UpdatePadThread()`. It therefore **does not itself
+measure accepted physical pad reads**. A later, separately instrumented
+PADMAN IRX counts accepted `ReadData()` responses and Square button
+edges on the IOP, exposing these diagnostic counters in reserved DMA
+bytes. In PCSX2, it measured about 597-598 accepted reads per 600 CPS1
+frames with stock VBlank scheduling and 2,496 with an experimental
+4 ms IOP alarm. Preliminary short-transition tests favor the IOP alarm,
+but physical PS2 performance/safety remains untested. See
+`docs/PS2_PADMAN_IOP_ACQUISITION_EXPERIMENT.md` for build instructions,
+measurements and restrictions. Neither IOP driver is a production default.
+
 The expanded PCSX2 tests also reproduce a second limitation:
 80 ms Square presses separated by only a **5-10 ms release** can merge
 into a continuous press if the release is not sampled. This is observed

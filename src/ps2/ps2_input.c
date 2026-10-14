@@ -18,6 +18,9 @@
 #include "ps2/ps2_pad_packet.h"
 #ifdef PS2_INPUT_PROFILE
 #include "ps2/ps2_padman_frame_probe.h"
+#ifdef PS2_IOP_PADMAN_PROBE
+#include "ps2/ps2_padman_iop_probe.h"
+#endif
 #endif
 #ifdef PS2_INPUT_THREADED
 #include "ps2/ps2_input_capture.h"
@@ -56,6 +59,10 @@ typedef struct ps2_input_profile {
 	uint32_t chord_raw_frames[4], chord_delivered_frames[4];
 	uint32_t previous_raw, previous_delivered;
 	ps2_padman_frame_probe_t padman_frames;
+#ifdef PS2_IOP_PADMAN_PROBE
+	ps2_padman_iop_probe_t iop_first, iop_last;
+	bool iop_observed;
+#endif
 } ps2_input_profile_t;
 
 enum { INPUT_PROFILE_FRESH, INPUT_PROFILE_UNAVAILABLE,
@@ -152,6 +159,12 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 			(unsigned int)p->padman_frames.skipped,
 			(unsigned int)p->padman_frames.backwards,
 			(unsigned int)p->padman_frames.previous);
+#ifdef PS2_IOP_PADMAN_PROBE
+		printf("[ps2_iop_acquire] frames=600 valid=%u acquired=%u square_edges=%u\n",
+			(unsigned int)p->iop_observed,
+			(unsigned int)(p->iop_last.acquired - p->iop_first.acquired),
+			(unsigned int)(p->iop_last.square_edges - p->iop_first.square_edges));
+#endif
 		/* Preserve edge continuity when starting the next window. */
 		raw_change = p->previous_raw;
 		delivered_change = p->previous_delivered;
@@ -161,6 +174,12 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 		p->previous_delivered = delivered_change;
 		p->padman_frames.previous = old_probe.previous;
 		p->padman_frames.have_previous = old_probe.have_previous;
+#ifdef PS2_IOP_PADMAN_PROBE
+		if (p->iop_observed) {
+			p->iop_first = p->iop_last;
+			p->iop_observed = true;
+		}
+#endif
 	}
 }
 #endif
@@ -700,6 +719,17 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 #ifdef PS2_INPUT_PROFILE
 	if (controller == 0) {
 		uint32_t frame;
+#ifdef PS2_IOP_PADMAN_PROBE
+		ps2_padman_iop_probe_t iop;
+		if (ps2_padman_iop_probe_decode(info->padBuf,
+			sizeof(info->padBuf), &iop)) {
+			if (!ps2->profile.iop_observed) {
+				ps2->profile.iop_first = iop;
+				ps2->profile.iop_observed = true;
+			}
+			ps2->profile.iop_last = iop;
+		}
+#endif
 		if (ps2_padman_dma_newest_frame(info->padBuf,
 			sizeof(info->padBuf), &frame))
 			ps2_padman_frame_probe_observe(

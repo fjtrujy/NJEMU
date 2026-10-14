@@ -1,0 +1,55 @@
+--- a/src/freepad.h
++++ b/src/freepad.h
+@@ -219,6 +219,11 @@
+ 	u32 taskTid;
+ 	u32 stat70bit;
+ 	u32 val_184; // Set, but unused
++	/* NJEMU opt-in IOP probe: these fields are not part of the pad EE ABI. */
++	u32 nj_probe_acquired;
++	u32 nj_probe_square_edges;
++	u16 nj_probe_last_square;
++	u8 nj_probe_seen_square;
+ } padState_t;
+ 
+ // Internal functions
+--- a/src/padPortOpen.c
++++ b/src/padPortOpen.c
+@@ -57,6 +57,14 @@
+ 			else
+ 			{
+ 				u32 i;
++				/* Count accepted SIO2 responses, not PADMAN DMA publications. */
++				u16 square = (pstate->outbuffer[4] & 0x80) != 0;
++				pstate->nj_probe_acquired++;
++				if (pstate->nj_probe_seen_square &&
++				    square != pstate->nj_probe_last_square)
++					pstate->nj_probe_square_edges++;
++				pstate->nj_probe_last_square = square;
++				pstate->nj_probe_seen_square = 1;
+ 
+ 				for(i=0; i < 32; i++)
+ 					pstate->buttonStatus[i] = pstate->outbuffer[i];
+--- a/src/padInit.c
++++ b/src/padInit.c
+@@ -349,6 +349,21 @@
+ 					p->ee_pdata.modeTable[1] = p->modeTable.data32[1];
+ 
+ 					p->ee_pdata.stat70bit = p->stat70bit;
++					/* Diagnostic-only, reserved bytes in the 128-byte new
++					 * PADMAN DMA record. Normal padRead ABI stays intact. */
++					{
++						u32 j;
++						for (j = 0; j < 4; j++)
++						{
++							p->ee_pdata.padding[j] =
++								(u8)(p->nj_probe_acquired >> (j * 8));
++							p->ee_pdata.padding[j + 4] =
++								(u8)(p->nj_probe_square_edges >> (j * 8));
++						}
++					}
++					p->ee_pdata.padding[8] = 'N';
++					p->ee_pdata.padding[9] = 'J';
++					p->ee_pdata.padding[10] = 1;
+ 
+ 					*((pad_ee_addr) ? &(p->ee_pdata.length) : &(p->ee_old_pdata.length)) = (p->buttonDataReady == 1) ? padSetupEEButtonData(port, slot, p) : 0;
+ 

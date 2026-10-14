@@ -10,6 +10,7 @@
 #include "ps2/ps2_pad_packet.h"
 #include "ps2/ps2_input_capture.h"
 #include "ps2/ps2_padman_frame_probe.h"
+#include "ps2/ps2_padman_iop_probe.h"
 #include "ps2/ps2_video_filter_policy.h"
 
 static void test_single_transport_gap(void)
@@ -195,6 +196,49 @@ static void test_padman_dma_publication_cadence(void)
     assert(probe.advances == 1 && probe.skipped == 1);
 }
 
+static void test_padman_iop_acquisition_probe(void)
+{
+    uint8_t dma[PS2_IOP_DMA_BUFFER_SIZE] = {0};
+    ps2_padman_iop_probe_t probe = {0};
+    const size_t offset = PS2_IOP_RECORD_SIZE + PS2_IOP_COUNTER_OFFSET;
+    uint32_t frame = 24;
+
+    assert(!ps2_padman_iop_probe_decode(dma, sizeof(dma), &probe));
+    memcpy(dma + PS2_IOP_RECORD_SIZE + 88, &frame, sizeof(frame));
+    dma[offset] = 0x78;
+    dma[offset + 1] = 0x56;
+    dma[offset + 2] = 0x34;
+    dma[offset + 3] = 0x12;
+    dma[offset + 4] = 0x0b;
+    dma[offset + 8] = 'N';
+    dma[offset + 9] = 'J';
+    dma[offset + 10] = 1;
+    assert(!ps2_padman_iop_probe_decode(dma, sizeof(dma) - 1, &probe));
+    assert(ps2_padman_iop_probe_decode(dma, sizeof(dma), &probe));
+    assert(probe.acquired == 0x12345678u && probe.square_edges == 11u);
+    dma[offset + 10] = 2;
+    assert(!ps2_padman_iop_probe_decode(dma, sizeof(dma), &probe));
+
+    /* The decoder selects the first record if the second is older. */
+    frame = 25;
+    memcpy(dma + 88, &frame, sizeof(frame));
+    dma[PS2_IOP_COUNTER_OFFSET] = 0x2a;
+    dma[PS2_IOP_COUNTER_OFFSET + 8] = 'N';
+    dma[PS2_IOP_COUNTER_OFFSET + 9] = 'J';
+    dma[PS2_IOP_COUNTER_OFFSET + 10] = 1;
+    assert(ps2_padman_iop_probe_decode(dma, sizeof(dma), &probe));
+    assert(probe.acquired == 42);
+
+    /* The later record remains newer even when its frame wraps. */
+    frame = UINT32_MAX;
+    memcpy(dma + 88, &frame, sizeof(frame));
+    frame = 0;
+    memcpy(dma + PS2_IOP_RECORD_SIZE + 88, &frame, sizeof(frame));
+    dma[offset + 10] = 1;
+    assert(ps2_padman_iop_probe_decode(dma, sizeof(dma), &probe));
+    assert(probe.acquired == 0x12345678u);
+}
+
 int main(void)
 {
     test_single_transport_gap();
@@ -204,5 +248,6 @@ int main(void)
     test_240p_filter_policy();
     test_async_capture_short_taps_and_chords();
     test_padman_dma_publication_cadence();
+    test_padman_iop_acquisition_probe();
     return 0;
 }

@@ -95,6 +95,19 @@ option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution conf
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
 option(PS2_INPUT_PROFILE "PS2: log sampled button edges and transient pad failures" OFF)
 option(PS2_INPUT_THREADED "Experimental CPS1/PS2 input capture worker" OFF)
+set(PS2_IOP_PADMAN_PROBE_IRX "" CACHE FILEPATH
+    "PS2 diagnostic-only: replace embedded PADMAN with a locally instrumented IRX")
+if(PS2_IOP_PADMAN_PROBE_IRX)
+    if(NOT PLATFORM STREQUAL "PS2" OR NOT "${TARGET}" STREQUAL "CPS1" OR
+        NOT PS2_INPUT_PROFILE OR PS2_INPUT_THREADED OR
+        PS2_EXTERNAL_IRX_IMAGE OR RELEASE OR NJEMU_CANONICAL_RELEASE)
+        message(FATAL_ERROR
+            "PS2_IOP_PADMAN_PROBE_IRX requires non-release PS2 CPS1, PS2_INPUT_PROFILE=ON, PS2_INPUT_THREADED=OFF, and classic embedded drivers")
+    endif()
+    if(NOT EXISTS "${PS2_IOP_PADMAN_PROBE_IRX}")
+        message(FATAL_ERROR "Missing experimental PADMAN IRX: ${PS2_IOP_PADMAN_PROBE_IRX}")
+    endif()
+endif()
 option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
 if("${PLATFORM}" STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
     set(PS2_MVS_NATIVE_WORD_ACCESS_DEFAULT ON)
@@ -1410,6 +1423,27 @@ elseif(PLATFORM STREQUAL "PS2")
         )
     else()
         target_link_libraries(${TARGET} PUBLIC ps2_drivers)
+    endif()
+    if(PS2_IOP_PADMAN_PROBE_IRX)
+        find_program(NJEMU_PS2_BIN2C NAMES bin2c
+            HINTS "$ENV{PS2SDK}/bin" REQUIRED)
+        set(NJEMU_PADMAN_PROBE_SOURCE
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/ps2_padman_probe_irx.c")
+        add_custom_command(
+            OUTPUT "${NJEMU_PADMAN_PROBE_SOURCE}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/generated"
+            COMMAND "${NJEMU_PS2_BIN2C}"
+                "${PS2_IOP_PADMAN_PROBE_IRX}"
+                "${NJEMU_PADMAN_PROBE_SOURCE}"
+                ps2_padman_probe_irx
+            DEPENDS "${PS2_IOP_PADMAN_PROBE_IRX}"
+            COMMENT "Embedding experimental PADMAN acquisition probe"
+            VERBATIM)
+        target_sources(${TARGET} PRIVATE
+            "${NJEMU_PADMAN_PROBE_SOURCE}"
+            src/ps2/ps2_padman_probe_override.c)
+        target_compile_definitions(${TARGET} PRIVATE PS2_IOP_PADMAN_PROBE=1)
     endif()
 elseif(PLATFORM STREQUAL "PSVITA")
     # GCC's <limits.h> in the VitaSDK toolchain does not reach newlib's, which

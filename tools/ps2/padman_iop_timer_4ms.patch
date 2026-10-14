@@ -1,0 +1,101 @@
+--- a/Makefile
++++ b/Makefile
+@@ -42,3 +42,6 @@
+ include $(PS2SDKSRC)/iop/Rules.bin.make
+ include $(PS2SDKSRC)/iop/Rules.make
+ include $(PS2SDKSRC)/iop/Rules.release
++
++# Opt-in PCSX2-only PADMAN timer acquisition experiment
++IOP_CFLAGS += -DNJEMU_PADMAN_TIMER_POLL_US=4000
+--- a/src/padInit.c
++++ b/src/padInit.c
+@@ -44,6 +44,21 @@
+ int sifdma_id = 0;
+ u32 vblankStartCount = 0;
+ s32 mainThreadCount = 0;
++
++#ifdef NJEMU_PADMAN_TIMER_POLL_US
++static iop_sys_clock_t nj_timer_period;
++int nj_timer_active = 0;
++
++unsigned int nj_padman_timer_poll(void *arg)
++{
++	vblankData_t *data = (vblankData_t *)arg;
++	if (data->init && !data->stopTransfer) {
++		data->stopTransfer = 1;
++		iSetEventFlag(data->eventflag, EF_VB_TRANSFER);
++	}
++	return nj_timer_period.lo;
++}
++#endif
+ 
+ static void TransferThread(void *arg)
+ {
+@@ -664,7 +679,11 @@
+ 	vblankStartCount++;
+ 	frame_count++;
+ 
+-	if((vData->init == 1) && (vData->stopTransfer == 0))
++	if((vData->init == 1) && (vData->stopTransfer == 0)
++#ifdef NJEMU_PADMAN_TIMER_POLL_US
++	   && !nj_timer_active
++#endif
++	)
+ 	{
+ 		vData->stopTransfer = 1;
+ 		iSetEventFlag(vData->eventflag, EF_VB_TRANSFER);
+@@ -781,5 +800,16 @@
+ 	vblankData.init = 1;
+ 	padman_init = 1;
+ 
++#ifdef NJEMU_PADMAN_TIMER_POLL_US
++	USec2SysClock(NJEMU_PADMAN_TIMER_POLL_US, &nj_timer_period);
++	if (SetAlarm(&nj_timer_period, nj_padman_timer_poll, &vblankData) == 0) {
++		nj_timer_active = 1;
++		M_PRINTF("experimental PADMAN timer poll interval: %d us\n",
++			NJEMU_PADMAN_TIMER_POLL_US);
++	} else {
++		M_PRINTF("experimental timer unavailable, using VBlank polling\n");
++	}
++#endif
++
+ 	return 1;
+ }
+--- a/src/padMiscFuncs.c
++++ b/src/padMiscFuncs.c
+@@ -30,6 +30,10 @@
+ extern vblankData_t vblankData;
+ extern int padman_init;
+ extern void *pad_ee_addr;
++#ifdef NJEMU_PADMAN_TIMER_POLL_US
++extern int nj_timer_active;
++extern unsigned int nj_padman_timer_poll(void *);
++#endif
+ 
+ void DeleteThreadsEventFlag(vblankData_t *s)
+ {
+@@ -50,6 +54,12 @@
+ 				if((openSlots[port] >> slot) & 0x1)
+ 					padPortClose(port, slot, 1);
+ 			}
++#ifdef NJEMU_PADMAN_TIMER_POLL_US
++		if (nj_timer_active) {
++			CancelAlarm(nj_padman_timer_poll, &vblankData);
++			nj_timer_active = 0;
++		}
++#endif
+ 
+ 		SetEventFlag(vblankData.eventflag, EF_EXIT_THREAD);
+ 
+--- a/src/imports.lst
++++ b/src/imports.lst
+@@ -17,6 +17,9 @@
+ I_GetThreadId
+ I_ReferThreadStatus
+ I_iReferThreadStatus
++I_SetAlarm
++I_CancelAlarm
++I_USec2SysClock
+ thbase_IMPORTS_end
+ 
+ thevent_IMPORTS_start
