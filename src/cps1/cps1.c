@@ -217,42 +217,6 @@ static void apply_cheat()
 uint32_t global_frame_count = 0;
 // int pspScreenshotSave(const char *filename);
 
-#ifdef CPS1_INPUT_PORT_PROFILE
-/* Trace the P1 input-register value for the just-executed CPU frame.
- * This is diagnostic-only; no register values or timings are changed. */
-static void cps1_profile_input_port(void)
-{
-	static uint32_t frames, attack_down, attack_up, attack_held;
-	static uint32_t right_attack, cross_attack;
-	static int previous_attack;
-	uint16_t port = cps1_port_value[1];
-	int attack = (port & 0x0010) == 0;
-
-	if (attack && !previous_attack)
-		attack_down++;
-	if (!attack && previous_attack)
-		attack_up++;
-	if (attack) {
-		attack_held++;
-		if ((port & 0x0001) == 0)
-			right_attack++;
-		if ((port & 0x0020) == 0)
-			cross_attack++;
-	}
-	previous_attack = attack;
-	if (++frames == 600) {
-		printf("[cps1_port] frames=600 attack_down=%u attack_up=%u "
-			"held_frames=%u right_attack_frames=%u cross_attack_frames=%u\n",
-			(unsigned int)attack_down, (unsigned int)attack_up,
-			(unsigned int)attack_held, (unsigned int)right_attack,
-			(unsigned int)cross_attack);
-		cps1_profile_port_reads_report();
-		frames = attack_down = attack_up = attack_held = 0;
-		right_attack = cross_attack = 0;
-	}
-}
-#endif
-
 static void cps1_run(void)
 {
 	while (Loop >= LOOP_RESET)
@@ -277,11 +241,6 @@ static void cps1_run(void)
 			 * keeps input independent from whether the previous frame was presented. */
 			update_inputport();
 			timer_update_cpu();
-#ifdef CPS1_INPUT_PORT_PROFILE
-			cps1_profile_port_reads_finish_frame(
-				(cps1_port_value[1] & 0x0010) == 0);
-			cps1_profile_input_port();
-#endif
 			update_screen();
 
 			// printf("Frame: %u\n", global_frame_count++);

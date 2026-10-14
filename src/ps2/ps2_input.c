@@ -5,10 +5,6 @@
 #include <libpad.h>
 #include <libmtap.h>
 #include <ps2_joystick_driver.h>
-#ifdef PS2_INPUT_THREADED
-#include <kernel.h>
-#include <delaythread.h>
-#endif
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
 #endif
@@ -16,19 +12,6 @@
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
 #include "ps2/ps2_pad_packet.h"
-#ifdef PS2_INPUT_PROFILE
-#include "ps2/ps2_padman_frame_probe.h"
-#ifdef PS2_IOP_PADMAN_PROBE
-#include "ps2/ps2_padman_iop_probe.h"
-#include "ps2/ps2_padman_edge_gap.h"
-#ifdef PS2_IOP_SQUARE_REPLAY
-#include "ps2/ps2_padman_square_fifo.h"
-#endif
-#endif
-#endif
-#ifdef PS2_INPUT_THREADED
-#include "ps2/ps2_input_capture.h"
-#endif
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -54,174 +37,8 @@ struct JoyInfo
 
 struct JoyInfo joyInfo[MAX_CONTROLLERS];
 
-#ifdef PS2_INPUT_PROFILE
-typedef struct ps2_input_profile {
-	uint32_t samples, fresh, unavailable, read_fail, mode_wait, cached, invalid;
-	uint32_t square_raw_down, square_raw_up;
-	uint32_t square_delivered_down, square_delivered_up;
-	uint32_t other_raw_down[3], other_delivered_down[3];
-	uint32_t chord_raw_frames[4], chord_delivered_frames[4];
-	uint32_t previous_raw, previous_delivered;
-	ps2_padman_frame_probe_t padman_frames;
-#ifdef PS2_IOP_PADMAN_PROBE
-	ps2_padman_iop_probe_t iop_first, iop_last;
-	ps2_padman_edge_gap_t iop_gap;
-	bool iop_observed;
-#endif
-} ps2_input_profile_t;
-
-enum { INPUT_PROFILE_FRESH, INPUT_PROFILE_UNAVAILABLE,
-	INPUT_PROFILE_READ_FAIL, INPUT_PROFILE_MODE_WAIT, INPUT_PROFILE_INVALID };
-
-static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
-	uint32_t raw_buttons, bool delivered, uint32_t delivered_buttons,
-	bool cached)
-{
-	/* Right, Cross, Circle; include Square in all chord counters. */
-	static const uint32_t other_bits[3] = {
-		PLATFORM_PAD_RIGHT, PLATFORM_PAD_B2, PLATFORM_PAD_B1
-	};
-	static const uint32_t chord_bits[4] = {
-		PLATFORM_PAD_RIGHT | PLATFORM_PAD_B3,
-		PLATFORM_PAD_B2 | PLATFORM_PAD_B3,
-		PLATFORM_PAD_B1 | PLATFORM_PAD_B3,
-		PLATFORM_PAD_B1 | PLATFORM_PAD_B2 | PLATFORM_PAD_B3
-	};
-	uint32_t raw_change;
-	uint32_t delivered_change;
-	unsigned int i;
-
-	p->samples++;
-	if (reason == INPUT_PROFILE_FRESH) {
-		p->fresh++;
-		raw_change = raw_buttons ^ p->previous_raw;
-		for (i = 0; i < 3; ++i)
-			if ((raw_change & raw_buttons & other_bits[i]) != 0)
-				p->other_raw_down[i]++;
-		for (i = 0; i < 4; ++i)
-			if ((raw_buttons & chord_bits[i]) == chord_bits[i])
-				p->chord_raw_frames[i]++;
-		if ((raw_change & PLATFORM_PAD_B3) != 0) {
-			if ((raw_buttons & PLATFORM_PAD_B3) != 0)
-				p->square_raw_down++;
-			else
-				p->square_raw_up++;
-		}
-		p->previous_raw = raw_buttons;
-	} else if (reason == INPUT_PROFILE_UNAVAILABLE)
-		p->unavailable++;
-	else if (reason == INPUT_PROFILE_READ_FAIL)
-		p->read_fail++;
-	else if (reason == INPUT_PROFILE_INVALID)
-		p->invalid++;
-	else
-		p->mode_wait++;
-
-	if (cached)
-		p->cached++;
-	if (!delivered)
-		delivered_buttons = 0;
-	delivered_change = delivered_buttons ^ p->previous_delivered;
-	for (i = 0; i < 3; ++i)
-		if ((delivered_change & delivered_buttons & other_bits[i]) != 0)
-			p->other_delivered_down[i]++;
-	for (i = 0; i < 4; ++i)
-		if ((delivered_buttons & chord_bits[i]) == chord_bits[i])
-			p->chord_delivered_frames[i]++;
-	if ((delivered_change & PLATFORM_PAD_B3) != 0) {
-		if ((delivered_buttons & PLATFORM_PAD_B3) != 0)
-			p->square_delivered_down++;
-		else
-			p->square_delivered_up++;
-	}
-	p->previous_delivered = delivered_buttons;
-
-	if (p->samples == 600) {
-		printf("[ps2_input] polls=600 fresh=%u unavailable=%u read_fail=%u "
-			"mode_wait=%u invalid=%u cached=%u square_raw=%u/%u square_sent=%u/%u\n",
-			(unsigned int)p->fresh, (unsigned int)p->unavailable,
-			(unsigned int)p->read_fail, (unsigned int)p->mode_wait,
-			(unsigned int)p->invalid,
-			(unsigned int)p->cached, (unsigned int)p->square_raw_down,
-			(unsigned int)p->square_raw_up,
-			(unsigned int)p->square_delivered_down,
-			(unsigned int)p->square_delivered_up);
-		printf("[ps2_chords] right=%u/%u cross=%u/%u circle=%u/%u "
-			"frames_right_square=%u/%u frames_cross_square=%u/%u "
-			"frames_circle_square=%u/%u frames_three_faces=%u/%u\n",
-			(unsigned int)p->other_raw_down[0], (unsigned int)p->other_delivered_down[0],
-			(unsigned int)p->other_raw_down[1], (unsigned int)p->other_delivered_down[1],
-			(unsigned int)p->other_raw_down[2], (unsigned int)p->other_delivered_down[2],
-			(unsigned int)p->chord_raw_frames[0], (unsigned int)p->chord_delivered_frames[0],
-			(unsigned int)p->chord_raw_frames[1], (unsigned int)p->chord_delivered_frames[1],
-			(unsigned int)p->chord_raw_frames[2], (unsigned int)p->chord_delivered_frames[2],
-			(unsigned int)p->chord_raw_frames[3], (unsigned int)p->chord_delivered_frames[3]);
-		printf("[ps2_padman] frames=600 reads=%u advanced=%u repeated=%u "
-			"skipped=%u backward=%u last_frame=%u\n",
-			(unsigned int)p->padman_frames.reads,
-			(unsigned int)p->padman_frames.advances,
-			(unsigned int)p->padman_frames.repeats,
-			(unsigned int)p->padman_frames.skipped,
-			(unsigned int)p->padman_frames.backwards,
-			(unsigned int)p->padman_frames.previous);
-#ifdef PS2_IOP_PADMAN_PROBE
-		printf("[ps2_iop_acquire] frames=600 valid=%u acquired=%u square_edges=%u\n",
-			(unsigned int)p->iop_observed,
-			(unsigned int)(p->iop_last.acquired - p->iop_first.acquired),
-			(unsigned int)(p->iop_last.square_edges - p->iop_first.square_edges));
-		printf("[ps2_iop_gap] frames=600 iop_edges=%u ee_edges=%u "
-			"extra=%u multi_frames=%u invisible_cycles=%u max_per_frame=%u resets=%u\n",
-			(unsigned int)p->iop_gap.iop_edges,
-			(unsigned int)p->iop_gap.ee_edges,
-			(unsigned int)p->iop_gap.extra_edges,
-			(unsigned int)p->iop_gap.multi_edge_frames,
-			(unsigned int)p->iop_gap.invisible_cycles,
-			(unsigned int)p->iop_gap.max_edges_per_frame,
-			(unsigned int)p->iop_gap.discontinuities);
-#endif
-		/* Preserve edge continuity when starting the next window. */
-		raw_change = p->previous_raw;
-		delivered_change = p->previous_delivered;
-		ps2_padman_frame_probe_t old_probe = p->padman_frames;
-#ifdef PS2_IOP_PADMAN_PROBE
-		ps2_padman_edge_gap_t old_gap = p->iop_gap;
-		ps2_padman_edge_gap_reset_window(&old_gap);
-#endif
-		memset(p, 0, sizeof(*p));
-		p->previous_raw = raw_change;
-		p->previous_delivered = delivered_change;
-		p->padman_frames.previous = old_probe.previous;
-		p->padman_frames.have_previous = old_probe.have_previous;
-#ifdef PS2_IOP_PADMAN_PROBE
-		p->iop_gap = old_gap;
-		if (p->iop_observed) {
-			p->iop_first = p->iop_last;
-			p->iop_observed = true;
-		}
-#endif
-	}
-}
-#endif
-
 typedef struct ps2_input {
 	uint8_t mtap_opened[PS2_MAX_PORT];
-#ifdef PS2_INPUT_THREADED
-	ps2_input_capture_t capture;
-	int32_t capture_thread_id;
-	int32_t capture_done_sema;
-	void *capture_stack;
-	volatile int capture_stop;
-#ifdef PS2_INPUT_PROFILE
-	uint32_t capture_frames, capture_previous_square, capture_sent_square;
-	ps2_padman_frame_probe_t capture_padman_frames;
-#endif
-#endif
-#ifdef PS2_INPUT_PROFILE
-	ps2_input_profile_t profile;
-#endif
-#ifdef PS2_IOP_SQUARE_REPLAY
-	ps2_padman_square_fifo_t square_fifo;
-#endif
 } ps2_input_t;
 
 static uint32_t decodePadButtons(uint16_t pad_buttons)
@@ -253,106 +70,6 @@ static void decodePadState(const struct padButtonStatus *pad, input_state_t *out
 		out->axis_flags = INPUT_AXIS_LX | INPUT_AXIS_LY;
 	}
 }
-
-#ifdef PS2_INPUT_THREADED
-enum { PS2_INPUT_CAPTURE_PERIOD_US = 4000, PS2_INPUT_CAPTURE_STACK = 8192 };
-
-/* The worker reads only the IOP-updated port-0 DMA buffer. Topology and
- * analog-mode RPCs stay on the main thread. It is stopped before refresh/close. */
-static int ps2_capture_worker(void *arg)
-{
-	ps2_input_t *ps2 = (ps2_input_t *)arg;
-	while (!ps2->capture_stop) {
-		struct padButtonStatus pad = {0};
-		int state = padGetState(0, 0);
-		if (state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1 ||
-			state == PAD_STATE_EXECCMD) {
-			int ret = padRead(0, 0, &pad);
-			if (ps2_pad_packet_valid(ret,
-				offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
-				pad.mode, pad.btns)) {
-				input_state_t fresh;
-				decodePadState(&pad, &fresh);
-				DI();
-				ps2_input_capture_record(&ps2->capture, &fresh);
-			#ifdef PS2_INPUT_PROFILE
-				uint32_t frame;
-				if (ps2_padman_dma_newest_frame(joyInfo[0].padBuf,
-					sizeof(joyInfo[0].padBuf), &frame))
-					ps2_padman_frame_probe_observe(
-						&ps2->capture_padman_frames, frame);
-			#endif
-				EI();
-			}
-		} else {
-			DI();
-			ps2_input_capture_reset(&ps2->capture);
-			EI();
-		}
-		DelayThread(PS2_INPUT_CAPTURE_PERIOD_US);
-	}
-	SignalSema(ps2->capture_done_sema);
-	ExitThread();
-	return 0;
-}
-
-static void ps2_capture_stop(ps2_input_t *ps2)
-{
-	if (ps2->capture_thread_id < 0)
-		return;
-	ps2->capture_stop = 1;
-	WaitSema(ps2->capture_done_sema);
-	DeleteThread(ps2->capture_thread_id);
-	DeleteSema(ps2->capture_done_sema);
-	free(ps2->capture_stack);
-	ps2->capture_thread_id = -1;
-	ps2->capture_done_sema = -1;
-	ps2->capture_stack = NULL;
-	ps2_input_capture_reset(&ps2->capture);
-}
-
-static void ps2_capture_start(ps2_input_t *ps2)
-{
-	ee_thread_t thread = {0};
-	ee_sema_t sema = {0};
-	if (ps2->capture_thread_id >= 0)
-		return;
-	ps2->capture_stack = malloc(PS2_INPUT_CAPTURE_STACK);
-	if (!ps2->capture_stack) {
-		printf("[ps2_input] async capture stack unavailable; using frame polling\n");
-		return;
-	}
-	thread.func = ps2_capture_worker;
-	thread.stack = ps2->capture_stack;
-	thread.stack_size = PS2_INPUT_CAPTURE_STACK;
-	thread.gp_reg = &_gp;
-	/* Priority 31 preempts the emulation thread (32), then sleeps.
-	 * Audio priority (8) remains higher. */
-	thread.initial_priority = NJEMU_MAIN_THREAD_PRIORITY - 1;
-	ps2->capture_thread_id = CreateThread(&thread);
-	if (ps2->capture_thread_id < 0)
-		goto fail;
-	sema.init_count = 0;
-	sema.max_count = 1;
-	ps2->capture_done_sema = CreateSema(&sema);
-	if (ps2->capture_done_sema < 0) {
-		DeleteThread(ps2->capture_thread_id);
-		goto fail;
-	}
-	ps2->capture_stop = 0;
-	ps2_input_capture_reset(&ps2->capture);
-	if (StartThread(ps2->capture_thread_id, ps2) >= 0)
-		return;
-	DeleteSema(ps2->capture_done_sema);
-	DeleteThread(ps2->capture_thread_id);
-fail:
-	free(ps2->capture_stack);
-	ps2->capture_stack = NULL;
-	ps2->capture_thread_id = -1;
-	ps2->capture_done_sema = -1;
-	printf("[ps2_input] async capture unavailable; using frame polling\n");
-}
-#endif
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
 {
@@ -544,16 +261,7 @@ static void ps2_refresh(void *data)
 	ps2_input_t *ps2 = (ps2_input_t *)data;
 
 	if (ps2) {
-#ifdef PS2_IOP_SQUARE_REPLAY
-		ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
-#ifdef PS2_INPUT_THREADED
-		ps2_capture_stop(ps2);
-#endif
 		refreshJoyInfo(ps2);
-#ifdef PS2_INPUT_THREADED
-		ps2_capture_start(ps2);
-#endif
 	}
 }
 
@@ -564,10 +272,6 @@ static void *ps2_init(void)
 
 	if (ps2 == NULL)
 		return NULL;
-#ifdef PS2_INPUT_THREADED
-	ps2->capture_thread_id = -1;
-	ps2->capture_done_sema = -1;
-#endif
 
 	if (init_joystick_driver(true) < 0) {
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
@@ -600,9 +304,6 @@ static void *ps2_init(void)
 		ps2->mtap_opened[port] = (mtapPortOpen(port) == 1);
 
 	refreshJoyInfo(ps2);
-#ifdef PS2_INPUT_THREADED
-	ps2_capture_start(ps2);
-#endif
 
 	return ps2;
 }
@@ -615,9 +316,6 @@ static void ps2_free(void *data)
 	if (ps2 == NULL)
 		return;
 
-#ifdef PS2_INPUT_THREADED
-	ps2_capture_stop(ps2);
-#endif
 	for (i = 0; i < MAX_CONTROLLERS; i++) {
 		struct JoyInfo *info = &joyInfo[i];
 		closeJoyInfo(info);
@@ -646,110 +344,29 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 
 	info = getActiveJoyInfo(controller);
 	if (info == NULL) {
-#ifdef PS2_IOP_SQUARE_REPLAY
-		if (controller == 0)
-			ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
-#ifdef PS2_INPUT_PROFILE
-		if (controller == 0)
-			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_UNAVAILABLE,
-				0, false, 0, false);
-#endif
 		return false;
 	}
 	if (!configureJoyInfoAnalogMode(info)) {
-#ifdef PS2_IOP_SQUARE_REPLAY
-		if (controller == 0)
-			ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-#ifdef PS2_INPUT_PROFILE
-		if (controller == 0)
-			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_MODE_WAIT,
-				0, valid, valid ? state->buttons : 0, valid);
-#endif
 		return valid;
 	}
-
-#ifdef PS2_INPUT_THREADED
-	if (controller == 0 && info == getJoyInfo(0, 0) &&
-		ps2->capture_thread_id >= 0) {
-		uint32_t samples;
-		uint32_t square_presses;
-		DI();
-		valid = ps2_input_capture_consume(&ps2->capture, state);
-		samples = ps2->capture.samples;
-		square_presses = ps2->capture.square_presses;
-		EI();
-		if (valid) {
-#ifdef PS2_INPUT_PROFILE
-			ps2_padman_frame_probe_t window;
-			uint32_t square = state->buttons & PLATFORM_PAD_B3;
-			if (square && !ps2->capture_previous_square)
-				ps2->capture_sent_square++;
-			ps2->capture_previous_square = square;
-			if (++ps2->capture_frames == 600) {
-				printf("[ps2_capture] frames=600 reads=%u square_raw=%u square_sent=%u\n",
-					(unsigned int)samples, (unsigned int)square_presses,
-					(unsigned int)ps2->capture_sent_square);
-				ps2->capture_frames = 0;
-				ps2->capture_sent_square = 0;
-				DI();
-				window = ps2->capture_padman_frames;
-				ps2_padman_frame_probe_reset_window(
-					&ps2->capture_padman_frames);
-				ps2->capture.samples = 0;
-				ps2->capture.square_presses = 0;
-				EI();
-				printf("[ps2_padman_worker] frames=600 reads=%u advanced=%u "
-					"repeated=%u skipped=%u backward=%u last_frame=%u\n",
-					(unsigned int)window.reads,
-					(unsigned int)window.advances,
-					(unsigned int)window.repeats,
-					(unsigned int)window.skipped,
-					(unsigned int)window.backwards,
-					(unsigned int)window.previous);
-			}
-#endif
-			return true;
-		}
-	}
-#endif
 
 	ret = padRead(info->port, info->slot, &paddata);
 	/* A positive short packet must not turn zero-initialized btns into
 	 * a spurious 0xffff set of pressed buttons. */
 	if (ret < (int)(offsetof(struct padButtonStatus, btns) +
 		sizeof(paddata.btns))) {
-#ifdef PS2_IOP_SQUARE_REPLAY
-		if (controller == 0)
-			ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-#ifdef PS2_INPUT_PROFILE
-		if (controller == 0)
-			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_READ_FAIL,
-				0, valid, valid ? state->buttons : 0, valid);
-#endif
 		return valid;
 	}
 
 	if (!ps2_pad_packet_valid(ret,
 		offsetof(struct padButtonStatus, btns) + sizeof(paddata.btns),
 		paddata.mode, paddata.btns)) {
-#ifdef PS2_IOP_SQUARE_REPLAY
-		if (controller == 0)
-			ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-#ifdef PS2_INPUT_PROFILE
-		if (controller == 0)
-			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_INVALID,
-				0, valid, valid ? state->buttons : 0, valid);
-#endif
 		return valid;
 	}
 
@@ -757,61 +374,8 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 
 	valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 		true, &fresh, state);
-#ifdef PS2_INPUT_PROFILE
-	if (controller == 0) {
-		uint32_t frame;
-#ifdef PS2_IOP_PADMAN_PROBE
-		ps2_padman_iop_probe_t iop;
-		if (ps2_padman_iop_probe_decode(info->padBuf,
-			sizeof(info->padBuf), &iop)) {
-			if (!ps2->profile.iop_observed) {
-				ps2->profile.iop_first = iop;
-				ps2->profile.iop_observed = true;
-			}
-			ps2->profile.iop_last = iop;
-			ps2_padman_edge_gap_observe(&ps2->profile.iop_gap,
-				iop.square_edges, (fresh.buttons & PLATFORM_PAD_B3) != 0);
-#ifdef PS2_IOP_SQUARE_REPLAY
-			{
-				bool square = ps2_padman_square_fifo_sample(
-					&ps2->square_fifo, iop.square_edges,
-					(fresh.buttons & PLATFORM_PAD_B3) != 0);
-				if (square)
-					state->buttons |= PLATFORM_PAD_B3;
-				else
-					state->buttons &= ~PLATFORM_PAD_B3;
-			}
-#endif
-		}
-#ifdef PS2_IOP_SQUARE_REPLAY
-		else
-			ps2_padman_square_fifo_reset(&ps2->square_fifo);
-#endif
-#ifdef PS2_IOP_SQUARE_REPLAY
-		if (ps2->profile.samples == 599) {
-			printf("[ps2_iop_replay] frames=600 emitted=%u recovered=%u "
-				"overflows=%u resyncs=%u max_pending=%u pending=%u\n",
-				(unsigned int)ps2->square_fifo.emitted_presses,
-				(unsigned int)ps2->square_fifo.recovered_presses,
-				(unsigned int)ps2->square_fifo.overflows,
-				(unsigned int)ps2->square_fifo.resyncs,
-				(unsigned int)ps2->square_fifo.max_pending,
-				(unsigned int)ps2->square_fifo.pending);
-			ps2_padman_square_fifo_reset_stats(&ps2->square_fifo);
-		}
-#endif
-#endif
-		if (ps2_padman_dma_newest_frame(info->padBuf,
-			sizeof(info->padBuf), &frame))
-			ps2_padman_frame_probe_observe(
-				&ps2->profile.padman_frames, frame);
-		ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_FRESH, fresh.buttons,
-			valid, valid ? state->buttons : 0, false);
-	}
-#endif
 	return valid;
 }
-
 
 input_driver_t input_ps2 = {
 	"ps2",

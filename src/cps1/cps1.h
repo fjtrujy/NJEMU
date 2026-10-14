@@ -34,9 +34,4 @@ enum TEXTURE_LAYER_INDEX {
 
 void cps1_main(void);
 
-#ifdef CPS1_INPUT_PORT_PROFILE
-void cps1_profile_port_reads_finish_frame(int attack_asserted);
-void cps1_profile_port_reads_report(void);
-#endif
-
 #endif /* CPS1_H */

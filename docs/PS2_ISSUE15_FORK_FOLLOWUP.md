@@ -27,10 +27,8 @@ the preceding state. Current NJEMU retains its per-controller,
 global last state indefinitely.
 
 A new PS2-local `ps2_pad_packet_valid()` helper checks packet length,
-mode, and active-low button word. It is used both by the normal read
-path and by the opt-in 4ms EE capture worker. A rejected normal packet
-increments the diagnostic `invalid` count when `PS2_INPUT_PROFILE=ON`;
-it never enters the input decoder or fresh-sample cache. Following one
+mode, and active-low button word. It is used by the normal read path;
+rejected packets never enter the input decoder or fresh-sample cache. Following one
 cached replay, a second invalid read cannot keep a held button stuck.
 A hard disconnect still invalidates the cache immediately.
 
@@ -46,7 +44,7 @@ and release after recovery.
 
 ### PCSX2 CPS1 runtime smoke
 
-Used PCSX2 2.9.93 with the profiled CPS1 build, `dino.zip`,
+Originally tested with PCSX2 2.9.93 and a temporary profiled CPS1 build, `dino.zip`,
 NO_GUI, 240p, and `DisplayMode=4` in an **ignored, separate** runtime
 directory. The game rendered successfully with the narrower centered
 native-pixel presentation and reached a 60 FPS screen. Diagnostic windows
@@ -61,8 +59,8 @@ Synthetic keyboard-to-virtual-pad tests in that run:
 | 12 ms down / 32 ms up | 30 | 25 | 25 |
 
 These are not statistically paired A/B results. They show that the
-new invalid-packet filter does not produce additional raw-to-delivered
-losses in this run; they do **not** prove a new rapid-tap fix.
+invalid-packet filter did not produce additional raw-to-delivered
+losses in that historical test; they do **not** prove a new rapid-tap fix.
 Short transitions remain susceptible to PCSX2/PADMAN ~60 Hz sampling.
 
 Local ignored evidence:
@@ -111,7 +109,7 @@ Source ID values 0..428 remain stable.
 
 - Desktop CPS1: 39/39 CTest tests passed, including geometry,
   PADMAN packet validation and translation-pack tests.
-- PS2: CPS1 normal/profile builds passed, as did CPS2, MVS and NCDZ.
+- PS2: CPS1 normal build passed, as did CPS2, MVS and NCDZ.
 - Desktop CPS2: clean build passed.
 - Legacy cached Desktop/PSP directories could not be reused because
   stale options/toolchain paths cause configuration errors unrelated to
@@ -121,7 +119,8 @@ Source ID values 0..428 remain stable.
 
 Future work: reproduce `mode==0` and `btns==0` on real DualShock
 hardware, validate legacy PADMAN variants, and compare the two display
-choices on the same CRT. Do not promote experimental 4ms EE polling as
-a proven rapid-tap fix.
+choices on the same CRT. Prior experiments with high-rate IOP/EE polling
+and button replay were deliberately removed from active sources; the
+historical Git commits preserve that research if it is needed again.
 
 Never modify, stage, or commit files under `resources/`.

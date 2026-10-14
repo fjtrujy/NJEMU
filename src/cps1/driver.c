@@ -480,48 +480,8 @@ READ16_HANDLER( cps1_inputport0_r )
 	return cps1_port_value[0];
 }
 
-#ifdef CPS1_INPUT_PORT_PROFILE
-static uint32_t port1_reads_this_frame;
-static uint32_t port1_reads_during_attack;
-static uint32_t port1_read_total, port1_read_frames;
-static uint32_t port1_attack_read_frames, port1_attack_unread_frames;
-
-void cps1_profile_port_reads_finish_frame(int attack_asserted)
-{
-	port1_read_total += port1_reads_this_frame;
-	if (port1_reads_this_frame != 0)
-		port1_read_frames++;
-	if (attack_asserted) {
-		if (port1_reads_during_attack != 0)
-			port1_attack_read_frames++;
-		else
-			port1_attack_unread_frames++;
-	}
-	port1_reads_this_frame = 0;
-	port1_reads_during_attack = 0;
-}
-
-void cps1_profile_port_reads_report(void)
-{
-	printf("[cps1_cpu_input] frames=600 port1_reads=%u read_frames=%u "
-		"attack_read_frames=%u attack_unread_frames=%u\n",
-		(unsigned int)port1_read_total, (unsigned int)port1_read_frames,
-		(unsigned int)port1_attack_read_frames,
-		(unsigned int)port1_attack_unread_frames);
-	port1_read_total = 0;
-	port1_read_frames = 0;
-	port1_attack_read_frames = 0;
-	port1_attack_unread_frames = 0;
-}
-#endif
-
 READ16_HANDLER( cps1_inputport1_r )
 {
-#ifdef CPS1_INPUT_PORT_PROFILE
-	port1_reads_this_frame++;
-	if ((cps1_port_value[1] & 0x0010) == 0)
-		port1_reads_during_attack++;
-#endif
 	return cps1_port_value[1];
 }
 
