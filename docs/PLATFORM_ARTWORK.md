@@ -11,8 +11,8 @@ include their dimensions, rather than sorting by platform. The original
 high-resolution background illustration is `source_1666_944.png`, while the
 separately composed, visually centered small-icon artwork is
 `icon_source_1254_1254.png`. Console-ready assets are derived from them using
-`tools/generate_platform_artwork.swift`. The PSP XMB background keeps its
-artwork on the right to accommodate the XMB icon on the left; the small PSP
+the C99 `njemu-tool artwork` command in `tools/host/`. The PSP XMB background
+keeps its artwork on the right to accommodate the XMB icon on the left; the small PSP
 icon and Vita bubble/startup assets use an independently centered logo crop.
 
 The PSP SDK's `create_pbp_file()` builds the EBOOT using these inputs:
@@ -36,9 +36,28 @@ Vita VPK assets for each core use the same visual identity:
 | `sce_sys/livearea/contents/template.xml` | `data/artwork/template.xml` | LiveArea XML |
 
 These images are external source assets embedded into the PSP EBOOT or Vita
-VPK at package time, not emulator runtime textures. To regenerate them on macOS,
-run `swift tools/generate_platform_artwork.swift data/artwork`. The generated
-PNGs are checked in so CI does not require Swift. Run
+VPK at package time, not emulator runtime textures. To regenerate them on any
+supported desktop host, build the portable C host tool with an optional libpng
+development package available (such as `libpng-dev` on Debian/Ubuntu):
+
+```sh
+cmake -S tools/host -B build_artwork_host
+cmake --build build_artwork_host
+ctest --test-dir build_artwork_host -R artwork --output-on-failure
+build_artwork_host/njemu-tool artwork data/artwork
+```
+
+To regenerate without overwriting the checked-in outputs, add an output root:
+`build_artwork_host/njemu-tool artwork data/artwork build_artwork_preview`.
+The first argument always points to the original per-core source PNG files;
+the second argument, if present, receives the seven derived images per core.
+The PSP preview overlay is drawn in C rather than needing a font or macOS
+graphics framework. Vita exports are 8-bit indexed PNGs with a 3-3-2 RGB
+palette; PSP exports are RGBA. The C tool uses libpng only while authoring
+assets, not for building the emulator or packaging its releases.
+
+The generated PNGs are checked in, so normal CI and releases need no libpng
+installation beyond their preexisting dependencies. Run
 `cmake -P cmake/NJEMUArtworkValidation.cmake` to validate image metadata.
 
 To inspect an EBOOT, run `unpack-pbp EBOOT.PBP` in an empty directory, compare

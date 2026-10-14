@@ -35,6 +35,11 @@ For PSP use the PSPSDK CMake toolchain (`$PSPDEV/psp/share/pspdev.cmake`). Run
 executables from their build/resource context when relative resource paths are
 needed.
 
+Authoring utilities must be implemented in portable C99 and integrated with
+`tools/host/njemu-tool` where possible. Avoid new Swift or Python scripts.
+The optional PNG artwork authoring command uses host libpng; its prebuilt
+outputs are checked in so emulator builds have no new image-tool dependency.
+
 Useful options include:
 
 - `GUI=ON/OFF`;

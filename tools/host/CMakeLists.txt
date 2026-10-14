@@ -35,8 +35,29 @@ add_library(njemu_host_tool_lib STATIC
 )
 target_include_directories(njemu_host_tool_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Artwork authoring is optional; console builds and other host commands never
+# require libpng, and all generated binary images are checked into the repo.
+find_package(PNG QUIET)
+if(PNG_FOUND)
+    target_sources(njemu_host_tool_lib PRIVATE command_artwork.c)
+    target_link_libraries(njemu_host_tool_lib PUBLIC PNG::PNG)
+endif()
+
 add_executable(njemu-tool main.c)
 target_link_libraries(njemu-tool PRIVATE njemu_host_tool_lib)
+if(PNG_FOUND)
+    target_compile_definitions(njemu-tool PRIVATE NJEMU_HAS_PNG_ARTWORK=1)
+    enable_testing()
+    add_test(NAME artwork_generate
+        COMMAND njemu-tool artwork "${CMAKE_CURRENT_SOURCE_DIR}/../../data/artwork"
+                "${CMAKE_CURRENT_BINARY_DIR}/generated-artwork")
+    add_test(NAME artwork_output_valid
+        COMMAND ${CMAKE_COMMAND}
+            -DNJEMU_ARTWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/generated-artwork
+            -DNJEMU_ARTWORK_GENERATED_ONLY=ON
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NJEMUArtworkValidation.cmake")
+    set_tests_properties(artwork_output_valid PROPERTIES DEPENDS artwork_generate)
+endif()
 
 add_executable(njemu-host-tests host_tests.c)
 target_link_libraries(njemu-host-tests PRIVATE njemu_host_tool_lib)

@@ -12,6 +12,9 @@ typedef struct command_entry {
 } command_entry_t;
 
 static const command_entry_t commands[] = {
+#ifdef NJEMU_HAS_PNG_ARTWORK
+    {"artwork", command_artwork, "generate PSP/Vita PNG artwork from per-core sources"},
+#endif
     {"dip-metadata", command_dip_metadata, "validate/build localized DIP metadata"},
     {"elf-footprint", command_elf_footprint, "measure and compare ELF allocated sections"},
     {"font", command_font, "validate/build the external GBK font asset"},
