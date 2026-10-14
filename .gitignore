@@ -69,3 +69,6 @@ web/version.js
 
 # Build artifacts
 build_*/
+/build-release-*/
+/release-stage/
+/release-assets/

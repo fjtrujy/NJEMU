@@ -1586,6 +1586,12 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
+    find_program(NJEMU_BASH_EXECUTABLE bash)
+    if(NJEMU_BASH_EXECUTABLE)
+        add_test(NAME release_parallel_build_tests
+            COMMAND "${NJEMU_BASH_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/release_parallel_build_tests.sh")
+    endif()
     add_test(NAME web_version_generation_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUWebVersionTests.cmake)
 

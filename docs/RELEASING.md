@@ -152,13 +152,35 @@ Packaging fixes the archive entry order and ZIP modification timestamps and prod
 A push of a strict `vMAJOR.MINOR.PATCH` tag:
 
 1. validates that the tag and centrally derived build version match exactly;
-2. builds the canonical CPS1/CPS2/MVS/NCDZ configurations for PSP, PS2, Vita, Linux Desktop, and macOS Desktop;
+2. starts PSP, PS2, Vita, Linux Desktop, and macOS Desktop jobs independently; within each job, builds the four canonical CPS1/CPS2/MVS/NCDZ configurations in bounded parallel batches;
 3. installs through CMake's explicit runtime-file manifests;
 4. packages and validates the five public archives and checksum sidecars;
 5. creates the versioned GitHub Release and marks it as **Latest**;
 6. generates the release description automatically from merged pull requests.
 
 A manual `workflow_dispatch` still accepts an existing stable tag and performs the complete build/package validation without publishing. This is the release dry-run path.
+
+### Parallel core builds
+
+`tools/ci/build_release_cores.sh` builds and installs the four emulator cores
+into independent `build-release-<core>` and `release-stage/<CORE>` trees.
+Each platform job installs its toolchain dependencies just once and then
+normally runs **two core builds simultaneously**, allocating a share of
+the runner's CPUs to each. The PS2 per-core cache, driver-image, and
+sprite-upload feature checks remain mandatory.
+
+To tune or troubleshoot the release runner:
+
+- `NJEMU_RELEASE_CORE_CONCURRENCY=1|2|4` changes the number of simultaneous
+  emulator builds (default 2, capped by the available CPU count).
+- `NJEMU_RELEASE_CORE_BUILD_JOBS=N` sets the parallel compiler jobs within
+  each emulator build (default CPU count divided by concurrent cores).
+
+Core-specific logs are retained in `build_release_core_logs/`; on failure the
+relevant log tail is reported and that platform's packaging step is skipped.
+The final publish job still requires **all five complete platform archives**
+and their checksum sidecars. Installations remain isolated per core, and
+an incomplete build can never be published.
 
 ### Development channel
 
