@@ -1488,6 +1488,7 @@ endif()
 # Create the VPK for PS Vita: the executable, the target resources and the
 # translation packs, laid out like the install tree of the other platforms.
 if(PLATFORM STREQUAL "PSVITA")
+    include("${CMAKE_SOURCE_DIR}/cmake/NJEMUArtworkValidation.cmake")
     # Title IDs: NJMU0000n, one per target so they can be installed side by side
     set(VITA_TITLEID_CPS1 "NJMU00003")
     set(VITA_TITLEID_CPS2 "NJMU00004")
@@ -1546,6 +1547,16 @@ if(PLATFORM STREQUAL "PSVITA")
     # a runtime asset in both configurations.
     list(APPEND VITA_VPK_FILE_ARGS FILE "${GBK_FONT_ASSET}" "font/gbk_s14.bin")
 
+    set(VITA_ARTWORK_DIR "${CMAKE_SOURCE_DIR}/data/artwork/${TARGET_LOWER}")
+    list(APPEND VITA_VPK_FILE_ARGS
+        FILE "${VITA_ARTWORK_DIR}/icon_128_128.png" "sce_sys/icon0.png"
+        FILE "${VITA_ARTWORK_DIR}/pic0_960_544.png" "sce_sys/pic0.png"
+        FILE "${VITA_ARTWORK_DIR}/bg_840_500.png" "sce_sys/livearea/contents/bg0.png"
+        FILE "${VITA_ARTWORK_DIR}/startup_280_158.png" "sce_sys/livearea/contents/startup.png")
+    list(APPEND VITA_VPK_FILE_ARGS
+        FILE "${CMAKE_SOURCE_DIR}/data/artwork/template.xml"
+             "sce_sys/livearea/contents/template.xml")
+
     # Room after the text segment for the SCE module data that vita-elf-create
     # appends (vitasdk/vita-toolchain#303): recent binutils may place the data
     # segment right behind it.
@@ -1561,17 +1572,14 @@ endif()
 
 # Create the PBP file for PSP
 if(PLATFORM STREQUAL "PSP")
+    include("${CMAKE_SOURCE_DIR}/cmake/NJEMUArtworkValidation.cmake")
     set(BUILD_PRX ON)
-    set(PSP_EBOOT_ICON "${CMAKE_SOURCE_DIR}/data/${TARGET_LOWER}.png")
-    set(PSP_EBOOT_BACKGROUND "${CMAKE_SOURCE_DIR}/data/psp/${TARGET_LOWER}_pic1.png")
-    if(NOT EXISTS "${PSP_EBOOT_BACKGROUND}")
-        message(FATAL_ERROR "Missing PSP XMB background: ${PSP_EBOOT_BACKGROUND}")
-    endif()
+    set(PSP_ARTWORK_DIR "${CMAKE_SOURCE_DIR}/data/artwork/${TARGET_LOWER}")
     create_pbp_file(
         TARGET ${TARGET}
-        ICON_PATH "${PSP_EBOOT_ICON}"
-        BACKGROUND_PATH "${PSP_EBOOT_BACKGROUND}"
-        PREVIEW_PATH NULL
+        ICON_PATH "${PSP_ARTWORK_DIR}/icon_144_80.png"
+        BACKGROUND_PATH "${PSP_ARTWORK_DIR}/pic1_480_272.png"
+        PREVIEW_PATH "${PSP_ARTWORK_DIR}/pic0_480_272.png"
         # PSPSDK's create_pbp_file() forwards TITLE through a shell command.
         # Keep XMB metadata concise; build identity remains in the binary.
         TITLE "NJEMU ${TARGET} ${NJEMU_RELEASE_VERSION}"
@@ -1592,6 +1600,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             --suite elf)
     add_test(NAME version_derivation_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
+    add_test(NAME platform_artwork_tests
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUArtworkValidation.cmake)
     add_test(NAME release_packaging_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
     find_program(NJEMU_BASH_EXECUTABLE bash)

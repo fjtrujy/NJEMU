@@ -37,7 +37,7 @@ jobs:
     - name: Install dependencies
       run: |
         apt-get update
-        apt-get install -y --no-install-recommends build-essential git cmake
+        apt-get install -y --no-install-recommends build-essential git cmake unzip
 
     - name: Install miniz 3.1.2
       run: |
@@ -106,6 +106,17 @@ jobs:
           *) test ! -e "build/install/gamelist_${target_lower}.txt" ;;
         esac
         test "$(find build/install -maxdepth 1 -type f -name 'zipname*' | wc -l)" -eq 0
+
+    - name: Validate Vita LiveArea artwork in VPK
+      run: |
+        target_lower=$(printf '%s' "${{ matrix.target }}" | tr '[:upper:]' '[:lower:]')
+        package="build/${{ matrix.target }}.vpk"
+        unzip -tq "$package"
+        unzip -p "$package" sce_sys/icon0.png | cmp - "data/artwork/${target_lower}/icon_128_128.png"
+        unzip -p "$package" sce_sys/pic0.png | cmp - "data/artwork/${target_lower}/pic0_960_544.png"
+        unzip -p "$package" sce_sys/livearea/contents/bg0.png | cmp - "data/artwork/${target_lower}/bg_840_500.png"
+        unzip -p "$package" sce_sys/livearea/contents/startup.png | cmp - "data/artwork/${target_lower}/startup_280_158.png"
+        unzip -p "$package" sce_sys/livearea/contents/template.xml | cmp - data/artwork/template.xml
 
     - name: Get short SHA
       id: slug
