@@ -439,6 +439,7 @@ jobs:
           gh release create "${{ needs.version.outputs.tag }}" \
             release-assets/*.zip \
             release-assets/*.zip.json \
+            --repo "${{ github.repository }}" \
             --verify-tag \
             --title "NJEMU ${{ needs.version.outputs.version }}" \
             --generate-notes \
