@@ -8,9 +8,12 @@ Other platforms continue to use the detailed version in their UI. The shared
 
 All artwork is grouped by emulator core under `data/artwork/<core>/`. Filenames
 include their dimensions, rather than sorting by platform. The original
-high-resolution illustration is `source_1666_944.png` and console-ready assets
-are derived from it using `tools/generate_platform_artwork.swift`. The PSP XMB
-background keeps its artwork on the right to accommodate the XMB icon on the left.
+high-resolution background illustration is `source_1666_944.png`, while the
+separately composed, visually centered small-icon artwork is
+`icon_source_1254_1254.png`. Console-ready assets are derived from them using
+`tools/generate_platform_artwork.swift`. The PSP XMB background keeps its
+artwork on the right to accommodate the XMB icon on the left; the small PSP
+icon and Vita bubble/startup assets use an independently centered logo crop.
 
 The PSP SDK's `create_pbp_file()` builds the EBOOT using these inputs:
 

@@ -7,13 +7,16 @@ import UniformTypeIdentifiers
 // These are optional authoring tools; all generated PNGs are checked into Git.
 struct CoreArtwork {
     let slug: String
+    // The wide icon uses a logo-focused crop, rather than stretching the square
+    // illustration. Values are measured from the bottom of the source artwork.
+    let iconFocusY: CGFloat
 }
 
 let cores = [
-    CoreArtwork(slug: "cps1"),
-    CoreArtwork(slug: "cps2"),
-    CoreArtwork(slug: "mvs"),
-    CoreArtwork(slug: "ncdz")
+    CoreArtwork(slug: "cps1", iconFocusY: 0.44),
+    CoreArtwork(slug: "cps2", iconFocusY: 0.39),
+    CoreArtwork(slug: "mvs", iconFocusY: 0.41),
+    CoreArtwork(slug: "ncdz", iconFocusY: 0.35)
 ]
 
 let root = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "data/artwork",
@@ -51,28 +54,25 @@ func drawCover(_ image: NSImage, width: Int, height: Int) {
                from: crop, operation: .copy, fraction: 1.0)
 }
 
-// Keep the NJEMU/core logo together and preserve the original lettering and
-// neon arcade treatment in both icon formats. Source art is 1666x944 and has
-// intentional negative space on the left for the PSP XMB selection icon.
-func drawBrandCrop(_ source: NSImage, in destination: NSRect) {
-    let crop = NSRect(x: source.size.width * 0.43,
-                      y: source.size.height * 0.17,
-                      width: source.size.width * 0.54,
-                      height: source.size.height * 0.54)
-    source.draw(in: destination, from: crop, operation: .copy, fraction: 1)
-}
-
-func artworkIcon(_ source: NSImage, width: Int, height: Int) -> NSBitmapImageRep {
+// The icon illustrations have centered lettering, unlike the deliberately
+// right-weighted XMB backgrounds. Crop wide icons around the complete logo
+// group while preserving the full composition for square Vita bubbles.
+func artworkIcon(_ source: NSImage, width: Int, height: Int,
+                 focusY: CGFloat) -> NSBitmapImageRep {
     makeBitmap(width: width, height: height) {
-        drawCover(source, width: width, height: height)
-        let bandHeight = CGFloat(width) * 80 / 144
-        let band = NSRect(x: 0, y: (CGFloat(height) - bandHeight) / 2,
-                          width: CGFloat(width), height: bandHeight)
-        drawBrandCrop(source, in: band)
-        NSColor.white.withAlphaComponent(0.65).setStroke()
-        NSBezierPath(rect: NSRect(x: 0.5, y: 0.5,
-                                 width: CGFloat(width) - 1,
-                                 height: CGFloat(height) - 1)).stroke()
+        if width == height {
+            drawCover(source, width: width, height: height)
+        } else {
+            let cropWidth = source.size.width * 0.97
+            let cropHeight = cropWidth * CGFloat(height) / CGFloat(width)
+            let centerY = source.size.height * focusY
+            let crop = NSRect(x: (source.size.width - cropWidth) / 2,
+                              y: max(0, min(source.size.height - cropHeight,
+                                            centerY - cropHeight / 2)),
+                              width: cropWidth, height: cropHeight)
+            source.draw(in: NSRect(x: 0, y: 0, width: width, height: height),
+                        from: crop, operation: .copy, fraction: 1)
+        }
     }
 }
 
@@ -136,8 +136,12 @@ for core in cores {
     let coreRoot = root.appendingPathComponent(core.slug, isDirectory: true)
     let sourceURL = coreRoot.appendingPathComponent("source_1666_944.png")
     guard let source = NSImage(contentsOf: sourceURL) else { fatalError("Missing source \(sourceURL.path)") }
+    let iconURL = coreRoot.appendingPathComponent("icon_source_1254_1254.png")
+    guard let iconSource = NSImage(contentsOf: iconURL) else {
+        fatalError("Missing centered icon source \(iconURL.path)")
+    }
 
-    try writePNG(artworkIcon(source, width: 144, height: 80),
+    try writePNG(artworkIcon(iconSource, width: 144, height: 80, focusY: core.iconFocusY),
                  to: coreRoot.appendingPathComponent("icon_144_80.png"))
     try writePNG(render(480, 272) { drawCover(source, width: 480, height: 272) },
                  to: coreRoot.appendingPathComponent("pic1_480_272.png"))
@@ -154,13 +158,13 @@ for core in cores {
     }
     try writePNG(overlay, to: coreRoot.appendingPathComponent("pic0_480_272.png"))
 
-    try writeIndexedPNG(artworkIcon(source, width: 128, height: 128),
+    try writeIndexedPNG(artworkIcon(iconSource, width: 128, height: 128, focusY: core.iconFocusY),
                         to: coreRoot.appendingPathComponent("icon_128_128.png"))
     try writeIndexedPNG(render(960, 544) { drawCover(source, width: 960, height: 544) },
                         to: coreRoot.appendingPathComponent("pic0_960_544.png"))
     try writeIndexedPNG(render(840, 500) { drawCover(source, width: 840, height: 500) },
                         to: coreRoot.appendingPathComponent("bg_840_500.png"))
-    try writeIndexedPNG(artworkIcon(source, width: 280, height: 158),
+    try writeIndexedPNG(artworkIcon(iconSource, width: 280, height: 158, focusY: core.iconFocusY),
                         to: coreRoot.appendingPathComponent("startup_280_158.png"))
     print("Generated PSP and PS Vita artwork for \(core.slug)")
 }
