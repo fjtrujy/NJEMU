@@ -9,12 +9,17 @@ int main(void)
      * CPS2/MVS processed assets must remain readable after a SemVer bump. */
     static const char cps2[8] = NJEMU_CPS2_CACHE_SIGNATURE;
     static const char mvs[8] = NJEMU_MVS_CACHE_SIGNATURE;
-    static const char state_cps1[8] = NJEMU_CPS1_STATE_SIGNATURE;
-    static const char state_cps2[8] = NJEMU_CPS2_STATE_SIGNATURE;
-    static const char state_mvs[8] = NJEMU_MVS_STATE_SIGNATURE;
-    static const char state_ncdz[8] = NJEMU_NCDZ_STATE_SIGNATURE;
+    /* Keep the C terminator in test storage. The on-disk format still
+     * writes only the first eight signature bytes. */
+    static const char state_cps1[] = NJEMU_CPS1_STATE_SIGNATURE;
+    static const char state_cps2[] = NJEMU_CPS2_STATE_SIGNATURE;
+    static const char state_mvs[] = NJEMU_MVS_STATE_SIGNATURE;
+    static const char state_ncdz[] = NJEMU_NCDZ_STATE_SIGNATURE;
 
     if (sizeof(cps2) != 8 || sizeof(mvs) != 8)
+        return 1;
+    if (sizeof(state_cps1) != 9 || sizeof(state_cps2) != 9 ||
+        sizeof(state_mvs) != 9 || sizeof(state_ncdz) != 9)
         return 1;
     if (memcmp(cps2, "CPS2V24\0", 8) != 0)
         return 1;
