@@ -95,6 +95,7 @@ option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution conf
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
 option(PS2_INPUT_PROFILE "PS2: log sampled button edges and transient pad failures" OFF)
 option(PS2_INPUT_THREADED "Experimental CPS1/PS2 input capture worker" OFF)
+option(PS2_IOP_SQUARE_REPLAY "PS2/CPS1 diagnostic only: replay IOP Square edges across emulation frames" OFF)
 set(PS2_IOP_PADMAN_PROBE_IRX "" CACHE FILEPATH
     "PS2 diagnostic-only: replace embedded PADMAN with a locally instrumented IRX")
 if(PS2_IOP_PADMAN_PROBE_IRX)
@@ -107,6 +108,15 @@ if(PS2_IOP_PADMAN_PROBE_IRX)
     if(NOT EXISTS "${PS2_IOP_PADMAN_PROBE_IRX}")
         message(FATAL_ERROR "Missing experimental PADMAN IRX: ${PS2_IOP_PADMAN_PROBE_IRX}")
     endif()
+endif()
+if(PS2_IOP_SQUARE_REPLAY)
+    if(NOT PS2_IOP_PADMAN_PROBE_IRX OR GUI OR
+        NOT PLATFORM STREQUAL "PS2" OR NOT "${TARGET}" STREQUAL "CPS1" OR
+        RELEASE OR NJEMU_CANONICAL_RELEASE)
+        message(FATAL_ERROR
+            "PS2_IOP_SQUARE_REPLAY requires a non-release PS2 CPS1 NO_GUI build with PS2_IOP_PADMAN_PROBE_IRX")
+    endif()
+    add_definitions(-DPS2_IOP_SQUARE_REPLAY=1)
 endif()
 option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
 if("${PLATFORM}" STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")

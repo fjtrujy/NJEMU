@@ -11,6 +11,8 @@
 #include "ps2/ps2_input_capture.h"
 #include "ps2/ps2_padman_frame_probe.h"
 #include "ps2/ps2_padman_iop_probe.h"
+#include "ps2/ps2_padman_edge_gap.h"
+#include "ps2/ps2_padman_square_fifo.h"
 #include "ps2/ps2_video_filter_policy.h"
 
 static void test_single_transport_gap(void)
@@ -239,6 +241,74 @@ static void test_padman_iop_acquisition_probe(void)
     assert(probe.acquired == 0x12345678u);
 }
 
+static void test_padman_subframe_edge_loss(void)
+{
+    ps2_padman_edge_gap_t p = {0};
+
+    ps2_padman_edge_gap_observe(&p, 100, false);
+    ps2_padman_edge_gap_observe(&p, 101, true);
+    ps2_padman_edge_gap_observe(&p, 102, false);
+    assert(p.iop_edges == 2 && p.ee_edges == 2);
+    assert(p.extra_edges == 0 && p.invisible_cycles == 0);
+
+    /* Entire press + release between two CPS1 frame samples. */
+    ps2_padman_edge_gap_observe(&p, 104, false);
+    assert(p.iop_edges == 4 && p.ee_edges == 2);
+    assert(p.extra_edges == 2 && p.invisible_cycles == 1);
+    assert(p.multi_edge_frames == 1 && p.max_edges_per_frame == 2);
+
+    /* Two events plus the new held state; one IOP cycle is invisible. */
+    ps2_padman_edge_gap_observe(&p, 107, true);
+    assert(p.extra_edges == 4 && p.invisible_cycles == 1);
+    assert(p.multi_edge_frames == 2 && p.max_edges_per_frame == 3);
+
+    /* A reset/disconnect never becomes billions of missing edges. */
+    ps2_padman_edge_gap_observe(&p, 1, false);
+    assert(p.discontinuities == 1 && p.iop_edges == 7);
+    ps2_padman_edge_gap_reset_window(&p);
+    assert(p.iop_edges == 0 && p.ee_edges == 0);
+    ps2_padman_edge_gap_observe(&p, 2, true);
+    assert(p.iop_edges == 1 && p.ee_edges == 1);
+    assert(p.discontinuities == 0);
+}
+
+static void test_iop_square_event_replay(void)
+{
+    ps2_padman_square_fifo_t q = {0};
+    unsigned int i;
+
+    assert(!ps2_padman_square_fifo_sample(&q, 100, false));
+    assert(ps2_padman_square_fifo_sample(&q, 102, false));
+    assert(q.recovered_presses == 1 && q.pending == 1);
+    assert(!ps2_padman_square_fifo_sample(&q, 102, false));
+    assert(q.pending == 0);
+
+    /* Ordinary input stays timely; extra edges remain ordered. */
+    assert(ps2_padman_square_fifo_sample(&q, 103, true));
+    assert(!ps2_padman_square_fifo_sample(&q, 105, true));
+    assert(ps2_padman_square_fifo_sample(&q, 105, true));
+    assert(q.pending == 0 && q.overflows == 0 && q.resyncs == 0);
+
+    ps2_padman_square_fifo_reset_stats(&q);
+    assert(q.emitted_presses == 0 && q.recovered_presses == 0);
+    assert(q.initialized && q.last_emitted);
+
+    /* A torn IOP snapshot or reset resynchronizes without stale replay. */
+    assert(!ps2_padman_square_fifo_sample(&q, 106, false));
+    assert(!ps2_padman_square_fifo_sample(&q, 107, false));
+    assert(q.resyncs == 1 && q.pending == 0);
+
+    /* A bound on backlog avoids indefinite synthetic delayed actions. */
+    ps2_padman_square_fifo_reset(&q);
+    assert(!ps2_padman_square_fifo_sample(&q, 100, false));
+    assert(ps2_padman_square_fifo_sample(&q, 108, false));
+    assert(q.pending == 7);
+    assert(!ps2_padman_square_fifo_sample(&q, 110, false));
+    assert(q.overflows == 1 && q.pending == 0);
+    for (i = 0; i < 8; ++i)
+        assert(!ps2_padman_square_fifo_sample(&q, 110, false));
+}
+
 int main(void)
 {
     test_single_transport_gap();
@@ -249,5 +319,7 @@ int main(void)
     test_async_capture_short_taps_and_chords();
     test_padman_dma_publication_cadence();
     test_padman_iop_acquisition_probe();
+    test_padman_subframe_edge_loss();
+    test_iop_square_event_replay();
     return 0;
 }

@@ -170,3 +170,15 @@ face buttons, rumble, disconnect/reconnect, menus, suspension/restart and
 audio/video performance before any proposal to enable faster acquisition.
 Only implement an IOP event ring after demonstrating genuine IOP-observed
 transitions lost before the EE consumes them.
+
+### Follow-up: IOP-observed edges missing at the CPS1 frame boundary
+
+The follow-up diagnostic did find such a case with 12/12 ms Square taps:
+112 IOP-accepted Square edges versus 104 CPS1 frame-level edges in a
+600-frame window, representing four complete missed press/release cycles.
+A strictly opt-in, Square-only EE event FIFO reconstructed ten otherwise
+unrepresented full cycles in a separate PCSX2 test window; this changes
+input duration semantics and is **not** a production default. See
+`docs/PS2_IOP_SQUARE_EVENT_REPLAY_EXPERIMENT.md` for implementation,
+controls, limitations, and the reason not to generalize to other buttons
+without a properly ordered multi-button IOP event protocol.

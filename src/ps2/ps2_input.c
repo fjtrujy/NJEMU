@@ -20,6 +20,10 @@
 #include "ps2/ps2_padman_frame_probe.h"
 #ifdef PS2_IOP_PADMAN_PROBE
 #include "ps2/ps2_padman_iop_probe.h"
+#include "ps2/ps2_padman_edge_gap.h"
+#ifdef PS2_IOP_SQUARE_REPLAY
+#include "ps2/ps2_padman_square_fifo.h"
+#endif
 #endif
 #endif
 #ifdef PS2_INPUT_THREADED
@@ -61,6 +65,7 @@ typedef struct ps2_input_profile {
 	ps2_padman_frame_probe_t padman_frames;
 #ifdef PS2_IOP_PADMAN_PROBE
 	ps2_padman_iop_probe_t iop_first, iop_last;
+	ps2_padman_edge_gap_t iop_gap;
 	bool iop_observed;
 #endif
 } ps2_input_profile_t;
@@ -164,17 +169,31 @@ static void ps2_input_profile_record(ps2_input_profile_t *p, int reason,
 			(unsigned int)p->iop_observed,
 			(unsigned int)(p->iop_last.acquired - p->iop_first.acquired),
 			(unsigned int)(p->iop_last.square_edges - p->iop_first.square_edges));
+		printf("[ps2_iop_gap] frames=600 iop_edges=%u ee_edges=%u "
+			"extra=%u multi_frames=%u invisible_cycles=%u max_per_frame=%u resets=%u\n",
+			(unsigned int)p->iop_gap.iop_edges,
+			(unsigned int)p->iop_gap.ee_edges,
+			(unsigned int)p->iop_gap.extra_edges,
+			(unsigned int)p->iop_gap.multi_edge_frames,
+			(unsigned int)p->iop_gap.invisible_cycles,
+			(unsigned int)p->iop_gap.max_edges_per_frame,
+			(unsigned int)p->iop_gap.discontinuities);
 #endif
 		/* Preserve edge continuity when starting the next window. */
 		raw_change = p->previous_raw;
 		delivered_change = p->previous_delivered;
 		ps2_padman_frame_probe_t old_probe = p->padman_frames;
+#ifdef PS2_IOP_PADMAN_PROBE
+		ps2_padman_edge_gap_t old_gap = p->iop_gap;
+		ps2_padman_edge_gap_reset_window(&old_gap);
+#endif
 		memset(p, 0, sizeof(*p));
 		p->previous_raw = raw_change;
 		p->previous_delivered = delivered_change;
 		p->padman_frames.previous = old_probe.previous;
 		p->padman_frames.have_previous = old_probe.have_previous;
 #ifdef PS2_IOP_PADMAN_PROBE
+		p->iop_gap = old_gap;
 		if (p->iop_observed) {
 			p->iop_first = p->iop_last;
 			p->iop_observed = true;
@@ -199,6 +218,9 @@ typedef struct ps2_input {
 #endif
 #ifdef PS2_INPUT_PROFILE
 	ps2_input_profile_t profile;
+#endif
+#ifdef PS2_IOP_SQUARE_REPLAY
+	ps2_padman_square_fifo_t square_fifo;
 #endif
 } ps2_input_t;
 
@@ -522,6 +544,9 @@ static void ps2_refresh(void *data)
 	ps2_input_t *ps2 = (ps2_input_t *)data;
 
 	if (ps2) {
+#ifdef PS2_IOP_SQUARE_REPLAY
+		ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
 #ifdef PS2_INPUT_THREADED
 		ps2_capture_stop(ps2);
 #endif
@@ -621,6 +646,10 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 
 	info = getActiveJoyInfo(controller);
 	if (info == NULL) {
+#ifdef PS2_IOP_SQUARE_REPLAY
+		if (controller == 0)
+			ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
 #ifdef PS2_INPUT_PROFILE
 		if (controller == 0)
 			ps2_input_profile_record(&ps2->profile, INPUT_PROFILE_UNAVAILABLE,
@@ -629,6 +658,10 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		return false;
 	}
 	if (!configureJoyInfoAnalogMode(info)) {
+#ifdef PS2_IOP_SQUARE_REPLAY
+		if (controller == 0)
+			ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
 #ifdef PS2_INPUT_PROFILE
@@ -689,6 +722,10 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	 * a spurious 0xffff set of pressed buttons. */
 	if (ret < (int)(offsetof(struct padButtonStatus, btns) +
 		sizeof(paddata.btns))) {
+#ifdef PS2_IOP_SQUARE_REPLAY
+		if (controller == 0)
+			ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
 #ifdef PS2_INPUT_PROFILE
@@ -702,6 +739,10 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	if (!ps2_pad_packet_valid(ret,
 		offsetof(struct padButtonStatus, btns) + sizeof(paddata.btns),
 		paddata.mode, paddata.btns)) {
+#ifdef PS2_IOP_SQUARE_REPLAY
+		if (controller == 0)
+			ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
 #ifdef PS2_INPUT_PROFILE
@@ -728,7 +769,37 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 				ps2->profile.iop_observed = true;
 			}
 			ps2->profile.iop_last = iop;
+			ps2_padman_edge_gap_observe(&ps2->profile.iop_gap,
+				iop.square_edges, (fresh.buttons & PLATFORM_PAD_B3) != 0);
+#ifdef PS2_IOP_SQUARE_REPLAY
+			{
+				bool square = ps2_padman_square_fifo_sample(
+					&ps2->square_fifo, iop.square_edges,
+					(fresh.buttons & PLATFORM_PAD_B3) != 0);
+				if (square)
+					state->buttons |= PLATFORM_PAD_B3;
+				else
+					state->buttons &= ~PLATFORM_PAD_B3;
+			}
+#endif
 		}
+#ifdef PS2_IOP_SQUARE_REPLAY
+		else
+			ps2_padman_square_fifo_reset(&ps2->square_fifo);
+#endif
+#ifdef PS2_IOP_SQUARE_REPLAY
+		if (ps2->profile.samples == 599) {
+			printf("[ps2_iop_replay] frames=600 emitted=%u recovered=%u "
+				"overflows=%u resyncs=%u max_pending=%u pending=%u\n",
+				(unsigned int)ps2->square_fifo.emitted_presses,
+				(unsigned int)ps2->square_fifo.recovered_presses,
+				(unsigned int)ps2->square_fifo.overflows,
+				(unsigned int)ps2->square_fifo.resyncs,
+				(unsigned int)ps2->square_fifo.max_pending,
+				(unsigned int)ps2->square_fifo.pending);
+			ps2_padman_square_fifo_reset_stats(&ps2->square_fifo);
+		}
+#endif
 #endif
 		if (ps2_padman_dma_newest_frame(info->padBuf,
 			sizeof(info->padBuf), &frame))
