@@ -4,6 +4,34 @@ NJEMU follows Semantic Versioning for releases from the 2.4.0 line onward. Histo
 
 ## Unreleased
 
+## 3.0.0 (2026-10-14)
+
+This is the first stable SemVer-tagged NJEMU release. Version 3.0.0 marks the
+cross-platform architecture and the current recommended builds as a stable
+release line rather than a continuation of the historic PSP-only versions.
+
+### Emulation and performance
+
+- Improved PS2 emulation timing, VSync behavior, audio queue handling, and
+  frame pacing while retaining the default PS2SDK PADMAN controller driver.
+- Hardened PS2 controller enumeration, transient read recovery, and packet
+  validation; moved CPS1 input sampling ahead of the emulated CPU frame.
+- Enabled optional PSP Media Engine sound processing with a normal CPU
+  fallback, preserving PSP emulator and hardware compatibility.
+- Improved platform-specific video paths and memory/cache policies without
+  removing the portable software-based reference paths.
+
+### Interface and platforms
+
+- Reorganized emulator settings into single-level category pages, with
+  clearer menu icons and game-browser, save-state, and exit actions.
+- Added PS2 display refinements, including a native-pixel presentation
+  option alongside the existing aspect-ratio modes.
+- Continued support for CPS1, CPS2, MVS, and NCDZ across PSP, PS2, PS Vita,
+  and Desktop, using shared configuration and translations.
+
+### Distribution
+
 - Added an automatically refreshed Development prerelease for every successful `master` release build.
 - Added categorized GitHub release notes for breaking changes, features, fixes, and other changes.
 - Added separate stable and Development package downloads to the GitHub Pages site.

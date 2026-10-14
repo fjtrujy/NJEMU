@@ -22,7 +22,11 @@ Before the first SemVer tag exists, Git builds identify themselves as:
 2.4.0-pre.<commit-count>+g<sha>
 ```
 
-The first stable SemVer release should be tagged `v2.4.0` once the maintainers consider that source state release-ready. Do not reconstruct historical tags simply to make old versions look SemVer-complete.
+The first stable SemVer release is `v3.0.0`, reflecting the stabilized
+multi-platform release line. The `2.4.0` pre-tag fallback remains the
+historical migration baseline rather than a published stable Git tag.
+Do not reconstruct historical tags simply to make old versions look
+SemVer-complete.
 
 ## Build version identity
 
@@ -186,8 +190,8 @@ The normal platform CI workflows remain independent and continue exercising the 
 5. Create and push the final annotated tag, for example:
 
    ```sh
-   git tag -a v2.4.0 -m "NJEMU 2.4.0"
-   git push origin v2.4.0
+   git tag -a v3.0.0 -m "NJEMU 3.0.0"
+   git push origin v3.0.0
    ```
 
 6. The tag push builds the canonical packages, creates the GitHub Release, attaches all platform archives/checksum sidecars, marks it as Latest, and generates the categorized description automatically.
