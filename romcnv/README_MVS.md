@@ -184,7 +184,9 @@ emmake make
 - Parent ROM sets must be in the same directory as the game ROM
 - The converter requires `rominfo.mvs` file to be present in the same directory as the executable
 - Converter language is selected at runtime. `NJEMU_LANG`, `LC_ALL`, `LC_MESSAGES`, and `LANG` are used when `-lang` is omitted; unsupported languages fall back to English.
-- Processed assets are version-specific - regenerate if you update the emulator
+- Processed-asset headers currently use format `MVS_V24`, independent
+  of NJEMU/ROMCNV application versions. Regenerate only when the
+  processed-asset format changes.
 - Cache-enabled MVS builds can still read the legacy `cache/` layout for migration; `USE_CACHE=OFF` intentionally reads only `processed/`.
 
 ## Troubleshooting

@@ -10,21 +10,23 @@ Release versions use `MAJOR.MINOR.PATCH` and release tags use `vMAJOR.MINOR.PATC
 - **MINOR**: backwards-compatible features or substantial new capabilities.
 - **PATCH**: backwards-compatible fixes.
 
-Pre-release tags are not part of the automated release workflow today. The release workflow accepts strict stable tags such as `v2.4.0` or `v2.5.1`.
+Pre-release tags are not part of the automated release workflow today. The release workflow accepts strict stable tags such as `v3.0.0` or `v3.0.1`.
 
 ## Migration to SemVer
 
 The repository had no Git tags when this policy was introduced, but the existing CMake/README lineage identified the cross-platform tree as `2.4.0`. NJEMU therefore uses `2.4.0` as the migration baseline rather than inventing a new unrelated version or retroactively tagging old commits.
 
-Before the first SemVer tag exists, Git builds identify themselves as:
+Before the first SemVer tag existed, Git builds identified themselves as:
 
 ```text
 2.4.0-pre.<commit-count>+g<sha>
 ```
 
 The first stable SemVer release is `v3.0.0`, reflecting the stabilized
-multi-platform release line. The `2.4.0` pre-tag fallback remains the
-historical migration baseline rather than a published stable Git tag.
+multi-platform release line. `2.4.0` remains a historical migration
+baseline, not a published stable Git tag. With the first stable release
+published, **untagged source archives** use `3.0.0` as their fallback
+version (and should pass `NJEMU_VERSION_OVERRIDE` for any later release).
 Do not reconstruct historical tags simply to make old versions look
 SemVer-complete.
 
@@ -42,19 +44,27 @@ Artifact identities remain SemVer-compatible:
 
 | Source state | Artifact identity |
 | --- | --- |
-| Exact clean SemVer tag | `2.4.0` |
-| 12 commits after `v2.4.0` | `2.4.0+12.gabcdef0` |
-| Dirty tree after that tag | `2.4.0+12.gabcdef0.dirty` |
-| Git tree before the first SemVer tag | `2.4.0-pre.967+gabcdef0` |
-| Source tree without `.git` | `2.4.0+source` |
+| Exact clean SemVer tag | `3.0.0` |
+| 12 commits after `v3.0.0` | `3.0.0+12.gabcdef0` |
+| Dirty tree after that tag | `3.0.0+12.gabcdef0.dirty` |
+| Git tree before the first SemVer tag (historical) | `2.4.0-pre.967+gabcdef0` |
+| Source tree without `.git` | `3.0.0+source` |
 
 For the same Git-backed builds, the runtime/frontend version is simply:
 
 ```text
-2.4.0 (abcdef01)
+3.0.0 (abcdef01)
 ```
 
 NJEMU currently uses up to eight hexadecimal characters for this short SHA.
+
+The native ROMCNV converters and the browser ROM converter use the same
+Git-derived human-readable version. The separately maintained cache-header
+signature (`CPS2V24`/`MVS_V24`) and save-state signatures
+(`CPS1SV23`, `CPS2SV23`, `MVS_SV23`, `NCDZSV23`) are **file format
+versions**, not release versions. They must not change when a new SemVer
+tag is published unless the corresponding serialized format becomes
+incompatible.
 
 Untracked files do not mark a build dirty. This is intentional because local ROMs, BIOS files, caches, saves, and other runtime data can exist beside a development checkout without changing the source revision.
 

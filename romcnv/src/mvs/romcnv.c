@@ -18,6 +18,7 @@
 #include "romcnv.h"
 #include "common.h"
 #include "common/game_metadata.h"
+#include "common/cache_format_version.h"
 #include "neogeo.h"
 #include "translation.h"
 #include "zip_writer.h"
@@ -890,10 +891,9 @@ error:
 static int create_raw_cache(char *game_name)
 {
 	int fp;
-	char version[8];
+	const char version[8] = NJEMU_MVS_CACHE_SIGNATURE;
 	char fname[PATH_MAX];
 
-	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
 	change_directory("processed");
 	fputs(ROMCNV_TEXT(MVS_CREATE_PROCESSED_ASSET), stdout);
@@ -971,10 +971,10 @@ static int create_zip_cache(char *game_name)
 	zip_writer_t writer = {0};
 	zip_writer_segment_t cache_info[2];
 	uint32_t block, num_blocks;
-	char version[8], zipname[PATH_MAX];
+	const char version[8] = NJEMU_MVS_CACHE_SIGNATURE;
+	char zipname[PATH_MAX];
 	int res = 0;
 
-	sprintf(version, "MVS_V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
 	change_directory("processed");
 

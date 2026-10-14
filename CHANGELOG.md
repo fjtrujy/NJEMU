@@ -4,6 +4,11 @@ NJEMU follows Semantic Versioning for releases from the 2.4.0 line onward. Histo
 
 ## Unreleased
 
+- Unified native ROMCNV and web converter version displays with NJEMU's
+  Git-derived version, preserving V24 cache and SV23 save-state formats.
+- Updated the fallback version for Git-less source archives after the first
+  stable release.
+
 ## 3.0.0 (2026-10-14)
 
 This is the first stable SemVer-tagged NJEMU release. Version 3.0.0 marks the

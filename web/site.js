@@ -18,7 +18,7 @@
             apiUrl: `${apiBaseUrl}/latest`,
             strictSemVer: true,
             fallbackVersion: 'No stable package metadata available',
-            notFoundMessage: 'NJEMU has not published its first Semantic Versioning release yet. You can use the Development packages below in the meantime.',
+            notFoundMessage: 'Stable release metadata is currently unavailable. You can try the Development packages below or open GitHub Releases.',
         },
         {
             key: 'development',

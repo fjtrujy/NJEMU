@@ -341,6 +341,8 @@ Supported cache representations are:
 
 The runtime also accepts the older `cache/<game>_cache/` folder representation
 for backwards compatibility, but current ROMCNV output is raw or ZIP.
+The `CPS2V24` cache signature identifies the on-disk format, not NJEMU's
+release version. A compatible app update does not require reconversion.
 
 #### Special Cases
 
@@ -415,6 +417,9 @@ not fit fully in RAM. `romcnv_mvs` generates canonical `processed/` assets for
 sets that require offline C/S/V-ROM processing and for MVS streaming paths.
 The CPS2 converter keeps its converter-only graphics layout metadata in
 `cps2_cache_layouts.tsv`, separate from the emulator's `game_database.cps2`.
+Both converters display the Git-derived NJEMU build version. Their output
+format signatures remain `CPS2V24` and `MVS_V24`, regardless of that
+application version.
 
 ### Web Interface
 

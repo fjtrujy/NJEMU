@@ -36,21 +36,13 @@ if(EMSCRIPTEN)
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 endif()
 
-# Version
-set(VERSION_MAJOR 2)
-set(VERSION_MINOR 4)
-set(VERSION_BUILD 0)
-add_definitions(-DVERSION_MAJOR=${VERSION_MAJOR})
-add_definitions(-DVERSION_MINOR=${VERSION_MINOR})
-add_definitions(-DVERSION_BUILD=${VERSION_BUILD})
-
-# Define the version string
-if (VERSION_BUILD EQUAL 0)
-    set(VERSION_STR "${VERSION_MAJOR}.${VERSION_MINOR}")
-else()
-    set(VERSION_STR "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_BUILD}")
-endif()
+# ROMCNV shares NJEMU's application version, but not its cache-file format
+# version. Existing V24 processed assets must remain loadable by NJEMU 3.x.
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/NJEMUVersion.cmake")
+njemu_derive_version("${CMAKE_CURRENT_SOURCE_DIR}/..")
+set(VERSION_STR "${NJEMU_DISPLAY_VERSION}")
 add_definitions(-DVERSION_STR="${VERSION_STR}")
+message(STATUS "ROMCNV version: ${NJEMU_DISPLAY_VERSION}")
 
 # Define TARGET_STR in the code
 add_definitions(-DTARGET_STR="${TARGET}")
@@ -178,7 +170,9 @@ add_executable(${BINARY_TARGET}
     ${ALL_SRC}
 )
 add_dependencies(${BINARY_TARGET} romcnv_translations)
-target_include_directories(${BINARY_TARGET} PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_include_directories(${BINARY_TARGET} PRIVATE
+    "${CMAKE_BINARY_DIR}/generated"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 set_source_files_properties(
     src/translation.c
     PROPERTIES OBJECT_DEPENDS "${ROMCNV_TRANSLATION_OUTPUT}"

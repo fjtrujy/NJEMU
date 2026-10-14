@@ -1,4 +1,4 @@
-set(NJEMU_VERSION_FALLBACK "2.4.0")
+set(NJEMU_VERSION_FALLBACK "3.0.0")
 
 function(_njemu_version_parse_semver version prefix)
     if(NOT "${version}" MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(-([0-9A-Za-z-]+)(\\.([0-9A-Za-z-]+))*)?(\\+([0-9A-Za-z-]+)(\\.([0-9A-Za-z-]+))*)?$")

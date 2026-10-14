@@ -9,6 +9,8 @@
 #ifndef EMUCONFIG_H
 #define EMUCONFIG_H
 
+#include "common/cache_format_version.h"
+
 #ifndef EMUSYS_VALUE
 #define EMUSYS_VALUE
 #define CPS1	0
@@ -69,7 +71,7 @@
 #define TICKS_PER_FRAME			16769.144773
 	/* Keep streaming cache support compiled in unconditionally. Runtime memory
 	 * planning decides whether CPS2 uses it or loads the complete GFX region. */
-#define CACHE_VERSION			"V24"
+#define CACHE_VERSION			NJEMU_CACHE_FORMAT_VERSION
 #define EEPROM_SIZE				128
 #define GULIST_SIZE				300*1024	// 300KB
 #define ENABLE_RASTER_OPTION	0			// off
@@ -88,7 +90,7 @@
 #define SYSTEM_NAME				"NEO·GEO"
 #define FPS						59.185606
 #define TICKS_PER_FRAME			16896.0
-#define CACHE_VERSION			"V24"
+#define CACHE_VERSION			NJEMU_CACHE_FORMAT_VERSION
 #define GULIST_SIZE				300*1024	// 300KB
 
 

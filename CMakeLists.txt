@@ -1586,6 +1586,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUVersionTests.cmake)
     add_test(NAME release_packaging_tests
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUReleasePackageTests.cmake)
+    add_test(NAME web_version_generation_tests
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NJEMUWebVersionTests.cmake)
+
+    add_executable(cache_format_version_tests tests/cache_format_version_tests.c)
+    target_include_directories(cache_format_version_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    target_compile_options(cache_format_version_tests PRIVATE ${WARNING_OPTIONS})
+    add_test(NAME cache_format_version_tests COMMAND cache_format_version_tests)
 
     add_executable(audio_producer_job_tests
         tests/audio_producer_job_tests.c

@@ -19,6 +19,7 @@
 #include "common/runtime_paths.h"
 #include "common/path_utils.h"
 #include "common/state.h"
+#include "common/state_format_version.h"
 #include "common/ui_defs.h"
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
@@ -119,13 +120,13 @@ static int state_thumbnail_capture_width;
 static int state_thumbnail_capture_height;
 
 #if (EMU_SYSTEM == CPS1)
-static const char *current_version_str = "CPS1SV23";
+static const char *current_version_str = NJEMU_CPS1_STATE_SIGNATURE;
 #elif (EMU_SYSTEM == CPS2)
-static const char *current_version_str = "CPS2SV23";
+static const char *current_version_str = NJEMU_CPS2_STATE_SIGNATURE;
 #elif (EMU_SYSTEM == MVS)
-static const char *current_version_str = "MVS_SV23";
+static const char *current_version_str = NJEMU_MVS_STATE_SIGNATURE;
 #elif (EMU_SYSTEM == NCDZ)
-static const char *current_version_str = "NCDZSV23";
+static const char *current_version_str = NJEMU_NCDZ_STATE_SIGNATURE;
 #endif
 
 

@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "common/game_database.h"
+#include "common/cache_format_version.h"
 #include "cache_layouts.h"
 #include "romcnv.h"
 #include "translation.h"
@@ -805,11 +806,10 @@ static int create_raw_cache(char *game_name)
 {
 	int fp;
 	int i, offset;
-	char version[8];
+	const char version[8] = NJEMU_CPS2_CACHE_SIGNATURE;
 	uint32_t header_size, aligned_size, block[0x200];
 	char fname[PATH_MAX];
 
-	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
 	change_directory("cache");
 
@@ -900,9 +900,9 @@ static int create_zip_cache(char *game_name)
 	zip_writer_t writer = {0};
 	zip_writer_segment_t cache_info[5];
 	uint32_t block, res = 0, total = 0, count = 0;
-	char version[8], fname[PATH_MAX], zipname[PATH_MAX];
+	const char version[8] = NJEMU_CPS2_CACHE_SIGNATURE;
+	char fname[PATH_MAX], zipname[PATH_MAX];
 
-	sprintf(version, "CPS2V%d%d\0", VERSION_MAJOR, VERSION_MINOR);
 
 	change_directory("cache");
 

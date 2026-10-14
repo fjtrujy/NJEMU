@@ -143,7 +143,9 @@ emmake make
 - `cps2_cache_layouts.tsv` owns converter-only graphics cache geometry. The build validates its game names and ranges against canonical CPS2 metadata; it is bundled automatically into the WebAssembly converter.
 - `rominfo.cps2` remains a build-time source for the generator but is no longer a converter runtime dependency
 - Converter language is selected at runtime. `NJEMU_LANG`, `LC_ALL`, `LC_MESSAGES`, and `LANG` are used when `-lang` is omitted; unsupported languages fall back to English.
-- Cache files are version-specific - regenerate if you update the emulator
+- Cache headers currently use format `CPS2V24`, independent of the
+  NJEMU/ROMCNV application version. Regenerate when the cache format
+  changes, not merely when a new NJEMU version is released.
 - Some games fully fit in memory and don't require cache conversion
 
 ## Cache Format Comparison
