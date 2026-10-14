@@ -3,6 +3,7 @@
 
 int command_artwork(int argc, char **argv);
 int command_compare_frames(int argc, char **argv);
+int command_stats_snapshot(int argc, char **argv);
 int command_dip_metadata(int argc, char **argv);
 int command_elf_footprint(int argc, char **argv);
 int command_font(int argc, char **argv);

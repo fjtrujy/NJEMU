@@ -11,7 +11,7 @@ This document is the contributor-facing entry point for NJEMU development. Repos
 - `translations/` - tracked localization sources
 - `tools/` - metadata/translation/font/build helpers
 - `romcnv/` - MVS/CPS2 ROM conversion tools
-- `web/` - static GitHub Pages site and browser converter
+- `web/` - static GitHub Pages site and browser converter, including [statistics](STATISTICS.md)
 - `tests/` - Desktop-hosted unit/integration tests
 - `docs/` - architecture, audits, plans, and user/developer documentation
 

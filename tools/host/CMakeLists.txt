@@ -23,6 +23,7 @@ add_library(njemu_host_tool_lib STATIC
     tsv.c
     utf8.c
     command_compare_frames.c
+    command_stats_snapshot.c
     command_dip_metadata.c
     command_elf_footprint.c
     command_font.c

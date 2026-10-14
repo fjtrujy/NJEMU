@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Live NJEMU release downloads and historical project traffic statistics from GitHub.">
+    <title>NJEMU · Project Statistics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="stats.css">
+    <script src="stats-model.js" defer></script>
+    <script src="stats.js" defer></script>
+</head>
+<body class="site-body">
+    <main class="container site-container stats-container">
+        <nav class="site-nav" aria-label="Primary navigation">
+            <a class="site-brand" href="./">NJEMU</a>
+            <div class="site-nav-links">
+                <a href="./#downloads">Downloads</a>
+                <a href="converter.html">ROM Converter</a>
+                <a href="stats.html" aria-current="page">Statistics</a>
+                <a href="https://github.com/fjtrujy/NJEMU">GitHub</a>
+            </div>
+        </nav>
+        <header class="stats-header">
+            <p class="site-eyebrow">Open-source project telemetry</p>
+            <h1>NJEMU in numbers</h1>
+            <p class="site-lead">Real release downloads, platform adoption and historical repository activity — from GitHub, not hardcoded counters.</p>
+            <p id="stats-updated" class="stats-updated" role="status">Loading GitHub statistics…</p>
+        </header>
+        <section class="stats-overview" aria-label="Download totals">
+            <article class="stats-metric"><p>Stable downloads</p><strong id="stat-stable">—</strong><small>GitHub release ZIP assets</small></article>
+            <article class="stats-metric"><p>Development downloads</p><strong id="stat-development">—</strong><small>Current development release assets</small></article>
+            <article class="stats-metric"><p>Published stable versions</p><strong id="stat-versions">—</strong><small>Releases available via the API</small></article>
+            <article class="stats-metric"><p>Most downloaded platform</p><strong id="stat-platform">—</strong><small>Across published stable ZIPs</small></article>
+        </section>
+        <section class="stats-panel" aria-labelledby="platform-heading">
+            <div class="stats-heading"><div><p class="site-eyebrow">Platform adoption</p><h2 id="platform-heading">Downloads by platform</h2></div>
+                <label class="stats-filter">Release channel <select id="channel-filter"><option value="stable">Stable</option><option value="development">Development</option></select></label>
+            </div>
+            <div id="stats-platforms" class="stats-bars" aria-live="polite"><p class="site-muted">Loading download counts…</p></div>
+        </section>
+        <section class="stats-panel" aria-labelledby="versions-heading">
+            <div class="stats-heading"><div><p class="site-eyebrow">Releases</p><h2 id="versions-heading">Downloads by version</h2></div><a href="https://github.com/fjtrujy/NJEMU/releases">Browse releases ↗</a></div>
+            <p class="stats-hint">GitHub reports counts per release asset. ZIP downloads are summed; checksum/metadata files are excluded.</p>
+            <div class="stats-table-scroll"><table class="stats-table"><thead><tr><th scope="col">Version</th><th scope="col">Published</th><th scope="col">Platform downloads</th><th scope="col">Total</th></tr></thead><tbody id="stats-release-rows"><tr><td colspan="4">Loading releases…</td></tr></tbody></table></div>
+        </section>
+        <section class="stats-panel" aria-labelledby="timeline-heading">
+            <div class="stats-heading"><div><p class="site-eyebrow">Snapshots</p><h2 id="timeline-heading">Download history</h2></div><span id="stats-history-date" class="stats-small"></span></div>
+            <p class="stats-hint">Daily snapshots of cumulative GitHub asset counts, not unique installations. Older downloads cannot be reconstructed retroactively. Replaced development assets may reset their counts.</p>
+            <div id="stats-download-timeline" class="stats-timeline" role="img" aria-label="Daily snapshot download totals"><p class="site-muted">Historical snapshots will appear once collection starts.</p></div>
+        </section>
+        <section class="stats-panel" aria-labelledby="traffic-heading">
+            <div class="stats-heading"><div><p class="site-eyebrow">Repository activity</p><h2 id="traffic-heading">GitHub traffic</h2></div><a href="https://github.com/fjtrujy/NJEMU/graphs/traffic">Repository traffic ↗</a></div>
+            <p class="stats-hint">Daily repository views and clone operations, not GitHub Pages visitors. GitHub only exposes a rolling 14-day window; archiving requires a repository-owner traffic token.</p>
+            <div id="stats-traffic-status" class="stats-small" role="status"></div>
+            <div class="stats-traffic-grids"><div><h3>Repository views</h3><div id="stats-views" class="stats-timeline"></div></div><div><h3>Git clones</h3><div id="stats-clones" class="stats-timeline"></div></div></div>
+        </section>
+        <footer class="site-footer">
+            <span>Aggregated statistics only; no browser tracking, cookies, or user identifiers collected by NJEMU.</span>
+            <span><a href="./">Back to NJEMU</a></span>
+        </footer>
+    </main>
+</body>
+</html>

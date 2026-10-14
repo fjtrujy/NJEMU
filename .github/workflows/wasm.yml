@@ -59,6 +59,9 @@ jobs:
           ..
         emmake make -j$(nproc)
 
+    - name: Validate statistics data model
+      run: node --test web/stats-model.test.cjs
+
     - name: Prepare web files
       run: |
         mkdir -p dist
@@ -68,6 +71,10 @@ jobs:
         cp web/converter.html dist/
         cp web/style.css dist/
         cp web/site.js dist/
+        cp web/stats.html dist/
+        cp web/stats.css dist/
+        cp web/stats-model.js dist/
+        cp web/stats.js dist/
         cp web/app.js dist/
 
         # Generate documentation HTML from markdown using pandoc

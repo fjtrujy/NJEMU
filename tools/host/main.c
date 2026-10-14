@@ -25,6 +25,7 @@ static const command_entry_t commands[] = {
     {"translations", command_translations, "validate/build runtime translations"},
     {"validate-cps2-cache", command_validate_cps2_cache, "validate CPS2 converter cache layouts"},
     {"compare-frames", command_compare_frames, "compare Desktop PPM frame dumps"},
+    {"stats-snapshot", command_stats_snapshot, "archive GitHub release downloads and optional traffic"},
 };
 
 static void print_usage(const char *program)

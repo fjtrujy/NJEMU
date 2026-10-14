@@ -1,0 +1,137 @@
+(() => {
+    'use strict';
+    const model = window.NJEMUStatsModel;
+    const repository = 'fjtrujy/NJEMU';
+    const releasesUrl = `https://api.github.com/repos/${repository}/releases?per_page=100`;
+    const archiveUrl = `https://raw.githubusercontent.com/${repository}/stats-data/history.json`;
+    const formatNumber = new Intl.NumberFormat();
+    const element = (id) => document.getElementById(id);
+    let releases = [];
+
+    function append(tag, parent, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        parent.appendChild(node);
+        return node;
+    }
+    function showPlatforms(channel) {
+        const root = element('stats-platforms');
+        root.replaceChildren();
+        const values = model.byPlatform(releases.filter((release) => release.channel === channel));
+        const maximum = Math.max(...values.map((value) => value.downloads), 1);
+        values.forEach(({ label, downloads }) => {
+            const row = append('div', root, 'stats-bar');
+            append('span', row, '', label);
+            const track = append('div', row, 'stats-bar-track');
+            const fill = append('span', track, 'stats-bar-fill');
+            fill.style.width = `${downloads / maximum * 100}%`;
+            append('strong', row, 'stats-bar-count', formatNumber.format(downloads));
+        });
+    }
+    function showReleases() {
+        const root = element('stats-release-rows');
+        root.replaceChildren();
+        if (!releases.length) {
+            const row = append('tr', root);
+            const cell = append('td', row, '', 'Release details are currently unavailable.');
+            cell.colSpan = 4;
+            return;
+        }
+        releases.forEach((release) => {
+            const row = append('tr', root);
+            append('td', row, '', release.tag);
+            append('td', row, '', release.published ? release.published.slice(0, 10) : '—');
+            const byPlatform = model.byPlatform([release]).filter((platform) => platform.downloads > 0);
+            append('td', row, '', byPlatform.map((platform) => `${platform.label}: ${formatNumber.format(platform.downloads)}`).join(' · ') || 'No recorded downloads');
+            append('td', row, '', formatNumber.format(model.releaseTotal(release)));
+        });
+    }
+    function updateSummary() {
+        const stable = releases.filter((release) => release.channel === 'stable');
+        const development = releases.filter((release) => release.channel === 'development');
+        const platforms = model.byPlatform(stable).sort((a, b) => b.downloads - a.downloads);
+        element('stat-stable').textContent = formatNumber.format(stable.reduce((sum, item) => sum + model.releaseTotal(item), 0));
+        element('stat-development').textContent = formatNumber.format(development.reduce((sum, item) => sum + model.releaseTotal(item), 0));
+        element('stat-versions').textContent = formatNumber.format(stable.length);
+        element('stat-platform').textContent = platforms[0]?.downloads ? platforms[0].label : '—';
+        showReleases();
+        showPlatforms(element('channel-filter').value);
+    }
+    function barTimeline(root, points, key, emptyMessage) {
+        root.replaceChildren();
+        const valid = points.filter((item) => Number.isFinite(item[key]) && item[key] >= 0).slice(-90);
+        if (!valid.length) {
+            append('p', root, 'site-muted', emptyMessage);
+            return;
+        }
+        const maximum = Math.max(...valid.map((point) => point[key]), 1);
+        valid.forEach((point) => {
+            const bar = append('div', root, 'stats-timebar');
+            const tooltip = `${point.date}: ${formatNumber.format(point[key])}`;
+            bar.title = tooltip;
+            bar.tabIndex = 0;
+            bar.setAttribute('aria-label', tooltip);
+            const fill = append('span', bar);
+            fill.style.height = `${Math.max(1, point[key] / maximum * 100)}%`;
+        });
+    }
+    function showHistory(history) {
+        const downloadSeries = model.snapshotSeries(history);
+        barTimeline(element('stats-download-timeline'), downloadSeries, 'downloads', 'Daily download snapshots will appear after the first successful collection.');
+        const traffic = history && history.traffic && typeof history.traffic === 'object' ? history.traffic : {};
+        for (const key of ['views', 'clones']) {
+            const records = Array.isArray(traffic[key]) ? traffic[key] : [];
+            barTimeline(element(`stats-${key}`), records, 'count', 'Repository traffic history is not yet available.');
+        }
+        if (downloadSeries.length) {
+            element('stats-history-date').textContent = `Latest snapshot: ${downloadSeries[downloadSeries.length - 1].date}`;
+        }
+        element('stats-traffic-status').textContent = (traffic.views?.length || traffic.clones?.length)
+            ? 'Collected repository traffic. Counts may include automated activity; daily unique values are not additive.'
+            : 'Traffic archives are unavailable. Repository-owner authorization is required for private traffic endpoints.';
+    }
+    async function readJson(url) {
+        const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-cache' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
+    async function loadReleases() {
+        const all = [];
+        // GitHub paginates release assets and versions at 100 records per page.
+        for (let page = 1; page <= 20; ++page) {
+            const batch = await readJson(`${releasesUrl}&page=${page}`);
+            if (!Array.isArray(batch)) throw new Error('Unexpected GitHub release response');
+            all.push(...batch);
+            if (batch.length < 100) break;
+        }
+        return all;
+    }
+    async function initialize() {
+
+        element('channel-filter').addEventListener('change', (event) => showPlatforms(event.target.value));
+        const [live, archived] = await Promise.allSettled([loadReleases(), readJson(archiveUrl)]);
+        const history = archived.status === 'fulfilled' && archived.value?.schema === 1 ? archived.value : null;
+        const liveReleases = live.status === 'fulfilled' ? live.value : null;
+        if (liveReleases) releases = model.normaliseReleases(liveReleases);
+        else if (history?.snapshots?.length) {
+            const last = history.snapshots[history.snapshots.length - 1];
+            releases = model.normaliseReleases((last.releases || []).map((release) => ({
+                tag_name: release.tag, prerelease: release.tag === 'development',
+                published_at: '', assets: release.assets.map((asset) => ({...asset, download_count: asset.downloads})),
+            })));
+        }
+        if (releases.length) updateSummary();
+        else {
+            showPlatforms('stable');
+            showReleases();
+        }
+        showHistory(history);
+        const state = live.status === 'fulfilled' ? 'Live GitHub release counts' : 'Live GitHub API unavailable';
+        element('stats-updated').textContent = `${state} · ${new Date().toLocaleString()}${history ? ' · historical snapshots loaded' : ' · history not collected yet'}`;
+    }
+    initialize().catch((error) => {
+        console.error('NJEMU statistics failed to load:', error);
+        element('stats-updated').textContent = 'Statistics are temporarily unavailable. Please try again later.';
+    });
+})();

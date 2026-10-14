@@ -1,0 +1,105 @@
+name: Archive NJEMU Statistics
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: njemu-stats-archive
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: github.repository == 'fjtrujy/NJEMU'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Build native C statistics tool
+        run: |
+          cmake -S tools/host -B build-stats-host -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_DISABLE_FIND_PACKAGE_PNG=TRUE
+          cmake --build build-stats-host --parallel 2
+
+      - name: Fetch public releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build-stats-input
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            > build-stats-input/releases.json
+
+      - name: Fetch optional private traffic metrics
+        env:
+          TRAFFIC_STATS_TOKEN: ${{ secrets.TRAFFIC_STATS_TOKEN }}
+        run: |
+          # An optional fine-grained owner token with Administration: read is
+          # required for GitHub's rolling 14-day repository traffic API.
+          # Missing permissions must never block public download snapshots.
+          if [ -n "$TRAFFIC_STATS_TOKEN" ]; then
+            for kind in views clones; do
+              if ! GH_TOKEN="$TRAFFIC_STATS_TOKEN" gh api "repos/${GITHUB_REPOSITORY}/traffic/$kind" \
+                  > "build-stats-input/${kind}-response.json"; then
+                echo "Unable to fetch traffic/$kind; retaining earlier history" >&2
+                continue
+              fi
+              # The API returns an object containing a named daily array.
+              jq --arg key "$kind" '.[$key] // []' \
+                "build-stats-input/${kind}-response.json" > "build-stats-input/$kind.json"
+            done
+          else
+            echo 'TRAFFIC_STATS_TOKEN not configured: collecting public release downloads only.'
+          fi
+
+      - name: Preserve previous history
+        run: |
+          if git fetch --quiet origin 'refs/heads/stats-data:refs/remotes/origin/stats-data'; then
+            git show refs/remotes/origin/stats-data:history.json > build-stats-input/previous.json
+          else
+            echo 'No statistics archive exists yet; beginning a new archive.'
+          fi
+
+      - name: Merge daily snapshot
+        run: |
+          ./build-stats-host/njemu-tool stats-snapshot \
+            build-stats-input/releases.json \
+            "$(test -s build-stats-input/views.json && echo build-stats-input/views.json || echo -)" \
+            "$(test -s build-stats-input/clones.json && echo build-stats-input/clones.json || echo -)" \
+            "$(test -s build-stats-input/previous.json && echo build-stats-input/previous.json || echo -)" \
+            build-stats-input/history.json "$(date -u +%F)"
+          jq -e '.schema == 1 and (.snapshots | length > 0)' build-stats-input/history.json >/dev/null
+
+      - name: Push separate data-only history branch
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          # Git plumbing creates a one-file data commit without touching the
+          # checked-out master index or triggering the development release.
+          blob=$(git hash-object -w build-stats-input/history.json)
+          if git show-ref --verify --quiet refs/remotes/origin/stats-data; then
+            old_blob=$(git rev-parse refs/remotes/origin/stats-data:history.json)
+            if [ "$blob" = "$old_blob" ]; then
+              echo 'No statistics changes to publish.'
+              exit 0
+            fi
+          fi
+          tree=$(printf '100644 blob %s\thistory.json\n' "$blob" | git mktree)
+          if git show-ref --verify --quiet refs/remotes/origin/stats-data; then
+            parent=$(git rev-parse refs/remotes/origin/stats-data)
+            commit=$(printf 'NJEMU statistics snapshot %s\n' "$(date -u +%F)" |
+              git commit-tree "$tree" -p "$parent")
+          else
+            commit=$(printf 'Initial NJEMU statistics snapshot %s\n' "$(date -u +%F)" |
+              git commit-tree "$tree")
+          fi
+          git push origin "$commit:refs/heads/stats-data"
