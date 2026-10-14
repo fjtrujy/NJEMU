@@ -239,7 +239,8 @@ jobs:
           unpack-pbp ../install/EBOOT.PBP
         )
         cmp build/pbp-check/ICON0.PNG "data/${target_lower}.png"
-        strings build/pbp-check/PARAM.SFO | grep -F "${{ matrix.target }} " | grep -F " for PSP"
+        cmp build/pbp-check/PIC1.PNG "data/psp/${target_lower}_pic1.png"
+        strings build/pbp-check/PARAM.SFO | grep -F "NJEMU ${{ matrix.target }} "
 
     - name: Get short SHA
       id: slug

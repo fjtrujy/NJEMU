@@ -414,10 +414,15 @@ set(VERSION_MAJOR ${NJEMU_VERSION_MAJOR})
 set(VERSION_MINOR ${NJEMU_VERSION_MINOR})
 set(VERSION_BUILD ${NJEMU_VERSION_PATCH})
 set(VERSION_STR "${NJEMU_DISPLAY_VERSION}")
+set(NJEMU_RUNTIME_BUILD_ID "${NJEMU_DISPLAY_VERSION}")
+if(PLATFORM STREQUAL "PSP")
+    set(VERSION_STR "${NJEMU_RELEASE_VERSION}")
+endif()
 add_definitions(-DVERSION_MAJOR=${VERSION_MAJOR})
 add_definitions(-DVERSION_MINOR=${VERSION_MINOR})
 add_definitions(-DVERSION_BUILD=${VERSION_BUILD})
 add_definitions(-DVERSION_STR="${VERSION_STR}")
+add_definitions(-DNJEMU_RUNTIME_BUILD_ID="${NJEMU_RUNTIME_BUILD_ID}")
 add_definitions(-DNJEMU_GIT_SHA="${NJEMU_GIT_SHA}")
 message(STATUS "NJEMU version: ${NJEMU_DISPLAY_VERSION} [artifact ${NJEMU_VERSION}; ${NJEMU_VERSION_SOURCE}]")
 
@@ -1558,15 +1563,18 @@ endif()
 if(PLATFORM STREQUAL "PSP")
     set(BUILD_PRX ON)
     set(PSP_EBOOT_ICON "${CMAKE_SOURCE_DIR}/data/${TARGET_LOWER}.png")
+    set(PSP_EBOOT_BACKGROUND "${CMAKE_SOURCE_DIR}/data/psp/${TARGET_LOWER}_pic1.png")
+    if(NOT EXISTS "${PSP_EBOOT_BACKGROUND}")
+        message(FATAL_ERROR "Missing PSP XMB background: ${PSP_EBOOT_BACKGROUND}")
+    endif()
     create_pbp_file(
         TARGET ${TARGET}
         ICON_PATH "${PSP_EBOOT_ICON}"
-        BACKGROUND_PATH NULL
+        BACKGROUND_PATH "${PSP_EBOOT_BACKGROUND}"
         PREVIEW_PATH NULL
         # PSPSDK's create_pbp_file() forwards TITLE through a shell command.
-        # Keep this metadata shell-safe; the runtime still shows the canonical
-        # parenthesized display version (for example, 2.4.0 (88138190)).
-        TITLE "${TARGET} ${NJEMU_RELEASE_VERSION} build ${NJEMU_BUILD_NUMBER} for PSP"
+        # Keep XMB metadata concise; build identity remains in the binary.
+        TITLE "NJEMU ${TARGET} ${NJEMU_RELEASE_VERSION}"
         # PARAM.SFO's application version remains the SDK-friendly numeric
         # major/minor pair; the title/runtime version carries the human-readable
         # release version and commit build number.
