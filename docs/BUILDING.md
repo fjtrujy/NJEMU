@@ -58,6 +58,7 @@ The current public feature switches include:
 | `PS2_VIDEO_MODE` | Initial PS2 output mode (`240p`, `480i`, `480p`) | PS2 only; default `480i`; runtime settings can change mode |
 | `PSP_ME_AUDIO` | PSP Media Engine audio-production capability | PSP only; default OFF; the canonical PSP release enables it |
 | `PSP_AUDIO_PROFILE` | PSP audio timing diagnostics | PSP only; default OFF |
+| `PSP_ME_DIAGNOSTIC_LOG` | Periodic CPS2 QSound / Neo Geo ME diagnostic files | PSP CPS2/MVS/NCDZ with `PSP_ME_AUDIO=ON` only; default OFF and forced OFF for official releases |
 | `USE_ASAN`, `USE_UBSAN`, `USE_PG` | Development diagnostics | Desktop only |
 | `RELEASE` | Release-only compile behavior used by legacy code paths | Independent of CMake build type |
 

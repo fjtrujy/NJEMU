@@ -892,11 +892,15 @@ mutex unconditionally: it only samples the worker when a shadow echo is pending
 or once per 300-frame diagnostic window.  The window/frame hints use explicit
 atomic operations rather than `volatile`.
 
-`psp_me_sound_shadow.log` records 300-frame windows with sent/matched/mismatch
+When `PSP_ME_DIAGNOSTIC_LOG=ON`, `psp_me_sound_shadow.log` records 300-frame
+windows with sent/matched/mismatch
 counts, send failures, pending/high-water occupancy, ME-processed shadow count,
 ring overflow state, fatal status and final emulated time.  This is sufficient to
 measure commands/frame and prove exact order/timestamp equivalence during the
 same controlled `mslug3` workload used for C0.
+
+Regular builds do not open, append, or delete this diagnostic file. The
+300-frame checkpoint scheduling is retained independently of file logging.
 
 The standalone C2 hardware harness has also been extended to exercise 256
 timestamped shadow commands per worker cycle (including groups sharing an equal

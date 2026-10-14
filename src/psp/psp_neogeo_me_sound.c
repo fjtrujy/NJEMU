@@ -488,6 +488,7 @@ bool neogeo_sound_offload_pcm_write_byte(uint32_t offset, uint8_t data)
 #endif
 }
 
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 static uint32_t psp_me_sound_counter_delta(uint32_t current, uint32_t base)
 {
 	return current >= base ? current - base : current;
@@ -723,6 +724,31 @@ static void psp_me_sound_shadow_log_window(const char *reason, bool force)
 	me_sound_cpu_recovery_failures = 0;
 	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
 }
+#else
+static void psp_me_sound_shadow_log_window(const char *reason, bool force)
+{
+	(void)reason;
+	(void)force;
+	/* The 300-frame boundary is still used for Z80 checkpoint scheduling.
+	 * Suppress disk activity and reporting, not the scheduler reset. */
+	__atomic_store_n(&me_sound_shadow_window_frames, 0, __ATOMIC_RELAXED);
+	me_sound_status_checks = 0;
+	me_sound_status_mismatches = 0;
+	me_sound_status_presented_reads = 0;
+	me_sound_status_fallback_busy = 0;
+	me_sound_status_fallback_stale = 0;
+	me_sound_status_fence_attempts = 0;
+	me_sound_status_fence_matches = 0;
+	me_sound_status_fence_pending = 0;
+	me_sound_status_fence_failures = 0;
+	me_sound_status_fence_wait_us = 0;
+	me_sound_status_fence_wait_max_us = 0;
+	me_sound_z80_owned_slices = 0;
+	me_sound_cpu_recovery_attempts = 0;
+	me_sound_cpu_recovery_successes = 0;
+	me_sound_cpu_recovery_failures = 0;
+}
+#endif
 
 bool neogeo_sound_offload_command(uint8_t command, uint64_t emulated_time)
 {
@@ -1603,7 +1629,9 @@ void neogeo_sound_offload_frame_completed(uint64_t emulated_time,
 bool psp_neogeo_me_sound_sync_init(psp_neogeo_me_sound_available_fn available,
 	void *opaque)
 {
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 	char path[1024];
+#endif
 
 	transport_available = available;
 	transport_available_opaque = opaque;
@@ -1622,8 +1650,10 @@ bool psp_neogeo_me_sound_sync_init(psp_neogeo_me_sound_available_fn available,
 		"NJEMU ME sound worker", 0, 0, NULL) >= 0;
 	me_sound_ym_gate_ready = sceKernelCreateLwMutex(&me_sound_ym_gate,
 		"NJEMU ME sound YM gate", 0, 0, NULL) >= 0;
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 	snprintf(path, sizeof(path), "%spsp_me_sound_shadow.log", launchDir);
 	remove(path);
+#endif
 	return me_sound_worker_mutex_ready && me_sound_ym_gate_ready;
 }
 

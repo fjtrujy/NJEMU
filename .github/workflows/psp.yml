@@ -242,6 +242,21 @@ jobs:
         cmp build/pbp-check/PIC0.PNG "data/artwork/${target_lower}/pic0_480_272.png"
         cmp build/pbp-check/PIC1.PNG "data/artwork/${target_lower}/pic1_480_272.png"
         strings build/pbp-check/PARAM.SFO | grep -F "NJEMU ${{ matrix.target }} "
+        # Normal PSP packages must not contain periodic ME filesystem loggers.
+        case "${{ matrix.target }}" in
+          CPS2)
+            if strings build/install/EBOOT.PBP | grep -Fq 'psp_me_qsound.log'; then
+              echo 'Unexpected CPS2 ME logging in PSP package' >&2
+              exit 1
+            fi
+            ;;
+          MVS|NCDZ)
+            if strings build/install/EBOOT.PBP | grep -Fq 'psp_me_sound_shadow.log'; then
+              echo 'Unexpected Neo Geo ME logging in PSP package' >&2
+              exit 1
+            fi
+            ;;
+        esac
 
     - name: Get short SHA
       id: slug

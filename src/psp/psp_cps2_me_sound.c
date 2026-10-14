@@ -99,6 +99,7 @@ static void mark_failed(const char *reason)
 	set_recovery_required(true);
 }
 
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 static void log_window(const char *reason, bool force)
 {
 	psp_me_qsound_worker_stats_t stats;
@@ -162,6 +163,9 @@ static void log_window(const char *reason, bool force)
 	cpu_recovery_successes = 0;
 	cpu_recovery_failures = 0;
 }
+#else
+#define log_window(reason, force) ((void)0)
+#endif
 
 static bool recover_cpu_locked(void)
 {
@@ -223,7 +227,9 @@ static bool recover_cpu(void)
 
 bool psp_cps2_me_sound_sync_init(void)
 {
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 	char path[1024];
+#endif
 
 	memset(&worker, 0, sizeof(worker));
 	memset(&worker_mutex, 0, sizeof(worker_mutex));
@@ -232,8 +238,10 @@ bool psp_cps2_me_sound_sync_init(void)
 	reset_tracking();
 	worker_mutex_ready = sceKernelCreateLwMutex(&worker_mutex,
 		"NJEMU ME QSound worker", 0, 0, NULL) >= 0;
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 	snprintf(path, sizeof(path), "%spsp_me_qsound.log", launchDir);
 	remove(path);
+#endif
 	return worker_mutex_ready;
 }
 
@@ -663,7 +671,9 @@ bool cps2_sound_offload_render(int32_t **buffer, uint32_t samples)
 
 void cps2_sound_offload_frame_completed(void)
 {
+#ifdef PSP_ME_DIAGNOSTIC_LOG
 	window_frames++;
 	if (window_frames >= 300u)
 		log_window("window", false);
+#endif
 }

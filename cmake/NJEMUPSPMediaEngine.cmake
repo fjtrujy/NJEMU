@@ -9,6 +9,7 @@ function(njemu_psp_me_declare_options)
     option(PSP_ME_AUDIO "PSP: enable Media Engine audio acceleration" OFF)
     option(PSP_AUDIO_PROFILE "PSP: log audio producer/chip/output timing" OFF)
     option(PSP_ME_SOUND_PROFILE "PSP MVS: log 68000/Z80/scheduler/sound-island timing" OFF)
+    option(PSP_ME_DIAGNOSTIC_LOG "PSP: write periodic CPS2/Neo Geo ME diagnostic logs" OFF)
     option(PSP_ME_RING_SELFTEST "PSP MVS: run the synthetic ME shared-ring self-test" OFF)
 
     # This was an intermediate bring-up switch. Keep command lines that still
@@ -32,6 +33,13 @@ function(njemu_psp_me_configure_policy)
     if(PSP_ME_SOUND_PROFILE AND
        NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS"))
         message(FATAL_ERROR "PSP_ME_SOUND_PROFILE requires PLATFORM=PSP and TARGET=MVS")
+    endif()
+    if(PSP_ME_DIAGNOSTIC_LOG AND
+       NOT (PLATFORM STREQUAL "PSP" AND PSP_ME_AUDIO AND
+            ("${TARGET}" STREQUAL "CPS2" OR "${TARGET}" STREQUAL "MVS" OR
+             "${TARGET}" STREQUAL "NCDZ")))
+        message(FATAL_ERROR
+            "PSP_ME_DIAGNOSTIC_LOG requires PSP_ME_AUDIO=ON and PSP CPS2/MVS/NCDZ")
     endif()
     if(PSP_ME_RING_SELFTEST AND
        NOT (PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND PSP_ME_AUDIO))
@@ -148,6 +156,10 @@ function(njemu_psp_me_append_sources source_variable)
     if(PLATFORM STREQUAL "PSP" AND PSP_AUDIO_PROFILE)
         list(APPEND NJEMU_PSP_ME_SOURCES psp/psp_audio_profile.c)
         add_definitions(-DPSP_AUDIO_PROFILE=1)
+    endif()
+
+    if(PSP_ME_DIAGNOSTIC_LOG)
+        add_definitions(-DPSP_ME_DIAGNOSTIC_LOG=1)
     endif()
 
     if(PLATFORM STREQUAL "PSP" AND "${TARGET}" STREQUAL "MVS" AND
