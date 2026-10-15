@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+enable_testing()
+
 add_library(njemu_host_tool_lib STATIC
     c_source.c
     crc32.c
@@ -23,6 +25,7 @@ add_library(njemu_host_tool_lib STATIC
     tsv.c
     utf8.c
     command_compare_frames.c
+    command_release_notes.c
     command_stats_snapshot.c
     command_dip_metadata.c
     command_elf_footprint.c
@@ -48,7 +51,6 @@ add_executable(njemu-tool main.c)
 target_link_libraries(njemu-tool PRIVATE njemu_host_tool_lib)
 if(PNG_FOUND)
     target_compile_definitions(njemu-tool PRIVATE NJEMU_HAS_PNG_ARTWORK=1)
-    enable_testing()
     add_test(NAME artwork_generate
         COMMAND njemu-tool artwork "${CMAKE_CURRENT_SOURCE_DIR}/../../data/artwork"
                 "${CMAKE_CURRENT_BINARY_DIR}/generated-artwork")
@@ -59,6 +61,12 @@ if(PNG_FOUND)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NJEMUArtworkValidation.cmake")
     set_tests_properties(artwork_output_valid PROPERTIES DEPENDS artwork_generate)
 endif()
+
+add_test(NAME release_notes_format
+    COMMAND ${CMAKE_COMMAND}
+        -DNJEMU_TOOL=$<TARGET_FILE:njemu-tool>
+        -DNJEMU_TEST_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/release-notes-test
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/NJEMUReleaseNotesTests.cmake)
 
 add_executable(njemu-host-tests host_tests.c)
 target_link_libraries(njemu-host-tests PRIVATE njemu_host_tool_lib)

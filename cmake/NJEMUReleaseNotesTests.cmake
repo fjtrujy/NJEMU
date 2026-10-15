@@ -1,0 +1,43 @@
+if(NOT EXISTS "${NJEMU_TOOL}")
+    message(FATAL_ERROR "release_notes_format: missing host tool")
+endif()
+file(MAKE_DIRECTORY "${NJEMU_TEST_OUTPUT}")
+set(input "${NJEMU_TEST_OUTPUT}/commits.tsv")
+set(notes "${NJEMU_TEST_OUTPUT}/release.md")
+file(WRITE "${input}" "a123abcd\tFix CPU memory guard\n1234abcd\tAdd a new \\`option\\`\n")
+execute_process(
+    COMMAND "${NJEMU_TOOL}" release-notes "${input}" v3.0.2 v3.0.3 stable a123abcd "${notes}"
+    RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "release_notes_format: stable notes generation failed")
+endif()
+file(READ "${notes}" content)
+foreach(expected IN ITEMS "Changes since v3.0.2" "Fix CPU memory guard" "1234abcd" "v3.0.2...v3.0.3")
+    string(FIND "${content}" "${expected}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "release_notes_format: missing ${expected}")
+    endif()
+endforeach()
+file(WRITE "${input}" "")
+execute_process(
+    COMMAND "${NJEMU_TOOL}" release-notes "${input}" v3.0.3 deadbeef development deadbeef "${notes}"
+    RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "release_notes_format: development notes generation failed")
+endif()
+file(READ "${notes}" content)
+foreach(expected IN ITEMS "Development build" "deadbeef" "No changes since the preceding stable release")
+    string(FIND "${content}" "${expected}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "release_notes_format: missing ${expected}")
+    endif()
+endforeach()
+file(WRITE "${input}" "not-tab-separated\n")
+execute_process(
+    COMMAND "${NJEMU_TOOL}" release-notes "${input}" v3.0.2 v3.0.3 stable a123abcd "${notes}"
+    RESULT_VARIABLE result
+    OUTPUT_QUIET ERROR_QUIET)
+if(result EQUAL 0)
+    message(FATAL_ERROR "release_notes_format: malformed input was accepted")
+endif()
+message(STATUS "release_notes_format: PASS")

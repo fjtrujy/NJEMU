@@ -1026,3 +1026,54 @@ footer a:hover {
     font-size: clamp(1.35rem, 3vw, 1.8rem);
     color: var(--text-primary);
 }
+
+/* Stable releases keep their tagged history; development is a separate stream. */
+.site-release-history {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+.site-release-history h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.4rem;
+}
+.site-release-list {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1rem;
+}
+.site-release-entry {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    padding: 0.85rem 1rem;
+    min-width: 0;
+}
+.site-release-entry summary {
+    cursor: pointer;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.site-release-entry summary::marker {
+    color: var(--accent-primary);
+}
+.site-release-entry-body {
+    padding: 0.8rem 0 0.15rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+.site-release-entry-body ul {
+    margin: 0.6rem 0 0.8rem;
+    padding-left: 1.4rem;
+}
+.site-release-entry-body li + li { margin-top: 0.4rem; }
+.site-download-channel-development {
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--accent-secondary);
+    border-radius: var(--radius);
+}
+@media (max-width: 600px) {
+    .site-download-channel-development { padding: 1.1rem; }
+}

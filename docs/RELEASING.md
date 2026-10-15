@@ -187,36 +187,41 @@ an incomplete build can never be published.
 Every push to `master` runs the same canonical packaging path. After every successful matrix:
 
 1. the mutable `development` tag is moved to the exact tested `master` commit;
-2. the previous Development GitHub prerelease is replaced;
+2. the existing Development GitHub prerelease is updated in place (only its replaceable asset files are refreshed);
 3. the five platform archives and checksum sidecars are attached;
 4. the release title exposes the exact Git-derived development version;
-5. generated notes describe the changes since the latest stable release when one exists.
+5. commit-based release notes list changes since the nearest preceding stable tag.
 
 Development is always a GitHub **prerelease** and is explicitly not marked as **Latest**, so GitHub's `releases/latest` endpoint continues to resolve only the stable channel.
 
 The workflow uses concurrency cancellation for `master` pushes. If a newer commit arrives while an older Development build is still running, the obsolete release build is cancelled and only the newest source state proceeds.
 
-## Automatic release-note categories
+## Commit-based release notes
 
-`.github/release.yml` configures GitHub's generated release notes. Pull-request labels determine the section used in stable and Development descriptions:
+The publish job checks out the **exact tested source commit** and generates
+Markdown with the portable C99 command `njemu-tool release-notes`. The notes
+include all non-merge commit subjects and links between the nearest preceding
+stable tag and the release commit, plus a GitHub compare link. This includes
+direct `master` commits, squashed PRs, and work that GitHub's PR-only
+`--generate-notes` mechanism omitted in previous releases.
 
-| Release-note section | PR labels |
-| --- | --- |
-| **Breaking Changes** | `breaking-change`, `breaking` |
-| **Features** | `enhancement`, `feature` |
-| **Fixes** | `bug`, `fix` |
-| **Other Changes** | any other label/no matching category |
+The `development` prerelease lists the commits since the latest stable tag and
+identifies the exact source SHA in its title. Stable releases remain immutable:
+re-running their workflow updates the changelog and adds only missing assets,
+without replacing existing downloads or resetting their counts. Development
+asset files can change on every build, but the existing prerelease is updated
+rather than deleted and recreated.
 
-`skip-changelog` and `documentation-only` exclude a pull request from generated release notes. The pull-request template includes the classification checklist so user-visible changes can be categorized before merge.
-
-GitHub generated release notes are PR-oriented. User-visible changes should normally land through pull requests with the appropriate label; direct commits to `master` still produce a Development package, but they do not provide the same structured release-note metadata.
+Pull-request labels remain useful for reviewing changes, but they do not filter
+or determine the automated changelog. Keep commit subjects descriptive enough
+to be useful as user-visible release entries.
 
 The normal platform CI workflows remain independent and continue exercising the broader developer option matrix. Their project checkout uses full history so development artifacts can identify the nearest SemVer release correctly.
 
 ## Creating a stable release
 
 1. Ensure the intended release commit is on `master` and normal CI is green.
-2. Confirm merged user-visible pull requests carry the appropriate release-note labels.
+2. Confirm the intended commits have useful summaries for the release notes.
 3. Confirm the version bump category follows the SemVer policy above. There is no version constant to edit.
 4. If desired, run the Release workflow manually against an existing intended tag in a rehearsal context. Do not create throwaway production tags merely for testing.
 5. Create and push the final annotated tag, for example:
@@ -226,7 +231,7 @@ The normal platform CI workflows remain independent and continue exercising the 
    git push origin v3.0.0
    ```
 
-6. The tag push builds the canonical packages, creates the GitHub Release, attaches all platform archives/checksum sidecars, marks it as Latest, and generates the categorized description automatically.
+6. The tag push builds the canonical packages, creates the GitHub Release, attaches all platform archives/checksum sidecars, marks it as Latest, and generates a Git-based changelog against the previous tag.
 7. Verify the NJEMU Pages site resolves the new stable release while the Development channel remains available independently.
 
 `CHANGELOG.md` remains a curated project-history document, but publishing a stable release does not depend on manually copying its **Unreleased** section into the GitHub Release description.
@@ -240,7 +245,11 @@ The GitHub Pages site is the normal user-facing download entry point. It reads G
 - **Stable** uses GitHub's `/releases/latest` API and therefore resolves the latest non-prerelease SemVer version.
 - **Development** uses the mutable `development` prerelease and exposes the newest successfully packaged `master` commit.
 
-Both sections show the exact version, publication date, package size, release-notes link, and direct platform downloads. The binaries remain GitHub Release assets rather than being copied into the Pages deployment.
+The website labels the stable version with its immutable `vMAJOR.MINOR.PATCH` tag,
+provides a browsable tagged-release history, and identifies Development as a
+rolling build from `master` (with its short commit SHA on newly published
+snapshots). Both sections show the version, publication date, package size,
+release-notes link, and direct platform downloads. The binaries remain GitHub Release assets rather than being copied into the Pages deployment.
 
 The existing MVS/CPS2 browser ROM converter is preserved at `converter.html` and remains part of the same Pages deployment.
 

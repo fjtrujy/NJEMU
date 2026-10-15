@@ -28,13 +28,13 @@
 
 ## Release notes
 
-<!-- Apply the matching PR label so automated release notes classify the change correctly. -->
+<!-- Describe the user-visible change type. Changelogs are generated from Git commit subjects. -->
 
 - [ ] Breaking change (`breaking-change` or `breaking`)
 - [ ] Feature (`enhancement` or `feature`)
 - [ ] Fix (`bug` or `fix`)
 - [ ] Other change (falls back to **Other Changes**)
-- [ ] Exclude from release notes (`skip-changelog` or `documentation-only`)
+- [ ] Documentation/tooling only
 
 ## Validation
 

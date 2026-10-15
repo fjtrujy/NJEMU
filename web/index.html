@@ -87,8 +87,8 @@
             <div class="site-download-channel" aria-labelledby="stable-downloads-heading">
                 <div class="site-download-heading">
                     <div>
-                        <p class="site-eyebrow">Latest stable release</p>
-                        <h3 id="stable-downloads-heading">Stable</h3>
+                        <p class="site-eyebrow">Stable · immutable Git tag</p>
+                        <h3 id="stable-downloads-heading">Tagged releases</h3>
                     </div>
                     <div class="site-release-meta">
                         <strong id="stable-version">Checking latest release…</strong>
@@ -99,14 +99,21 @@
                     Loading stable release metadata from GitHub Releases…
                 </div>
                 <div id="stable-download-grid" class="site-download-grid" hidden></div>
-                <p><a id="stable-release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases">View stable releases and notes on GitHub</a></p>
+                <p><a id="stable-release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases">View latest tagged release notes</a></p>
+                <div class="site-release-history" aria-labelledby="tagged-history-heading">
+                    <h4 id="tagged-history-heading">Tagged release history</h4>
+                    <p class="site-muted">Version tags are permanent. Expand a release to inspect its changes or access its original packages.</p>
+                    <div id="tagged-release-list" class="site-release-list" role="list">
+                        <p class="site-muted">Loading tagged release history…</p>
+                    </div>
+                </div>
             </div>
 
             <div class="site-download-channel site-download-channel-development" aria-labelledby="development-downloads-heading">
                 <div class="site-download-heading">
                     <div>
-                        <p class="site-eyebrow">Latest master build</p>
-                        <h3 id="development-downloads-heading">Development</h3>
+                        <p class="site-eyebrow">Development · rolling master build</p>
+                        <h3 id="development-downloads-heading">Development snapshot</h3>
                     </div>
                     <div class="site-release-meta">
                         <strong id="development-version">Checking development build…</strong>
@@ -118,8 +125,9 @@
                 </div>
                 <div id="development-download-grid" class="site-download-grid" hidden></div>
                 <p class="site-muted">
-                    Development packages are rebuilt automatically from the current <code>master</code> branch.
-                    They contain the newest merged changes and may be less stable than a tagged release.
+                    Development packages track the latest successfully built <code>master</code> commit,
+                    not a permanent version tag. They may be less stable than tagged releases,
+                    and their downloadable assets can be replaced by newer builds.
                 </p>
                 <p><a id="development-release-notes-link" href="https://github.com/fjtrujy/NJEMU/releases/tag/development">View development changes on GitHub</a></p>
             </div>
@@ -173,6 +181,7 @@
             <span>ROMs and BIOS files are not distributed by the project.</span>
         </footer>
     </main>
+    <script src="release-model.js"></script>
     <script src="site.js"></script>
 </body>
 </html>

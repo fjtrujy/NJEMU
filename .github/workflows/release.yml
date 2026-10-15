@@ -324,6 +324,48 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout exact release source and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.version.outputs.source_sha }}
+
+      - name: Generate notes from commits since the preceding stable tag
+        env:
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S tools/host -B build-release-notes \
+            -DCMAKE_DISABLE_FIND_PACKAGE_PNG=TRUE
+          cmake --build build-release-notes --parallel 2
+
+          previous_tag=""
+          while IFS= read -r candidate; do
+            [[ "$candidate" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+            [[ "$candidate" == "$RELEASE_TAG" ]] && continue
+            if git merge-base --is-ancestor "$candidate" "$SOURCE_SHA"; then
+              previous_tag="$candidate"
+              break
+            fi
+          done < <(git tag --list 'v*.*.*' --sort=-v:refname)
+          if [[ -n "$previous_tag" ]]; then
+            git log --no-merges --format='%h%x09%s' \
+              "${previous_tag}..${SOURCE_SHA}" > release-commits.tsv
+          else
+            # The first tagged release has no preceding version for comparison.
+            previous_tag=initial
+            git log --no-merges --format='%h%x09%s' \
+              "$SOURCE_SHA" > release-commits.tsv
+          fi
+          ./build-release-notes/njemu-tool release-notes \
+            release-commits.tsv "$previous_tag" \
+            "$([[ "$CHANNEL" == stable ]] && echo "$RELEASE_TAG" || echo "$SOURCE_SHA")" \
+            "$CHANNEL" "$SOURCE_SHA" release-notes.md
+          cat release-notes.md
+
       - name: Download canonical packages
         uses: actions/download-artifact@v7
         with:
@@ -339,28 +381,41 @@ jobs:
           test "$(find release-assets -maxdepth 1 -type f -name '*.zip.json' | wc -l)" -eq 5
           ls -lh release-assets
 
-      - name: Create stable release
+      - name: Publish immutable stable release
         if: needs.version.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "${{ needs.version.outputs.tag }}" \
-            release-assets/*.zip \
-            release-assets/*.zip.json \
-            --repo "${{ github.repository }}" \
-            --verify-tag \
-            --title "NJEMU ${{ needs.version.outputs.version }}" \
-            --generate-notes \
-            --latest
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            # Retrying a tag build must not replace downloads or reset counts.
+            gh release edit "$RELEASE_TAG" --repo "$REPOSITORY" \
+              --title "NJEMU $RELEASE_VERSION" --notes-file release-notes.md --draft=false
+            existing_assets="$(gh release view "$RELEASE_TAG" --repo "$REPOSITORY" \
+              --json assets --jq '.assets[].name')"
+            for asset in release-assets/*.zip release-assets/*.zip.json; do
+              if ! grep -Fxq "$(basename "$asset")" <<< "$existing_assets"; then
+                gh release upload "$RELEASE_TAG" "$asset" --repo "$REPOSITORY"
+              fi
+            done
+          else
+            gh release create "$RELEASE_TAG" \
+              release-assets/*.zip release-assets/*.zip.json \
+              --repo "$REPOSITORY" --verify-tag \
+              --title "NJEMU $RELEASE_VERSION" \
+              --notes-file release-notes.md --latest
+          fi
 
       - name: Refresh development release
         if: needs.version.outputs.channel == 'development'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ needs.version.outputs.source_sha }}
           VERSION: ${{ needs.version.outputs.version }}
         shell: bash
         run: |
@@ -382,21 +437,20 @@ jobs:
               >/dev/null
           fi
 
+          # Keep one rolling prerelease instead of deleting and recreating it.
+          # The stable channel keeps immutable assets and historical counters.
+          short_sha="${SOURCE_SHA:0:8}"
           if gh release view development --repo "$REPOSITORY" >/dev/null 2>&1; then
-            gh release delete development --repo "$REPOSITORY" --yes
+            gh release edit development --repo "$REPOSITORY" \
+              --title "NJEMU Development · $VERSION ($short_sha)" \
+              --notes-file release-notes.md --prerelease
+            gh release upload development \
+              release-assets/*.zip release-assets/*.zip.json \
+              --repo "$REPOSITORY" --clobber
+          else
+            gh release create development \
+              release-assets/*.zip release-assets/*.zip.json \
+              --repo "$REPOSITORY" --verify-tag \
+              --title "NJEMU Development · $VERSION ($short_sha)" \
+              --notes-file release-notes.md --prerelease --latest=false
           fi
-
-          # The development tag is force-moved on every master build. GitHub's
-          # generated-notes API can reject that moving tag as an invalid
-          # previous_tag, especially before the repository has a stable release.
-          # Keep generated notes for immutable stable releases and use explicit
-          # notes for this rolling prerelease.
-          gh release create development \
-            release-assets/*.zip \
-            release-assets/*.zip.json \
-            --repo "$REPOSITORY" \
-            --verify-tag \
-            --title "NJEMU Development · $VERSION" \
-            --notes "Automated development build from the current master branch. This prerelease may be less stable than a tagged NJEMU release." \
-            --prerelease \
-            --latest=false

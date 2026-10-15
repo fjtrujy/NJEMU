@@ -59,8 +59,8 @@ jobs:
           ..
         emmake make -j$(nproc)
 
-    - name: Validate statistics data model
-      run: node --test web/stats-model.test.cjs
+    - name: Validate website release and statistics models
+      run: node --test web/stats-model.test.cjs web/release-model.test.cjs
 
     - name: Prepare web files
       run: |
@@ -70,6 +70,7 @@ jobs:
         cp web/index.html dist/
         cp web/converter.html dist/
         cp web/style.css dist/
+        cp web/release-model.js dist/
         cp web/site.js dist/
         cp web/stats.html dist/
         cp web/stats.css dist/

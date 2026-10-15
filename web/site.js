@@ -158,7 +158,12 @@
             const assets = Array.isArray(release.assets) ? release.assets : [];
             const version = deriveVersion(release, assets, config.strictSemVer);
 
-            nodes.version.textContent = `NJEMU ${version}`;
+            const commit = config.key === 'development'
+                ? /\(([0-9a-f]{7,12})\)/i.exec(typeof release.name === 'string' ? release.name : '')?.[1]
+                : null;
+            nodes.version.textContent = config.key === 'stable'
+                ? `Tagged v${version}`
+                : `Development · ${version}${commit ? ` (${commit})` : ' · master'}`;
             if (release.published_at) {
                 const date = new Date(release.published_at);
                 nodes.date.textContent = Number.isNaN(date.valueOf())
@@ -185,5 +190,64 @@
         }
     }
 
-    Promise.all(channels.map(loadRelease));
+    async function loadTaggedHistory() {
+        const list = document.getElementById('tagged-release-list');
+        try {
+            const response = await fetch(`${apiBaseUrl}?per_page=100`, {
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
+            const releases = window.NJEMUReleaseModel.stableReleases(await response.json());
+            list.replaceChildren();
+            if (!releases.length) {
+                const message = document.createElement('p');
+                message.textContent = 'No tagged releases have been published yet.';
+                list.appendChild(message);
+                return;
+            }
+            releases.forEach((release) => {
+                const item = document.createElement('details');
+                item.className = 'site-release-entry';
+                item.setAttribute('role', 'listitem');
+                const summary = document.createElement('summary');
+                const date = typeof release.published_at === 'string'
+                    ? release.published_at.slice(0, 10) : '';
+                summary.textContent = `${release.tag_name}${date ? ` · ${date}` : ''}`;
+                item.appendChild(summary);
+
+                const body = document.createElement('div');
+                body.className = 'site-release-entry-body';
+                const changes = window.NJEMUReleaseModel.changes(release);
+                if (changes.length) {
+                    const heading = document.createElement('p');
+                    heading.textContent = 'Changes in this version:';
+                    body.appendChild(heading);
+                    const items = document.createElement('ul');
+                    changes.slice(0, 8).forEach((change) => {
+                        const entry = document.createElement('li');
+                        entry.textContent = change;
+                        items.appendChild(entry);
+                    });
+                    body.appendChild(items);
+                } else {
+                    const message = document.createElement('p');
+                    message.textContent = 'See the full changelog on GitHub.';
+                    body.appendChild(message);
+                }
+                const link = document.createElement('a');
+                link.href = release.html_url || `${releasesUrl}/tag/${release.tag_name}`;
+                link.textContent = changes.length > 8
+                    ? `Full changelog and downloads (${changes.length} entries) →`
+                    : 'Full changelog and downloads on GitHub →';
+                body.appendChild(link);
+                item.appendChild(body);
+                list.appendChild(item);
+            });
+        } catch (error) {
+            console.error(error);
+            list.textContent = 'Tagged release history is temporarily unavailable. View all releases on GitHub.';
+        }
+    }
+
+    Promise.all([...channels.map(loadRelease), loadTaggedHistory()]);
 })();
