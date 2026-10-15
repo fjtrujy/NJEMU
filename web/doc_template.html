@@ -14,8 +14,10 @@
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
-            padding: 2rem;
+            padding: clamp(1.25rem, 3vw, 2rem);
             margin-bottom: 1.5rem;
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
         .doc-content h1 {
             color: var(--accent-primary);
@@ -71,7 +73,9 @@
             padding: 0;
         }
         .doc-content table {
-            width: 100%;
+            display: block;
+            max-width: 100%;
+            overflow-x: auto;
             border-collapse: collapse;
             margin-bottom: 1rem;
         }

@@ -15,7 +15,9 @@
     --error: #f85149;
     --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     --radius: 12px;
+    --radius-md: 12px;
     --radius-sm: 8px;
+    --page-gutter: clamp(1.25rem, 3.5vw, 2.5rem);
 }
 
 * {
@@ -38,7 +40,7 @@ body {
 .container {
     max-width: 800px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 2rem var(--page-gutter);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -300,6 +302,8 @@ section {
 
 .file-name {
     flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.9rem;
     color: var(--success);
@@ -357,6 +361,8 @@ section {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.85rem;
     color: var(--success);
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .file-list-item.pending {
@@ -634,7 +640,15 @@ footer a:hover {
 /* Responsive */
 @media (max-width: 600px) {
     .container {
-        padding: 1rem;
+        padding: 1.25rem;
+    }
+
+    .upload-zone {
+        padding: 1.5rem 1rem;
+    }
+
+    .options-panel {
+        padding: 0.85rem;
     }
     
     h1 {
@@ -685,7 +699,7 @@ footer a:hover {
     align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
-    padding: 1.25rem 0;
+    padding: 1.25rem clamp(0.75rem, 2vw, 1.5rem);
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -703,6 +717,7 @@ footer a:hover {
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 1rem;
+    min-width: 0;
 }
 
 .site-nav-links a,
@@ -718,7 +733,7 @@ footer a:hover {
 
 .site-hero {
     text-align: left;
-    padding: 5rem 0 4rem;
+    padding: 5rem clamp(0.75rem, 2vw, 1.5rem) 4rem;
     max-width: 900px;
 }
 
@@ -780,8 +795,17 @@ footer a:hover {
 }
 
 .site-section {
-    padding: 3.5rem 0;
+    padding: 3.5rem clamp(1rem, 2.5vw, 1.75rem);
     border-top: 1px solid var(--border-color);
+}
+
+/* Ensure long release identifiers and links wrap within panels. */
+.site-section,
+.site-card,
+.site-download-card,
+.site-footer {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .site-section-heading {
@@ -803,7 +827,7 @@ footer a:hover {
 
 .site-card,
 .site-download-card {
-    padding: 1.25rem;
+    padding: clamp(1.25rem, 2.3vw, 1.5rem);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     background: var(--bg-secondary);
@@ -870,6 +894,8 @@ footer a:hover {
     color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.8rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .site-release-meta strong {
@@ -879,7 +905,7 @@ footer a:hover {
 
 .site-notice {
     margin-bottom: 1rem;
-    padding: 1rem;
+    padding: 1.125rem 1.25rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
@@ -933,6 +959,7 @@ footer a:hover {
     flex-wrap: wrap;
     justify-content: space-between;
     gap: 0.75rem 2rem;
+    padding-inline: clamp(0.75rem, 2vw, 1.5rem);
     color: var(--text-muted);
     font-size: 0.85rem;
 }
@@ -961,10 +988,15 @@ footer a:hover {
 
     .site-nav-links {
         justify-content: flex-start;
+        gap: 0.5rem 0.9rem;
     }
 
     .site-hero {
-        padding: 3.5rem 0 3rem;
+        padding-block: 3.5rem 3rem;
+    }
+
+    .site-section {
+        padding: 2.5rem 1rem;
     }
 
     .site-card-grid,
