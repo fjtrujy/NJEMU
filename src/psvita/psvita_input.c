@@ -73,4 +73,5 @@ input_driver_t input_psvita = {
 	NULL,
 	psvita_input_controllerCount,
 	psvita_input_sample,
+	NULL,
 };

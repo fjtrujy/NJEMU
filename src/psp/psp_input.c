@@ -72,4 +72,5 @@ input_driver_t input_psp = {
 	NULL,
 	psp_controllerCount,
 	psp_sample,
+	NULL,
 };

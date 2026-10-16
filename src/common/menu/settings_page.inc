@@ -371,10 +371,17 @@ static int menu_settings_page(int section, int title, int icon)
             int next = row->kind == SETTING_CHEAT && pad_pressed(PLATFORM_PAD_B1)
                 ? 0 : current + direction;
             if (row->enabled && next >= row->min_value && next <= row->max_value) {
+#ifdef PS2
+                int old_output_mode = option_video_output_mode;
+                int old_display_mode = option_display_mode;
+#endif
                 menu_setting_assign(row, next);
 #ifdef PS2
-                if (row->kind == SETTING_VIDEO_OUTPUT) {
-                    menu_apply_live_video_output_mode(current);
+                if (row->kind == SETTING_VIDEO_OUTPUT ||
+                    (row->label_id == DISPLAY_MODE &&
+                     menu_requires_native_ps2_scanout_switch(old_display_mode))) {
+                    menu_apply_live_video_output_mode(old_output_mode,
+                        old_display_mode);
                     pad_wait_clear();
                     rows_visible = ui_layout_visible_rows(40, 17);
                 } else if (row->label_id == VIDEO_X_OFFSET || row->label_id == VIDEO_Y_OFFSET) {

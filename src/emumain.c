@@ -151,6 +151,7 @@ static const uint8_t skiptable[FRAMESKIP_LEVELS][FRAMESKIP_LEVELS] =
 };
 
 static int show_frames_each_second = 0;
+static bool gamepad_edges_armed;
 
 /******************************************************************************
 	Global Variables/Structures
@@ -269,10 +270,14 @@ void emu_main(void)
 #endif
 
 	snap_no = -1;
+	set_gamepad_edge_capture(false);
+	gamepad_edges_armed = false;
 
 	sound_thread_init();
 	machine_main();
 	sound_thread_exit();
+	set_gamepad_edge_capture(false);
+	gamepad_edges_armed = false;
 
 #ifdef ADHOC
 	if (adhoc_enable)
@@ -357,6 +362,12 @@ uint8_t skip_this_frame(void)
 
 void update_screen(void)
 {
+	/* Leave edge capture disabled in the browser and during ROM loading.
+	 * Arm it at the first emulated frame; this cannot replay a launch tap. */
+	if (!gamepad_edges_armed) {
+		set_gamepad_edge_capture(true);
+		gamepad_edges_armed = true;
+	}
 	uint8_t skipped_it = skiptable[frameskip][frameskip_counter];
 
 	if (show_frames_each_second && !option_showfps &&

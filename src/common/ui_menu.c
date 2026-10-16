@@ -19,6 +19,12 @@
 #include "common/cps_orientation.h"
 #endif
 #include "common/emulator_options.h"
+#ifdef PS2
+#include "common/display_mode.h"
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#include "ps2/ps2_native_240p_policy.h"
+#endif
+#endif
 #include "common/emulator_runtime.h"
 #include "common/input_driver.h"
 #include "common/filer.h"
@@ -221,7 +227,8 @@ typedef struct {
 #undef INCLUDE_GAMECFG_STRUCT
 
 #ifdef PS2
-static int menu_apply_live_video_output_mode(int previous_mode)
+static int menu_apply_live_video_output_mode(int previous_mode,
+	int previous_display_mode)
 {
 	int requested_mode = option_video_output_mode;
 
@@ -243,6 +250,7 @@ static int menu_apply_live_video_output_mode(int previous_mode)
 	 * VRAM. Restore the previous known-good mode and UI instead of requiring a
 	 * process restart or leaving a partially rebuilt renderer behind. */
 	option_video_output_mode = previous_mode;
+	option_display_mode = previous_display_mode;
 	ui_exit();
 	if (!video_driver->setOutputMode(video_data, previous_mode) || !ui_init())
 	{
@@ -254,6 +262,61 @@ static int menu_apply_live_video_output_mode(int previous_mode)
 	ui_popup_reset();
 	return 0;
 }
+
+static int menu_requires_native_ps2_scanout_switch(int previous_display_mode)
+{
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	return option_video_output_mode == VIDEO_OUTPUT_240P &&
+		(previous_display_mode == DISPLAY_MODE_NATIVE_PIXELS ||
+		 option_display_mode == DISPLAY_MODE_NATIVE_PIXELS);
+#else
+	(void)previous_display_mode;
+	return 0;
+#endif
+}
+
+#if (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+int ui_sync_ps2_native_scanout(int previous_display_mode)
+{
+	int output_width = 0, output_height = 0;
+	int native_before;
+	int native_requested;
+	int restore_mode;
+
+	if (option_video_output_mode != VIDEO_OUTPUT_240P ||
+	    !video_data || !video_driver->getOutputSize ||
+	    !video_driver->setOutputMode)
+		return 1;
+
+	video_driver->getOutputSize(video_data, &output_width, &output_height);
+	native_before = output_width == PS2_CPS_NATIVE_WIDTH &&
+		output_height == PS2_CPS_NATIVE_HEIGHT;
+	native_requested = option_display_mode == DISPLAY_MODE_NATIVE_PIXELS;
+	if (native_before == native_requested)
+		return 1;
+
+	/* Game-specific settings load after initial video/UI creation. Rebuild
+	 * only when the requested GS geometry actually differs. */
+	ui_exit();
+	if (video_driver->setOutputMode(video_data, option_video_output_mode) &&
+	    ui_init())
+		return 1;
+
+	/* Restore the old framebuffer and UI; prefer a non-native presentation
+	 * if the saved previous setting didn't match the actual framebuffer. */
+	restore_mode = native_before ? DISPLAY_MODE_NATIVE_PIXELS :
+		(previous_display_mode == DISPLAY_MODE_NATIVE_PIXELS ?
+		 DISPLAY_MODE_ORIGINAL_ASPECT : previous_display_mode);
+	option_display_mode = restore_mode;
+	ui_exit();
+	if (!video_driver->setOutputMode(video_data, option_video_output_mode) ||
+	    !ui_init()) {
+		Loop = LOOP_EXIT;
+		return 0;
+	}
+	return 0;
+}
+#endif
 
 #endif
 
@@ -1779,6 +1842,9 @@ void showmenu(void)
 	char buf[128];
 #endif
 	menu_t mainmenu[MENU_MAX_ITEMS];
+	/* A sampled menu tap must not be replayed as an attack after closing the
+	 * menu; short-press edge capture is intended for emulated gameplay. */
+	set_gamepad_edge_capture(false);
 
 #ifdef NJEMU_EXTERNAL_MENU_ICONS
 	/* The pack is resident only while the in-game menu is active. */
@@ -2016,6 +2082,7 @@ void showmenu(void)
 #if USE_CACHE
 	cache_sleep(0);
 #endif
+	set_gamepad_edge_capture(true);
 
 #if (EMU_SYSTEM == MVS || EMU_SYSTEM == NCDZ)
 	neogeo_reset_driver_type();

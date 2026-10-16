@@ -9,6 +9,8 @@
 #include "ps2/ps2_pad_presence.h"
 #include "ps2/ps2_pad_packet.h"
 #include "ps2/ps2_video_filter_policy.h"
+#include "ps2/ps2_native_240p_policy.h"
+#include "ps2/ps2_input_edge_latch.h"
 
 static void test_single_transport_gap(void)
 {
@@ -108,6 +110,68 @@ static void test_240p_filter_policy(void)
     assert(!ps2_presentation_uses_nearest_filter(1, 384, 0, 656, 224));
 }
 
+static void test_native_cps_progressive_output(void)
+{
+    assert(PS2_CPS_NATIVE_WIDTH == 384);
+    assert(PS2_CPS_NATIVE_HEIGHT == 224);
+    assert(ps2_use_native_cps_240p(1, 1, 1));
+    assert(!ps2_use_native_cps_240p(1, 1, 0));
+    assert(!ps2_use_native_cps_240p(1, 0, 1));
+    assert(!ps2_use_native_cps_240p(0, 1, 1));
+}
+
+static void test_between_frame_punch_edges(void)
+{
+    ps2_input_edge_latch_t player1 = {0};
+    ps2_input_edge_latch_t player2 = {0};
+
+    /* A full down/up transition between polls still yields one punch. */
+    ps2_input_edge_latch_record(&player1, 0);
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_B3);
+    ps2_input_edge_latch_record(&player1, 0);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == PLATFORM_PAD_B3);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+
+    /* Repeated taps and other players have independent lifetimes. */
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_B3);
+    ps2_input_edge_latch_record(&player1, 0);
+    assert(ps2_input_edge_latch_consume(&player2, 0, 1) == 0);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == PLATFORM_PAD_B3);
+
+    /* A held button remains level-triggered, never synthesized repeatedly. */
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_RIGHT);
+    assert(ps2_input_edge_latch_consume(&player1, PLATFORM_PAD_RIGHT, 1) ==
+        PLATFORM_PAD_RIGHT);
+    assert(ps2_input_edge_latch_consume(&player1, PLATFORM_PAD_RIGHT, 1) ==
+        PLATFORM_PAD_RIGHT);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+
+    /* A stale cached sample must not create a second edge. */
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_B1);
+    ps2_input_edge_latch_record(&player1, 0);
+    assert(ps2_input_edge_latch_consume(&player1, PLATFORM_PAD_B1, 0) ==
+        PLATFORM_PAD_B1);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+
+    /* Menu chords are never constructed from two non-overlapping taps. */
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_START);
+    ps2_input_edge_latch_record(&player1, 0);
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_SELECT);
+    ps2_input_edge_latch_record(&player1, 0);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+
+    ps2_input_edge_latch_record(&player1, PLATFORM_PAD_LEFT);
+    ps2_input_edge_latch_reset(&player1);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+
+    /* Arming after loading starts from the current physical level only;
+     * a browser/previous-game tap cannot be delivered a second time. */
+    ps2_input_edge_latch_reset(&player1);
+    assert(ps2_input_edge_latch_consume(&player1, PLATFORM_PAD_B1, 1) ==
+        PLATFORM_PAD_B1);
+    assert(ps2_input_edge_latch_consume(&player1, 0, 1) == 0);
+}
+
 int main(void)
 {
     test_single_transport_gap();
@@ -115,5 +179,7 @@ int main(void)
     test_invalid_pad_packet_is_not_all_buttons();
     test_pad_command_does_not_change_controller_order();
     test_240p_filter_policy();
+    test_native_cps_progressive_output();
+    test_between_frame_punch_edges();
     return 0;
 }

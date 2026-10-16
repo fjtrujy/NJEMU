@@ -18,6 +18,14 @@
 #include "common/runtime_paths.h"
 #include "common/path_utils.h"
 #include "common/ui_text_driver.h"
+#if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#if defined(GUI)
+#include "common/ui_menu.h"
+#else
+#include "common/emulator_runtime.h"
+#include "common/video_driver.h"
+#endif
+#endif
 
 #ifdef ADHOC
 #include "common/adhoc.h"
@@ -631,6 +639,9 @@ void load_gamecfg(const char *name)
 	int i;
 	char path[PATH_MAX];
 	cfg_type *gamecfg;
+#if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+	int previous_display_mode = option_display_mode;
+#endif
 
 	if (!path_format(path, sizeof(path), "%sconfig/%s.ini", launchDir, name)) return;
 
@@ -676,6 +687,17 @@ void load_gamecfg(const char *name)
 #endif
 			save_gamecfg(name);
 	}
+#if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
+#if defined(GUI)
+	(void)ui_sync_ps2_native_scanout(previous_display_mode);
+#else
+	/* NO_GUI has no UI VRAM to rebuild. Sync the per-game physical scanout
+	 * directly after reading its saved display mode. */
+	if (video_data && video_driver->setOutputMode &&
+	    !video_driver->setOutputMode(video_data, option_video_output_mode))
+		option_display_mode = previous_display_mode;
+#endif
+#endif
 }
 
 

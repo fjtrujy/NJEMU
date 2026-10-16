@@ -57,6 +57,12 @@ void refresh_gamepads(void)
 		input_driver->refresh(input_info);
 }
 
+void set_gamepad_edge_capture(bool enabled)
+{
+	if (input_info && input_driver->setEdgeCapture)
+		input_driver->setEdgeCapture(input_info, enabled);
+}
+
 /*--------------------------------------------------------
 	Get Number of Physical Controllers
 --------------------------------------------------------*/

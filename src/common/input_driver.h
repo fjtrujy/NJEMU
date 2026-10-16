@@ -17,6 +17,7 @@
 bool pad_init(void);
 void pad_exit(void);
 void refresh_gamepads(void);
+void set_gamepad_edge_capture(bool enabled);
 uint32_t gamepad_count(void);
 bool sample_gamepad_index(uint32_t controller, input_state_t *state);
 uint32_t poll_gamepad(void);
@@ -51,6 +52,9 @@ typedef struct input_driver
 	/* Sample raw physical state by logical controller index. Emulator-specific
 	 * interpretation of analog axes belongs in common/target code. */
 	bool (*sample)(void *data, uint32_t controller, input_state_t *state);
+	/* Optional high-frequency edge capture can be disabled in UI screens to
+	 * prevent replaying menu controls as if they were gameplay actions. */
+	void (*setEdgeCapture)(void *data, bool enabled);
 } input_driver_t;
 
 
