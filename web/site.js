@@ -4,6 +4,9 @@
     const repository = 'fjtrujy/NJEMU';
     const releasesUrl = `https://github.com/${repository}/releases`;
     const apiBaseUrl = `https://api.github.com/repos/${repository}/releases`;
+    const t = (phrase, variables) => window.NJEMUI18n.t(phrase, variables);
+    const releaseCache = new Map();
+    let historyCache = null;
     const downloads = [
         { slug: 'psp', label: 'PSP', detail: 'EBOOT.PBP builds for all four emulator cores' },
         { slug: 'ps2', label: 'PlayStation 2', detail: 'ELF builds for all four emulator cores' },
@@ -114,25 +117,25 @@
         card.appendChild(title);
 
         const detail = document.createElement('p');
-        detail.textContent = entry.detail;
+        detail.textContent = t(entry.detail);
         card.appendChild(detail);
 
         const meta = document.createElement('span');
         meta.className = 'site-download-meta';
         if (asset) {
             const size = formatBytes(asset.size);
-            meta.textContent = size ? `Download ZIP · ${size}` : 'Download ZIP';
+            meta.textContent = size ? t('Download ZIP · {size}', { size }) : t('Download ZIP');
         } else {
-            meta.textContent = 'Package not available for this release';
+            meta.textContent = t('Package not available for this release');
         }
         card.appendChild(meta);
         return card;
     }
 
     function showFallback(config, nodes, message) {
-        nodes.version.textContent = config.fallbackVersion;
+        nodes.version.textContent = t(config.fallbackVersion);
         nodes.date.textContent = '';
-        nodes.status.textContent = message;
+        nodes.status.textContent = t(message);
         nodes.status.hidden = false;
         nodes.grid.hidden = true;
         nodes.notes.href = config.key === 'development'
@@ -143,18 +146,21 @@
     async function loadRelease(config) {
         const nodes = channelNodes(config.key);
         try {
-            const response = await fetch(config.apiUrl, {
-                headers: { Accept: 'application/vnd.github+json' },
-            });
-            if (!response.ok) {
-                if (response.status === 404) {
-                    showFallback(config, nodes, config.notFoundMessage);
-                    return;
+            let release = releaseCache.get(config.key);
+            if (!release) {
+                const response = await fetch(config.apiUrl, {
+                    headers: { Accept: 'application/vnd.github+json' },
+                });
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showFallback(config, nodes, config.notFoundMessage);
+                        return;
+                    }
+                    throw new Error(`GitHub API returned HTTP ${response.status}`);
                 }
-                throw new Error(`GitHub API returned HTTP ${response.status}`);
+                release = await response.json();
+                releaseCache.set(config.key, release);
             }
-
-            const release = await response.json();
             const assets = Array.isArray(release.assets) ? release.assets : [];
             const version = deriveVersion(release, assets, config.strictSemVer);
 
@@ -162,13 +168,17 @@
                 ? /\(([0-9a-f]{7,12})\)/i.exec(typeof release.name === 'string' ? release.name : '')?.[1]
                 : null;
             nodes.version.textContent = config.key === 'stable'
-                ? `Tagged v${version}`
-                : `Development · ${version}${commit ? ` (${commit})` : ' · master'}`;
+                ? t('Tagged v{version}', { version })
+                : t('Development · {version}{suffix}', {
+                    version, suffix: commit ? ` (${commit})` : ' · master',
+                });
             if (release.published_at) {
                 const date = new Date(release.published_at);
                 nodes.date.textContent = Number.isNaN(date.valueOf())
                     ? ''
-                    : `Published ${date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                    : t('Published {date}', { date: date.toLocaleDateString(window.NJEMUI18n.language, {
+                        year: 'numeric', month: 'short', day: 'numeric',
+                    }) });
             }
 
             nodes.grid.replaceChildren();
@@ -182,8 +192,8 @@
             nodes.status.hidden = true;
             nodes.notes.href = release.html_url || releasesUrl;
             nodes.notes.textContent = config.key === 'development'
-                ? `Changes in NJEMU ${version}`
-                : `Release notes for NJEMU ${version}`;
+                ? t('Changes in NJEMU {version}', { version })
+                : t('Release notes for NJEMU {version}', { version });
         } catch (error) {
             console.error(error);
             showFallback(config, nodes, 'Release metadata could not be loaded right now. Downloads remain available from GitHub Releases.');
@@ -193,15 +203,18 @@
     async function loadTaggedHistory() {
         const list = document.getElementById('tagged-release-list');
         try {
-            const response = await fetch(`${apiBaseUrl}?per_page=100`, {
-                headers: { Accept: 'application/vnd.github+json' },
-            });
-            if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
-            const releases = window.NJEMUReleaseModel.stableReleases(await response.json());
+            if (!historyCache) {
+                const response = await fetch(`${apiBaseUrl}?per_page=100`, {
+                    headers: { Accept: 'application/vnd.github+json' },
+                });
+                if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
+                historyCache = window.NJEMUReleaseModel.stableReleases(await response.json());
+            }
+            const releases = historyCache;
             list.replaceChildren();
             if (!releases.length) {
                 const message = document.createElement('p');
-                message.textContent = 'No tagged releases have been published yet.';
+                message.textContent = t('No tagged releases have been published yet.');
                 list.appendChild(message);
                 return;
             }
@@ -220,7 +233,7 @@
                 const changes = window.NJEMUReleaseModel.changes(release);
                 if (changes.length) {
                     const heading = document.createElement('p');
-                    heading.textContent = 'Changes in this version:';
+                    heading.textContent = t('Changes in this version:');
                     body.appendChild(heading);
                     const items = document.createElement('ul');
                     changes.slice(0, 8).forEach((change) => {
@@ -231,23 +244,26 @@
                     body.appendChild(items);
                 } else {
                     const message = document.createElement('p');
-                    message.textContent = 'See the full changelog on GitHub.';
+                    message.textContent = t('See the full changelog on GitHub.');
                     body.appendChild(message);
                 }
                 const link = document.createElement('a');
                 link.href = release.html_url || `${releasesUrl}/tag/${release.tag_name}`;
                 link.textContent = changes.length > 8
-                    ? `Full changelog and downloads (${changes.length} entries) →`
-                    : 'Full changelog and downloads on GitHub →';
+                    ? t('Full changelog and downloads ({count} entries) →', { count: changes.length })
+                    : t('Full changelog and downloads on GitHub →');
                 body.appendChild(link);
                 item.appendChild(body);
                 list.appendChild(item);
             });
         } catch (error) {
             console.error(error);
-            list.textContent = 'Tagged release history is temporarily unavailable. View all releases on GitHub.';
+            list.textContent = t('Tagged release history is temporarily unavailable. View all releases on GitHub.');
         }
     }
 
     Promise.all([...channels.map(loadRelease), loadTaggedHistory()]);
+    window.addEventListener('njemu:languagechange', () => {
+        Promise.all([...channels.map(loadRelease), loadTaggedHistory()]);
+    });
 })();

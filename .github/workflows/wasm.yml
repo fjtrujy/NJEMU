@@ -59,8 +59,8 @@ jobs:
           ..
         emmake make -j$(nproc)
 
-    - name: Validate website release and statistics models
-      run: node --test web/stats-model.test.cjs web/release-model.test.cjs
+    - name: Validate website release, statistics, and localization models
+      run: node --test web/stats-model.test.cjs web/release-model.test.cjs web/i18n.test.cjs
 
     - name: Prepare web files
       run: |
@@ -70,6 +70,7 @@ jobs:
         cp web/index.html dist/
         cp web/converter.html dist/
         cp web/style.css dist/
+        cp web/i18n.js dist/
         cp web/release-model.js dist/
         cp web/site.js dist/
         cp web/stats.html dist/
@@ -86,12 +87,26 @@ jobs:
           --metadata icon="🕹️" \
           -o dist/doc_mvs.html
 
+        pandoc romcnv/README_MVS.es.md \
+          --template=web/doc_template.html \
+          --metadata title="MVS ROM Converter" \
+          --metadata subtitle="Documentación de conversión de ROM Neo Geo MVS" \
+          --metadata icon="🕹️" \
+          -o dist/doc_mvs_es.html
+
         pandoc romcnv/README_CPS2.md \
           --template=web/doc_template.html \
           --metadata title="CPS2 ROM Converter" \
           --metadata subtitle="Documentation for Capcom CPS2 ROM conversion" \
           --metadata icon="👊" \
           -o dist/doc_cps2.html
+
+        pandoc romcnv/README_CPS2.es.md \
+          --template=web/doc_template.html \
+          --metadata title="CPS2 ROM Converter" \
+          --metadata subtitle="Documentación de conversión de ROM Capcom CPS2" \
+          --metadata icon="👊" \
+          -o dist/doc_cps2_es.html
 
         # Use the same Git-derived version shown by native ROMCNV/NJEMU.
         cmake -DNJEMU_SOURCE_DIR="$PWD" \

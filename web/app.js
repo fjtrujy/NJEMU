@@ -1,6 +1,10 @@
 // NJEMU ROM Converter - Web Application
 
 class RomConverter {
+    t(phrase, variables) {
+        return window.NJEMUI18n.t(phrase, variables);
+    }
+
     constructor() {
         this.selectedFiles = [];
         this.fileStatuses = new Map(); // Track status of each file
@@ -12,6 +16,22 @@ class RomConverter {
 
         this.initElements();
         this.initEventListeners();
+        window.addEventListener('njemu:languagechange', () => {
+            if (this.selectedFiles.length) this.updateFileListDisplay();
+            if (this.currentSystem) {
+                const options = RomConverter.FORMAT_OPTIONS[this.currentSystem];
+                const names = this.formatGroup.querySelectorAll('.format-name');
+                options.forEach((fmt, index) => {
+                    if (names[index]) names[index].textContent = this.t(fmt.label);
+                });
+                this.updateFormatInfo(this.currentSystem);
+            }
+            if (this.loadingModule) {
+                this.loadingText.textContent = this.t('Loading {system} module...', {
+                    system: this.getSelectedSystem()?.toUpperCase() || '',
+                });
+            }
+        });
         // Module will be loaded when user selects a system
     }
 
@@ -162,7 +182,7 @@ class RomConverter {
         this.loadingModule = true;
 
         // Show loading spinner
-        this.loadingText.textContent = `Loading ${system.toUpperCase()} module...`;
+        this.loadingText.textContent = this.t('Loading {system} module...', { system: system.toUpperCase() });
         this.loadingOverlay.hidden = false;
 
         const scriptName = `romcnv_${system}.js`;
@@ -196,7 +216,7 @@ class RomConverter {
 
             // Store the module instance
             this.modules[system] = moduleInstance;
-            this.log(`${system.toUpperCase()} ROM Converter ready!`, 'success');
+            this.log(this.t('{system} ROM Converter ready!', { system: system.toUpperCase() }), 'success');
         } finally {
             // Always hide spinner and reset loading state
             this.loadingModule = false;
@@ -215,8 +235,8 @@ class RomConverter {
     }
 
     showWasmUnavailable(system) {
-        this.log(`${system.toUpperCase()} WASM module is unavailable.`, 'error');
-        this.log('Please retry or use the command-line romcnv tool.', 'error');
+        this.log(this.t('{system} WASM module is unavailable.', { system: system.toUpperCase() }), 'error');
+        this.log(this.t('Please retry or use the command-line romcnv tool.'), 'error');
         this.convertBtn.disabled = true;
     }
 
@@ -226,13 +246,13 @@ class RomConverter {
 
         for (const file of files) {
             if (!file.name.toLowerCase().endsWith('.zip')) {
-                this.log(`Skipped ${file.name} - not a ZIP file`, 'error');
+                this.log(this.t('Skipped {file} - not a ZIP file', { file: file.name }), 'error');
                 continue;
             }
 
             // Check if file already added (by name)
             if (this.selectedFiles.some(f => f.name === file.name)) {
-                this.log(`Skipped ${file.name} - already in list`, 'error');
+                this.log(this.t('Skipped {file} - already in list', { file: file.name }), 'error');
                 continue;
             }
 
@@ -256,7 +276,8 @@ class RomConverter {
     }
 
     updateFileListDisplay() {
-        this.fileCount.textContent = `${this.selectedFiles.length} file${this.selectedFiles.length !== 1 ? 's' : ''} selected`;
+        this.fileCount.textContent = this.t(this.selectedFiles.length === 1
+            ? '{count} file selected' : '{count} files selected', { count: this.selectedFiles.length });
         this.fileListItems.innerHTML = '';
 
         for (const file of this.selectedFiles) {
@@ -386,7 +407,7 @@ class RomConverter {
 
             const name = document.createElement('span');
             name.className = 'format-name';
-            name.textContent = fmt.label;
+            name.textContent = this.t(fmt.label);
 
             text.appendChild(name);
             label.appendChild(icon);
@@ -406,7 +427,7 @@ class RomConverter {
         const selected = this.getSelectedFormat();
         const fmt = formats.find(f => f.value === selected);
         if (fmt) {
-            this.formatInfo.textContent = fmt.description;
+            this.formatInfo.textContent = this.t(fmt.description);
         }
     }
     
@@ -437,7 +458,7 @@ class RomConverter {
             const originalText = this.copyConsoleBtn.querySelector('.copy-text').textContent;
             
             this.copyConsoleBtn.querySelector('.copy-icon').textContent = '✓';
-            this.copyConsoleBtn.querySelector('.copy-text').textContent = 'Copied!';
+            this.copyConsoleBtn.querySelector('.copy-text').textContent = this.t('Copied!');
             this.copyConsoleBtn.classList.add('copied');
             
             // Reset after 2 seconds
@@ -448,7 +469,7 @@ class RomConverter {
             }, 2000);
         } catch (error) {
             console.error('Failed to copy console output:', error);
-            this.log('Failed to copy to clipboard', 'error');
+            this.log(this.t('Failed to copy to clipboard'), 'error');
         }
     }
     
@@ -460,7 +481,7 @@ class RomConverter {
     async startConversion() {
         if (this.selectedFiles.length === 0 || this.isProcessing) return;
         if (!this.moduleReady) {
-            this.log('Please select a target system first', 'error');
+            this.log(this.t('Please select a target system first'), 'error');
             return;
         }
 
@@ -494,10 +515,12 @@ class RomConverter {
             const fileNum = i + 1;
 
             this.setFileStatus(fileName, 'processing');
-            this.updateProgress((i / totalFiles) * 100, `Processing ${fileName} (${fileNum}/${totalFiles})...`);
+            this.updateProgress((i / totalFiles) * 100, this.t('Processing {file} ({current}/{total})...', {
+                file: fileName, current: fileNum, total: totalFiles,
+            }));
 
             try {
-                this.log(`\n[${fileNum}/${totalFiles}] Converting ${fileName}...`);
+                this.log(`\n[${fileNum}/${totalFiles}] ${this.t('Converting {file}...', { file: fileName })}`);
 
                 // Read the file
                 const arrayBuffer = await file.arrayBuffer();
@@ -519,7 +542,7 @@ class RomConverter {
 
                 // Get options
                 const format = this.getSelectedFormat();
-                this.log(`Output format: ${format}`);
+                this.log(this.t('Output format: {format}', { format }));
 
                 // Build command-line arguments
                 const args = [`/roms/${fileName}`];
@@ -548,12 +571,12 @@ class RomConverter {
                 const cacheExists = FS.analyzePath(cachePath).exists;
 
                 if (cacheExists) {
-                    this.log(`✓ ${fileName} converted successfully!`, 'success');
+                    this.log(`✓ ${this.t('{file} converted successfully!', { file: fileName })}`, 'success');
                     this.setFileStatus(fileName, 'completed');
                     this.cacheResults.set(fileName, { gameName, type: cacheType, path: cachePath });
                     successCount++;
                 } else {
-                    this.log(`✗ ${fileName} - No converted output created (may not need conversion)`, 'error');
+                    this.log(`✗ ${this.t('{file} - No converted output created (may not need conversion)', { file: fileName })}`, 'error');
                     this.setFileStatus(fileName, 'error');
                 }
 
@@ -561,16 +584,18 @@ class RomConverter {
                 try { FS.unlink(`/roms/${fileName}`); } catch (e) { /* ignore */ }
 
             } catch (error) {
-                this.log(`✗ ${fileName} - Error: ${error.message}`, 'error');
+                this.log(`✗ ${this.t('{file} - Error: {error}', { file: fileName, error: error.message })}`, 'error');
                 this.setFileStatus(fileName, 'error');
                 console.error(error);
             }
         }
 
         // Final summary
-        this.updateProgress(100, 'Conversion complete!');
+        this.updateProgress(100, this.t('Conversion complete!'));
         this.log('\n---');
-        this.log(`Completed: ${successCount}/${totalFiles} files converted successfully`, successCount > 0 ? 'success' : 'error');
+        this.log(this.t('Completed: {done}/{total} files converted successfully', {
+            done: successCount, total: totalFiles,
+        }), successCount > 0 ? 'success' : 'error');
 
         if (successCount > 0) {
             this.downloadPanel.hidden = false;
@@ -597,7 +622,7 @@ class RomConverter {
             }
 
             if (cacheEntries.length === 0) {
-                this.log('No converted files found to download', 'error');
+                this.log(this.t('No converted files found to download'), 'error');
                 return;
             }
 
@@ -613,7 +638,9 @@ class RomConverter {
                     ? 'application/zip'
                     : 'application/octet-stream';
 
-                this.log(`Downloading ${fileName} (${(data.length / 1024 / 1024).toFixed(2)} MB)`);
+                this.log(this.t('Downloading {file} ({size} MB)', {
+                    file: fileName, size: (data.length / 1024 / 1024).toFixed(2),
+                }));
                 const blob = new Blob([data], { type: mimeType });
                 this.downloadBlob(blob, fileName);
                 return;
@@ -622,7 +649,7 @@ class RomConverter {
             // Multiple caches or directory-based: wrap in a JSZip container
             const JSZip = window.JSZip;
             if (!JSZip) {
-                this.log('JSZip not available for download', 'error');
+                this.log(this.t('JSZip not available for download'), 'error');
                 return;
             }
 
@@ -631,32 +658,34 @@ class RomConverter {
             for (const entry of cacheEntries) {
                 if (entry.type === 'dir') {
                     // MVS-style: directory with multiple files
-                    this.log(`Packaging ${entry.gameName}_cache/...`);
+                    this.log(this.t('Packaging {file}...', { file: `${entry.gameName}_cache/` }));
                     this.addFolderToZip(zip, entry.path, `${entry.gameName}_cache`, FS);
                 } else if (entry.type === 'zip') {
                     // CPS2-style: zip file — download as-is
-                    this.log(`Packaging ${entry.gameName}_cache.zip...`);
+                    this.log(this.t('Packaging {file}...', { file: `${entry.gameName}_cache.zip` }));
                     const data = FS.readFile(entry.path);
                     zip.file(`${entry.gameName}_cache.zip`, data);
-                    this.log(`  Added: ${entry.gameName}_cache.zip (${data.length} bytes)`);
+                    this.log(this.t('Added: {file} ({bytes} bytes)', { file: `${entry.gameName}_cache.zip`, bytes: data.length }));
                 } else {
                     // CPS2-style: raw cache file
-                    this.log(`Packaging ${entry.gameName}.cache...`);
+                    this.log(this.t('Packaging {file}...', { file: `${entry.gameName}.cache` }));
                     const data = FS.readFile(entry.path);
                     zip.file(`${entry.gameName}.cache`, data);
-                    this.log(`  Added: ${entry.gameName}.cache (${data.length} bytes)`);
+                    this.log(this.t('Added: {file} ({bytes} bytes)', { file: `${entry.gameName}.cache`, bytes: data.length }));
                 }
             }
 
             // Generate and download the zip
-            this.log('Generating zip file...');
+            this.log(this.t('Generating zip file...'));
             const content = await zip.generateAsync({ type: 'blob' });
             const zipName = `romcnv_output_${cacheEntries.length}_games.zip`;
-            this.log(`Downloading ${zipName} (${(content.size / 1024 / 1024).toFixed(2)} MB)`);
+            this.log(this.t('Downloading {file} ({size} MB)', {
+                file: zipName, size: (content.size / 1024 / 1024).toFixed(2),
+            }));
             this.downloadBlob(content, zipName);
 
         } catch (error) {
-            this.log(`Download error: ${error.message}`, 'error');
+            this.log(this.t('Download error: {error}', { error: error.message }), 'error');
             console.error(error);
         }
     }
@@ -678,7 +707,7 @@ class RomConverter {
                 // Add file
                 const data = FS.readFile(fullFsPath);
                 zip.file(fullZipPath, data);
-                this.log(`  Added: ${fullZipPath} (${data.length} bytes)`);
+                this.log(this.t('Added: {file} ({bytes} bytes)', { file: fullZipPath, bytes: data.length }));
             }
         }
     }
@@ -722,6 +751,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const dateText = document.getElementById('date-text');
 
     versionText.textContent = `ROMCNV v${window.ROMCNV_VERSION || 'dev'}`;
-    dateText.textContent = `Last updated: ${window.ROMCNV_BUILD_DATE || 'dev'}`;
+    const updateDate = () => {
+        dateText.textContent = window.NJEMUI18n.t('Last updated: {date}', { date: window.ROMCNV_BUILD_DATE || 'dev' });
+    };
+    updateDate();
+    window.addEventListener('njemu:languagechange', updateDate);
 });
 

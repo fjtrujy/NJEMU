@@ -4,9 +4,12 @@
     const repository = 'fjtrujy/NJEMU';
     const releasesUrl = `https://api.github.com/repos/${repository}/releases?per_page=100`;
     const archiveUrl = `https://raw.githubusercontent.com/${repository}/stats-data/history.json`;
-    const formatNumber = new Intl.NumberFormat();
+    const t = (phrase, variables) => window.NJEMUI18n.t(phrase, variables);
+    const formatNumber = (value) => new Intl.NumberFormat(window.NJEMUI18n.language).format(value);
     const element = (id) => document.getElementById(id);
     let releases = [];
+    let cachedHistory = null;
+    let liveAvailable = false;
 
     function append(tag, parent, className, text) {
         const node = document.createElement(tag);
@@ -26,7 +29,7 @@
             const track = append('div', row, 'stats-bar-track');
             const fill = append('span', track, 'stats-bar-fill');
             fill.style.width = `${downloads / maximum * 100}%`;
-            append('strong', row, 'stats-bar-count', formatNumber.format(downloads));
+            append('strong', row, 'stats-bar-count', formatNumber(downloads));
         });
     }
     function showReleases() {
@@ -34,7 +37,7 @@
         root.replaceChildren();
         if (!releases.length) {
             const row = append('tr', root);
-            const cell = append('td', row, '', 'Release details are currently unavailable.');
+            const cell = append('td', row, '', t('Release details are currently unavailable.'));
             cell.colSpan = 4;
             return;
         }
@@ -43,17 +46,17 @@
             append('td', row, '', release.tag);
             append('td', row, '', release.published ? release.published.slice(0, 10) : '—');
             const byPlatform = model.byPlatform([release]).filter((platform) => platform.downloads > 0);
-            append('td', row, '', byPlatform.map((platform) => `${platform.label}: ${formatNumber.format(platform.downloads)}`).join(' · ') || 'No recorded downloads');
-            append('td', row, '', formatNumber.format(model.releaseTotal(release)));
+            append('td', row, '', byPlatform.map((platform) => `${platform.label}: ${formatNumber(platform.downloads)}`).join(' · ') || t('No recorded downloads'));
+            append('td', row, '', formatNumber(model.releaseTotal(release)));
         });
     }
     function updateSummary() {
         const stable = releases.filter((release) => release.channel === 'stable');
         const development = releases.filter((release) => release.channel === 'development');
         const platforms = model.byPlatform(stable).sort((a, b) => b.downloads - a.downloads);
-        element('stat-stable').textContent = formatNumber.format(stable.reduce((sum, item) => sum + model.releaseTotal(item), 0));
-        element('stat-development').textContent = formatNumber.format(development.reduce((sum, item) => sum + model.releaseTotal(item), 0));
-        element('stat-versions').textContent = formatNumber.format(stable.length);
+        element('stat-stable').textContent = formatNumber(stable.reduce((sum, item) => sum + model.releaseTotal(item), 0));
+        element('stat-development').textContent = formatNumber(development.reduce((sum, item) => sum + model.releaseTotal(item), 0));
+        element('stat-versions').textContent = formatNumber(stable.length);
         element('stat-platform').textContent = platforms[0]?.downloads ? platforms[0].label : '—';
         showReleases();
         showPlatforms(element('channel-filter').value);
@@ -68,7 +71,7 @@
         const maximum = Math.max(...valid.map((point) => point[key]), 1);
         valid.forEach((point) => {
             const bar = append('div', root, 'stats-timebar');
-            const tooltip = `${point.date}: ${formatNumber.format(point[key])}`;
+            const tooltip = `${point.date}: ${formatNumber(point[key])}`;
             bar.title = tooltip;
             bar.tabIndex = 0;
             bar.setAttribute('aria-label', tooltip);
@@ -78,18 +81,18 @@
     }
     function showHistory(history) {
         const downloadSeries = model.snapshotSeries(history);
-        barTimeline(element('stats-download-timeline'), downloadSeries, 'downloads', 'Daily download snapshots will appear after the first successful collection.');
+        barTimeline(element('stats-download-timeline'), downloadSeries, 'downloads', t('Daily download snapshots will appear after the first successful collection.'));
         const traffic = history && history.traffic && typeof history.traffic === 'object' ? history.traffic : {};
         for (const key of ['views', 'clones']) {
             const records = Array.isArray(traffic[key]) ? traffic[key] : [];
-            barTimeline(element(`stats-${key}`), records, 'count', 'Repository traffic history is not yet available.');
+            barTimeline(element(`stats-${key}`), records, 'count', t('Repository traffic history is not yet available.'));
         }
         if (downloadSeries.length) {
-            element('stats-history-date').textContent = `Latest snapshot: ${downloadSeries[downloadSeries.length - 1].date}`;
+            element('stats-history-date').textContent = t('Latest snapshot: {date}', { date: downloadSeries[downloadSeries.length - 1].date });
         }
         element('stats-traffic-status').textContent = (traffic.views?.length || traffic.clones?.length)
-            ? 'Collected repository traffic. Counts may include automated activity; daily unique values are not additive.'
-            : 'Traffic archives are unavailable. Repository-owner authorization is required for private traffic endpoints.';
+            ? t('Collected repository traffic. Counts may include automated activity; daily unique values are not additive.')
+            : t('Traffic archives are unavailable. Repository-owner authorization is required for private traffic endpoints.');
     }
     async function readJson(url) {
         const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-cache' });
@@ -108,10 +111,12 @@
         return all;
     }
     async function initialize() {
-
         element('channel-filter').addEventListener('change', (event) => showPlatforms(event.target.value));
+        window.addEventListener('njemu:languagechange', renderCurrent);
         const [live, archived] = await Promise.allSettled([loadReleases(), readJson(archiveUrl)]);
         const history = archived.status === 'fulfilled' && archived.value?.schema === 1 ? archived.value : null;
+        cachedHistory = history;
+        liveAvailable = live.status === 'fulfilled';
         const liveReleases = live.status === 'fulfilled' ? live.value : null;
         if (liveReleases) releases = model.normaliseReleases(liveReleases);
         else if (history?.snapshots?.length) {
@@ -121,17 +126,21 @@
                 published_at: '', assets: release.assets.map((asset) => ({...asset, download_count: asset.downloads})),
             })));
         }
+        renderCurrent();
+    }
+    function renderCurrent() {
         if (releases.length) updateSummary();
         else {
-            showPlatforms('stable');
+            showPlatforms(element('channel-filter').value);
             showReleases();
         }
-        showHistory(history);
-        const state = live.status === 'fulfilled' ? 'Live GitHub release counts' : 'Live GitHub API unavailable';
-        element('stats-updated').textContent = `${state} · ${new Date().toLocaleString()}${history ? ' · historical snapshots loaded' : ' · history not collected yet'}`;
+        showHistory(cachedHistory);
+        const state = liveAvailable ? t('Live GitHub release counts') : t('Live GitHub API unavailable');
+        const detail = cachedHistory ? t('historical snapshots loaded') : t('history not collected yet');
+        element('stats-updated').textContent = `${state} · ${new Date().toLocaleString(window.NJEMUI18n.language)} · ${detail}`;
     }
     initialize().catch((error) => {
         console.error('NJEMU statistics failed to load:', error);
-        element('stats-updated').textContent = 'Statistics are temporarily unavailable. Please try again later.';
+        element('stats-updated').textContent = t('Statistics are temporarily unavailable. Please try again later.');
     });
 })();

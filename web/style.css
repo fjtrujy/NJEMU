@@ -718,6 +718,39 @@ footer a:hover {
     justify-content: flex-end;
     gap: 1rem;
     min-width: 0;
+    flex: 1;
+}
+
+.language-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.language-switcher select {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 0.5rem 0.65rem;
+    min-height: 40px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.language-switcher select:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.language-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 0 0.65rem;
 }
 
 .site-nav-links a,
@@ -989,6 +1022,11 @@ footer a:hover {
     .site-nav-links {
         justify-content: flex-start;
         gap: 0.5rem 0.9rem;
+        flex: initial;
+    }
+
+    .site-nav > .language-switcher {
+        align-self: flex-end;
     }
 
     .site-hero {
