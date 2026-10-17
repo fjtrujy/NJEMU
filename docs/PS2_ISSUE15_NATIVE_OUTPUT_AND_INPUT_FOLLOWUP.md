@@ -91,3 +91,50 @@ Therefore the new sampler is not yet proof that every missed attack is fixed.
 This follow-up supersedes the native-width behavior documented in
 `docs/PS2_ISSUE15_FORK_FOLLOWUP.md` (2026-10-12) without rewriting that
 historical investigation. No `resources/` files are part of this work.
+
+## Real PS2Link hardware validation (2026-10-17)
+
+The fix was exercised on a physical PS2 running PS2Link. The CPS1 ELF was
+built from `74338782` with the standalone embedded-driver configuration
+(`PS2_EXTERNAL_IRX_IMAGE=OFF`, `PS2_FAST_CACHE=OFF`, `PS2_VIDEO_MODE=240p`).
+The console accepted `ps2client -h <PS2_IP> reset` followed by
+`ps2client -h <PS2_IP> execee host:CPS1.ELF` from the CPS1 build directory.
+The GUI build initialized the PS2 platform, pad driver, video backend and
+CLUT without an immediate error.
+
+For automated gameplay startup, a separate NO_GUI build used
+`game_name.ini` containing `dino`, a per-game `DisplayMode = 4` (Native
+Pixels), and global `VideoOutputMode = 0` (240p). The console recognized
+`ROM set "dino"`, loaded the program/graphics/QSound assets, and reported
+`Done.` Audio initialization also reported success. A temporary diagnostic
+build logged the following from the physical console:
+
+```text
+[issue15-hw] initial GS scanout 704x240 interlace=0 output=0 display=0
+[issue15-hw] reconfigured GS scanout 384x224 interlace=0 output=0 display=4
+PS2 Audio: Audio initialized successfully
+[issue15-hw] input edge capture armed, sampler=1 thread=32
+```
+
+These observations confirm that loading the per-game settings actually
+reconfigures the GS to 384x224 noninterlaced on hardware, and that the
+gameplay frame loop enables a running EE input sampler. The last message
+is emitted when the first emulated gameplay frame arms edge capture; it
+does not establish that every short physical button press is delivered.
+
+The PS2Link connection requires a *temporary, uncommitted* change to skip
+`SifIopReset()` in `src/ps2/ps2_platform.c`; resetting the IOP would
+disconnect the resident PS2Link host. Earlier PS2Link stashes contain
+this workaround alongside unrelated profiling changes and should not be
+applied wholesale. The reset and hardware-only trace changes were removed
+from the source after validation. The captured console logs and test ELFs
+remain in ignored `build_issue15_ps2link_cps1_240p/` and
+`build_issue15_hw_nogui_cps1_240p/` directories; no ROMs, configurations,
+or other files under `resources/` were changed.
+
+**Still outstanding:** direct visual comparison of the stage-one building
+scroll, overscan, and CRT image quality in Native Pixels versus Original
+Aspect; manual rapid-press testing with a physical controller; and a check
+that changing modes through the GUI remains stable on the target display.
+PS2Link console output cannot by itself establish these visual or human
+input outcomes.
