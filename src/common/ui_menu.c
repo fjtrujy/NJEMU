@@ -227,6 +227,16 @@ typedef struct {
 #undef INCLUDE_GAMECFG_STRUCT
 
 #ifdef PS2
+static void menu_release_ps2_ui_before_mode_change(void)
+{
+	/* The GS FINISH event is not a fence for all pending GIF DMA reads.
+	 * UI upload buffers must remain allocated until both the command queue
+	 * and the GIF channel have finished consuming them. */
+	if (video_driver->flushAndWait)
+		video_driver->flushAndWait(video_data);
+	ui_exit();
+}
+
 static int menu_apply_live_video_output_mode(int previous_mode,
 	int previous_display_mode)
 {
@@ -238,7 +248,7 @@ static int menu_apply_live_video_output_mode(int previous_mode,
 	/* The PS2 UI driver owns VRAM textures allocated after the emulator video
 	 * resources. Drop those first, let the video backend rebuild the GS/VRAM
 	 * layout, then recreate the UI against the new output geometry. */
-	ui_exit();
+	menu_release_ps2_ui_before_mode_change();
 	if (video_driver->setOutputMode(video_data, requested_mode) && ui_init())
 	{
 		load_background(WP_GAMECFG);
@@ -251,7 +261,7 @@ static int menu_apply_live_video_output_mode(int previous_mode,
 	 * process restart or leaving a partially rebuilt renderer behind. */
 	option_video_output_mode = previous_mode;
 	option_display_mode = previous_display_mode;
-	ui_exit();
+	menu_release_ps2_ui_before_mode_change();
 	if (!video_driver->setOutputMode(video_data, previous_mode) || !ui_init())
 	{
 		Loop = LOOP_EXIT;
@@ -297,7 +307,7 @@ int ui_sync_ps2_native_scanout(int previous_display_mode)
 
 	/* Game-specific settings load after initial video/UI creation. Rebuild
 	 * only when the requested GS geometry actually differs. */
-	ui_exit();
+	menu_release_ps2_ui_before_mode_change();
 	if (video_driver->setOutputMode(video_data, option_video_output_mode) &&
 	    ui_init())
 		return 1;
@@ -308,7 +318,7 @@ int ui_sync_ps2_native_scanout(int previous_display_mode)
 		(previous_display_mode == DISPLAY_MODE_NATIVE_PIXELS ?
 		 DISPLAY_MODE_ORIGINAL_ASPECT : previous_display_mode);
 	option_display_mode = restore_mode;
-	ui_exit();
+	menu_release_ps2_ui_before_mode_change();
 	if (!video_driver->setOutputMode(video_data, option_video_output_mode) ||
 	    !ui_init()) {
 		Loop = LOOP_EXIT;

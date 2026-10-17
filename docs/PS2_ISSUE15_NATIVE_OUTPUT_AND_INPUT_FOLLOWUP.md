@@ -138,3 +138,42 @@ Aspect; manual rapid-press testing with a physical controller; and a check
 that changing modes through the GUI remains stable on the target display.
 PS2Link console output cannot by itself establish these visual or human
 input outcomes.
+
+## Intermittent in-menu Native Pixels switch and DMA teardown fence (2026-10-17)
+
+A real PS2 GUI test exposed an intermittent failure when advancing the 240p
+display-mode selector from `4:3` through `Fullscreen` to `Native Pixels`.
+`Fullscreen` stays in the 704x240 GS framebuffer, but `Native Pixels` requests
+384x224 and rebuilds the GS framebuffer, game VRAM allocations and UI.
+PS2Link did not deliver a usable EE exception register dump for the reported
+failure. A subsequent diagnostic build with console logging completed the
+same manual transition, so the precise original fault is not proven.
+
+The PS2 UI previously called `ui_exit()` before the video backend had
+explicitly drained its outstanding command queue and GIF DMA. The GS FINISH
+event does not alone guarantee that the GIF DMA channel has finished reading
+CPU-side UI upload buffers. `menu_release_ps2_ui_before_mode_change()` now
+calls the backend's existing `flushAndWait()` before destroying the UI. It
+is used for the live video-output switch, the per-game native-scanout sync,
+and both rollback paths. The behavior is PS2-only and does not change the
+240p native GS geometry, other renderer implementations, or UI allocation
+policy.
+
+A temporary CPS1 GUI startup stress harness ran on the physical PS2 via
+PS2Link. For 24 iterations it rendered UI text, switched alternately to
+384x224 Native Pixels and 704x240 Fullscreen, reinitialized the UI, and
+checked the output dimensions. The PS2Link trace contains successful geometry
+assertions for iterations 0 through 22 (some console messages were dropped)
+and records the final iteration's GS framebuffer being initialized, game
+textures restored, and frame presented. No exception was reported. See the
+ignored `build_issue15_ps2link_cps1_240p/issue15_dma_stress_hardware.log`.
+The stress harness and verbose trace logging were removed from the source
+after the test. The focused test is not a substitute for manual validation
+through the exact settings-page transition, because console output and the
+extra instrumentation can affect timing.
+
+Host verification: `ctest --test-dir build_issue15_tests --output-on-failure
+-j4` passed 43/43 tests. A PS2Link debug executable temporarily skips the
+IOP reset to preserve the resident server; that workaround must not become
+a production change. Existing unrelated HDD staging modifications in
+`src/ps2/ps2_platform.c` belong to another task and must remain untouched.
