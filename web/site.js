@@ -57,29 +57,7 @@
         return `${value.toFixed(digits)} ${units[index]}`;
     }
 
-    function findAsset(assets, slug, exactVersion = '') {
-        if (exactVersion) {
-            const expected = `njemu-${exactVersion}-${slug}.zip`;
-            return assets.find((asset) => asset.name === expected) || null;
-        }
-
-        const suffix = `-${slug}.zip`;
-        return assets.find((asset) => asset.name.startsWith('njemu-') && asset.name.endsWith(suffix)) || null;
-    }
-
-    function versionFromAsset(asset, slug) {
-        if (!asset) {
-            return '';
-        }
-        const prefix = 'njemu-';
-        const suffix = `-${slug}.zip`;
-        if (!asset.name.startsWith(prefix) || !asset.name.endsWith(suffix)) {
-            return '';
-        }
-        return asset.name.slice(prefix.length, -suffix.length);
-    }
-
-    function deriveVersion(release, assets, strictSemVer) {
+    function deriveVersion(release, strictSemVer) {
         const tag = typeof release.tag_name === 'string' ? release.tag_name : '';
         if (strictSemVer) {
             const version = tag.startsWith('v') ? tag.slice(1) : tag;
@@ -89,20 +67,11 @@
             return version;
         }
 
-        for (const entry of downloads) {
-            const version = versionFromAsset(findAsset(assets, entry.slug), entry.slug);
-            if (version) {
-                return version;
-            }
+        const version = window.NJEMUReleaseModel.developmentVersion(release);
+        if (!version) {
+            throw new Error('Development release does not have a valid version title');
         }
-
-        if (typeof release.name === 'string') {
-            const prefix = 'NJEMU Development · ';
-            if (release.name.startsWith(prefix)) {
-                return release.name.slice(prefix.length);
-            }
-        }
-        return tag || 'development';
+        return version;
     }
 
     function createDownloadCard(entry, asset) {
@@ -162,7 +131,7 @@
                 releaseCache.set(config.key, release);
             }
             const assets = Array.isArray(release.assets) ? release.assets : [];
-            const version = deriveVersion(release, assets, config.strictSemVer);
+            const version = deriveVersion(release, config.strictSemVer);
 
             const commit = config.key === 'development'
                 ? /\(([0-9a-f]{7,12})\)/i.exec(typeof release.name === 'string' ? release.name : '')?.[1]
@@ -183,9 +152,7 @@
 
             nodes.grid.replaceChildren();
             downloads.forEach((entry) => {
-                const asset = config.strictSemVer
-                    ? findAsset(assets, entry.slug, version)
-                    : findAsset(assets, entry.slug);
+                const asset = window.NJEMUReleaseModel.releaseAsset(assets, version, entry.slug);
                 nodes.grid.appendChild(createDownloadCard(entry, asset));
             });
             nodes.grid.hidden = false;

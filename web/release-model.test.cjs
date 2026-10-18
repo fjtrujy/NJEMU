@@ -29,3 +29,23 @@ test('release changes include direct commits and older PR-based descriptions', (
     ]);
     assert.deepEqual(model.changes(null), []);
 });
+
+test('rolling development downloads use the current release version, never older attached ZIPs', () => {
+    const release = {
+        tag_name: 'development',
+        name: 'NJEMU Development · 3.0.3+6.gb68af56e (b68af56e)',
+        assets: [
+            {name: 'njemu-3.0.3+1.g1f8886dd-ps2.zip', size: 110},
+            {name: 'njemu-3.0.3+2.g4e98f964-ps2.zip', size: 120},
+            {name: 'njemu-3.0.3+6.gb68af56e-ps2.zip.json', size: 100},
+            {name: 'njemu-3.0.3+6.gb68af56e-ps2.zip', size: 130},
+        ],
+    };
+    const version = model.developmentVersion(release);
+    assert.equal(version, '3.0.3+6.gb68af56e');
+    assert.equal(model.releaseAsset(release.assets, version, 'ps2').size, 130);
+    assert.equal(model.releaseAsset(release.assets, version, 'psp'), null);
+    assert.equal(model.releaseAsset(release.assets, '3.0.3', 'ps2'), null);
+    assert.equal(model.developmentVersion({name: 'Unexpected development release title'}), null);
+    assert.equal(model.releaseAsset(release.assets, '', 'ps2'), null);
+});

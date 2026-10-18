@@ -29,7 +29,21 @@
                 .replace(/\s*\(\[\x60[0-9a-f]+\x60\]\(https:\/\/github\.com\/[^)]+\)\)\s*$/u, '')
                 .replace(/\[@([^\]]+)\]\(https:\/\/github\.com\/[^)]+\)/gu, '@$1'));
     }
-    const api = { isStableRelease, stableReleases, changes };
+    function developmentVersion(release) {
+        // The rolling release retains historical assets. Select only the ZIPs
+        // named by its current title, never the first asset with that platform.
+        const name = release && typeof release.name === 'string' ? release.name : '';
+        const match = /^NJEMU Development · (\S+)(?: \([0-9a-f]{7,12}\))?$/.exec(name);
+        return match ? match[1] : null;
+    }
+
+    function releaseAsset(assets, version, platform) {
+        if (!version || !Array.isArray(assets)) return null;
+        const name = `njemu-${version}-${platform}.zip`;
+        return assets.find((asset) => asset && asset.name === name) || null;
+    }
+
+    const api = { isStableRelease, stableReleases, changes, developmentVersion, releaseAsset };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.NJEMUReleaseModel = api;
 })(typeof window !== 'undefined' ? window : globalThis);

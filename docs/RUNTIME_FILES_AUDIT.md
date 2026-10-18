@@ -560,6 +560,9 @@ Therefore:
 
 - `processed/` is the canonical location;
 - `cache/` is a migration compatibility path, not a second canonical source;
+- canonical PSP/PS2 releases with `USE_CACHE=ON` include an empty `cache/`
+  directory as a compatibility hint alongside `processed/`, while Desktop
+  and Vita resident MVS releases use `processed/` only;
 - it must not be removed until installations using the legacy layout have a
   documented migration path;
 - duplicated processed assets in both roots are unnecessary once migration is

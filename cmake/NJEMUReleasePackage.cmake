@@ -84,6 +84,38 @@ function(_njemu_validate_install core install_dir)
             "release packaging: ${core}: canonical executable/package is missing: ${_required_binary}")
     endif()
 
+    # Canonical PSP/PS2 releases include a CPS2 streaming cache and the MVS
+    # legacy-cache compatibility path. MVS processed/ is mandatory on every
+    # non-Vita platform; CPS1/NCDZ never use a streaming cache. Fail instead
+    # of shipping a stale install tree with missing or surplus directories.
+    if(NOT NJEMU_RELEASE_PLATFORM STREQUAL "psvita")
+        set(_cache_expected FALSE)
+        if((core STREQUAL "CPS2" OR core STREQUAL "MVS") AND
+           (NJEMU_RELEASE_PLATFORM STREQUAL "psp" OR NJEMU_RELEASE_PLATFORM STREQUAL "ps2"))
+            set(_cache_expected TRUE)
+        endif()
+        set(_processed_expected FALSE)
+        if(core STREQUAL "MVS")
+            set(_processed_expected TRUE)
+        endif()
+        foreach(_runtime_dir IN ITEMS cache processed)
+            if(_runtime_dir STREQUAL "cache")
+                set(_expected "${_cache_expected}")
+            else()
+                set(_expected "${_processed_expected}")
+            endif()
+            if(_expected)
+                if(NOT EXISTS "${install_dir}/${_runtime_dir}/_placeholder")
+                    message(FATAL_ERROR
+                        "release packaging: ${core}: missing required ${_runtime_dir}/_placeholder")
+                endif()
+            elseif(EXISTS "${install_dir}/${_runtime_dir}" OR IS_SYMLINK "${install_dir}/${_runtime_dir}")
+                message(FATAL_ERROR
+                    "release packaging: ${core}: unexpected ${_runtime_dir}/ in canonical ${NJEMU_RELEASE_PLATFORM} install")
+            endif()
+        endforeach()
+    endif()
+
     file(GLOB_RECURSE _install_files
         LIST_DIRECTORIES false
         RELATIVE "${install_dir}"
@@ -153,7 +185,27 @@ macro(_njemu_manifest_add relative_path)
         "      \"size\": ${_file_size}\n"
         "    }")
     math(EXPR _manifest_file_count "${_manifest_file_count} + 1")
-    list(APPEND _archive_entries "${relative_path}")
+    # Archive directories explicitly so ZIP browsers display empty runtime
+    # roots such as CPS2/cache and MVS/processed. Adding the directory itself
+    # also includes its _placeholder; do not add that file twice.
+    if("${relative_path}" MATCHES "/_placeholder$")
+        string(REGEX REPLACE "/_placeholder$" "/" _archive_dir "${relative_path}")
+        # The archiver descends into directory arguments. Do not allow a
+        # hidden or unlisted runtime file to hitch a ride past the manifest.
+        file(GLOB _archive_dir_children LIST_DIRECTORIES TRUE
+            "${_stage}/${_archive_dir}*"
+            "${_stage}/${_archive_dir}.*")
+        foreach(_child IN LISTS _archive_dir_children)
+            if(NOT "${_child}" STREQUAL "${_stage}/${_archive_dir}_placeholder" OR
+               IS_SYMLINK "${_child}")
+                message(FATAL_ERROR
+                    "release packaging: unexpected runtime directory content: ${_child}")
+            endif()
+        endforeach()
+        list(APPEND _archive_entries "${_archive_dir}")
+    else()
+        list(APPEND _archive_entries "${relative_path}")
+    endif()
 endmacro()
 
 foreach(_project_file IN ITEMS README.md Licence.txt)

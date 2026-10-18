@@ -141,6 +141,24 @@ Desktop has two native archives because Linux and macOS executables are not inte
 
 Each archive has a matching `.zip.json` sidecar containing the platform, version, size, and SHA-256 digest. The archive itself contains `release-manifest.json`, `version.txt`, the project README/license, and the relevant binaries/runtime install files. The Vita archive contains the four ready-to-install VPKs rather than duplicating each VPK's embedded runtime tree.
 
+The PSP and PS2 archives explicitly preserve `CPS2/cache/`, `MVS/processed/`
+(the canonical MVS converted-asset root), and `MVS/cache/` (a compatibility
+fallback for older converted assets). CPS1 and NCDZ have no streaming cache
+and must not ship a `cache/` directory. Desktop canonical builds use resident
+CPS2 graphics and therefore do not ship CPS2 or MVS `cache/` directories;
+Desktop MVS still needs `processed/`. The ZIP stores a zero-length
+`_placeholder` in each required runtime directory and an explicit directory
+entry, so both archive browsers and extracted packages expose the layout.
+Release packaging rejects stale install trees with missing or unexpected
+`cache/` or `processed/` directories. Vita packages carry the target-specific
+runtime layout inside their individual VPKs.
+
+The rolling `development` GitHub Release may retain assets from earlier
+commits because their versioned filenames differ. GitHub Pages derives the
+active development version from the release title and links only ZIPs whose
+filenames match it exactly; old assets must never be selected just because
+their platform suffix matches.
+
 Packaging fixes the archive entry order and ZIP modification timestamps and produces a deterministic `release-manifest.json`. CMake's libarchive backend may still emit host-dependent Unix access/change-time extra fields, so raw ZIP bytes are not promised to be identical across invocations or hosts. The `.zip.json` SHA-256 always identifies the exact produced archive.
 
 ## Automated release flow

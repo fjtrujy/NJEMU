@@ -1193,9 +1193,13 @@ elseif("${TARGET}" STREQUAL "CPS2")
     endif()
 elseif("${TARGET}" STREQUAL "MVS")
     # processed/ is canonical even for full-resident builds because encrypted
-    # sets may require offline-converted C/S/V data. cache/ remains only a
-    # compatibility fallback for existing USE_CACHE installs.
+    # sets may require offline-converted C/S/V data. Cached builds also accept
+    # cache/ as a legacy processed-asset location; expose that compatibility
+    # directory only when the fallback is actually compiled in.
     list(APPEND NJEMU_RUNTIME_DATA_DIRS processed memcard nvram)
+    if(USE_CACHE)
+        list(APPEND NJEMU_RUNTIME_DATA_DIRS cache)
+    endif()
 elseif("${TARGET}" STREQUAL "NCDZ")
     if(GUI)
         list(APPEND NJEMU_RUNTIME_DATA_DIRS data)
