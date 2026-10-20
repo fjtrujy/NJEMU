@@ -24,6 +24,19 @@ static int copy_field(char *dest, size_t size, const char *value)
     return 1;
 }
 
+static int is_lower_hex(const char *text, size_t length)
+{
+    size_t i;
+    if (strlen(text) != length)
+        return 0;
+    for (i = 0; i < length; ++i) {
+        if ((text[i] < '0' || text[i] > '9') &&
+            (text[i] < 'a' || text[i] > 'f'))
+            return 0;
+    }
+    return 1;
+}
+
 static int parse_u64(const char *text, uint64_t *value)
 {
     char *end = NULL;
@@ -54,6 +67,10 @@ static int assign_field(ps2_benchmark_result_t *r, const char *key,
         return copy_field(r->state, sizeof(r->state), value);
     if (strcmp(key, "state_hash") == 0)
         return copy_field(r->state_hash, sizeof(r->state_hash), value);
+    if (strcmp(key, "config_hash") == 0)
+        return copy_field(r->configuration_hash, sizeof(r->configuration_hash), value);
+    if (strcmp(key, "worktree") == 0)
+        return copy_field(r->worktree_hash, sizeof(r->worktree_hash), value);
     if (strcmp(key, "cache") == 0)
         return copy_field(r->cache, sizeof(r->cache), value);
     if (strcmp(key, "sound") == 0)
@@ -113,7 +130,8 @@ int ps2_benchmark_parse(const char *text, ps2_benchmark_result_t *result,
         "io_bytes", "cache", "sound", "state", "status", "revision",
         "cc_version", "state_hash", "scenario", "resident",
         "cpu_bytes", "gfx_bytes", "pcm_bytes",
-        "core_update_us", "screen_update_us", "ticker_pair_ns"
+        "core_update_us", "screen_update_us", "ticker_pair_ns",
+        "config_hash", "worktree"
     };
     unsigned i;
     memset(result, 0, sizeof(*result));
@@ -174,8 +192,11 @@ int ps2_benchmark_result_accepted(const ps2_benchmark_result_t *r)
 {
     return strcmp(r->status, "ok") == 0 &&
         strcmp(r->state, "verified") == 0 &&
-        r->state_hash[0] != '\0' &&
-        r->revision[0] != '\0' &&
+        is_lower_hex(r->state_hash, 16) &&
+        is_lower_hex(r->configuration_hash, 16) &&
+        is_lower_hex(r->worktree_hash, 64) &&
+        is_lower_hex(r->revision, 40) &&
+        r->compiler_version[0] != '\0' &&
         r->scenario[0] != '\0' &&
         strcmp(r->cache, "off") == 0 &&
         strcmp(r->resident, "on") == 0 &&
@@ -183,6 +204,10 @@ int ps2_benchmark_result_accepted(const ps2_benchmark_result_t *r)
         strcmp(r->sound, "on") == 0 &&
         r->io_ops == 0 && r->io_bytes == 0 &&
         r->frames > 0 && r->frames == r->expected &&
+        r->over_60hz <= r->frames &&
+        r->min_us <= r->p50_us && r->p50_us <= r->p95_us &&
+        r->p95_us <= r->p99_us && r->p99_us <= r->max_us &&
+        r->sample_sum_us != 0 &&
         r->total_us > 0;
 }
 

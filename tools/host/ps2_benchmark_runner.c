@@ -53,7 +53,7 @@ static int safe_component(const char *text)
     return 1;
 }
 
-static int forbidden_output(const char *path)
+int ps2_benchmark_forbidden_output(const char *path)
 {
     char ancestor[PATH_MAX];
     char resolved[PATH_MAX];
@@ -172,9 +172,9 @@ static pid_t spawn_client(const char *binary, const char *ip,
             _exit(126);
         close(output);
         if (argument)
-            execl(binary, binary, "-h", ip, command, argument, (char *)NULL);
+            execlp(binary, binary, "-h", ip, command, argument, (char *)NULL);
         else
-            execl(binary, binary, "-h", ip, command, (char *)NULL);
+            execlp(binary, binary, "-h", ip, command, (char *)NULL);
         _exit(127);
     }
     return pid;
@@ -241,7 +241,7 @@ int ps2_benchmark_run(int argc, char **argv)
         !parse_bounded(argv[11], 3, PS2_BENCHMARK_MAX_TRIALS, &repeat) ||
         !parse_bounded(argv[12], 1, 86400, &timeout) ||
         !parse_bounded(argv[13], 1, 100000, &frames) ||
-        forbidden_output(output_dir) ||
+        ps2_benchmark_forbidden_output(output_dir) ||
         !host_make_directories(output_dir)) {
         fprintf(stderr, "ps2-benchmark: invalid launch arguments\n");
         return 2;
@@ -313,6 +313,21 @@ int ps2_benchmark_run(int argc, char **argv)
     return failed || rc ? 1 : 0;
 }
 #else
+int ps2_benchmark_forbidden_output(const char *path)
+{
+    const char *p = path;
+    while (*p) {
+        const char *start = p;
+        size_t n;
+        while (*p && *p != '/' && *p != '\\') ++p;
+        n = (size_t)(p - start);
+        if (n == 9 && !strncmp(start, "resources", n))
+            return 1;
+        if (*p) ++p;
+    }
+    return 0;
+}
+
 int ps2_benchmark_run(int argc, char **argv)
 {
     (void)argc;

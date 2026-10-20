@@ -997,12 +997,23 @@ if(PS2_COMPILER_BENCHMARK)
        NOT PS2_BENCHMARK_COMMIT_LENGTH EQUAL 40)
         set(PS2_BENCHMARK_NJEMU_COMMIT "unknown")
     endif()
+    # HEAD alone does not identify locally modified source. Include the
+    # tracked worktree diff in the benchmark provenance.
+    execute_process(
+        COMMAND git diff --binary HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE PS2_BENCHMARK_WORKTREE_DIFF
+        ERROR_QUIET
+    )
+    string(SHA256 PS2_BENCHMARK_WORKTREE_SHA256 "${PS2_BENCHMARK_WORKTREE_DIFF}")
     target_compile_definitions(${TARGET} PRIVATE
         "PS2_BENCHMARK_NJEMU_COMMIT=\"${PS2_BENCHMARK_NJEMU_COMMIT}\""
+        "PS2_BENCHMARK_WORKTREE_SHA256=\"${PS2_BENCHMARK_WORKTREE_SHA256}\""
         "PS2_BENCHMARK_CC_VERSION=\"${CMAKE_C_COMPILER_VERSION}\"")
     # Audit file for each build. Never rebuild GCC-provided external libraries.
     file(WRITE "${CMAKE_BINARY_DIR}/benchmark_build.txt"
         "NJEMU commit: ${PS2_BENCHMARK_NJEMU_COMMIT}\n"
+        "NJEMU tracked worktree diff SHA256: ${PS2_BENCHMARK_WORKTREE_SHA256}\n"
         "core: ${TARGET}\n"
         "platform: PS2\n"
         "compiler: ${CMAKE_C_COMPILER}\n"

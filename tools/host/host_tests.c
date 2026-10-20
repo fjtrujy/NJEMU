@@ -14,6 +14,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #define CHECK(condition) do { \
     if (!(condition)) { \
@@ -810,10 +813,25 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     size_t i;
     CHECK(ps2_benchmark_median(values, 4) == 1500);
     CHECK(ps2_benchmark_median(values, 0) == 0);
+    CHECK(ps2_benchmark_forbidden_output("resources/cps1/benchmark-reports"));
+    CHECK(!ps2_benchmark_forbidden_output(scratch_dir));
     CHECK(path_join(matrix, sizeof(matrix), scratch_dir, "roms.tsv"));
     CHECK(write_text(matrix, "# Core\tROM\tScenario\tStatus\tNotes\n"
         "CPS1\tsf2hf\tattract\tunverified\tTest fixture\n"
         "MVS\tkof96\tattract\tineligible-memory\tStatic RAM limit\n"));
+#ifndef _WIN32
+    {
+        char target[1024];
+        char destination[1024];
+        CHECK(path_join(target, sizeof(target), source_dir, "resources"));
+        CHECK(path_join(destination, sizeof(destination), scratch_dir, "resource-symlink"));
+        unlink(destination);
+        CHECK(symlink(target, destination) == 0);
+        CHECK(ps2_benchmark_forbidden_output(destination));
+        CHECK(ps2_benchmark_write_reports(matrix, destination, 0, NULL) != 0);
+        CHECK(unlink(destination) == 0);
+    }
+#endif
     CHECK(ps2_benchmark_matrix_can_attempt(matrix, "CPS1", "sf2hf"));
     CHECK(!ps2_benchmark_matrix_can_attempt(matrix, "MVS", "kof96"));
     CHECK(!ps2_benchmark_matrix_can_attempt(matrix, "CPS2", "sf2hf"));
@@ -832,7 +850,9 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
             "cpu_bytes=1048576 gfx_bytes=4194304 pcm_bytes=1048576 resident=on "
             "core_update_us=1000000 screen_update_us=500000 ticker_pair_ns=1200 "
             "cache=off sound=on scenario=attract state=verified "
-            "state_hash=0123456789abcdef revision=1234567890abcdef "
+            "state_hash=0123456789abcdef config_hash=aaaabbbbccccdddd "
+            "worktree=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef "
+            "revision=0123456789abcdef0123456789abcdef01234567 "
             "cc_version=15.2.0 status=ok\n",
             compiler, duration, duration) < (int)sizeof(record));
         CHECK(path_join(log_path[i], sizeof(log_path[i]), output, "placeholder"));
@@ -884,7 +904,9 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         "io_bytes=0 cpu_bytes=1048576 gfx_bytes=4194304 pcm_bytes=1048576 "
         "resident=on core_update_us=1000000 screen_update_us=500000 "
         "ticker_pair_ns=1200 cache=off sound=on scenario=attract state=unverified "
-        "state_hash=0123456789abcdef revision=1234567890abcdef "
+        "state_hash=0123456789abcdef config_hash=aaaabbbbccccdddd "
+        "worktree=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef "
+        "revision=0123456789abcdef0123456789abcdef01234567 "
         "cc_version=15.2.0 status=unverified\n"));
     CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
     CHECK(host_read_file(report_path, &summary));

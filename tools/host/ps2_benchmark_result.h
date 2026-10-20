@@ -14,6 +14,8 @@ typedef struct ps2_benchmark_result {
     char scenario[24];
     char state[24];
     char state_hash[33];
+    char configuration_hash[33];
+    char worktree_hash[72];
     char cache[12];
     char sound[12];
     char resident[12];

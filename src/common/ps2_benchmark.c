@@ -32,6 +32,9 @@
 #ifndef PS2_BENCHMARK_CC_VERSION
 #define PS2_BENCHMARK_CC_VERSION "unknown"
 #endif
+#ifndef PS2_BENCHMARK_WORKTREE_SHA256
+#define PS2_BENCHMARK_WORKTREE_SHA256 "unknown"
+#endif
 
 #if !defined(PS2) || !defined(PS2_COMPILER_BENCHMARK) || USE_CACHE
 #error "PS2 benchmark requires PS2, PS2_COMPILER_BENCHMARK, and USE_CACHE=OFF"
@@ -53,6 +56,7 @@ static uint32_t resident_cpu_bytes;
 static uint32_t resident_gfx_bytes;
 static uint32_t resident_pcm_bytes;
 static uint64_t state_fingerprint;
+static uint64_t configuration_fingerprint;
 static uint64_t cpu_start_us;
 static uint64_t render_start_us;
 static uint64_t cpu_total_us;
@@ -146,6 +150,7 @@ void ps2_benchmark_reset(void)
     resident_gfx_bytes = 0;
     resident_pcm_bytes = 0;
     state_fingerprint = 0;
+    configuration_fingerprint = 0;
     cpu_start_us = render_start_us = 0;
     cpu_total_us = render_total_us = 0;
     ticker_pair_ns = 0;
@@ -180,6 +185,20 @@ void ps2_benchmark_frame_begin(void)
         if (end_calibration >= begin_calibration)
             ticker_pair_ns = (uint32_t)(
                 ((end_calibration - begin_calibration) * 1000u) / 4096u);
+        configuration_fingerprint = UINT64_C(14695981039346656037);
+        hash_register(&configuration_fingerprint, (uint32_t)option_sound_enable);
+        hash_register(&configuration_fingerprint, (uint32_t)option_samplerate);
+        hash_register(&configuration_fingerprint, (uint32_t)option_sound_volume);
+        hash_register(&configuration_fingerprint, (uint32_t)option_vsync);
+        hash_register(&configuration_fingerprint, (uint32_t)option_speedlimit);
+        hash_register(&configuration_fingerprint, (uint32_t)option_autoframeskip);
+        hash_register(&configuration_fingerprint, (uint32_t)option_frameskip);
+        hash_register(&configuration_fingerprint, (uint32_t)option_video_output_mode);
+        hash_register(&configuration_fingerprint, (uint32_t)option_display_mode);
+        hash_register(&configuration_fingerprint, (uint32_t)option_video_backend);
+        hash_register(&configuration_fingerprint, (uint32_t)option_video_offset_x);
+        hash_register(&configuration_fingerprint, (uint32_t)option_video_offset_y);
+        hash_register(&configuration_fingerprint, (uint32_t)machine_sound_type);
         residency_checked = true;
         resident_cpu_bytes = memory_length_cpu1;
         resident_pcm_bytes = memory_length_sound1;
@@ -327,7 +346,8 @@ void ps2_benchmark_report(void)
            "cpu_bytes=%u gfx_bytes=%u pcm_bytes=%u resident=%s "
            "core_update_us=%" PRIu64 " screen_update_us=%" PRIu64 " ticker_pair_ns=%u "
            "cache=off sound=%s scenario=attract state=unverified "
-           "state_hash=%016" PRIx64 " revision=%s cc_version=%s status=%s\n",
+           "state_hash=%016" PRIx64 " config_hash=%016" PRIx64
+           " revision=%s worktree=%s cc_version=%s status=%s\n",
            TARGET_STR, game_name,
 #if defined(__clang__)
            "LLVM",
@@ -346,7 +366,8 @@ void ps2_benchmark_report(void)
            residency_checked && !invalid_residency ? "on" : "off",
            cpu_total_us, render_total_us, (unsigned)ticker_pair_ns,
            invalid_sound ? "off" : "on", state_fingerprint,
-           PS2_BENCHMARK_NJEMU_COMMIT, PS2_BENCHMARK_CC_VERSION, status);
+           configuration_fingerprint, PS2_BENCHMARK_NJEMU_COMMIT,
+           PS2_BENCHMARK_WORKTREE_SHA256, PS2_BENCHMARK_CC_VERSION, status);
 }
 
 /*

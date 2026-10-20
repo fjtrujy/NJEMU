@@ -31,21 +31,6 @@ typedef struct trial {
 static candidate_t candidates[MAX_CANDIDATES];
 static trial_t trials[MAX_LOGS];
 
-static int forbidden_output(const char *path)
-{
-    const char *p = path;
-    while (*p) {
-        const char *start = p;
-        size_t n;
-        while (*p && *p != '/' && *p != '\\') ++p;
-        n = (size_t)(p - start);
-        if (n == 9 && !strncmp(start, "resources", n))
-            return 1;
-        if (*p) ++p;
-    }
-    return 0;
-}
-
 static int is_safe_name(const char *s)
 {
     if (*s == '\0') return 0;
@@ -154,7 +139,8 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
     int i, valid = 0;
     int ok = 1;
     char csv_path[MAX_PATH_LENGTH], md_path[MAX_PATH_LENGTH];
-    if (log_count < 0 || log_count > MAX_LOGS || forbidden_output(output_dir) ||
+    if (log_count < 0 || log_count > MAX_LOGS ||
+        ps2_benchmark_forbidden_output(output_dir) ||
         !load_matrix(matrix_path, &count))
         return 1;
     if (snprintf(csv_path, sizeof(csv_path), "%s/trials.csv", output_dir) >= (int)sizeof(csv_path) ||
@@ -165,7 +151,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
     }
     host_buffer_init(&csv);
     host_buffer_init(&md);
-    ok &= host_buffer_append_string(&csv, "core,rom,compiler,trial,frames,total_ms,avg_ms_per_emulated_frame,sampled_frame_mean_ms,fps,p95_ms,core_update_total_ms,screen_update_total_ms,ticker_pair_ns,io_ops,cpu_bytes,gfx_bytes,pcm_bytes,resident,result,state,scenario,revision,compiler_version,log\n");
+    ok &= host_buffer_append_string(&csv, "core,rom,compiler,trial,frames,total_ms,avg_ms_per_emulated_frame,sampled_frame_mean_ms,fps,p95_ms,core_update_total_ms,screen_update_total_ms,ticker_pair_ns,io_ops,cpu_bytes,gfx_bytes,pcm_bytes,resident,result,state,scenario,revision,worktree,config_hash,compiler_version,log\n");
     ok &= host_buffer_append_string(&md, "# PS2 compiler benchmark\n\n");
     ok &= host_buffer_append_string(&md, "Only physical-PS2 measurements with fully validated residency, I/O and matching state fingerprints may contribute to speedup. These reports contain raw logs; the tool cannot determine whether the hardware was real or emulated.\n\n");
     ok &= host_buffer_append_string(&md, "## Trials\n\n| Core | ROM | Compiler | Trial | Frames | Total ms | Mean ms/frame | FPS | P95 ms | I/O | Status |\n| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n");
@@ -220,8 +206,9 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
             r->ticker_pair_ns, r->io_ops,
             r->cpu_bytes, r->gfx_bytes, r->pcm_bytes, r->resident);
         ok &= append_csv_field(&csv, display);
-        ok &= host_buffer_append_format(&csv, ",%s,%s,%s,%s,",
-            r->state, r->scenario, r->revision, r->compiler_version);
+        ok &= host_buffer_append_format(&csv, ",%s,%s,%s,%s,%s,%s,",
+            r->state, r->scenario, r->revision, r->worktree_hash,
+            r->configuration_hash, r->compiler_version);
         ok &= append_csv_field(&csv, t->path);
         ok &= host_buffer_append_string(&csv, "\n");
         ok &= host_buffer_append_format(&md,
@@ -262,6 +249,8 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
                 anchor = r;
             else if (strcmp(anchor->state_hash, r->state_hash) != 0 ||
                      strcmp(anchor->revision, r->revision) != 0 ||
+                     strcmp(anchor->worktree_hash, r->worktree_hash) != 0 ||
+                     strcmp(anchor->configuration_hash, r->configuration_hash) != 0 ||
                      strcmp(anchor->scenario, r->scenario) != 0 ||
                      anchor->cpu_bytes != r->cpu_bytes ||
                      anchor->gfx_bytes != r->gfx_bytes ||
