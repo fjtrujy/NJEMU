@@ -87,6 +87,9 @@ uint32_t poll_gamepad(void)
 
 bool sample_gamepad_index(uint32_t controller, input_state_t *state)
 {
+#ifdef PS2_COMPILER_BENCHMARK
+    bool available;
+#endif
 	if (state == NULL)
 		return false;
 
@@ -95,7 +98,15 @@ bool sample_gamepad_index(uint32_t controller, input_state_t *state)
 	if (!input_info || !input_driver->sample)
 		return false;
 
+#ifdef PS2_COMPILER_BENCHMARK
+    /* Keep the same physical polling cost, but feed neutral controls to
+     * the game so human input cannot change an attract-mode workload. */
+    available = input_driver->sample(input_info, controller, state);
+    input_state_reset(state);
+    return available;
+#else
 	return input_driver->sample(input_info, controller, state);
+#endif
 }
 
 uint32_t poll_gamepad_index(uint32_t controller)

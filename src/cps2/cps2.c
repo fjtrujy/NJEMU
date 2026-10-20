@@ -23,6 +23,9 @@
 #include "common/ui.h"
 #include "common/filer.h"
 #include "common/config.h"
+#ifdef PS2_COMPILER_BENCHMARK
+#include "common/ps2_benchmark.h"
+#endif
 
 
 /* Per-target texture atlas descriptions required by the video driver.
@@ -257,11 +260,17 @@ static void cps2_run(void)
 					autoframeskip_reset();
 				}
 
-				apply_cheat();//davex
+#ifdef PS2_COMPILER_BENCHMARK
+					ps2_benchmark_frame_begin();
+#endif
+					apply_cheat();//davex
 				timer_update_cpu();
 				cps2_sound_offload_frame_completed();
 				update_screen();
-				update_inputport();
+					update_inputport();
+#ifdef PS2_COMPILER_BENCHMARK
+					ps2_benchmark_frame_end();
+#endif
 			}
 
 		video_driver->clearScreen(video_data);

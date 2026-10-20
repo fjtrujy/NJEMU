@@ -23,6 +23,9 @@
 #include "common/ui.h"
 #include "common/filer.h"
 #include "common/config.h"
+#ifdef PS2_COMPILER_BENCHMARK
+#include "common/ps2_benchmark.h"
+#endif
 
 /* Per-target texture atlas descriptions required by the video driver.
  * Each entry describes a texture atlas width/height (pixels).
@@ -235,13 +238,19 @@ static void cps1_run(void)
 				autoframeskip_reset();
 			}
 
-			apply_cheat(); //davex cheat
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_frame_begin();
+#endif
+				apply_cheat(); //davex cheat
 			/* Sample controls at the emulation-frame boundary, before CPU work and
 			 * presentation pacing. This removes a full frame of avoidable latency and
 			 * keeps input independent from whether the previous frame was presented. */
 			update_inputport();
 			timer_update_cpu();
-			update_screen();
+				update_screen();
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_frame_end();
+#endif
 
 			// printf("Frame: %u\n", global_frame_count++);
 			// if (global_frame_count == 685) {

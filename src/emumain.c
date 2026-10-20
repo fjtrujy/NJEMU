@@ -39,6 +39,9 @@
 #include "common/ui_text_driver.h"
 #include "common/video_driver.h"
 #include "common/video_geometry.h"
+#ifdef PS2_COMPILER_BENCHMARK
+#include "common/ps2_benchmark.h"
+#endif
 #ifdef ADHOC
 #include "common/adhoc.h"
 #endif
@@ -270,12 +273,18 @@ void emu_main(void)
 #endif
 
 	snap_no = -1;
+#ifdef PS2_COMPILER_BENCHMARK
+	ps2_benchmark_reset();
+#endif
 	set_gamepad_edge_capture(false);
 	gamepad_edges_armed = false;
 
 	sound_thread_init();
 	machine_main();
 	sound_thread_exit();
+#ifdef PS2_COMPILER_BENCHMARK
+	ps2_benchmark_report();
+#endif
 	set_gamepad_edge_capture(false);
 	gamepad_edges_armed = false;
 

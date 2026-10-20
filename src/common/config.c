@@ -16,6 +16,9 @@
 #include "common/input_driver.h"
 #include "common/power_driver.h"
 #include "common/runtime_paths.h"
+#ifdef PS2_COMPILER_BENCHMARK
+#include "common/ps2_benchmark.h"
+#endif
 #include "common/path_utils.h"
 #include "common/ui_text_driver.h"
 #if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
@@ -680,13 +683,16 @@ void load_gamecfg(const char *name)
 		cps_screen_orientation = CPS_SCREEN_ORIENTATION_AUTO;
 #endif
 
-	if (load_inifile(path, gamecfg, NULL) == 0)
-	{
+		if (load_inifile(path, gamecfg, NULL) == 0)
+		{
 #ifdef ADHOC
 		if (adhoc_enable)
 #endif
-			save_gamecfg(name);
-	}
+				save_gamecfg(name);
+		}
+#ifdef PS2_COMPILER_BENCHMARK
+	ps2_benchmark_apply_options();
+#endif
 #if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 #if defined(GUI)
 	(void)ui_sync_ps2_native_scanout(previous_display_mode);

@@ -92,6 +92,28 @@ option(USE_ASAN "Use ASAN" OFF)
 option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
+option(PS2_COMPILER_BENCHMARK "PS2: deterministic no-cache compiler benchmark" OFF)
+set(PS2_BENCHMARK_FRAMES "10000" CACHE STRING "PS2 benchmark measured frame count")
+set(PS2_BENCHMARK_WARMUP "500" CACHE STRING "PS2 benchmark warm-up frame count")
+if(PS2_COMPILER_BENCHMARK)
+    if(NOT PLATFORM STREQUAL "PS2" OR "${TARGET}" STREQUAL "NCDZ" OR GUI OR USE_CACHE OR NJEMU_CANONICAL_RELEASE)
+        message(FATAL_ERROR
+            "PS2_COMPILER_BENCHMARK requires PS2, CPS1/CPS2/MVS, GUI=OFF, USE_CACHE=OFF, NJEMU_CANONICAL_RELEASE=OFF")
+    endif()
+    if(NOT PS2_BENCHMARK_FRAMES MATCHES "^[0-9]+$" OR
+       PS2_BENCHMARK_FRAMES LESS 1 OR PS2_BENCHMARK_FRAMES GREATER 100000)
+        message(FATAL_ERROR "PS2_BENCHMARK_FRAMES must be 1..100000")
+    endif()
+    if(NOT PS2_BENCHMARK_WARMUP MATCHES "^[0-9]+$" OR
+       PS2_BENCHMARK_WARMUP GREATER 100000)
+        message(FATAL_ERROR "PS2_BENCHMARK_WARMUP must be 0..100000")
+    endif()
+    add_compile_definitions(
+        PS2_COMPILER_BENCHMARK=1
+        PS2_BENCHMARK_FRAMES=${PS2_BENCHMARK_FRAMES}
+        PS2_BENCHMARK_WARMUP=${PS2_BENCHMARK_WARMUP}
+    )
+endif()
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
 option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
 if("${PLATFORM}" STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
@@ -441,7 +463,8 @@ if (USE_PG)
 endif()
 
 # Enable interprocedural optimization LTO (for PSP and PS2 platforms)
-if (((PLATFORM STREQUAL "PSP") OR (PLATFORM STREQUAL "PS2")) AND NOT USE_ASAN AND NOT USE_UBSAN)
+if (((PLATFORM STREQUAL "PSP") OR (PLATFORM STREQUAL "PS2")) AND NOT USE_ASAN AND NOT USE_UBSAN
+    AND NOT PS2_COMPILER_BENCHMARK)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 else()
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
@@ -659,6 +682,9 @@ set(COMMON_SRC ${COMMON_SRC}
     common/ui_draw.c
     common/config.c
 )
+if(PS2_COMPILER_BENCHMARK)
+    list(APPEND COMMON_SRC common/ps2_benchmark.c)
+endif()
 set(OS_SRC ${OS_SRC}
     ${PLATFORM_LOWER}/${PLATFORM_LOWER}_ui_draw.c
 )
@@ -948,6 +974,15 @@ list(TRANSFORM ALL_SRC PREPEND "src/")
 add_executable(${TARGET}
     ${ALL_SRC}
 )
+if(PS2_COMPILER_BENCHMARK)
+    # This instruments filesystem calls referenced by linked NJEMU and SDK
+    # objects. Calls bypassing POSIX still need an independent IOP RPC audit.
+    foreach(PS2_BENCHMARK_IO_SYMBOL
+            open close read write lseek fopen fclose fread fwrite fseek)
+        target_link_options(${TARGET} PRIVATE
+            "-Wl,--wrap=${PS2_BENCHMARK_IO_SYMBOL}")
+    endforeach()
+endif()
 
 # Every NJEMU source includes project headers from the source root (for example
 # "common/video_driver.h" or "mvs/driver.h").  Keep that search path local to
