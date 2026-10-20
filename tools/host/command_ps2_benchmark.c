@@ -154,6 +154,97 @@ static int append_csv_field(host_buffer_t *out, const char *value)
     return host_buffer_append_string(out, "\"");
 }
 
+/* A descriptive baseline can be reported before deterministic gameplay replay
+ * is verified. It must not be mistaken for an accepted GCC/LLVM comparison.
+ * Keep samples from different binaries/configurations/environments separate. */
+static int append_descriptive_baselines(host_buffer_t *md, size_t count,
+    int log_count)
+{
+    size_t j;
+    int ok = host_buffer_append_string(md,
+        "\n## Repeated-run timing (descriptive only)\n\n"
+        "These statistics include complete, resident, zero-wrapped-I/O trials "
+        "even when `state=unverified`. Matching timings and final-state hashes "
+        "are not a deterministic-replay proof or an authorized compiler speedup. "
+        "Spread is `(maximum - minimum) / mean` as a percentage. "
+        "Different environments, build provenance or configurations must not "
+        "be pooled.\n\n"
+        "| Core | ROM | Compiler | Environment | Trials | Mean ms | Median ms | Minimum ms | Maximum ms | Spread % | Unique final states | Notes |\n"
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n");
+    for (j = 0; j < count && ok; ++j) {
+        static const char *compilers[] = {"GCC", "LLVM"};
+        size_t c;
+        for (c = 0; c < sizeof(compilers) / sizeof(compilers[0]) && ok; ++c) {
+            uint64_t durations[MAX_LOGS];
+            const char *seen_hashes[MAX_LOGS];
+            size_t n = 0, unique_states = 0;
+            const trial_t *anchor = NULL;
+            int mixed = 0;
+            int unverified = 0;
+            int i;
+            double sum = 0;
+            uint64_t minimum = UINT64_MAX, maximum = 0;
+            for (i = 0; i < log_count; ++i) {
+                const trial_t *t = &trials[i];
+                const ps2_benchmark_result_t *r = &t->value;
+                size_t k;
+                if (!t->parsed || t->candidate_index != (int)j ||
+                    strcmp(r->compiler, compilers[c]))
+                    continue;
+                if (!r->frames || r->frames != r->expected || !r->warmup ||
+                    r->total_us == 0 || r->io_ops != 0 ||
+                    strcmp(r->resident, "on") || strcmp(r->sound, "on") ||
+                    strcmp(r->cache, "off") ||
+                    (strcmp(r->status, "ok") &&
+                     strcmp(r->status, "unverified")) ||
+                    strncmp(candidates[j].status, "ineligible", 10) == 0 ||
+                    strcmp(r->scenario, candidates[j].scenario))
+                    continue;
+                if (anchor != NULL &&
+                    (strcmp(anchor->environment, t->environment) ||
+                     strcmp(anchor->value.revision, r->revision) ||
+                     strcmp(anchor->value.worktree_hash, r->worktree_hash) ||
+                     strcmp(anchor->value.configuration_hash, r->configuration_hash) ||
+                     strcmp(anchor->value.compiler_version, r->compiler_version) ||
+                     anchor->value.cpu_bytes != r->cpu_bytes ||
+                     anchor->value.gfx_bytes != r->gfx_bytes ||
+                     anchor->value.pcm_bytes != r->pcm_bytes ||
+                     anchor->value.warmup != r->warmup ||
+                     anchor->value.frames != r->frames))
+                    mixed = 1;
+                if (anchor == NULL)
+                    anchor = t;
+                for (k = 0; k < unique_states; ++k)
+                    if (!strcmp(seen_hashes[k], r->state_hash)) break;
+                if (k == unique_states) seen_hashes[unique_states++] = r->state_hash;
+                durations[n++] = r->total_us;
+                sum += (double)r->total_us;
+                if (r->total_us < minimum) minimum = r->total_us;
+                if (r->total_us > maximum) maximum = r->total_us;
+                if (strcmp(r->state, "verified")) unverified = 1;
+            }
+            if (n == 0) continue;
+            if (mixed) {
+                ok &= host_buffer_append_format(md,
+                    "| %s | %s | %s | mixed | %zu | - | - | - | - | - | - | mixed_configuration |\n",
+                    candidates[j].core, candidates[j].rom, compilers[c], n);
+            } else {
+                double mean = sum / (double)n;
+                uint64_t median = ps2_benchmark_median(durations, n);
+                double spread = mean ? 100.0 * (double)(maximum - minimum) / mean : 0;
+                ok &= host_buffer_append_format(md,
+                    "| %s | %s | %s | %s | %zu | %.3f | %.3f | %.3f | %.3f | %.4f | %zu | %s |\n",
+                    candidates[j].core, candidates[j].rom, compilers[c],
+                    anchor->environment, n, mean / 1000.0,
+                    (double)median / 1000.0, (double)minimum / 1000.0,
+                    (double)maximum / 1000.0, spread, unique_states,
+                    unverified ? "state_unverified" : "state_reported_verified");
+            }
+        }
+    }
+    return ok;
+}
+
 int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
     int log_count, char *const *logs)
 {
@@ -266,6 +357,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
             ms, mean, fps, p95, r->io_ops, display);
     }
 
+    ok &= append_descriptive_baselines(&md, count, log_count);
     ok &= host_buffer_append_string(&md,
         "\n## GCC versus LLVM\n\n| Core | ROM | GCC median ms | LLVM median ms | Speedup | Improvement % | Result |\n| --- | --- | ---: | ---: | ---: | ---: | --- |\n");
     for (size_t j = 0; j < count && ok; ++j) {

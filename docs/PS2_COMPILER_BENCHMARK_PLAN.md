@@ -158,6 +158,29 @@ These are the 10 active, resident test candidates out of 14 matrix entries; the 
 
 **Same-build state divergence:** Two independent 10,000-frame `trally` executions of the *same ELF* and runtime-configuration fingerprint produced different final state hashes (`99e1e67d0018259d` versus `e75fcc13982b65d6`). To investigate, benchmark-only instrumentation was added that emits `NJEMU_BENCHMARK_STATE_PARTS_V1` immediately before the standard benchmark record; it separates 68000 registers, Z80 registers and mutable RAM without changing the accepted record schema or timing interval. In three additional same-build `trally` tests of 30 warm-up + 300 measured frames, the RAM fingerprints differed in **all three trials**, and the CPU-register fingerprints also differed between the first and the subsequent two. These runs are evidence of insufficient replay determinism, not a diagnosis of its cause. A deterministic game-state fixture and input/audio-thread synchronization audit are required before declaring compiler results comparable. No result was promoted from `state=unverified`.
 
+### Repeatable GCC baseline in PCSX2 (2026-10-20)
+
+To estimate timing repeatability without adding any runtime telemetry, every eligible ROM was executed twice more with the **same prebuilt GCC ELF**, build provenance, config fingerprint, PCSX2 v2.9.93, 500 warm-up frames and 10,000 measured frames. Together with each ROM's earlier full-length run, this produces three trials per ROM. `trally` also received **ten separate, new** full-length trials (the table below uses those ten rather than its earlier run). No test ran concurrently with another PCSX2 instance. All 37 baseline trials completed with `resident=on`, `sound=on`, `cache=off`, `io_ops=0`, and `state=unverified`. The zero-I/O result applies only to the instrumented POSIX/stdio wrappers, not all IOP RPC entry points.
+
+| Core | ROM | Trials | Mean seconds | Median seconds | Coefficient of variation | Distinct final hashes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| CPS1 | `slammast` | 3 | 65.290 | 65.226 | 0.1701% | 2 |
+| CPS1 | `dino` | 3 | 64.722 | 64.720 | 0.0058% | 2 |
+| CPS1 | `punisher` | 3 | 63.120 | 63.120 | 0.0009% | 2 |
+| CPS1 | `sf2hf` | 3 | 65.052 | 65.056 | 0.0223% | 3 |
+| CPS2 | `avsp` | 3 | 79.949 | 79.949 | 0.0012% | 2 |
+| CPS2 | `ddtod` | 3 | 82.385 | 82.381 | 0.0093% | 2 |
+| CPS2 | `ssf2` | 3 | 83.508 | 83.509 | 0.0012% | 2 |
+| MVS | `wjammers` | 3 | 55.346 | 55.183 | 0.5440% | 3 |
+| MVS | `pbobbl2n` | 3 | 66.034 | 66.027 | 0.0895% | 3 |
+| MVS | `trally` | 10 | 71.699 | 71.699 | 0.1066% | 10 |
+
+The coefficient of variation is the **sample** standard deviation divided by the mean, calculated from the original `total_us` records. Although all measured timing CVs are below 0.55%, **none of the ROMs reproduced exactly the same final-state hash across every trial**. In particular, `trally` produced ten distinct hashes in ten runs. The benchmark is useful as a *descriptive* baseline for future compiler work, but these observations do not establish identical emulated workloads or prove GCC/LLVM comparability. The PCSX2 guest-timer values are not real-PS2 benchmarks.
+
+`njemu-tool ps2-benchmark report` now adds a **Repeated-run timing (descriptive only)** section showing mean, median, minimum/maximum, range spread and distinct final-state counts. It refuses to pool trials with different compiler versions, configurations, source fingerprints or environment identifiers, and preserves the existing strict `GCC versus LLVM` acceptance gate. This reuses the existing records rather than changing the runtime format. All 37 raw logs and the generated CSV/Markdown combined report are kept in the ignored, local directory:
+
+`build_ps2_compiler_smoke/pcsx2_gcc_10x_20261020/aggregate/`
+
 ### Repeated GCC PCSX2 timing baseline (2026-10-20)
 
 The 10 eligible ROMs were repeated serially in PCSX2 v2.9.93, with GCC 15.2.0, `GUI=OFF`, `USE_CACHE=OFF`, sound enabled, 500 warm-up frames and 10,000 measured frames per run. No simultaneous PCSX2 instances were used. There were **28 new successful runs**: 10 for `trally` and two for each of the other nine ROMs. Combining the nine earlier qualification logs with the new runs produces **37 complete observations**. Each ROM's prior and new logs have identical revision, tracked-worktree, configuration and compiler-version fingerprints. These figures are **descriptive within-GCC PCSX2 guest-clock timings**, not real-hardware timings, proof of a deterministic game trajectory, cross-ROM CPU expense rankings or a GCC/LLVM speedup.

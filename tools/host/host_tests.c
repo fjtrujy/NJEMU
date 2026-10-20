@@ -893,6 +893,11 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     CHECK(host_read_file(report_path, &summary));
     CHECK(buffer_contains(&summary, "1.1667"));
     CHECK(buffer_contains(&summary, "14.29"));
+    CHECK(buffer_contains(&summary, "## Repeated-run timing (descriptive only)"));
+    CHECK(buffer_contains(&summary,
+        "| CPS1 | sf2hf | GCC | unknown | 3 | 2100.000 | 2100.000 | 2000.000 | 2200.000 | 9.5238 | 1 | state_reported_verified |"));
+    CHECK(buffer_contains(&summary,
+        "| CPS1 | sf2hf | LLVM | unknown | 3 | 1800.000 | 1800.000 | 1700.000 | 1900.000 | 11.1111 | 1 | state_reported_verified |"));
     host_buffer_free(&summary);
     CHECK(path_join(report_path, sizeof(report_path), output, "trials.csv"));
     CHECK(host_read_file(report_path, &summary));
@@ -917,6 +922,8 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         CHECK(host_read_file(report_path, &summary));
         CHECK(buffer_contains(&summary, "PCSX2-v2.9.93"));
         CHECK(buffer_contains(&summary, "divergent_state_or_configuration"));
+        CHECK(buffer_contains(&summary,
+            "| CPS1 | sf2hf | LLVM | mixed | 3 | - | - | - | - | - | - | mixed_configuration |"));
         CHECK(!buffer_contains(&summary, "1.1667"));
         host_buffer_free(&summary);
         CHECK(host_write_file(log_path[4], original.data, original.size));
@@ -956,6 +963,8 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
     CHECK(host_read_file(report_path, &summary));
     CHECK(buffer_contains(&summary, "failed_or_incomparable_trial"));
+    CHECK(buffer_contains(&summary,
+        "| CPS1 | sf2hf | LLVM | unknown | 3 | 1800.000 | 1800.000 | 1700.000 | 1900.000 | 11.1111 | 1 | state_unverified |"));
     CHECK(!buffer_contains(&summary, "1.1667"));
     host_buffer_free(&summary);
 #ifndef _WIN32
