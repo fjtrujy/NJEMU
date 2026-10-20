@@ -24,7 +24,7 @@ A run is accepted only when the complete ROM and audio samples are resident, the
 
 ## Candidate and qualification matrix
 
-The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. All entries are **unqualified** until per-ROM PS2 allocation proof, 10,500-frame completion, zero-I/O audit and deterministic state comparisons exist. These are not expense rankings. Keep raw allocation values, firmware/BIOS identity, processed asset digests and evidence per game in separate result manifests, not guessed in the source matrix.
+The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. Remaining `unverified` entries are **unqualified** until per-ROM PS2 allocation proof, 10,500-frame completion, zero-I/O audit and deterministic state comparisons exist. Two candidates have already been ruled out by their minimum ROM-region requirements alone. These are not expense rankings. Keep raw allocation values, firmware/BIOS identity, processed asset digests and evidence per game in separate result manifests, not guessed in the source matrix.
 
 | Core | Candidates | Starting hypothesis | Mandatory evidence |
 | --- | --- | --- | --- |
@@ -33,6 +33,26 @@ The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. All 
 | MVS | kof96, mslug, wjammers | Smaller early games are promising *candidates*, not guaranteed resident | Empirical `gfx_fully_resident`, `pcm_fully_resident` when needed, sound stays on, no processed-file reads during timing |
 
 Do not substitute Metal Slug 3: previous real-hardware findings describe large demand-read C-ROM; this suite intentionally avoids streaming.
+
+### Static ROM-region audit (2026-10-20)
+
+The following numbers come directly from `REGION(...)` declarations in the existing `resources/*/rominfo.*` files, **read only**. They describe allocated regions, not archive/ZIP sizes, empirical free-memory measurements, or frame costs. The CPU2, optional USER1, extra RAM, renderer, sound runtime, and PS2SDK allocations add further memory pressure. The standard retail PS2 Emotion Engine has 32 MiB RAM.
+
+| Core | ROM | CPU1 MiB | Graphics MiB | Samples MiB | Extra declared USER1 MiB | Residency assessment |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| CPS1 | slammast | 2 | 6 | 4 | 0.031 | Unverified |
+| CPS1 | dino | 2 | 4 | 2 | 0 | Unverified |
+| CPS1 | punisher | 2 | 4 | 2 | 0 | Unverified |
+| CPS1 | sf2hf | 2 | 6 | 0.25 | 0 | Unverified |
+| CPS2 | avsp | 2 | 16 | 4 | 1 | Unverified |
+| CPS2 | 19xx | 2.5 | 16 | 4 | 2 | Unverified |
+| CPS2 | ssf2t | 3.5 | 16 | 4 | 3 | Unverified |
+| CPS2 | sfa3ur1 | 4 | 32 | 8 | 1 | **Ineligible on retail PS2** |
+| MVS | kof96 | 3 | 32 | 10 | 0 | **Ineligible on retail PS2** |
+| MVS | mslug | 2 | 16 | 8 | 0 | Unverified, potentially tight |
+| MVS | wjammers | 1 | 4 | 4 | 0 | Unverified, promising |
+
+`sfa3ur1` and `kof96` each exceed 32 MiB even before all mandatory regions are accounted for, so they cannot qualify as complete resident workloads on a stock PS2. The remaining titles must be classified by actual successful no-cache execution and allocator evidence; their lower ROM-region totals are not proof that enough RAM exists.
 
 ## Milestones
 
@@ -59,11 +79,19 @@ For each accepted game/scene, execute >=3 physical-hardware trials per compiler,
 
 ## Instrumentation semantics and open risks
 
-The measured frame interval should be sampled at the common `update_screen()` completion boundary. Time zero follows the final warm-up frame, and final time is sampled after the last measured frame. This includes timer/CPU work, renderer, audio-thread contention and presentation except front-loaded startup. The initial warm-up may trigger a VBlank wait, but that is outside the measured interval. Background sound work may continue during or after exit; measured total is EE wall time, not summed CPU thread time.
+The measured frame interval starts just before the first measured iteration and ends after the last measured iteration. This includes timer/CPU work, renderer, audio-thread contention and presentation except front-loaded startup. The initial warm-up may trigger a VBlank wait, but that is outside the measured interval. Background sound work may continue during or after exit; measured total is EE wall time, not summed CPU thread time. `core_update_us` measures `timer_update_cpu()`, which may itself invoke video drawing; it **must not** be described as CPU-only. `screen_update_us` measures `update_screen()`, including presentation/yielding, **not** all rendering. They are partial, separately scoped wall times and must not be summed to claim a complete CPU+GPU split.
 
 One sample per frame (microseconds) gives quantiles; their sum may differ slightly from a separate total wall-clock clock read because of timestamp overhead. Record overhead by repeatable empty ticker-pair tests and compare an instrumented vs noninstrumented short run. Stage durations can be nested and should be named accordingly.
 
-PS2Link's executable location, mount path, audio scheduling, and game selector are environment-specific; do not hard-code local memory-card or USB paths. The current checkout lacks `PS2DEV`/`PS2SDK` in the connected shell environment, so PS2 compiles need environment setup.
+PS2Link's executable location, mount path, audio scheduling, and game selector are environment-specific; do not hard-code local memory-card or USB paths. This Mac has the GCC 15.2.0 PS2 toolchain at `/Users/fjtrujy/toolchains/ps2/ps2dev`; set `PS2DEV` and `PS2SDK=$PS2DEV/ps2sdk` before configuring. The experimental LLVM/R5900 compiler was not located in that toolchain. Historical PS2Link validation reports an IOP-reset/host-server conflict; the existing unrelated HDD edits to `src/ps2/ps2_platform.c` must not be used as a place to introduce a benchmark-specific workaround.
+
+### Implementation and evidence so far
+
+- Opt-in `PS2_COMPILER_BENCHMARK=ON` requires PS2, `GUI=OFF` and `USE_CACHE=OFF`; the existing core loops count full frames. The timing buffer captures per-frame microseconds without per-frame logging.
+- The recorder also emits pre- and post-timing metadata, a selected mutable-memory/CPU-register fingerprint, diagnostic allocations and ticker overhead. For safety it currently labels every otherwise completed trial `state=unverified status=unverified`: an end-state fingerprint alone cannot certify equivalent emulation across compiler builds.
+- Linker `--wrap` captures direct POSIX/stdio I/O but may miss direct SDK IOP file RPCs; a zero count is **not** a validated zero-I/O claim until that boundary audit is complete.
+- The portable C99 host utility can inspect the TSV matrix, launch PS2Link in a staged private directory, collect per-trial logs and output CSV/Markdown. It rejects incomplete/unverified or inconsistent runs. PS2Link connectivity and the staging mechanism still need real-device testing. The runner never writes into `resources/`.
+- GCC builds of the three no-cache PS2 targets succeeded; host reporting/parser regression tests pass. No physical PS2 timing baseline or LLVM-vs-GCC comparison has been collected.
 
 ## Acceptance checklist
 

@@ -6,7 +6,7 @@ CPS1	sf2hf	attract	unverified	Verify YM2151 and scene determinism
 CPS2	avsp	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	19xx	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	ssf2t	attract	unverified	Require full decoded GFX in PS2 RAM
-CPS2	sfa3ur1	attract	unverified	Require full decoded GFX in PS2 RAM
-MVS	kof96	attract	unverified	Require full C-ROM and PCM residency
+CPS2	sfa3ur1	attract	ineligible-memory	32 MiB decoded GFX plus 8 MiB sound exceeds retail PS2 EE RAM
+MVS	kof96	attract	ineligible-memory	32 MiB C-ROM plus 10 MiB samples exceeds retail PS2 EE RAM
 MVS	mslug	attract	unverified	Require full C-ROM and PCM residency
 MVS	wjammers	attract	unverified	Require full C-ROM and PCM residency
