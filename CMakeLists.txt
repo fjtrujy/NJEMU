@@ -978,10 +978,14 @@ add_executable(${TARGET}
     ${ALL_SRC}
 )
 if(PS2_COMPILER_BENCHMARK)
-    # This instruments filesystem calls referenced by linked NJEMU and SDK
-    # objects. Calls bypassing POSIX still need an independent IOP RPC audit.
+    # Instrument libc and direct fileXio/fio filesystem entry points in linked
+    # objects. Indirect/intra-object IOP RPC bypasses still need auditing.
     foreach(PS2_BENCHMARK_IO_SYMBOL
-            open close read write lseek fopen fclose fread fwrite fseek)
+            open close read write lseek fopen fclose fread fwrite fseek
+            fileXioOpen fileXioClose fileXioRead fileXioWrite fileXioLseek
+            fileXioDopen fileXioDread fileXioDclose fileXioGetStat
+            fioOpen fioClose fioRead fioWrite fioLseek fioDopen fioDread
+            fioDclose fioGetstat)
         target_link_options(${TARGET} PRIVATE
             "-Wl,--wrap=${PS2_BENCHMARK_IO_SYMBOL}")
     endforeach()

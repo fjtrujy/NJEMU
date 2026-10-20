@@ -973,6 +973,7 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     {
         char build_dir[1024], elf_path[1024], selector[1024];
         char asset[1024], script[1024], out_dir[1024], trial_log[1024];
+        char fixture_dir[1024], fixture_file[1024];
         char source_matrix[1024];
         char *args[13];
         DIR *dir;
@@ -987,6 +988,15 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         CHECK(write_text(elf_path, "fake-elf"));
         CHECK(write_text(selector, "original-game"));
         CHECK(write_text(asset, "shared-asset"));
+        CHECK(path_join(fixture_dir, sizeof(fixture_dir), build_dir, "nvram"));
+        CHECK(host_make_directories(fixture_dir));
+        CHECK(path_join(fixture_file, sizeof(fixture_file), fixture_dir, "sf2hf.nv"));
+        CHECK(write_text(fixture_file, "original-nvram"));
+        CHECK(path_join(fixture_dir, sizeof(fixture_dir), build_dir, "config"));
+        CHECK(host_make_directories(fixture_dir));
+        CHECK(path_join(asset, sizeof(asset), fixture_dir, "sf2hf.ini"));
+        CHECK(write_text(asset, "original-config"));
+        CHECK(path_join(asset, sizeof(asset), build_dir, "asset.txt"));
         CHECK(path_join(script, sizeof(script), scratch_dir, "fake-pcsx2.sh"));
         CHECK(write_text(script,
             "#!/bin/sh\n"
@@ -996,6 +1006,10 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
             "test \"$(cat \"$4\")\" = fake-elf || exit 5\n"
             "test \"$(cat game_name.ini)\" = sf2hf || exit 6\n"
             "test -L asset.txt && test \"$(cat asset.txt)\" = shared-asset || exit 7\n"
+            "test -d nvram && test ! -L nvram && test \"$(cat nvram/sf2hf.nv)\" = original-nvram || exit 9\n"
+            "test -d config && test ! -L config && test \"$(cat config/sf2hf.ini)\" = original-config || exit 10\n"
+            "echo modified > nvram/sf2hf.nv\n"
+            "echo modified > config/sf2hf.ini\n"
             "mkdir -p PICTURE/MVS || exit 8\n"
             "echo PCSX2_STAGE_VALID\n"));
         CHECK(chmod(script, 0755) == 0);
@@ -1021,6 +1035,13 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         host_buffer_free(&summary);
         CHECK(host_read_file(selector, &summary));
         CHECK(buffer_contains(&summary, "original-game"));
+        host_buffer_free(&summary);
+        CHECK(host_read_file(fixture_file, &summary));
+        CHECK(buffer_contains(&summary, "original-nvram"));
+        host_buffer_free(&summary);
+        CHECK(path_join(fixture_file, sizeof(fixture_file), fixture_dir, "sf2hf.ini"));
+        CHECK(host_read_file(fixture_file, &summary));
+        CHECK(buffer_contains(&summary, "original-config"));
         host_buffer_free(&summary);
         dir = opendir(out_dir);
         CHECK(dir != NULL);

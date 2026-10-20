@@ -115,6 +115,37 @@ static int copy_file(const char *source, const char *destination)
     return ok;
 }
 
+/* Only the selected ROM's persistent files belong in a benchmark fixture.
+ * Never link writable save directories into a shared build, where trial N
+ * would otherwise silently change trial N+1's initial emulated state. */
+static int stage_writable_dir(const char *source, const char *destination,
+    const char *directory, const char *rom)
+{
+    const char *extension = !strcmp(directory, "config") ? ".ini" :
+        !strcmp(directory, "nvram") ? ".nv" :
+        !strcmp(directory, "memcard") ? ".bin" : NULL;
+    char original_file[PATH_MAX], staged_file[PATH_MAX];
+    struct stat info;
+    int n;
+    if (lstat(source, &info) != 0 || !S_ISDIR(info.st_mode) ||
+        mkdir(destination, 0700) != 0)
+        return 0;
+    /* Save-state playback is not part of the current attract-mode fixture.
+     * Give it a private directory for output, but no inherited save files. */
+    if (extension == NULL) return 1;
+    n = snprintf(original_file, sizeof(original_file), "%s/%s%s",
+        source, rom, extension);
+    if (n < 0 || (size_t)n >= sizeof(original_file)) return 0;
+    if (lstat(original_file, &info) != 0)
+        return errno == ENOENT;
+    /* Refuse to follow an unexpected symlink into user-owned resources. */
+    if (!S_ISREG(info.st_mode)) return 0;
+    n = snprintf(staged_file, sizeof(staged_file), "%s/%s%s",
+        destination, rom, extension);
+    if (n < 0 || (size_t)n >= sizeof(staged_file)) return 0;
+    return copy_file(original_file, staged_file);
+}
+
 /* Never modify an existing game selector: stage build runtime links and a
  * private selector in a fresh output-owned directory instead. */
 static int stage_runtime(const char *source, char *staged, size_t staged_size,
@@ -155,7 +186,12 @@ static int stage_runtime(const char *source, char *staged, size_t staged_size,
                 entry->d_name) >= (int)sizeof(original) ||
             snprintf(link_path, sizeof(link_path), "%s/%s", staged,
                 entry->d_name) >= (int)sizeof(link_path) ||
-            ((pcsx2 && strcmp(entry->d_name, elf_name) == 0) ?
+            ((!strcmp(entry->d_name, "config") ||
+              !strcmp(entry->d_name, "nvram") ||
+              !strcmp(entry->d_name, "memcard") ||
+              !strcmp(entry->d_name, "state")) ?
+                !stage_writable_dir(original, link_path, entry->d_name, rom) :
+              (pcsx2 && strcmp(entry->d_name, elf_name) == 0) ?
                 !copy_file(original, link_path) :
                 symlink(original, link_path) != 0)) {
             closedir(dir);

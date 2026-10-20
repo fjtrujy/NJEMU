@@ -261,11 +261,26 @@ build_ps2_compiler_host/njemu-tool ps2-benchmark run \
 
 The optional PS2Link runner stages runtime symlinks and a private `game_name.ini` outside `resources/`; it never writes to ROMs or game saves. It stores raw per-trial logs in the output directory, then writes `trials.csv` and `summary.md`. It rejects output directories that resolve into a directory named `resources` (including symlink targets). For the moment, the diagnostic firmware records will remain `unverified` pending deterministic replay/state validation and comprehensive I/O audits, both of which can be investigated using PCSX2.
 
+### M3 follow-up: frozen RTC, isolated save fixtures and PS2SDK I/O boundaries (2026-10-20)
+
+The repeated GCC baseline revealed two *actual* nondeterministic inputs, rather than simply timer measurement noise:
+
+1. `neogeo_driver_reset()` initialized the emulated PD4990A calendar from `time(NULL)`/`localtime()`. Benchmark-only MVS builds now use a constant January 1, 2000 clock seed. Ordinary game builds still use the real host clock.
+2. The PCSX2 runner copied the ELF but symlinked all other build entries, **including writable** `config`, `nvram` and `memcard` directories. A completed trial wrote its game configuration and SRAM/memory-card output back to the shared build. Subsequent trials therefore inherited the preceding run's state. The runner now creates private per-trial save directories, copying only the selected game's starting `.ini`, `.nv` and `.bin` fixture files from the build; `state` is private and initially empty. It refuses symlinked save fixtures and never writes to original saves or `resources/`. Host tests mutate private save files and verify the originals remain unchanged.
+
+After fixing the RTC and isolating saves, **5/5** `trally` trials of 30 warm-up plus 300 measured frames in PCSX2 produced the same combined state hash (`1d9d2bbee0deaebd`), compared with initial divergence before both fixes. The 500+10,000-frame validation is more limited: **2/2** trials produced identical M68000 (`6dab89bb7f7e5a8b`) and RAM (`c46ff426882740e3`) diagnostic hashes, but their **Z80 hashes differed** (`c5ef8526e55d44d0`, `e1991980b49a1727`). The async audio thread renders against the original sound-enabled workload; sound-side state synchronization remains unverified. No compiler comparisons were promoted to `state=verified` or `status=ok`.
+
+The I/O linker-wrap coverage now includes direct PS2SDK `fileXio*` and legacy `fio*` open/read/write/seek/close, directory and stat operations as well as the original POSIX/stdio operations, with the **same** existing `io_ops`/`io_bytes` fields. Two new 30+300 PCSX2 trials completed `io_ops=0`, `io_bytes=0`, `resident=on` and matching state hashes. The MVS ELF was checked to contain the new wrapper symbols. Full IOP RPC completeness, including indirect and intra-library file operations, still requires an independent static/link and runtime audit; these counters alone are not yet sufficient proof of zero disk I/O.
+
+The PS2/GCC benchmark builds were rebuilt for **all three cores** after adding the SDK wrappers. Full 500+10,000-frame PCSX2 validation of CPS1 `dino` and CPS2 `avsp` also completed with all assets resident and `io_ops=0`, retaining their previously observed combined fingerprints (`598368570cb04116` and `287fc94462499bf5`, respectively). The four host tests pass, including the new save-fixture isolation regression. The elapsed times in these checks are PCSX2 observations only. The whole cross-core suite must still be rerun with frozen input fixtures and verified sound state before LLVM comparison.
+
+The original 37 GCC timing observations remain useful as a *provisional* historical reference, but were collected before writable-stage isolation and should be rerun with frozen fixtures before any GCC-vs-LLVM comparison. The new validations reside in ignored directories named `build_ps2_compiler_smoke/mvs_fixed_rtc_*_20261020/`, `build_ps2_compiler_smoke/mvs_extended_io_diag_20261020/`, and `build_ps2_compiler_smoke/m3_extended_io_*_20261020/`. The benchmark record format and per-frame logging have not changed. PCSX2 host timing is not physical PS2 timing.
+
 ## Acceptance checklist
 
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
 - [x] Exactly N completed frames, cache off and sound on for all 10 successful PCSX2 runs; no results were claimed for allocation failures.
-- [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; currently only wrapped POSIX/stdio calls report zero.
+- [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; POSIX/stdio plus direct fileXio/fio entry points are now wrapped, but indirect/intra-object and low-level RPC bypasses are not yet certified.
 - [ ] Deterministic replay or state fixture makes same-build PCSX2 state fingerprints repeatable.
 - [x] Structured trial output and report parsing validated, including synthetic >=3-trial GCC/LLVM medians and rejection of divergent state/environment/failure records; real comparable compiler medians still pending.
 - [x] Desktop host tests and affected GCC PS2 benchmark builds pass; benchmark-only code remains opt-in.

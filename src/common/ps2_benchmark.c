@@ -516,3 +516,100 @@ int __wrap_fseek(FILE *file, long offset, int origin)
     if (timed || measuring) note_io(0);
     return result;
 }
+
+/* PS2SDK can bypass POSIX/newlib through the fileXio or legacy fio RPC
+ * clients. Count these filesystem boundaries too, including metadata calls.
+ * This deliberate instrumentation is the only NJEMU source allowed to call
+ * the port-specific client APIs; ordinary game paths still use libc. */
+#ifndef NEWLIB_PORT_AWARE
+#define NEWLIB_PORT_AWARE 1
+#endif
+#include <fileXio_rpc.h>
+#include <fileio.h>
+
+extern int __real_fileXioOpen(const char *, int, ...);
+extern int __real_fileXioClose(int);
+extern int __real_fileXioRead(int, void *, int);
+extern int __real_fileXioWrite(int, const void *, int);
+extern int __real_fileXioLseek(int, int, int);
+extern int __real_fileXioDopen(const char *);
+extern int __real_fileXioDread(int, iox_dirent_t *);
+extern int __real_fileXioDclose(int);
+extern int __real_fileXioGetStat(const char *, iox_stat_t *);
+extern int __real_fioOpen(const char *, int);
+extern int __real_fioClose(int);
+extern int __real_fioRead(int, void *, int);
+extern int __real_fioWrite(int, const void *, int);
+extern int __real_fioLseek(int, int, int);
+extern int __real_fioDopen(const char *);
+extern int __real_fioDread(int, io_dirent_t *);
+extern int __real_fioDclose(int);
+extern int __real_fioGetstat(const char *, io_stat_t *);
+
+#define BENCHMARK_WRAP_INT_IO(name, params, arguments) \
+    int __wrap_##name params { \
+        int timed = measuring; \
+        int result = __real_##name arguments; \
+        if (timed || measuring) note_io(0); \
+        return result; \
+    }
+
+int __wrap_fileXioOpen(const char *path, int flags, ...)
+{
+    int timed = measuring;
+    int mode = 0;
+    int result;
+    if (flags & O_CREAT) {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, int);
+        va_end(args);
+    }
+    result = __real_fileXioOpen(path, flags, mode);
+    if (timed || measuring) note_io(0);
+    return result;
+}
+
+BENCHMARK_WRAP_INT_IO(fileXioClose, (int fd), (fd))
+BENCHMARK_WRAP_INT_IO(fileXioLseek,
+    (int fd, int offset, int whence), (fd, offset, whence))
+BENCHMARK_WRAP_INT_IO(fileXioDopen, (const char *path), (path))
+BENCHMARK_WRAP_INT_IO(fileXioDread,
+    (int fd, iox_dirent_t *entry), (fd, entry))
+BENCHMARK_WRAP_INT_IO(fileXioDclose, (int fd), (fd))
+BENCHMARK_WRAP_INT_IO(fileXioGetStat,
+    (const char *path, iox_stat_t *stat), (path, stat))
+
+int __wrap_fileXioRead(int fd, void *buffer, int size)
+{
+    int timed = measuring;
+    int result = __real_fileXioRead(fd, buffer, size);
+    if (timed || measuring) note_io(result > 0 ? (uint64_t)result : 0);
+    return result;
+}
+
+BENCHMARK_WRAP_INT_IO(fileXioWrite,
+    (int fd, const void *buffer, int size), (fd, buffer, size))
+
+BENCHMARK_WRAP_INT_IO(fioOpen, (const char *path, int flags), (path, flags))
+BENCHMARK_WRAP_INT_IO(fioClose, (int fd), (fd))
+BENCHMARK_WRAP_INT_IO(fioLseek,
+    (int fd, int offset, int whence), (fd, offset, whence))
+BENCHMARK_WRAP_INT_IO(fioDopen, (const char *path), (path))
+BENCHMARK_WRAP_INT_IO(fioDread, (int fd, io_dirent_t *entry), (fd, entry))
+BENCHMARK_WRAP_INT_IO(fioDclose, (int fd), (fd))
+BENCHMARK_WRAP_INT_IO(fioGetstat,
+    (const char *path, io_stat_t *stat), (path, stat))
+
+int __wrap_fioRead(int fd, void *buffer, int size)
+{
+    int timed = measuring;
+    int result = __real_fioRead(fd, buffer, size);
+    if (timed || measuring) note_io(result > 0 ? (uint64_t)result : 0);
+    return result;
+}
+
+BENCHMARK_WRAP_INT_IO(fioWrite,
+    (int fd, const void *buffer, int size), (fd, buffer, size))
+
+#undef BENCHMARK_WRAP_INT_IO

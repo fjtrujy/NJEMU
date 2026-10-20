@@ -231,8 +231,20 @@ void neogeo_driver_reset(void)
 	{
 		int y, m, d;
 
+#ifdef PS2_COMPILER_BENCHMARK
+		/* A host wall-clock seed changes the emulated RTC and can change
+		 * attract-mode behavior between identical compiler trials. Keep the
+		 * benchmark's starting calendar constant; normal builds still use
+		 * the platform's current local time. */
+		struct tm benchmark_date = {0};
+		struct tm *today = &benchmark_date;
+		benchmark_date.tm_year = 100; /* 2000 */
+		benchmark_date.tm_mon = 0;    /* January */
+		benchmark_date.tm_mday = 1;
+#else
 		time_t now = time(NULL);
-   		struct tm *today = localtime(&now);
+		struct tm *today = localtime(&now);
+#endif
 
 
 		pd4990a.seconds = today->tm_sec;
