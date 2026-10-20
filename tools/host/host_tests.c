@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
+#include <dirent.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -923,6 +925,68 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     CHECK(buffer_contains(&summary, "failed_or_incomparable_trial"));
     CHECK(!buffer_contains(&summary, "1.1667"));
     host_buffer_free(&summary);
+#ifndef _WIN32
+    /* A fake PCSX2 executable checks host-root isolation, copied ELF and
+     * selector without depending on PCSX2 or PS2 hardware in host CI. */
+    {
+        char build_dir[1024], elf_path[1024], selector[1024];
+        char asset[1024], script[1024], out_dir[1024], trial_log[1024];
+        char source_matrix[1024];
+        char *args[13];
+        DIR *dir;
+        struct dirent *entry;
+        CHECK(path_join(source_matrix, sizeof(source_matrix),
+            source_dir, "benchmarks/ps2/roms.tsv"));
+        CHECK(path_join(build_dir, sizeof(build_dir), scratch_dir, "fake-ps2-build"));
+        CHECK(host_make_directories(build_dir));
+        CHECK(path_join(elf_path, sizeof(elf_path), build_dir, "CPS1.ELF"));
+        CHECK(path_join(selector, sizeof(selector), build_dir, "game_name.ini"));
+        CHECK(path_join(asset, sizeof(asset), build_dir, "asset.txt"));
+        CHECK(write_text(elf_path, "fake-elf"));
+        CHECK(write_text(selector, "original-game"));
+        CHECK(write_text(asset, "shared-asset"));
+        CHECK(path_join(script, sizeof(script), scratch_dir, "fake-pcsx2.sh"));
+        CHECK(write_text(script,
+            "#!/bin/sh\n"
+            "test \"$1\" = -nogui && test \"$2\" = -batch && test \"$3\" = -elf || exit 2\n"
+            "case \"$4\" in /*) ;; *) exit 3;; esac\n"
+            "test -f \"$4\" && test ! -L \"$4\" || exit 4\n"
+            "test \"$(cat \"$4\")\" = fake-elf || exit 5\n"
+            "test \"$(cat game_name.ini)\" = sf2hf || exit 6\n"
+            "test -L asset.txt && test \"$(cat asset.txt)\" = shared-asset || exit 7\n"
+            "mkdir -p PICTURE/MVS || exit 8\n"
+            "echo PCSX2_STAGE_VALID\n"));
+        CHECK(chmod(script, 0755) == 0);
+        CHECK(path_join(out_dir, sizeof(out_dir), scratch_dir, "fake-pcsx2-out"));
+        args[0] = "ps2-benchmark";
+        args[1] = "pcsx2";
+        args[2] = source_matrix;
+        args[3] = "CPS1";
+        args[4] = "sf2hf";
+        args[5] = "GCC";
+        args[6] = script;
+        args[7] = build_dir;
+        args[8] = "CPS1.ELF";
+        args[9] = out_dir;
+        args[10] = "1";
+        args[11] = "4";
+        args[12] = "10000";
+        CHECK(ps2_benchmark_run(13, args) != 0); /* No synthetic result. */
+        CHECK(path_join(trial_log, sizeof(trial_log), out_dir,
+            "CPS1_sf2hf_GCC_001.log"));
+        CHECK(host_read_file(trial_log, &summary));
+        CHECK(buffer_contains(&summary, "PCSX2_STAGE_VALID"));
+        host_buffer_free(&summary);
+        CHECK(host_read_file(selector, &summary));
+        CHECK(buffer_contains(&summary, "original-game"));
+        host_buffer_free(&summary);
+        dir = opendir(out_dir);
+        CHECK(dir != NULL);
+        while ((entry = readdir(dir)) != NULL)
+            CHECK(strncmp(entry->d_name, "ps2-stage-", 10) != 0);
+        closedir(dir);
+    }
+#endif
     (void)source_dir;
     return 1;
 }

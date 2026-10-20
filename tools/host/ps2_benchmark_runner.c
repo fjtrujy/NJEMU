@@ -94,10 +94,32 @@ int ps2_benchmark_forbidden_output(const char *path)
     return 0;
 }
 
-/* Never modify an existing game selector: stage symlinks to the build's
- * runtime files in a fresh output-owned directory instead. */
+/* PCSX2 resolves ELF symlinks before choosing the host: root. The ELF must be
+ * an independent file in the stage directory, not a symlink to the build. */
+static int copy_file(const char *source, const char *destination)
+{
+    char buffer[32768];
+    FILE *input = fopen(source, "rb");
+    FILE *output;
+    size_t n;
+    int ok = 1;
+    if (!input) return 0;
+    output = fopen(destination, "wb");
+    if (!output) { fclose(input); return 0; }
+    while ((n = fread(buffer, 1, sizeof(buffer), input)) != 0) {
+        if (fwrite(buffer, 1, n, output) != n) { ok = 0; break; }
+    }
+    if (ferror(input) || fclose(output) != 0) ok = 0;
+    fclose(input);
+    if (!ok) unlink(destination);
+    return ok;
+}
+
+/* Never modify an existing game selector: stage build runtime links and a
+ * private selector in a fresh output-owned directory instead. */
 static int stage_runtime(const char *source, char *staged, size_t staged_size,
-    const char *output_dir, const char *rom)
+    const char *output_dir, const char *rom, const char *elf_name,
+    int pcsx2)
 {
     DIR *dir;
     struct dirent *entry;
@@ -118,8 +140,11 @@ static int stage_runtime(const char *source, char *staged, size_t staged_size,
     n = snprintf(templ, sizeof(templ), "%s/ps2-stage-XXXXXX", output_dir);
     if (n < 0 || (size_t)n >= sizeof(templ) || !mkdtemp(templ))
         return 0;
-    if (strlen(templ) >= staged_size) return 0;
-    strcpy(staged, templ);
+    /* PCSX2 resolves -elf relative to its launch cwd. Always use a fully
+     * resolved staging path to avoid looking for stage/stage/game.ELF. */
+    if (!realpath(templ, link_path) || strlen(link_path) >= staged_size)
+        return 0;
+    strcpy(staged, link_path);
     dir = opendir(absolute);
     if (!dir) return 0;
     while ((entry = readdir(dir)) != NULL) {
@@ -130,12 +155,21 @@ static int stage_runtime(const char *source, char *staged, size_t staged_size,
                 entry->d_name) >= (int)sizeof(original) ||
             snprintf(link_path, sizeof(link_path), "%s/%s", staged,
                 entry->d_name) >= (int)sizeof(link_path) ||
-            symlink(original, link_path) != 0) {
+            ((pcsx2 && strcmp(entry->d_name, elf_name) == 0) ?
+                !copy_file(original, link_path) :
+                symlink(original, link_path) != 0)) {
             closedir(dir);
             return 0;
         }
     }
     closedir(dir);
+    if (pcsx2) {
+        /* Refuse a missing ELF rather than launching another build's binary. */
+        if (snprintf(link_path, sizeof(link_path), "%s/%s", staged,
+                elf_name) >= (int)sizeof(link_path) ||
+            lstat(link_path, &info) != 0 || !S_ISREG(info.st_mode))
+            return 0;
+    }
     if (snprintf(selector, sizeof(selector), "%s/game_name.ini", staged) >=
         (int)sizeof(selector))
         return 0;
@@ -147,13 +181,22 @@ static void remove_staging(const char *path)
     DIR *dir = opendir(path);
     struct dirent *entry;
     char child[PATH_MAX];
+    struct stat info;
     if (!dir) return;
     while ((entry = readdir(dir)) != NULL) {
         if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
             continue;
         if (snprintf(child, sizeof(child), "%s/%s", path,
-                entry->d_name) < (int)sizeof(child))
-            unlink(child); /* Symlinks only: never traverse them. */
+                entry->d_name) >= (int)sizeof(child) ||
+            lstat(child, &info) != 0)
+            continue;
+        /* PCSX2 may create PICTURE/ or other output directories inside the
+         * private stage. Recurse into real directories only; symlinks to
+         * original build resources must never be followed or modified. */
+        if (S_ISDIR(info.st_mode))
+            remove_staging(child);
+        else
+            unlink(child);
     }
     closedir(dir);
     rmdir(path);
@@ -175,6 +218,22 @@ static pid_t spawn_client(const char *binary, const char *ip,
             execlp(binary, binary, "-h", ip, command, argument, (char *)NULL);
         else
             execlp(binary, binary, "-h", ip, command, (char *)NULL);
+        _exit(127);
+    }
+    return pid;
+}
+
+static pid_t spawn_pcsx2(const char *binary, const char *elf,
+    const char *cwd, const char *log_path)
+{
+    pid_t pid = fork();
+    if (pid == 0) {
+        int output = open(log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (output < 0 || dup2(output, STDOUT_FILENO) < 0 ||
+            dup2(output, STDERR_FILENO) < 0 || chdir(cwd) != 0)
+            _exit(126);
+        close(output);
+        execlp(binary, binary, "-nogui", "-batch", "-elf", elf, (char *)NULL);
         _exit(127);
     }
     return pid;
@@ -219,15 +278,16 @@ static int log_result(const char *path, const char *core, const char *rom,
 
 int ps2_benchmark_run(int argc, char **argv)
 {
+    const int pcsx2 = strcmp(argv[1], "pcsx2") == 0;
     const char *matrix = argv[2];
     const char *core = argv[3];
     const char *rom = argv[4];
     const char *compiler = argv[5];
     const char *client = argv[6];
-    const char *ip = argv[7];
-    const char *build_dir = argv[8];
-    const char *elf_name = argv[9];
-    const char *output_dir = argv[10];
+    const char *ip = pcsx2 ? NULL : argv[7];
+    const char *build_dir = argv[pcsx2 ? 7 : 8];
+    const char *elf_name = argv[pcsx2 ? 8 : 9];
+    const char *output_dir = argv[pcsx2 ? 9 : 10];
     unsigned repeat = 0, timeout = 0, frames = 0;
     char stage[PATH_MAX], elf[PATH_MAX], log[PATH_MAX];
     char *logs[PS2_BENCHMARK_MAX_TRIALS];
@@ -238,9 +298,10 @@ int ps2_benchmark_run(int argc, char **argv)
     if ((strcmp(core, "CPS1") && strcmp(core, "CPS2") && strcmp(core, "MVS")) ||
         (strcmp(compiler, "GCC") && strcmp(compiler, "LLVM")) ||
         !safe_component(rom) || !safe_component(elf_name) ||
-        !parse_bounded(argv[11], 3, PS2_BENCHMARK_MAX_TRIALS, &repeat) ||
-        !parse_bounded(argv[12], 1, 86400, &timeout) ||
-        !parse_bounded(argv[13], 1, 100000, &frames) ||
+        !parse_bounded(argv[pcsx2 ? 10 : 11], pcsx2 ? 1 : 3,
+            PS2_BENCHMARK_MAX_TRIALS, &repeat) ||
+        !parse_bounded(argv[pcsx2 ? 11 : 12], 1, 86400, &timeout) ||
+        !parse_bounded(argv[pcsx2 ? 12 : 13], 1, 100000, &frames) ||
         ps2_benchmark_forbidden_output(output_dir) ||
         !host_make_directories(output_dir)) {
         fprintf(stderr, "ps2-benchmark: invalid launch arguments\n");
@@ -259,21 +320,31 @@ int ps2_benchmark_run(int argc, char **argv)
         if (snprintf(log, sizeof(log), "%s/%s_%s_%s_%03u.log", output_dir,
                 core, rom, compiler, trial + 1) >= (int)sizeof(log) ||
             host_file_exists(log) ||
-            !stage_runtime(build_dir, stage, sizeof(stage), output_dir, rom) ||
-            snprintf(elf, sizeof(elf), "host:%s", elf_name) >= (int)sizeof(elf)) {
+            !stage_runtime(build_dir, stage, sizeof(stage), output_dir, rom,
+                elf_name, pcsx2)) {
             fprintf(stderr, "ps2-benchmark: staging failed, refusing to overwrite existing log\n");
             failed = 1;
             if (stage[0]) remove_staging(stage);
             break;
         }
-        listener = spawn_client(client, ip, "listen", NULL, stage, log);
-        if (listener <= 0) {
+        if ((pcsx2 ? snprintf(elf, sizeof(elf), "%s/%s", stage, elf_name) :
+                snprintf(elf, sizeof(elf), "host:%s", elf_name)) >= (int)sizeof(elf)) {
+            fprintf(stderr, "ps2-benchmark: staged ELF path too long\n");
             failed = 1;
             remove_staging(stage);
             break;
         }
-        nanosleep(&delay, NULL);
-        launch = spawn_client(client, ip, "execee", elf, stage, log);
+        if (!pcsx2) {
+            listener = spawn_client(client, ip, "listen", NULL, stage, log);
+            if (listener <= 0) {
+                failed = 1;
+                remove_staging(stage);
+                break;
+            }
+            nanosleep(&delay, NULL);
+        }
+        launch = pcsx2 ? spawn_pcsx2(client, elf, stage, log) :
+            spawn_client(client, ip, "execee", elf, stage, log);
         if (launch <= 0) {
             failed = 1;
             stop_child(listener);
@@ -282,10 +353,15 @@ int ps2_benchmark_run(int argc, char **argv)
         }
         started = time(NULL);
         while ((time(NULL) - started) < (time_t)timeout) {
+            int child_status;
             if (log_result(log, core, rom, compiler, frames)) {
                 completed = 1;
                 break;
             }
+            /* Do not burn the full timeout when PCSX2 rejects an ELF or
+             * exits before the benchmark record has been written. */
+            if (waitpid(launch, &child_status, WNOHANG) == launch)
+                break;
             nanosleep(&delay, NULL);
         }
         stop_child(launch);

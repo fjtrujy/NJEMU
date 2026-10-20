@@ -24,12 +24,36 @@ typedef struct trial {
     ps2_benchmark_result_t value;
     char path[MAX_PATH_LENGTH];
     char error[80];
+    char environment[32];
     int parsed;
     int candidate_index;
 } trial_t;
 
 static candidate_t candidates[MAX_CANDIDATES];
 static trial_t trials[MAX_LOGS];
+
+/* Preserve the PCSX2 version visible in the log. Unrecognized logs must not
+ * be silently labelled as real PS2 measurements. */
+static void identify_environment(const char *log, char *output, size_t size)
+{
+    const char *start = strstr(log, "PCSX2 v");
+    size_t length = 0;
+    if (start == NULL) {
+        snprintf(output, size, "unknown");
+        return;
+    }
+    start += strlen("PCSX2 ");
+    while ((start[length] >= '0' && start[length] <= '9') ||
+           (start[length] >= 'a' && start[length] <= 'z') ||
+           (start[length] >= 'A' && start[length] <= 'Z') ||
+           start[length] == '.' || start[length] == '-')
+        ++length;
+    if (length == 0 || length > 20) {
+        snprintf(output, size, "PCSX2-unknown-version");
+        return;
+    }
+    snprintf(output, size, "PCSX2-%.*s", (int)length, start);
+}
 
 static int is_safe_name(const char *s)
 {
@@ -151,10 +175,10 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
     }
     host_buffer_init(&csv);
     host_buffer_init(&md);
-    ok &= host_buffer_append_string(&csv, "core,rom,compiler,trial,frames,total_ms,avg_ms_per_emulated_frame,sampled_frame_mean_ms,fps,p95_ms,core_update_total_ms,screen_update_total_ms,ticker_pair_ns,io_ops,cpu_bytes,gfx_bytes,pcm_bytes,resident,result,state,scenario,revision,worktree,config_hash,compiler_version,log\n");
+    ok &= host_buffer_append_string(&csv, "core,rom,compiler,environment,trial,frames,total_ms,avg_ms_per_emulated_frame,sampled_frame_mean_ms,fps,p95_ms,core_update_total_ms,screen_update_total_ms,ticker_pair_ns,io_ops,cpu_bytes,gfx_bytes,pcm_bytes,resident,result,state,scenario,revision,worktree,config_hash,compiler_version,log\n");
     ok &= host_buffer_append_string(&md, "# PS2 compiler benchmark\n\n");
-    ok &= host_buffer_append_string(&md, "Only physical-PS2 measurements with fully validated residency, I/O and matching state fingerprints may contribute to speedup. These reports contain raw logs; the tool cannot determine whether the hardware was real or emulated.\n\n");
-    ok &= host_buffer_append_string(&md, "## Trials\n\n| Core | ROM | Compiler | Trial | Frames | Total ms | Mean ms/frame | FPS | P95 ms | I/O | Status |\n| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n");
+    ok &= host_buffer_append_string(&md, "PCSX2 measurements can be used for controlled emulator-only GCC/LLVM comparisons once residency, I/O and matching state trajectories are independently validated. PCSX2 timings are **not physical-PS2 performance**. The environment column is inferred from the log; `unknown` does not establish real hardware, and identical emulator versions do not prove identical configuration.\n\n");
+    ok &= host_buffer_append_string(&md, "## Trials\n\n| Core | ROM | Environment | Compiler | Trial | Frames | Total ms | Mean ms/frame | FPS | P95 ms | I/O | Status |\n| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n");
 
     for (i = 0; i < log_count && ok; ++i) {
         host_buffer_t raw;
@@ -172,6 +196,11 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
         host_buffer_init(&raw);
         if (!host_read_file(logs[i], &raw)) {
             snprintf(t->error, sizeof(t->error), "unreadable_log");
+        } else {
+            identify_environment((char *)raw.data, t->environment, sizeof(t->environment));
+        }
+        if (t->error[0]) {
+            /* Keep unreadable logs as failed rows. */
         } else if (!ps2_benchmark_parse((char *)raw.data, &t->value, t->error, sizeof(t->error))) {
             /* Keep failed/malformed runs as explicit rows. */
         } else {
@@ -196,10 +225,11 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
         sampled_mean = r->frames ? (double)r->sample_sum_us / (1000.0 * r->frames) : 0;
         fps = r->total_us ? 1000000.0 * r->frames / r->total_us : 0;
         p95 = (double)r->p95_us / 1000.0;
-        ok &= host_buffer_append_format(&csv, "%s,%s,%s,%d,%u,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u,%u,%s,",
+        ok &= host_buffer_append_format(&csv, "%s,%s,%s,%s,%d,%u,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u,%u,%u,%s,",
             t->parsed ? r->core : "unknown",
             t->parsed ? r->rom : "unknown",
             t->parsed ? r->compiler : "unknown",
+            t->environment[0] ? t->environment : "unknown",
             i + 1, r->frames, ms, mean, sampled_mean, fps, p95,
             (double)r->core_update_us / 1000.0,
             (double)r->screen_update_us / 1000.0,
@@ -212,8 +242,9 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
         ok &= append_csv_field(&csv, t->path);
         ok &= host_buffer_append_string(&csv, "\n");
         ok &= host_buffer_append_format(&md,
-            "| %s | %s | %s | %d | %u | %.3f | %.3f | %.3f | %.3f | %u | %s |\n",
+            "| %s | %s | %s | %s | %d | %u | %.3f | %.3f | %.3f | %.3f | %u | %s |\n",
             t->parsed ? r->core : "unknown", t->parsed ? r->rom : "unknown",
+            t->environment[0] ? t->environment : "unknown",
             t->parsed ? r->compiler : "unknown", i + 1, r->frames,
             ms, mean, fps, p95, r->io_ops, display);
     }
@@ -224,6 +255,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
         uint64_t durations[2][PS2_BENCHMARK_MAX_TRIALS];
         size_t n[2] = {0,0};
         const ps2_benchmark_result_t *anchor = NULL;
+        const char *anchor_environment = NULL;
         int comparable = 1;
         const char *reason = "insufficient_or_unverified_trials";
         for (i = 0; i < log_count; ++i) {
@@ -246,8 +278,9 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
             if (n[k] == PS2_BENCHMARK_MAX_TRIALS) { comparable = 0; break; }
             durations[k][n[k]++] = r->total_us;
             if (anchor == NULL)
-                anchor = r;
+                anchor = r, anchor_environment = t->environment;
             else if (strcmp(anchor->state_hash, r->state_hash) != 0 ||
+                     strcmp(anchor_environment, t->environment) != 0 ||
                      strcmp(anchor->revision, r->revision) != 0 ||
                      strcmp(anchor->worktree_hash, r->worktree_hash) != 0 ||
                      strcmp(anchor->configuration_hash, r->configuration_hash) != 0 ||
@@ -301,7 +334,8 @@ static void usage(void)
         "usage:\n"
         "  njemu-tool ps2-benchmark report MATRIX.tsv OUT_DIR [TRIAL.log ...]\n"
         "  njemu-tool ps2-benchmark matrix MATRIX.tsv\n"
-        "  njemu-tool ps2-benchmark run MATRIX.tsv CORE ROM COMPILER PS2CLIENT PS2_IP BUILD_DIR ELF_NAME OUT_DIR TRIALS TIMEOUT_SEC FRAMES\n");
+        "  njemu-tool ps2-benchmark run MATRIX.tsv CORE ROM COMPILER PS2CLIENT PS2_IP BUILD_DIR ELF_NAME OUT_DIR TRIALS TIMEOUT_SEC FRAMES\n"
+        "  njemu-tool ps2-benchmark pcsx2 MATRIX.tsv CORE ROM COMPILER PCSX2_BIN BUILD_DIR ELF_NAME OUT_DIR TRIALS TIMEOUT_SEC FRAMES\n");
 }
 
 int command_ps2_benchmark(int argc, char **argv)
@@ -310,6 +344,8 @@ int command_ps2_benchmark(int argc, char **argv)
     if (argc >= 4 && !strcmp(argv[1], "report"))
         return ps2_benchmark_write_reports(argv[2], argv[3], argc - 4, argv + 4);
     if (argc == 14 && !strcmp(argv[1], "run"))
+        return ps2_benchmark_run(argc, argv);
+    if (argc == 13 && !strcmp(argv[1], "pcsx2"))
         return ps2_benchmark_run(argc, argv);
     if (argc == 3 && !strcmp(argv[1], "matrix")) {
         if (!load_matrix(argv[2], &count)) return 1;

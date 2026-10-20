@@ -73,14 +73,14 @@ Reject `USE_CACHE=ON` benchmark builds and any runtime cache activation. Add cou
 ### M4 — Host C99 runner and reporter
 Integrate `njemu-tool ps2-benchmark` with a TSV matrix and explicit command-line flags for `ps2client`, executable, ROM, compiler, frame count, repeats, timeout, output directory. Keep PS2Link capture logs, CSV trials and Markdown reports outside `resources/`. Parse only structured records; reject malformed output, incomplete runs, wrong ROM/core/compiler, unverified residency, nonzero I/O and missing state signatures. Three trials minimum; medians for duration and speedup; preserve all raw data. Never treat failure as zero time.
 
-### M5 — GCC functional and real hardware
-Build three targets with GCC, `GUI=OFF`, `USE_CACHE=OFF`. Exercise a short PCSX2 smoke test, then fixed 500/10,000 runs on *real* PS2 via PS2Link. Record ROM digests, hardware revision, PS2SDK/gsKit/ps2_drivers revisions, compiler version/flags, commit, audio/output settings and exact run transcripts. Only real hardware is accepted as the throughput baseline.
+### M5 — GCC functional and PCSX2 baseline
+Build three targets with GCC, `GUI=OFF`, `USE_CACHE=OFF`. Exercise short PCSX2 smoke tests, then fixed 500/10,000 runs in PCSX2. Record ROM digests, PCSX2 version and configuration, PS2SDK/gsKit/ps2_drivers revisions, compiler version/flags, commit, audio/output settings and exact run transcripts. PCSX2 is the primary available validation environment; **physical-PS2 testing is deferred and not required to complete this development phase**. PCSX2 benchmark timings are emulator-specific, not estimates of actual PS2 throughput.
 
 ### M6 — Experimental LLVM/R5900
 First check toolchain driver/triple, MIPS/R5900 ABI, -O3 support, calling convention, float/double and alignment assumptions, startup contracts, inline assembly, builtins and libcalls. Compile NJEMU sources with LLVM and link GCC-provided runtime archives with GCC `ld` driver. Produce an object manifest proving each object origin. Disable incompatible GCC/LLVM LTO (including `-flto`); compare matching non-LTO GCC baseline to LLVM. Do not rebuild third parties. If toolchain is absent, retain an explicit blocker and don't claim validation.
 
-### M7 — Comparable reports
-For each accepted game/scene, execute >=3 physical-hardware trials per compiler, alternating compiler order if thermal effects matter. Compare median total duration, speedup = GCC/LLVM, percentage improvement = (GCC-LLVM)/GCC*100. Report spread; investigate outliers. A differing state checksum, scenario, asset hash, sound or video configuration invalidates the comparison.
+### M7 — Comparable PCSX2 reports
+For each accepted game/scene, execute >=3 PCSX2 trials per compiler under matching PCSX2 versions/settings on the same host, alternating compiler order to reduce run-order bias. Compare median total duration, speedup = GCC/LLVM, percentage improvement = (GCC-LLVM)/GCC*100. Report spread; investigate outliers. A differing state checksum, scenario, asset hash, sound/video configuration or execution environment invalidates the comparison. Any future physical-PS2 benchmarks must use separate tables and never be pooled with PCSX2 timings.
 
 ## Instrumentation semantics and open risks
 
@@ -95,10 +95,10 @@ PS2Link's executable location, mount path, audio scheduling, and game selector a
 - Opt-in `PS2_COMPILER_BENCHMARK=ON` requires PS2, `GUI=OFF` and `USE_CACHE=OFF`; the existing core loops count full frames. The timing buffer captures per-frame microseconds without per-frame logging.
 - The recorder also emits pre- and post-timing metadata, a selected mutable-memory/CPU-register fingerprint, diagnostic allocations and ticker overhead. For safety it currently labels every otherwise completed trial `state=unverified status=unverified`: an end-state fingerprint alone cannot certify equivalent emulation across compiler builds.
 - Linker `--wrap` captures direct POSIX/stdio I/O but may miss direct SDK IOP file RPCs; a zero count is **not** a validated zero-I/O claim until that boundary audit is complete.
-- The portable C99 host utility can inspect the TSV matrix, launch PS2Link in a staged private directory, collect per-trial logs and output CSV/Markdown. It rejects incomplete/unverified or inconsistent runs. PS2Link connectivity and the staging mechanism still need real-device testing. The runner never writes into `resources/`.
-- GCC builds of the three no-cache PS2 targets succeeded; host reporting/parser regression tests pass. No physical PS2 timing baseline or LLVM-vs-GCC comparison has been collected.
+- The portable C99 host utility can inspect the TSV matrix, launch either PCSX2 or PS2Link in a staged private directory, collect per-trial logs and output CSV/Markdown. It rejects incomplete/unverified or inconsistent runs. The PCSX2 launcher copies the ELF into a unique private stage (PCSX2 resolves ELF symlinks outside the staging root), symlinks the remaining read-only runtime assets, and writes a private `game_name.ini`. Temporary PCSX2-created output directories are removed without following symlinks. PS2Link connectivity still needs device testing, but is not a blocker for the PCSX2 development baseline. Neither launcher writes into `resources/`.
+- GCC builds of the three no-cache PS2 targets succeeded; host reporting/parser regression tests pass. Full PCSX2 baseline runs are being collected. No physical PS2 timing baseline or LLVM-vs-GCC comparison has been collected, nor is the former required in this development phase.
 - The structured record includes the exact 40-character Git HEAD, a 64-character SHA256 of `git diff --binary HEAD` at CMake configuration time, the C compiler version, and a deterministic runtime-configuration fingerprint. Combined revision and tracked-diff identity must match between compared trials. The build directory also retains hashes of detected GCC-provided SDK/gsKit/driver archives. Reconfigure after source edits; current worktree metadata is a *configure-time* snapshot. Untracked ROM/BIOS and processed-asset digests remain a separate validation requirement.
-- The reporter strictly validates record syntax and fingerprints, and explicitly rejects malformed logs, absent/ineligible titles, any failed trials, and divergent state/configuration/source identities. It does **not** confer state or I/O verification on provisional runtime records.
+- The reporter strictly validates record syntax and fingerprints, and explicitly rejects malformed logs, absent/ineligible titles, any failed trials, and divergent state/configuration/source identities. It detects the PCSX2 version from the emulator log, labels unknown environments conservatively, and rejects a comparison that mixes different detected environments. It does **not** confer state or I/O verification on provisional runtime records, nor certify that PCSX2 settings are identical.
 
 ### PCSX2 functional smoke tests (2026-10-20, **not PS2 hardware performance**)
 
@@ -116,7 +116,7 @@ The PCSX2 CLI accepts `-nogui -batch -elf <file>`. The ELF was copied (not linke
 
 MVS has an optional **benchmark-only** BIOS choice to prevent an interactive BIOS menu from blocking NO_GUI benchmarking. Its preferred order is the existing `bios_crc[]` order, and its actual choice is emitted before timing (e.g. index 0, CRC 9036d879). This is not a production BIOS policy change.
 
-These results prove only that the short opt-in workloads function under PCSX2's PS2 memory model. The timing values are deliberately **not** reported as real-PS2 performance numbers. Even a `io_ops=0` result only confirms the currently wrapped POSIX/stdio entry points; direct PS2SDK IOP-RPC coverage and state equivalence remain unverified. Rebuild the default 500/10,000 configuration before physical-baseline collection, as these smoke ELFs were built for 30/300 frames.
+These results prove only that the short opt-in workloads function under PCSX2's PS2 memory model. The timing values are deliberately **not** reported as real-PS2 performance numbers. Even a `io_ops=0` result only confirms the currently wrapped POSIX/stdio entry points; direct PS2SDK IOP-RPC coverage and state equivalence remain unverified. The 30/300 smoke ELFs are not the full-length baseline; separate 500/10,000 binaries have been built.
 
 ### MVS replacement ROMs: full-length PCSX2 functional runs (2026-10-20)
 
@@ -138,6 +138,23 @@ Raw functional logs and the generated (all-unverified) CSV/Markdown reports are 
 
 The PS2 toolchain build and host test suite pass, including matrix membership tests that require `trally` and `pbobbl2n` and reject the removed `mslug`. Benchmark runtime output still records `state=unverified` because a verified deterministic replay/oracle and complete filesystem-boundary instrumentation are outstanding.
 
+### Native PCSX2 benchmark runner
+
+`njemu-tool` now provides an alternative to PS2Link with the same matrix/ROM guards, log preservation and report validation. It directly invokes the PCSX2 CLI; the game is selected using the isolated `game_name.ini`, without editing the original build or any ROM assets:
+
+```sh
+build_ps2_compiler_host/njemu-tool ps2-benchmark pcsx2 \
+  benchmarks/ps2/roms.tsv MVS trally GCC \
+  /Applications/PCSX2.app/Contents/MacOS/PCSX2 \
+  build_ps2_compiler_bench_mvs_10k MVS.ELF \
+  build_ps2_compiler_smoke/pcsx2-trally-repeats \
+  3 210 10000
+```
+
+Arguments after the output directory are trial count, per-trial timeout in seconds and expected **measured** frame count. The PCSX2 runner permits a single functional trial; 3 or more are required for comparable median statistics. Logs, `trials.csv` and `summary.md` remain in the ignored output directory, and existing raw trial logs are never overwritten. PCSX2 may create nested `PICTURE/` directories in the temporary staging root; the runner deletes only its own staging files/directories and never follows links into `resources/`. A POSIX host regression uses a fake PCSX2 executable to verify absolute ELF paths, independent ELF copies, private selectors, linked read-only assets and cleanup.
+
+Passing 500/10,000 frames under PCSX2 is **functional evidence**, not proof of identical cross-compiler emulated state. Until the deterministic replay and comprehensive I/O audit are complete, completed runs deliberately remain `state=unverified` and cannot produce a speedup in the authoritative reporter.
+
 A further PS2 GCC build of `MVS` with `PS2_COMPILER_BENCHMARK=OFF` and `USE_CACHE=OFF` passed, confirming that the new benchmark-only BIOS path is excluded from normal builds. Host-tool tests also passed with synthetic comparable and divergent/incomplete logs. A real PCSX2 `wjammers` log was parsed through `njemu-tool ps2-benchmark report`; it produced CSV/Markdown with `unverified` status and no speedup.
 
 ### Build and runner examples
@@ -158,7 +175,7 @@ cmake --build build_ps2_compiler_bench_cps1 -j8
 build_ps2_compiler_host/njemu-tool ps2-benchmark matrix benchmarks/ps2/roms.tsv
 ```
 
-For a physical-PS2/PS2Link trial, choose the target build and the real console's address, then run at least three trials. The command requires a working PS2Link server; it **must not** be treated as validated merely because an ELF compiled:
+For an optional future physical-PS2/PS2Link trial, choose the target build and the real console's address, then run at least three trials. The command requires a working PS2Link server; it **must not** be treated as validated merely because an ELF compiled:
 
 ```sh
 : "${PS2_IP:?Set PS2_IP to the real console address before running}"
@@ -173,10 +190,10 @@ The runner stages runtime symlinks and a private `game_name.ini` outside `resour
 
 ## Acceptance checklist
 
-- [ ] All active benchmark candidates empirically classified on real PS2, with allocation and 10,500-frame evidence (12 matrix entries, including two statically ineligible titles).
+- [ ] All active benchmark candidates empirically classified under PCSX2, with allocation and 10,500-frame evidence (12 matrix entries, including two statically ineligible titles).
 - [ ] Exactly N full emulated frames, no load/save/INI/ROM I/O in the interval.
 - [ ] No streaming cache or forced sound suppression, deterministic state/replay validated.
 - [ ] Structured trial output, report parsing, >=3 medians, failures never averaged.
 - [ ] Desktop host tests + affected PS2 builds pass; normal mode remains unchanged.
-- [ ] Physical PS2 GCC data collected and clearly distinguished from PCSX2.
+- [ ] PCSX2 GCC baseline trials collected and environment/limitations documented; any later physical PS2 runs kept separate.
 - [ ] Mixed-link LLVM object manifest verified; compiler comparisons validated.
