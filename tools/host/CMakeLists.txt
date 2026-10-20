@@ -12,6 +12,8 @@ add_library(njemu_host_tool_lib STATIC
     crc32.c
     dip_metadata.c
     elf_footprint.c
+    ps2_benchmark_result.c
+    ps2_benchmark_runner.c
     endian.c
     file.c
     game_database.c
@@ -25,6 +27,7 @@ add_library(njemu_host_tool_lib STATIC
     tsv.c
     utf8.c
     command_compare_frames.c
+    command_ps2_benchmark.c
     command_release_notes.c
     command_stats_snapshot.c
     command_dip_metadata.c
@@ -70,6 +73,10 @@ add_test(NAME release_notes_format
 
 add_executable(njemu-host-tests host_tests.c)
 target_link_libraries(njemu-host-tests PRIVATE njemu_host_tool_lib)
+add_test(NAME ps2_benchmark_host_suite
+    COMMAND njemu-host-tests --suite ps2-benchmark
+        --source-dir "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        --scratch-dir "${CMAKE_CURRENT_BINARY_DIR}/ps2-benchmark-tests")
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(njemu_host_tool_lib PRIVATE -Wall -Wextra -Werror -pedantic)

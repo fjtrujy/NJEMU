@@ -6,6 +6,8 @@
 #include "game_database.h"
 #include "game_metadata.h"
 #include "rominfo.h"
+#include "ps2_benchmark_result.h"
+#include "ps2_benchmark_runner.h"
 #include "translation_source.h"
 #include "translations.h"
 
@@ -795,6 +797,104 @@ static int test_translations(const char *source_dir, const char *scratch_dir)
     return 1;
 }
 
+static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
+{
+    ps2_benchmark_result_t result;
+    uint64_t values[] = {3000, 900, 2000, 1000};
+    char error[128];
+    char matrix[1024], output[1024], log_path[6][1024];
+    char *logs[6];
+    char report_path[1024];
+    char record[1024];
+    host_buffer_t summary;
+    size_t i;
+    CHECK(ps2_benchmark_median(values, 4) == 1500);
+    CHECK(ps2_benchmark_median(values, 0) == 0);
+    CHECK(path_join(matrix, sizeof(matrix), scratch_dir, "roms.tsv"));
+    CHECK(write_text(matrix, "# Core\tROM\tScenario\tStatus\tNotes\n"
+        "CPS1\tsf2hf\tattract\tunverified\tTest fixture\n"
+        "MVS\tkof96\tattract\tineligible-memory\tStatic RAM limit\n"));
+    CHECK(ps2_benchmark_matrix_can_attempt(matrix, "CPS1", "sf2hf"));
+    CHECK(!ps2_benchmark_matrix_can_attempt(matrix, "MVS", "kof96"));
+    CHECK(!ps2_benchmark_matrix_can_attempt(matrix, "CPS2", "sf2hf"));
+    CHECK(path_join(output, sizeof(output), scratch_dir, "reports"));
+    CHECK(host_make_directories(output));
+    for (i = 0; i < 6; ++i) {
+        const char *compiler = i < 3 ? "GCC" : "LLVM";
+        unsigned duration = i == 0 ? 2000000 : i == 1 ? 2200000 :
+            i == 2 ? 2100000 : i == 3 ? 1800000 : i == 4 ? 1900000 : 1700000;
+        CHECK(snprintf(record, sizeof(record),
+            "PS2Link noise\nNJEMU_BENCHMARK_V1 core=CPS1 rom=sf2hf "
+            "compiler=%s warmup=500 frames=10000 expected=10000 "
+            "total_us=%u sample_sum_us=%u mean_us=200 "
+            "min_us=100 max_us=500 p50_us=190 p95_us=220 "
+            "p99_us=300 over_60hz=0 io_ops=0 io_bytes=0 "
+            "cpu_bytes=1048576 gfx_bytes=4194304 pcm_bytes=1048576 resident=on "
+            "core_update_us=1000000 screen_update_us=500000 ticker_pair_ns=1200 "
+            "cache=off sound=on scenario=attract state=verified "
+            "state_hash=0123456789abcdef revision=1234567890abcdef "
+            "cc_version=15.2.0 status=ok\n",
+            compiler, duration, duration) < (int)sizeof(record));
+        CHECK(path_join(log_path[i], sizeof(log_path[i]), output, "placeholder"));
+        CHECK(snprintf(log_path[i], sizeof(log_path[i]),
+            "%s/log_%zu.txt", output, i) < (int)sizeof(log_path[i]));
+        CHECK(write_text(log_path[i], record));
+        logs[i] = log_path[i];
+    CHECK(ps2_benchmark_parse(record, &result, error, sizeof(error)));
+    CHECK(ps2_benchmark_result_accepted(&result));
+    }
+    CHECK(!ps2_benchmark_parse("unstructured text", &result, error, sizeof(error)));
+    CHECK(!ps2_benchmark_parse("NJEMU_BENCHMARK_V1 core=CPS1\n",
+        &result, error, sizeof(error)));
+    CHECK(snprintf(record, sizeof(record),
+        "NJEMU_BENCHMARK_V1 core=CPS1 rom=sf2hf compiler=GCC "
+        "frames=10000 frames=10000\n") < (int)sizeof(record));
+    CHECK(!ps2_benchmark_parse(record, &result, error, sizeof(error)));
+    CHECK(strstr(error, "duplicate") != NULL);
+    CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
+    host_buffer_init(&summary);
+    CHECK(path_join(report_path, sizeof(report_path), output, "summary.md"));
+    CHECK(host_read_file(report_path, &summary));
+    CHECK(buffer_contains(&summary, "1.1667"));
+    CHECK(buffer_contains(&summary, "14.29"));
+    host_buffer_free(&summary);
+    /* Preserve three accepted LLVM records but change the final fingerprint:
+     * the report must not calculate a speedup from divergent emulated states. */
+    {
+        host_buffer_t raw;
+        char *hash;
+        host_buffer_init(&raw);
+        CHECK(host_read_file(log_path[4], &raw));
+        hash = strstr((char *)raw.data, "0123456789abcdef");
+        CHECK(hash != NULL);
+        *hash = 'f';
+        CHECK(host_write_file(log_path[4], raw.data, raw.size));
+        host_buffer_free(&raw);
+        CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
+        CHECK(host_read_file(report_path, &summary));
+        CHECK(buffer_contains(&summary, "divergent_state_or_configuration"));
+        CHECK(!buffer_contains(&summary, "1.1667"));
+        host_buffer_free(&summary);
+    }
+    CHECK(write_text(log_path[4],
+        "NJEMU_BENCHMARK_V1 core=CPS1 rom=sf2hf compiler=LLVM "
+        "warmup=500 frames=10000 expected=10000 total_us=1900000 "
+        "sample_sum_us=1900000 mean_us=190 min_us=100 max_us=500 "
+        "p50_us=190 p95_us=220 p99_us=300 over_60hz=0 io_ops=0 "
+        "io_bytes=0 cpu_bytes=1048576 gfx_bytes=4194304 pcm_bytes=1048576 "
+        "resident=on core_update_us=1000000 screen_update_us=500000 "
+        "ticker_pair_ns=1200 cache=off sound=on scenario=attract state=unverified "
+        "state_hash=0123456789abcdef revision=1234567890abcdef "
+        "cc_version=15.2.0 status=unverified\n"));
+    CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
+    CHECK(host_read_file(report_path, &summary));
+    CHECK(buffer_contains(&summary, "failed_or_incomparable_trial"));
+    CHECK(!buffer_contains(&summary, "1.1667"));
+    host_buffer_free(&summary);
+    (void)source_dir;
+    return 1;
+}
+
 static void usage(const char *program)
 {
     fprintf(stderr, "usage: %s --source-dir DIR --scratch-dir DIR --suite SUITE\n", program);
@@ -841,6 +941,8 @@ int main(int argc, char **argv)
         ok = test_translations(source_dir, scratch_dir);
     else if (strcmp(suite, "elf") == 0)
         ok = test_elf_footprint(source_dir, scratch_dir);
+    else if (strcmp(suite, "ps2-benchmark") == 0)
+        ok = test_ps2_benchmark(source_dir, scratch_dir);
     else {
         fprintf(stderr, "unknown host test suite: %s\n", suite);
         return 2;

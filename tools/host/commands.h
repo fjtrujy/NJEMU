@@ -14,5 +14,6 @@ int command_romcnv_translations(int argc, char **argv);
 int command_rominfo_validate(int argc, char **argv);
 int command_translations(int argc, char **argv);
 int command_validate_cps2_cache(int argc, char **argv);
+int command_ps2_benchmark(int argc, char **argv);
 
 #endif
