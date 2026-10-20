@@ -20,16 +20,16 @@ A run is accepted only when the complete ROM and audio samples are resident, the
 - MVS `memory_init()` retains an empirical C-ROM/PCM allocation plan; `load_rom_gfx3()` supports processed assets or streaming and `load_rom_sound1()` can allocate resident PCM. The benchmark must reject `disable_sound` and any PCM-demand-read state. `USE_CACHE=OFF` removes demand-read caching, not processed-asset loading. Encrypted sets may still need preprocessed files.
 - `NJEMU_CANONICAL_RELEASE=ON` forces cache on for PS2 CPS2/MVS and is incompatible with this benchmark. Use development builds with `NJEMU_CANONICAL_RELEASE=OFF`. PS2 currently enables global CMake LTO; mixed LLVM/GCC requires it disabled or made toolchain-aware.
 - Prior `PS2_MSLUG3_FRAME_PROFILE` switches were experimental and are *not* assumed available. Its timings show that CPU, rendering, cache and GPU stages overlap; never sum nested durations.
-- Unrelated local HDD change in `src/ps2/ps2_platform.c` and user-owned files under `resources/` must remain untouched.
+- The unrelated HDD change in `src/ps2/ps2_platform.c` was preserved in a dedicated Git stash before the PCSX2 automation work. User-owned files under `resources/` must remain untouched.
 
 ## Candidate and qualification matrix
 
-The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. Remaining `unverified` entries are **unqualified** until per-ROM PS2 allocation proof, 10,500-frame completion, zero-I/O audit and deterministic state comparisons exist. Two candidates have already been ruled out by their minimum ROM-region requirements alone. These are not expense rankings. Keep raw allocation values, firmware/BIOS identity, processed asset digests and evidence per game in separate result manifests, not guessed in the source matrix.
+The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. Remaining `unverified` entries are **unqualified for compiler speedup claims** until zero-I/O coverage and deterministic state comparisons exist, even if 10,500 frames complete. Two candidates were ruled out by the static 32 MiB RAM constraint; two additional CPS2 candidates failed empirical PCSX2 no-cache graphics allocation. These are not CPU-expense rankings. Keep raw allocation values, firmware/BIOS identity, processed asset digests and evidence per game in separate result manifests, not guessed in the source matrix.
 
 | Core | Candidates | Starting hypothesis | Mandatory evidence |
 | --- | --- | --- | --- |
 | CPS1 | slammast, dino, punisher, sf2hf | No streaming-cache backend; CPS1 QSound and heavy sprite scenes may stress EE | Complete CPU/GFX/audio allocations, attract-mode suitability, stable state signature |
-| CPS2 | avsp, 19xx, ssf2t, sfa3ur1 | Decoded graphics size may exceed PS2 heap on larger sets | Empirical `gfx_fully_resident`, all PCM allocated, `USE_CACHE=OFF`, successful 10,500 frames |
+| CPS2 | avsp, ddtod, ssf2 (`19xx`, `ssf2t`, `sfa3ur1` excluded) | 16 MiB graphics are too large for some games once mandatory allocations grow; 12 MiB alternatives are feasible | Empirical `gfx_fully_resident`, all PCM allocated, `USE_CACHE=OFF`, successful 10,500 frames |
 | MVS | pbobbl2n, trally, wjammers (kof96 excluded) | Fully resident PCSX2 smoke tests for Puzzle Bobble 2, Thrash Rally and Windjammers; replaced mslug after its no-cache allocation failure | Empirical `gfx_fully_resident`, `pcm_fully_resident` when needed, sound stays on, no processed-file reads during timing |
 
 Do not substitute Metal Slug 3: previous real-hardware findings describe large demand-read C-ROM; this suite intentionally avoids streaming.
@@ -45,17 +45,21 @@ The following numbers come directly from `REGION(...)` declarations in the exist
 | CPS1 | punisher | 2 | 4 | 2 | 0 | Unverified |
 | CPS1 | sf2hf | 2 | 6 | 0.25 | 0 | Unverified |
 | CPS2 | avsp | 2 | 16 | 4 | 1 | Unverified |
-| CPS2 | 19xx | 2.5 | 16 | 4 | 2 | Unverified |
-| CPS2 | ssf2t | 3.5 | 16 | 4 | 3 | Unverified |
+| CPS2 | ddtod | 2.5 | 12 | 4 | 1.5 | Full-resident PCSX2 30+300 smoke passed |
+| CPS2 | ssf2 | 2.5 | 12 | 4 | 2.5 | Full-resident PCSX2 30+300 smoke passed |
+| CPS2 | 19xx | 2.5 | 16 | 4 | 2 | **Ineligible in no-cache PCSX2: 14.7 MiB maximum GFX allocation** |
+| CPS2 | ssf2t | 3.5 | 16 | 4 | 3 | **Ineligible in no-cache PCSX2: 12.6 MiB maximum GFX allocation** |
 | CPS2 | sfa3ur1 | 4 | 32 | 8 | 1 | **Ineligible on retail PS2** |
 | MVS | kof96 | 3 | 32 | 10 | 0 | **Ineligible on retail PS2** |
-| MVS | mslug | 2 | 16 | 8 | 0 | Unverified, potentially tight |
-| MVS | wjammers | 1 | 4 | 4 | 0 | Unverified, promising |
-| MVS | pbobblen | 1 | 5 | 3.5 | 0 | New candidate: Puzzle Bobble |
-| MVS | trally | 1 | 3 | 1.5 | 0 | New candidate: Thrash Rally |
-| MVS | pbobbl2n | 1 | 10 | 8 | 0 | Puzzle Bobble 2: PCSX2 full-resident smoke passed |
+| MVS | mslug | 2 | 16 | 8 | 0 | Ineligible in no-cache PCSX2: 12.5 MiB GFX limit |
+| MVS | wjammers | 1 | 4 | 4 | 0 | Full-length PCSX2 execution, state unverified |
+| MVS | pbobblen | 1 | 5 | 3.5 | 0 | Local Puzzle Bobble archive missing `068-v1.v1` |
+| MVS | trally | 1 | 3 | 1.5 | 0 | Full-length PCSX2 execution, state unverified |
+| MVS | pbobbl2n | 1 | 10 | 8 | 0 | Full-length PCSX2 execution, state unverified |
 
 `sfa3ur1` and `kof96` each exceed 32 MiB even before all mandatory regions are accounted for, so they cannot qualify as complete resident workloads on a stock PS2. The remaining titles must be classified by actual successful no-cache execution and allocator evidence; their lower ROM-region totals are not proof that enough RAM exists.
+
+Empirical CPS2 full-length attempts confirmed this distinction: `avsp` reserves 16 MiB of graphics and completes 500+10,000 frames, but `19xx` could allocate at most 14.7 MiB after loading its mandatory regions, and `ssf2t` at most 12.6 MiB. Both print `Memory not enough` before emulation, with zero warm-up and measured frames. `ddtod` and `ssf2` are locally available, decoded 12 MiB-graphics alternatives; both passed separate 30+300 full-resident smoke tests. Additional short smoke runs of `choko`, `qndream` and `mpangj` (16 MiB GFX each) also passed, but they were not selected for the primary workload matrix because the chosen games better diversify arcade gameplay workloads. This selection is a functional sampling choice, not a measured expense ranking.
 
 The MVS file-driven shortlist now uses `pbobbl2n` (Puzzle Bobble 2) and `trally` (Thrash Rally) instead of `mslug`. The local `pbobblen` (first Puzzle Bobble) ROM set failed loading because NJEMU requested the absent `068-v1.v1` sound file; **no ROM data was modified to work around it**. Puzzle Bobble 2 uses a separate locally complete ROM set and passed the full-length no-cache PCSX2 test. NJEMU also defines `neodrift` (Neo Drift Out) and `overtop`, but those ROM archives were not present in the user's local MVS ROM directory at audit time. This does not imply the local archive names are mandatory for a future run. The original `mslug` observation remains in the historical static and PCSX2 audits below.
 
@@ -129,6 +133,31 @@ A separate `build_ps2_compiler_bench_mvs_10k` GCC PS2 build used `GUI=OFF`, `USE
 
 Both runs logged their normal game ROM loads before the measured interval and emitted a single `NJEMU_BENCHMARK_V1` record with `cache=off`, `resident=on`, `sound=on` and an end-state fingerprint. The MVS BIOS selection was completed before warm-up. PCSX2 timings are not comparable with real-PS2 measurements; even a successful 10,000-frame run does not establish a reproducible game trajectory between compiler builds.
 
+### Complete PCSX2 GCC candidate matrix (2026-10-20)
+
+The opt-in GCC benchmark builds for CPS1, CPS2 and MVS were configured for `GUI=OFF`, `USE_CACHE=OFF`, 500 warm-up frames and exactly 10,000 measured frames. PCSX2 v2.9.93 ran each candidate in its own private ELF-copy staging directory. The following values are **single-run PCSX2 guest-timer observations, not real PS2 performance measurements, compiler speedups or cross-ROM workload rankings**. The 10 completed games each logged `sound=on`, `cache=off`, `resident=on`, `io_ops=0`, and `state=unverified`.
+
+| Core | ROM | Resident graphics MiB | Resident sound MiB | Measured frames | PCSX2 timer s | Result |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| CPS1 | `slammast` | 6 | 4 | 10,000 | 65.418 | Completed, state unverified |
+| CPS1 | `dino` | 4 | 2 | 10,000 | 64.726 | Completed, state unverified |
+| CPS1 | `punisher` | 4 | 2 | 10,000 | 63.120 | Completed, state unverified |
+| CPS1 | `sf2hf` | 6 | 0.25 | 10,000 | 65.036 | Completed, state unverified |
+| CPS2 | `avsp` | 16 | 4 | 10,000 | 79.948 | Completed, state unverified |
+| CPS2 | `ddtod` | 12 | 4 | 10,000 | 82.394 | Completed, state unverified |
+| CPS2 | `ssf2` | 12 | 4 | 10,000 | 83.507 | Completed, state unverified |
+| CPS2 | `19xx` | — | — | 0 | — | Ineligible: GFX allocation 14.7 MiB vs 16 MiB required |
+| CPS2 | `ssf2t` | — | — | 0 | — | Ineligible: GFX allocation 12.6 MiB vs 16 MiB required |
+| MVS | `wjammers` | 4 | 4 | 10,000 | 55.183 | Completed, state unverified |
+| MVS | `pbobbl2n` | 10 | 8 | 10,000 | 66.027 | Completed, state unverified |
+| MVS | `trally` | 3 | 1.5 | 10,000 | 71.784 | Completed, state unverified |
+
+These are the 10 active, resident test candidates out of 14 matrix entries; the remaining two entries `sfa3ur1` and `kof96` are statically ineligible even before allocation. `19xx` and `ssf2t` each emitted an explicit zero-frame `status=failed` record after reporting `Memory not enough`. The PCSX2 launcher now recognizes such failure records immediately, produces a failure row, and exits rather than waiting for the configured timeout; this was confirmed by rerunning `19xx` after the improvement. An ignored aggregate report (12 PCSX2 logs, 10 full completions, 2 failed) is available at:
+
+`build_ps2_compiler_smoke/pcsx2_full_matrix/aggregate/summary.md` and `build_ps2_compiler_smoke/pcsx2_full_matrix/aggregate/trials.csv`.
+
+**Same-build state divergence:** Two independent 10,000-frame `trally` executions of the *same ELF* and runtime-configuration fingerprint produced different final state hashes (`99e1e67d0018259d` versus `e75fcc13982b65d6`). To investigate, benchmark-only instrumentation was added that emits `NJEMU_BENCHMARK_STATE_PARTS_V1` immediately before the standard benchmark record; it separates 68000 registers, Z80 registers and mutable RAM without changing the accepted record schema or timing interval. In three additional same-build `trally` tests of 30 warm-up + 300 measured frames, the RAM fingerprints differed in **all three trials**, and the CPU-register fingerprints also differed between the first and the subsequent two. These runs are evidence of insufficient replay determinism, not a diagnosis of its cause. A deterministic game-state fixture and input/audio-thread synchronization audit are required before declaring compiler results comparable. No result was promoted from `state=unverified`.
+
 Raw functional logs and the generated (all-unverified) CSV/Markdown reports are retained in ignored directories:
 
 - `build_ps2_compiler_smoke/mvs-trally-10k/pcsx2_10k.log`
@@ -153,7 +182,7 @@ build_ps2_compiler_host/njemu-tool ps2-benchmark pcsx2 \
 
 Arguments after the output directory are trial count, per-trial timeout in seconds and expected **measured** frame count. The PCSX2 runner permits a single functional trial; 3 or more are required for comparable median statistics. Logs, `trials.csv` and `summary.md` remain in the ignored output directory, and existing raw trial logs are never overwritten. PCSX2 may create nested `PICTURE/` directories in the temporary staging root; the runner deletes only its own staging files/directories and never follows links into `resources/`. A POSIX host regression uses a fake PCSX2 executable to verify absolute ELF paths, independent ELF copies, private selectors, linked read-only assets and cleanup.
 
-Passing 500/10,000 frames under PCSX2 is **functional evidence**, not proof of identical cross-compiler emulated state. Until the deterministic replay and comprehensive I/O audit are complete, completed runs deliberately remain `state=unverified` and cannot produce a speedup in the authoritative reporter.
+Passing 500/10,000 frames under PCSX2 is **functional evidence**, not proof of identical cross-compiler emulated state. Until the deterministic replay and comprehensive I/O audit are complete, completed runs deliberately remain `state=unverified` and cannot produce a speedup in the authoritative reporter. The reporter includes PCSX2 version provenance and uses per-core/ROM/compiler/environment trial numbering even in a combined multi-ROM report.
 
 A further PS2 GCC build of `MVS` with `PS2_COMPILER_BENCHMARK=OFF` and `USE_CACHE=OFF` passed, confirming that the new benchmark-only BIOS path is excluded from normal builds. Host-tool tests also passed with synthetic comparable and divergent/incomplete logs. A real PCSX2 `wjammers` log was parsed through `njemu-tool ps2-benchmark report`; it produced CSV/Markdown with `unverified` status and no speedup.
 
@@ -186,14 +215,15 @@ build_ps2_compiler_host/njemu-tool ps2-benchmark run \
   build_ps2_compiler_results 3 180 10000
 ```
 
-The runner stages runtime symlinks and a private `game_name.ini` outside `resources/`; it never writes to ROMs or game saves. It stores raw per-trial logs in the output directory, then writes `trials.csv` and `summary.md`. It rejects output directories that resolve into a directory named `resources` (including symlink targets). For the moment, the diagnostic firmware records will remain `unverified` pending real-machine replay/state validation and comprehensive I/O audits.
+The optional PS2Link runner stages runtime symlinks and a private `game_name.ini` outside `resources/`; it never writes to ROMs or game saves. It stores raw per-trial logs in the output directory, then writes `trials.csv` and `summary.md`. It rejects output directories that resolve into a directory named `resources` (including symlink targets). For the moment, the diagnostic firmware records will remain `unverified` pending deterministic replay/state validation and comprehensive I/O audits, both of which can be investigated using PCSX2.
 
 ## Acceptance checklist
 
-- [ ] All active benchmark candidates empirically classified under PCSX2, with allocation and 10,500-frame evidence (12 matrix entries, including two statically ineligible titles).
-- [ ] Exactly N full emulated frames, no load/save/INI/ROM I/O in the interval.
-- [ ] No streaming cache or forced sound suppression, deterministic state/replay validated.
-- [ ] Structured trial output, report parsing, >=3 medians, failures never averaged.
-- [ ] Desktop host tests + affected PS2 builds pass; normal mode remains unchanged.
-- [ ] PCSX2 GCC baseline trials collected and environment/limitations documented; any later physical PS2 runs kept separate.
+- [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
+- [x] Exactly N completed frames, cache off and sound on for all 10 successful PCSX2 runs; no results were claimed for allocation failures.
+- [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; currently only wrapped POSIX/stdio calls report zero.
+- [ ] Deterministic replay or state fixture makes same-build PCSX2 state fingerprints repeatable.
+- [x] Structured trial output and report parsing validated, including synthetic >=3-trial GCC/LLVM medians and rejection of divergent state/environment/failure records; real comparable compiler medians still pending.
+- [x] Desktop host tests and affected GCC PS2 benchmark builds pass; benchmark-only code remains opt-in.
+- [x] Single-run PCSX2 GCC functional baseline collected and environment/limitations documented; future real-hardware trials optional and kept separate.
 - [ ] Mixed-link LLVM object manifest verified; compiler comparisons validated.
