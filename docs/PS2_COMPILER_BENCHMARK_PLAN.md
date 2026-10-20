@@ -30,7 +30,7 @@ The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. Rema
 | --- | --- | --- | --- |
 | CPS1 | slammast, dino, punisher, sf2hf | No streaming-cache backend; CPS1 QSound and heavy sprite scenes may stress EE | Complete CPU/GFX/audio allocations, attract-mode suitability, stable state signature |
 | CPS2 | avsp, 19xx, ssf2t, sfa3ur1 | Decoded graphics size may exceed PS2 heap on larger sets | Empirical `gfx_fully_resident`, all PCM allocated, `USE_CACHE=OFF`, successful 10,500 frames |
-| MVS | kof96, mslug, wjammers | Smaller early games are promising *candidates*, not guaranteed resident | Empirical `gfx_fully_resident`, `pcm_fully_resident` when needed, sound stays on, no processed-file reads during timing |
+| MVS | pbobbl2n, trally, wjammers (kof96 excluded) | Fully resident PCSX2 smoke tests for Puzzle Bobble 2, Thrash Rally and Windjammers; replaced mslug after its no-cache allocation failure | Empirical `gfx_fully_resident`, `pcm_fully_resident` when needed, sound stays on, no processed-file reads during timing |
 
 Do not substitute Metal Slug 3: previous real-hardware findings describe large demand-read C-ROM; this suite intentionally avoids streaming.
 
@@ -51,8 +51,13 @@ The following numbers come directly from `REGION(...)` declarations in the exist
 | MVS | kof96 | 3 | 32 | 10 | 0 | **Ineligible on retail PS2** |
 | MVS | mslug | 2 | 16 | 8 | 0 | Unverified, potentially tight |
 | MVS | wjammers | 1 | 4 | 4 | 0 | Unverified, promising |
+| MVS | pbobblen | 1 | 5 | 3.5 | 0 | New candidate: Puzzle Bobble |
+| MVS | trally | 1 | 3 | 1.5 | 0 | New candidate: Thrash Rally |
+| MVS | pbobbl2n | 1 | 10 | 8 | 0 | Puzzle Bobble 2: PCSX2 full-resident smoke passed |
 
 `sfa3ur1` and `kof96` each exceed 32 MiB even before all mandatory regions are accounted for, so they cannot qualify as complete resident workloads on a stock PS2. The remaining titles must be classified by actual successful no-cache execution and allocator evidence; their lower ROM-region totals are not proof that enough RAM exists.
+
+The MVS file-driven shortlist now uses `pbobbl2n` (Puzzle Bobble 2) and `trally` (Thrash Rally) instead of `mslug`. The local `pbobblen` (first Puzzle Bobble) ROM set failed loading because NJEMU requested the absent `068-v1.v1` sound file; **no ROM data was modified to work around it**. Puzzle Bobble 2 uses a separate locally complete ROM set and passed the no-cache short smoke test. NJEMU also defines `neodrift` (Neo Drift Out) and `overtop`, but those ROM archives were not present in the user's local MVS ROM directory at audit time. This does not imply the local archive names are mandatory for a future run. The original `mslug` observation remains in the historical static and PCSX2 audits below.
 
 ## Milestones
 
@@ -105,6 +110,9 @@ The PCSX2 CLI accepts `-nogui -batch -elf <file>`. The ELF was copied (not linke
 | CPS2 | avsp | 30 + 300 | 0 | Full GFX 16 MiB, PCM 4 MiB | Completed, state unverified |
 | MVS | wjammers | 30 + 300 | 0 | Full C-ROM 4 MiB, PCM 4 MiB | Completed, state unverified |
 | MVS | mslug | 0 + 0 | N/A | Empirical 12.5 MiB graphics budget vs 16 MiB required | Failed no-cache allocation before emulation |
+| MVS | pbobblen | 0 + 0 | N/A | 5 MiB C-ROM and 3.5 MiB samples declared | Failed pre-start: local archive lacks requested `068-v1.v1` |
+| MVS | pbobbl2n | 30 + 300 | 0 | Full C-ROM 10 MiB, PCM 8 MiB | Completed, state unverified |
+| MVS | trally | 30 + 300 | 0 | Full C-ROM 3 MiB, PCM 1.5 MiB | Completed, state unverified |
 
 MVS has an optional **benchmark-only** BIOS choice to prevent an interactive BIOS menu from blocking NO_GUI benchmarking. Its preferred order is the existing `bios_crc[]` order, and its actual choice is emitted before timing (e.g. index 0, CRC 9036d879). This is not a production BIOS policy change.
 

@@ -8,5 +8,6 @@ CPS2	19xx	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	ssf2t	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	sfa3ur1	attract	ineligible-memory	32 MiB decoded GFX plus 8 MiB sound exceeds retail PS2 EE RAM
 MVS	kof96	attract	ineligible-memory	32 MiB C-ROM plus 10 MiB samples exceeds retail PS2 EE RAM
-MVS	mslug	attract	unverified	PCSX2 offered 12.5 MiB GFX versus required 16 MiB; full-resident load failed; hardware pending
+MVS	pbobbl2n	attract	unverified	Puzzle Bobble 2; PCSX2 loaded 10 MiB GFX plus 8 MiB PCM and completed 30 plus 300 frames
+MVS	trally	attract	unverified	Thrash Rally; PCSX2 loaded 3 MiB GFX plus 1.5 MiB PCM and completed 30 plus 300 frames
 MVS	wjammers	attract	unverified	PCSX2 allocated full 4 MiB C-ROM and ran 30 plus 300 frames; hardware pending
