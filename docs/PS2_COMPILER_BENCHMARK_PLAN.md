@@ -92,6 +92,56 @@ PS2Link's executable location, mount path, audio scheduling, and game selector a
 - Linker `--wrap` captures direct POSIX/stdio I/O but may miss direct SDK IOP file RPCs; a zero count is **not** a validated zero-I/O claim until that boundary audit is complete.
 - The portable C99 host utility can inspect the TSV matrix, launch PS2Link in a staged private directory, collect per-trial logs and output CSV/Markdown. It rejects incomplete/unverified or inconsistent runs. PS2Link connectivity and the staging mechanism still need real-device testing. The runner never writes into `resources/`.
 - GCC builds of the three no-cache PS2 targets succeeded; host reporting/parser regression tests pass. No physical PS2 timing baseline or LLVM-vs-GCC comparison has been collected.
+- The structured record includes the exact 40-character Git HEAD, a 64-character SHA256 of `git diff --binary HEAD` at CMake configuration time, the C compiler version, and a deterministic runtime-configuration fingerprint. Combined revision and tracked-diff identity must match between compared trials. The build directory also retains hashes of detected GCC-provided SDK/gsKit/driver archives. Reconfigure after source edits; current worktree metadata is a *configure-time* snapshot. Untracked ROM/BIOS and processed-asset digests remain a separate validation requirement.
+- The reporter strictly validates record syntax and fingerprints, and explicitly rejects malformed logs, absent/ineligible titles, any failed trials, and divergent state/configuration/source identities. It does **not** confer state or I/O verification on provisional runtime records.
+
+### PCSX2 functional smoke tests (2026-10-20, **not PS2 hardware performance**)
+
+The PCSX2 CLI accepts `-nogui -batch -elf <file>`. The ELF was copied (not linked) into an isolated ignored `build_ps2_compiler_smoke/<core>/` staging directory with a private `game_name.ini` and read-only symlinks to the build's runtime data. PCSX2 resolves symlinked ELFs to their original parent directory, which would select the wrong game; copying the ELF keeps its host root at the isolated directory. No ROM, BIOS, processed asset or configuration beneath `resources/` was modified.
+
+| Core | ROM | Warm-up + measured | I/O counter | Residency | Result |
+| --- | --- | --- | --- | --- | --- |
+| CPS1 | slammast | 30 + 300 | 0 | Full GFX 6 MiB, PCM 4 MiB | Completed, state unverified |
+| CPS2 | avsp | 30 + 300 | 0 | Full GFX 16 MiB, PCM 4 MiB | Completed, state unverified |
+| MVS | wjammers | 30 + 300 | 0 | Full C-ROM 4 MiB, PCM 4 MiB | Completed, state unverified |
+| MVS | mslug | 0 + 0 | N/A | Empirical 12.5 MiB graphics budget vs 16 MiB required | Failed no-cache allocation before emulation |
+
+MVS has an optional **benchmark-only** BIOS choice to prevent an interactive BIOS menu from blocking NO_GUI benchmarking. Its preferred order is the existing `bios_crc[]` order, and its actual choice is emitted before timing (e.g. index 0, CRC 9036d879). This is not a production BIOS policy change.
+
+These results prove only that the short opt-in workloads function under PCSX2's PS2 memory model. The timing values are deliberately **not** reported as real-PS2 performance numbers. Even a `io_ops=0` result only confirms the currently wrapped POSIX/stdio entry points; direct PS2SDK IOP-RPC coverage and state equivalence remain unverified. Rebuild the default 500/10,000 configuration before physical-baseline collection, as these smoke ELFs were built for 30/300 frames.
+
+A further PS2 GCC build of `MVS` with `PS2_COMPILER_BENCHMARK=OFF` and `USE_CACHE=OFF` passed, confirming that the new benchmark-only BIOS path is excluded from normal builds. Host-tool tests also passed with synthetic comparable and divergent/incomplete logs. A real PCSX2 `wjammers` log was parsed through `njemu-tool ps2-benchmark report`; it produced CSV/Markdown with `unverified` status and no speedup.
+
+### Build and runner examples
+
+```sh
+export PS2DEV=/Users/fjtrujy/toolchains/ps2/ps2dev
+export PS2SDK="$PS2DEV/ps2sdk"
+export PATH="$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PATH"
+
+cmake -S . -B build_ps2_compiler_bench_cps1 -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$PS2DEV/share/ps2dev.cmake" \
+  -DPLATFORM=PS2 -DTARGET=CPS1 \
+  -DGUI=OFF -DUSE_CACHE=OFF -DSAVE_STATE=ON \
+  -DPS2_COMPILER_BENCHMARK=ON \
+  -DPS2_BENCHMARK_WARMUP=500 -DPS2_BENCHMARK_FRAMES=10000
+cmake --build build_ps2_compiler_bench_cps1 -j8
+
+build_ps2_compiler_host/njemu-tool ps2-benchmark matrix benchmarks/ps2/roms.tsv
+```
+
+For a physical-PS2/PS2Link trial, choose the target build and the real console's address, then run at least three trials. The command requires a working PS2Link server; it **must not** be treated as validated merely because an ELF compiled:
+
+```sh
+: "${PS2_IP:?Set PS2_IP to the real console address before running}"
+build_ps2_compiler_host/njemu-tool ps2-benchmark run \
+  benchmarks/ps2/roms.tsv CPS1 slammast GCC \
+  "$PS2DEV/bin/ps2client" "$PS2_IP" \
+  build_ps2_compiler_bench_cps1 CPS1.ELF \
+  build_ps2_compiler_results 3 180 10000
+```
+
+The runner stages runtime symlinks and a private `game_name.ini` outside `resources/`; it never writes to ROMs or game saves. It stores raw per-trial logs in the output directory, then writes `trials.csv` and `summary.md`. It rejects output directories that resolve into a directory named `resources` (including symlink targets). For the moment, the diagnostic firmware records will remain `unverified` pending real-machine replay/state validation and comprehensive I/O audits.
 
 ## Acceptance checklist
 
