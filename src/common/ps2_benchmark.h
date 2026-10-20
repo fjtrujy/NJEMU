@@ -7,6 +7,10 @@
 void ps2_benchmark_reset(void);
 void ps2_benchmark_apply_options(void);
 void ps2_benchmark_frame_begin(void);
+void ps2_benchmark_cpu_begin(void);
+void ps2_benchmark_cpu_end(void);
+void ps2_benchmark_render_begin(void);
+void ps2_benchmark_render_end(void);
 void ps2_benchmark_frame_end(void);
 void ps2_benchmark_report(void);
 

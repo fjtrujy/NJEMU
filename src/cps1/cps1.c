@@ -246,8 +246,18 @@ static void cps1_run(void)
 			 * presentation pacing. This removes a full frame of avoidable latency and
 			 * keeps input independent from whether the previous frame was presented. */
 			update_inputport();
+#ifdef PS2_COMPILER_BENCHMARK
+			ps2_benchmark_cpu_begin();
+#endif
 			timer_update_cpu();
-				update_screen();
+#ifdef PS2_COMPILER_BENCHMARK
+			ps2_benchmark_cpu_end();
+			ps2_benchmark_render_begin();
+#endif
+			update_screen();
+#ifdef PS2_COMPILER_BENCHMARK
+			ps2_benchmark_render_end();
+#endif
 #ifdef PS2_COMPILER_BENCHMARK
 				ps2_benchmark_frame_end();
 #endif

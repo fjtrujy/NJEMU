@@ -264,9 +264,21 @@ static void cps2_run(void)
 					ps2_benchmark_frame_begin();
 #endif
 					apply_cheat();//davex
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_cpu_begin();
+#endif
 				timer_update_cpu();
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_cpu_end();
+#endif
 				cps2_sound_offload_frame_completed();
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_render_begin();
+#endif
 				update_screen();
+#ifdef PS2_COMPILER_BENCHMARK
+				ps2_benchmark_render_end();
+#endif
 					update_inputport();
 #ifdef PS2_COMPILER_BENCHMARK
 					ps2_benchmark_frame_end();

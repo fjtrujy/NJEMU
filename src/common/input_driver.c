@@ -8,6 +8,9 @@
 #include <time.h>
 
 #include "input_driver.h"
+#ifdef PS2_COMPILER_BENCHMARK
+#include "emulator_runtime.h"
+#endif
 #include "ticker_driver.h"
 #include "video_driver.h"
 
@@ -231,6 +234,12 @@ void pad_wait_clear(void)
 
 void pad_wait_press(int msec)
 {
+#ifdef PS2_COMPILER_BENCHMARK
+    /* Headless benchmarking must report load/BIOS failures rather than block
+     * indefinitely on a prompt whose physical input is deliberately neutral. */
+    (void)msec;
+    Loop = LOOP_EXIT;
+#else
 	pad_wait_clear();
 
 	if (msec == PAD_WAIT_INFINITY)
@@ -254,4 +263,5 @@ void pad_wait_press(int msec)
 	}
 
 	pad_wait_clear();
+#endif
 }

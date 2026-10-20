@@ -221,6 +221,9 @@ else()
     set(USE_CACHE_DEFAULT OFF)
 endif()
 option(USE_CACHE "Enable streaming cache support (MVS/CPS2 only)" ${USE_CACHE_DEFAULT})
+if(PS2_COMPILER_BENCHMARK AND USE_CACHE)
+    message(FATAL_ERROR "PS2_COMPILER_BENCHMARK must not enable streaming cache")
+endif()
 if(USE_CACHE AND NOT ("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS2"))
     message(FATAL_ERROR "USE_CACHE is only supported for TARGET=MVS or TARGET=CPS2")
 endif()
@@ -981,6 +984,49 @@ if(PS2_COMPILER_BENCHMARK)
             open close read write lseek fopen fclose fread fwrite fseek)
         target_link_options(${TARGET} PRIVATE
             "-Wl,--wrap=${PS2_BENCHMARK_IO_SYMBOL}")
+    endforeach()
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE PS2_BENCHMARK_NJEMU_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    string(LENGTH "${PS2_BENCHMARK_NJEMU_COMMIT}" PS2_BENCHMARK_COMMIT_LENGTH)
+    if(NOT PS2_BENCHMARK_NJEMU_COMMIT MATCHES "^[0-9a-f]+$" OR
+       NOT PS2_BENCHMARK_COMMIT_LENGTH EQUAL 40)
+        set(PS2_BENCHMARK_NJEMU_COMMIT "unknown")
+    endif()
+    target_compile_definitions(${TARGET} PRIVATE
+        "PS2_BENCHMARK_NJEMU_COMMIT=\"${PS2_BENCHMARK_NJEMU_COMMIT}\""
+        "PS2_BENCHMARK_CC_VERSION=\"${CMAKE_C_COMPILER_VERSION}\"")
+    # Audit file for each build. Never rebuild GCC-provided external libraries.
+    file(WRITE "${CMAKE_BINARY_DIR}/benchmark_build.txt"
+        "NJEMU commit: ${PS2_BENCHMARK_NJEMU_COMMIT}\n"
+        "core: ${TARGET}\n"
+        "platform: PS2\n"
+        "compiler: ${CMAKE_C_COMPILER}\n"
+        "compiler version: ${CMAKE_C_COMPILER_VERSION}\n"
+        "CFLAGS: ${CMAKE_C_FLAGS} ${COMMON_FLAGS}\n"
+        "optimization: -O3 -ffast-math\n"
+        "LTO: OFF\n"
+        "USE_CACHE: OFF\n"
+        "GUI: OFF\n"
+        "save states: ${SAVE_STATE}\n"
+        "warmup frames: ${PS2_BENCHMARK_WARMUP}\n"
+        "measured frames: ${PS2_BENCHMARK_FRAMES}\n"
+        "PS2SDK: $ENV{PS2SDK}\n"
+        "PS2DEV: $ENV{PS2DEV}\n")
+    foreach(PS2_BENCHMARK_DEP_ARCHIVE
+        "$ENV{PS2SDK}/ee/lib/libc.a"
+        "$ENV{PS2SDK}/ee/lib/libkernel.a"
+        "$ENV{PS2DEV}/gsKit/lib/libgskit.a"
+        "$ENV{PS2SDK}/ports/lib/libps2_drivers.a")
+        if(EXISTS "${PS2_BENCHMARK_DEP_ARCHIVE}")
+            file(SHA256 "${PS2_BENCHMARK_DEP_ARCHIVE}" PS2_BENCHMARK_DEP_SHA256)
+            file(APPEND "${CMAKE_BINARY_DIR}/benchmark_build.txt"
+                "GCC archive: ${PS2_BENCHMARK_DEP_ARCHIVE} SHA256=${PS2_BENCHMARK_DEP_SHA256}\n")
+        endif()
     endforeach()
 endif()
 

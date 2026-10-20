@@ -26,6 +26,12 @@
 #ifndef PS2_BENCHMARK_WARMUP
 #define PS2_BENCHMARK_WARMUP 500
 #endif
+#ifndef PS2_BENCHMARK_NJEMU_COMMIT
+#define PS2_BENCHMARK_NJEMU_COMMIT "unknown"
+#endif
+#ifndef PS2_BENCHMARK_CC_VERSION
+#define PS2_BENCHMARK_CC_VERSION "unknown"
+#endif
 
 #if !defined(PS2) || !defined(PS2_COMPILER_BENCHMARK) || USE_CACHE
 #error "PS2 benchmark requires PS2, PS2_COMPILER_BENCHMARK, and USE_CACHE=OFF"
@@ -41,7 +47,17 @@ static volatile unsigned io_operations;
 static volatile uint64_t io_read_bytes;
 static volatile int measuring;
 static bool invalid_sound;
+static bool invalid_residency;
+static bool residency_checked;
+static uint32_t resident_cpu_bytes;
+static uint32_t resident_gfx_bytes;
+static uint32_t resident_pcm_bytes;
 static uint64_t state_fingerprint;
+static uint64_t cpu_start_us;
+static uint64_t render_start_us;
+static uint64_t cpu_total_us;
+static uint64_t render_total_us;
+static uint32_t ticker_pair_ns;
 
 static void hash_bytes(uint64_t *hash, const void *data, size_t length)
 {
@@ -124,7 +140,15 @@ void ps2_benchmark_reset(void)
     io_read_bytes = 0;
     measuring = 0;
     invalid_sound = false;
+    invalid_residency = false;
+    residency_checked = false;
+    resident_cpu_bytes = 0;
+    resident_gfx_bytes = 0;
+    resident_pcm_bytes = 0;
     state_fingerprint = 0;
+    cpu_start_us = render_start_us = 0;
+    cpu_total_us = render_total_us = 0;
+    ticker_pair_ns = 0;
 }
 
 void ps2_benchmark_apply_options(void)
@@ -140,6 +164,37 @@ void ps2_benchmark_apply_options(void)
 
 void ps2_benchmark_frame_begin(void)
 {
+    if (!residency_checked) {
+        uint64_t begin_calibration;
+        uint64_t end_calibration;
+        volatile uint64_t sink = 0;
+        unsigned sample;
+        begin_calibration = ticker_driver->currentUs(ticker_data);
+        for (sample = 0; sample < 4096; ++sample) {
+            uint64_t a = ticker_driver->currentUs(ticker_data);
+            uint64_t b = ticker_driver->currentUs(ticker_data);
+            sink += b - a;
+        }
+        end_calibration = ticker_driver->currentUs(ticker_data);
+        (void)sink;
+        if (end_calibration >= begin_calibration)
+            ticker_pair_ns = (uint32_t)(
+                ((end_calibration - begin_calibration) * 1000u) / 4096u);
+        residency_checked = true;
+        resident_cpu_bytes = memory_length_cpu1;
+        resident_pcm_bytes = memory_length_sound1;
+#if EMU_SYSTEM == MVS
+        resident_gfx_bytes = memory_length_gfx3;
+        invalid_residency = !memory_region_cpu1 || !memory_region_gfx3 ||
+            (memory_length_sound1 && !memory_region_sound1);
+        if (disable_sound)
+            invalid_sound = true;
+#else
+        resident_gfx_bytes = memory_length_gfx1;
+        invalid_residency = !memory_region_cpu1 || !memory_region_gfx1 ||
+            (memory_length_sound1 && !memory_region_sound1);
+#endif
+    }
     if (warmup_completed < PS2_BENCHMARK_WARMUP ||
         measured_completed >= PS2_BENCHMARK_FRAMES)
         return;
@@ -147,11 +202,45 @@ void ps2_benchmark_frame_begin(void)
     /* Check a runtime downgrade to sound-off, e.g. a failed MVS PCM load. */
     if (!option_sound_enable)
         invalid_sound = true;
+#if EMU_SYSTEM == MVS
+    if (disable_sound)
+        invalid_sound = true;
+#endif
 
     measuring = 1;
     frame_begin_us = ticker_driver->currentUs(ticker_data);
     if (measured_completed == 0)
         start_us = frame_begin_us;
+}
+
+void ps2_benchmark_cpu_begin(void)
+{
+    if (measuring)
+        cpu_start_us = ticker_driver->currentUs(ticker_data);
+}
+
+void ps2_benchmark_cpu_end(void)
+{
+    if (measuring) {
+        uint64_t now = ticker_driver->currentUs(ticker_data);
+        if (now >= cpu_start_us)
+            cpu_total_us += now - cpu_start_us;
+    }
+}
+
+void ps2_benchmark_render_begin(void)
+{
+    if (measuring)
+        render_start_us = ticker_driver->currentUs(ticker_data);
+}
+
+void ps2_benchmark_render_end(void)
+{
+    if (measuring) {
+        uint64_t now = ticker_driver->currentUs(ticker_data);
+        if (now >= render_start_us)
+            render_total_us += now - render_start_us;
+    }
 }
 
 void ps2_benchmark_frame_end(void)
@@ -224,7 +313,7 @@ void ps2_benchmark_report(void)
 
     if (measured_completed != PS2_BENCHMARK_FRAMES || duration == 0)
         status = "failed";
-    else if (io_operations != 0 || invalid_sound)
+    else if (io_operations != 0 || invalid_sound || invalid_residency)
         status = "rejected";
     else
         /* No state/replay oracle yet: never label the trial comparable. */
@@ -235,8 +324,10 @@ void ps2_benchmark_report(void)
            "sample_sum_us=%" PRIu64 " mean_us=%" PRIu64 " "
            "min_us=%u max_us=%u p50_us=%u p95_us=%u p99_us=%u "
            "over_60hz=%u io_ops=%u io_bytes=%" PRIu64 " "
+           "cpu_bytes=%u gfx_bytes=%u pcm_bytes=%u resident=%s "
+           "core_update_us=%" PRIu64 " screen_update_us=%" PRIu64 " ticker_pair_ns=%u "
            "cache=off sound=%s scenario=attract state=unverified "
-           "state_hash=%016" PRIx64 " status=%s\n",
+           "state_hash=%016" PRIx64 " revision=%s cc_version=%s status=%s\n",
            TARGET_STR, game_name,
 #if defined(__clang__)
            "LLVM",
@@ -249,7 +340,13 @@ void ps2_benchmark_report(void)
            (unsigned)minimum, (unsigned)maximum, (unsigned)p50,
            (unsigned)p95, (unsigned)p99, (unsigned)over_budget,
            io_operations, io_read_bytes,
-           invalid_sound ? "off" : "on", state_fingerprint, status);
+           (unsigned)resident_cpu_bytes,
+           (unsigned)resident_gfx_bytes,
+           (unsigned)resident_pcm_bytes,
+           residency_checked && !invalid_residency ? "on" : "off",
+           cpu_total_us, render_total_us, (unsigned)ticker_pair_ns,
+           invalid_sound ? "off" : "on", state_fingerprint,
+           PS2_BENCHMARK_NJEMU_COMMIT, PS2_BENCHMARK_CC_VERSION, status);
 }
 
 /*
