@@ -252,6 +252,24 @@ void bios_select(int flag)
 
 	if (!bios_check(flag)) return;
 
+#ifdef PS2_COMPILER_BENCHMARK
+	/* Headless compiler comparisons must never wait for a BIOS selection
+	 * menu. Select the first verified BIOS in the fixed canonical list,
+	 * before the first emulated frame and outside the measured interval. */
+	for (i = 0; i < BIOS_MAX; ++i)
+	{
+		if (bios_exist[i])
+		{
+			neogeo_bios = i;
+			printf("[ps2-benchmark] BIOS index=%d CRC=%08x\n",
+				i, (unsigned)bios_crc[i]);
+			return;
+		}
+	}
+	neogeo_bios = -1;
+	return;
+#endif
+
 	if (neogeo_bios == -1)
 	{
 		sel = 0;

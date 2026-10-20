@@ -1,12 +1,12 @@
 # Core	ROM	Scenario	Status	Notes
-CPS1	slammast	attract	unverified	Verify QSound, graphics, and allocation
+CPS1	slammast	attract	unverified	PCSX2 loaded complete ROM and ran 30 plus 300 frames; real hardware pending
 CPS1	dino	attract	unverified	Verify gameplay animation and allocation
 CPS1	punisher	attract	unverified	Verify QSound and decoded assets
 CPS1	sf2hf	attract	unverified	Verify YM2151 and scene determinism
-CPS2	avsp	attract	unverified	Require full decoded GFX in PS2 RAM
+CPS2	avsp	attract	unverified	PCSX2 allocated full 16 MiB GFX and ran 30 plus 300 frames; real hardware pending
 CPS2	19xx	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	ssf2t	attract	unverified	Require full decoded GFX in PS2 RAM
 CPS2	sfa3ur1	attract	ineligible-memory	32 MiB decoded GFX plus 8 MiB sound exceeds retail PS2 EE RAM
 MVS	kof96	attract	ineligible-memory	32 MiB C-ROM plus 10 MiB samples exceeds retail PS2 EE RAM
-MVS	mslug	attract	unverified	Require full C-ROM and PCM residency
-MVS	wjammers	attract	unverified	Require full C-ROM and PCM residency
+MVS	mslug	attract	unverified	PCSX2 offered 12.5 MiB GFX versus required 16 MiB; full-resident load failed; hardware pending
+MVS	wjammers	attract	unverified	PCSX2 allocated full 4 MiB C-ROM and ran 30 plus 300 frames; hardware pending
