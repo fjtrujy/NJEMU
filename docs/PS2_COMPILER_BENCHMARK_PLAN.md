@@ -158,6 +158,27 @@ These are the 10 active, resident test candidates out of 14 matrix entries; the 
 
 **Same-build state divergence:** Two independent 10,000-frame `trally` executions of the *same ELF* and runtime-configuration fingerprint produced different final state hashes (`99e1e67d0018259d` versus `e75fcc13982b65d6`). To investigate, benchmark-only instrumentation was added that emits `NJEMU_BENCHMARK_STATE_PARTS_V1` immediately before the standard benchmark record; it separates 68000 registers, Z80 registers and mutable RAM without changing the accepted record schema or timing interval. In three additional same-build `trally` tests of 30 warm-up + 300 measured frames, the RAM fingerprints differed in **all three trials**, and the CPU-register fingerprints also differed between the first and the subsequent two. These runs are evidence of insufficient replay determinism, not a diagnosis of its cause. A deterministic game-state fixture and input/audio-thread synchronization audit are required before declaring compiler results comparable. No result was promoted from `state=unverified`.
 
+### Repeated GCC PCSX2 timing baseline (2026-10-20)
+
+The 10 eligible ROMs were repeated serially in PCSX2 v2.9.93, with GCC 15.2.0, `GUI=OFF`, `USE_CACHE=OFF`, sound enabled, 500 warm-up frames and 10,000 measured frames per run. No simultaneous PCSX2 instances were used. There were **28 new successful runs**: 10 for `trally` and two for each of the other nine ROMs. Combining the nine earlier qualification logs with the new runs produces **37 complete observations**. Each ROM's prior and new logs have identical revision, tracked-worktree, configuration and compiler-version fingerprints. These figures are **descriptive within-GCC PCSX2 guest-clock timings**, not real-hardware timings, proof of a deterministic game trajectory, cross-ROM CPU expense rankings or a GCC/LLVM speedup.
+
+| Core | ROM | Runs | Mean s | Median s | Sample std. dev. ms | CV % | Different final-state hashes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| CPS1 | `slammast` | 3 | 65.290 | 65.226 | 111.0 | 0.170 | 2 |
+| CPS1 | `dino` | 3 | 64.722 | 64.720 | 3.8 | 0.006 | 2 |
+| CPS1 | `punisher` | 3 | 63.120 | 63.120 | 0.6 | 0.001 | 2 |
+| CPS1 | `sf2hf` | 3 | 65.052 | 65.056 | 14.5 | 0.022 | 3 |
+| CPS2 | `avsp` | 3 | 79.949 | 79.949 | 1.0 | 0.001 | 2 |
+| CPS2 | `ddtod` | 3 | 82.385 | 82.381 | 7.6 | 0.009 | 2 |
+| CPS2 | `ssf2` | 3 | 83.508 | 83.509 | 1.0 | 0.001 | 2 |
+| MVS | `wjammers` | 3 | 55.346 | 55.183 | 301.1 | 0.544 | 3 |
+| MVS | `pbobbl2n` | 3 | 66.034 | 66.027 | 59.1 | 0.090 | 3 |
+| MVS | `trally` | 10 | 71.699 | 71.699 | 76.4 | 0.107 | 10 |
+
+CV is sample standard deviation divided by mean. All 37 runs reported 10,000 completed frames, `cache=off`, `sound=on`, `resident=on`, `io_ops=0` through the existing POSIX/stdio wrappers and `state=unverified`. Although every per-ROM timing CV was below 1%, **state fingerprints varied**, including 10 distinct combined hashes across the 10 new `trally` runs. Timing stability does not imply execution equivalence; comprehensive IOP-RPC I/O auditing and deterministic replay remain prerequisites before comparing GCC with LLVM. No extra per-frame traces were added.
+
+The ignored local result directory is `build_ps2_compiler_smoke/pcsx2_gcc_10x_20261020/`. Its `aggregate/` directory contains `trials.csv`, the unchanged acceptance-gated `summary.md` (37 unverified trials, zero accepted for compiler speedups) and `descriptive_statistics.md` (per-ROM means, medians, sample standard deviations, CVs, ranges and unique state-hash counts). The original nine qualifying logs remain at the paths named in `build_ps2_compiler_smoke/pcsx2_full_matrix/aggregate/trials.csv`; 28 additional raw logs are preserved under the new result directory. ROM assets and private resource files were not modified.
+
 Raw functional logs and the generated (all-unverified) CSV/Markdown reports are retained in ignored directories:
 
 - `build_ps2_compiler_smoke/mvs-trally-10k/pcsx2_10k.log`
