@@ -57,7 +57,7 @@ The following numbers come directly from `REGION(...)` declarations in the exist
 
 `sfa3ur1` and `kof96` each exceed 32 MiB even before all mandatory regions are accounted for, so they cannot qualify as complete resident workloads on a stock PS2. The remaining titles must be classified by actual successful no-cache execution and allocator evidence; their lower ROM-region totals are not proof that enough RAM exists.
 
-The MVS file-driven shortlist now uses `pbobbl2n` (Puzzle Bobble 2) and `trally` (Thrash Rally) instead of `mslug`. The local `pbobblen` (first Puzzle Bobble) ROM set failed loading because NJEMU requested the absent `068-v1.v1` sound file; **no ROM data was modified to work around it**. Puzzle Bobble 2 uses a separate locally complete ROM set and passed the no-cache short smoke test. NJEMU also defines `neodrift` (Neo Drift Out) and `overtop`, but those ROM archives were not present in the user's local MVS ROM directory at audit time. This does not imply the local archive names are mandatory for a future run. The original `mslug` observation remains in the historical static and PCSX2 audits below.
+The MVS file-driven shortlist now uses `pbobbl2n` (Puzzle Bobble 2) and `trally` (Thrash Rally) instead of `mslug`. The local `pbobblen` (first Puzzle Bobble) ROM set failed loading because NJEMU requested the absent `068-v1.v1` sound file; **no ROM data was modified to work around it**. Puzzle Bobble 2 uses a separate locally complete ROM set and passed the full-length no-cache PCSX2 test. NJEMU also defines `neodrift` (Neo Drift Out) and `overtop`, but those ROM archives were not present in the user's local MVS ROM directory at audit time. This does not imply the local archive names are mandatory for a future run. The original `mslug` observation remains in the historical static and PCSX2 audits below.
 
 ## Milestones
 
@@ -118,6 +118,26 @@ MVS has an optional **benchmark-only** BIOS choice to prevent an interactive BIO
 
 These results prove only that the short opt-in workloads function under PCSX2's PS2 memory model. The timing values are deliberately **not** reported as real-PS2 performance numbers. Even a `io_ops=0` result only confirms the currently wrapped POSIX/stdio entry points; direct PS2SDK IOP-RPC coverage and state equivalence remain unverified. Rebuild the default 500/10,000 configuration before physical-baseline collection, as these smoke ELFs were built for 30/300 frames.
 
+### MVS replacement ROMs: full-length PCSX2 functional runs (2026-10-20)
+
+A separate `build_ps2_compiler_bench_mvs_10k` GCC PS2 build used `GUI=OFF`, `USE_CACHE=OFF`, `PS2_COMPILER_BENCHMARK=ON`, `PS2_BENCHMARK_WARMUP=500`, and `PS2_BENCHMARK_FRAMES=10000`. For each ROM, the same ELF was **copied** into a private per-ROM stage directory, with a private selector; no files within `resources/` were changed.
+
+| ROM | CPU1 | Resident C-ROM | Resident PCM | Warm-up | Measured | Wrapped I/O | Final status |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `trally` — Thrash Rally | 1 MiB | 3 MiB | 1.5 MiB | 500/500 | 10,000/10,000 | 0 ops | `unverified` |
+| `pbobbl2n` — Puzzle Bobble 2 | 1 MiB | 10 MiB | 8 MiB | 500/500 | 10,000/10,000 | 0 ops | `unverified` |
+
+Both runs logged their normal game ROM loads before the measured interval and emitted a single `NJEMU_BENCHMARK_V1` record with `cache=off`, `resident=on`, `sound=on` and an end-state fingerprint. The MVS BIOS selection was completed before warm-up. PCSX2 timings are not comparable with real-PS2 measurements; even a successful 10,000-frame run does not establish a reproducible game trajectory between compiler builds.
+
+Raw functional logs and the generated (all-unverified) CSV/Markdown reports are retained in ignored directories:
+
+- `build_ps2_compiler_smoke/mvs-trally-10k/pcsx2_10k.log`
+- `build_ps2_compiler_smoke/mvs-pbobbl2n-10k/pcsx2_10k.log`
+- `build_ps2_compiler_smoke/qualified_10k_report/trials.csv`
+- `build_ps2_compiler_smoke/qualified_10k_report/summary.md`
+
+The PS2 toolchain build and host test suite pass, including matrix membership tests that require `trally` and `pbobbl2n` and reject the removed `mslug`. Benchmark runtime output still records `state=unverified` because a verified deterministic replay/oracle and complete filesystem-boundary instrumentation are outstanding.
+
 A further PS2 GCC build of `MVS` with `PS2_COMPILER_BENCHMARK=OFF` and `USE_CACHE=OFF` passed, confirming that the new benchmark-only BIOS path is excluded from normal builds. Host-tool tests also passed with synthetic comparable and divergent/incomplete logs. A real PCSX2 `wjammers` log was parsed through `njemu-tool ps2-benchmark report`; it produced CSV/Markdown with `unverified` status and no speedup.
 
 ### Build and runner examples
@@ -153,7 +173,7 @@ The runner stages runtime symlinks and a private `game_name.ini` outside `resour
 
 ## Acceptance checklist
 
-- [ ] All 11 candidates empirically classified on PS2, with allocation and 10,500-frame evidence.
+- [ ] All active benchmark candidates empirically classified on real PS2, with allocation and 10,500-frame evidence (12 matrix entries, including two statically ineligible titles).
 - [ ] Exactly N full emulated frames, no load/save/INI/ROM I/O in the interval.
 - [ ] No streaming cache or forced sound suppression, deterministic state/replay validated.
 - [ ] Structured trial output, report parsing, >=3 medians, failures never averaged.
