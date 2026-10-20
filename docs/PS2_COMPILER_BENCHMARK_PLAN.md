@@ -1,0 +1,76 @@
+# PS2 compiler benchmark plan
+
+Status: implementation in progress. Target: PS2 Emotion Engine / R5900; CPS1, CPS2, and MVS only. This is a development benchmark, not a canonical release configuration.
+
+## Goal and experiment contract
+
+Compare builds in which **only NJEMU-owned source objects** are compiled by GCC or experimental R5900 LLVM. PS2SDK, gsKit, ps2_drivers, startup objects, libc, archives and the final linker driver remain GCC-provided. Never infer real-hardware performance from PCSX2 wall time. Benchmark the original sound-enabled, rendering-enabled game loop, not a synthetic CPU loop.
+
+The default workload is 500 unmeasured warm-up frames then exactly 10,000 measured emulated frames, with VSync off, limiter off, automatic/manual frame skipping off/zero, overlay off, and sound on. Identical physical output, audio samplerate, input policy and game settings are required between compiler runs. Save-state deserialization and ROM/processed-asset loading must finish *before* warm-up and timing. Standard attract mode is a provisional workload only; a verified in-memory replay or state fixture is required for cross-compiler comparability.
+
+A run is accepted only when the complete ROM and audio samples are resident, the measured interval contains zero forbidden filesystem operations, both variants execute the same state trajectory, the number of frames is exact, and the measurement metadata agrees. An unsupported dependency, failed allocation, cache fallback, hash divergence, exit prior to completion, or log parse error is **ineligible/failed/incomparable**, never a speedup.
+
+## Repository audit (2026-10-20)
+
+- `src/emumain.c:update_screen()` is called once per emulated frame by CPS1, CPS2 and MVS after `timer_update_cpu()`. Frame pacing/presentation finishes in `update_screen()`. Instrument at this common frame boundary; do not create an alternate emulation loop. The Desktop `NJEMU_TEST_FRAME_LIMIT` is a separate test-only mechanism.
+- `ticker_driver->currentUs(ticker_data)` exists on PS2 via the SDK system timer and can return microseconds. Quantiles should be computed once *after* timing from fixed-size frame samples; avoid console formatting in the timed loop.
+- `src/common/no_gui.c` selects the ROM from `game_name.ini`, then calls `emu_main()`. Load-time configuration is reapplied inside `memory_init()` via `load_gamecfg()`; benchmark overrides must come after this config reload but before sound/CPU initialization.
+- CPS1 has no streaming cache; each candidate still needs successful full ROM allocation and repeatable scene verification.
+- CPS2 `load_rom_gfx1()` tries an empirical full-region allocation and `load_rom_gfx1_full_resident()`; with `USE_CACHE=ON` it may instead enter `cache_start()`. Benchmark with `USE_CACHE=OFF` and verify the selected allocation shape and load success.
+- MVS `memory_init()` retains an empirical C-ROM/PCM allocation plan; `load_rom_gfx3()` supports processed assets or streaming and `load_rom_sound1()` can allocate resident PCM. The benchmark must reject `disable_sound` and any PCM-demand-read state. `USE_CACHE=OFF` removes demand-read caching, not processed-asset loading. Encrypted sets may still need preprocessed files.
+- `NJEMU_CANONICAL_RELEASE=ON` forces cache on for PS2 CPS2/MVS and is incompatible with this benchmark. Use development builds with `NJEMU_CANONICAL_RELEASE=OFF`. PS2 currently enables global CMake LTO; mixed LLVM/GCC requires it disabled or made toolchain-aware.
+- Prior `PS2_MSLUG3_FRAME_PROFILE` switches were experimental and are *not* assumed available. Its timings show that CPU, rendering, cache and GPU stages overlap; never sum nested durations.
+- Unrelated local HDD change in `src/ps2/ps2_platform.c` and user-owned files under `resources/` must remain untouched.
+
+## Candidate and qualification matrix
+
+The authoritative file-driven candidates live in `benchmarks/ps2/roms.tsv`. All entries are **unqualified** until per-ROM PS2 allocation proof, 10,500-frame completion, zero-I/O audit and deterministic state comparisons exist. These are not expense rankings. Keep raw allocation values, firmware/BIOS identity, processed asset digests and evidence per game in separate result manifests, not guessed in the source matrix.
+
+| Core | Candidates | Starting hypothesis | Mandatory evidence |
+| --- | --- | --- | --- |
+| CPS1 | slammast, dino, punisher, sf2hf | No streaming-cache backend; CPS1 QSound and heavy sprite scenes may stress EE | Complete CPU/GFX/audio allocations, attract-mode suitability, stable state signature |
+| CPS2 | avsp, 19xx, ssf2t, sfa3ur1 | Decoded graphics size may exceed PS2 heap on larger sets | Empirical `gfx_fully_resident`, all PCM allocated, `USE_CACHE=OFF`, successful 10,500 frames |
+| MVS | kof96, mslug, wjammers | Smaller early games are promising *candidates*, not guaranteed resident | Empirical `gfx_fully_resident`, `pcm_fully_resident` when needed, sound stays on, no processed-file reads during timing |
+
+Do not substitute Metal Slug 3: previous real-hardware findings describe large demand-read C-ROM; this suite intentionally avoids streaming.
+
+## Milestones
+
+### M1 — Eligibility and baseline identity
+Audit per-game CPU/GFX/PCM allocation paths, ROM/processed-asset dependencies, actual PS2 heap probes and title-loop behavior. Use `USE_CACHE=OFF`; record the exact eligible, ineligible or unverified classification. Acceptance: no guessed eligible label and clear reasons for every excluded ROM.
+
+### M2 — Opt-in runtime
+Add a separate PS2-only CMake option and a small common benchmark recorder. At game startup enforce fixed runtime settings *after* `load_gamecfg()`, not before. At frame boundary warm up then measure exactly N completed frames; print a single parseable result, exit cleanly. Keep the default non-benchmark build unchanged. Include total, FPS, mean, min/max, P50/95/99, >16,666.7us count, frame count, build identity and completion code. Reserve space for CPU/render stage timing without manufacturing those values.
+
+### M3 — I/O, residency and deterministic replay
+Reject `USE_CACHE=ON` benchmark builds and any runtime cache activation. Add counted wrappers at real filesystem boundaries (including cache/processed assets and save-state path); instrument concurrent audio-thread access as needed. Separate I/O counters by operation and size. Capture a deterministic state signature each trial at the same emulated frame checkpoints, or use an input replay and state signature oracle. Reject divergent compiler runs before speedup calculation. A zero count is insufficient until all relevant filesystem paths are covered.
+
+### M4 — Host C99 runner and reporter
+Integrate `njemu-tool ps2-benchmark` with a TSV matrix and explicit command-line flags for `ps2client`, executable, ROM, compiler, frame count, repeats, timeout, output directory. Keep PS2Link capture logs, CSV trials and Markdown reports outside `resources/`. Parse only structured records; reject malformed output, incomplete runs, wrong ROM/core/compiler, unverified residency, nonzero I/O and missing state signatures. Three trials minimum; medians for duration and speedup; preserve all raw data. Never treat failure as zero time.
+
+### M5 — GCC functional and real hardware
+Build three targets with GCC, `GUI=OFF`, `USE_CACHE=OFF`. Exercise a short PCSX2 smoke test, then fixed 500/10,000 runs on *real* PS2 via PS2Link. Record ROM digests, hardware revision, PS2SDK/gsKit/ps2_drivers revisions, compiler version/flags, commit, audio/output settings and exact run transcripts. Only real hardware is accepted as the throughput baseline.
+
+### M6 — Experimental LLVM/R5900
+First check toolchain driver/triple, MIPS/R5900 ABI, -O3 support, calling convention, float/double and alignment assumptions, startup contracts, inline assembly, builtins and libcalls. Compile NJEMU sources with LLVM and link GCC-provided runtime archives with GCC `ld` driver. Produce an object manifest proving each object origin. Disable incompatible GCC/LLVM LTO (including `-flto`); compare matching non-LTO GCC baseline to LLVM. Do not rebuild third parties. If toolchain is absent, retain an explicit blocker and don't claim validation.
+
+### M7 — Comparable reports
+For each accepted game/scene, execute >=3 physical-hardware trials per compiler, alternating compiler order if thermal effects matter. Compare median total duration, speedup = GCC/LLVM, percentage improvement = (GCC-LLVM)/GCC*100. Report spread; investigate outliers. A differing state checksum, scenario, asset hash, sound or video configuration invalidates the comparison.
+
+## Instrumentation semantics and open risks
+
+The measured frame interval should be sampled at the common `update_screen()` completion boundary. Time zero follows the final warm-up frame, and final time is sampled after the last measured frame. This includes timer/CPU work, renderer, audio-thread contention and presentation except front-loaded startup. The initial warm-up may trigger a VBlank wait, but that is outside the measured interval. Background sound work may continue during or after exit; measured total is EE wall time, not summed CPU thread time.
+
+One sample per frame (microseconds) gives quantiles; their sum may differ slightly from a separate total wall-clock clock read because of timestamp overhead. Record overhead by repeatable empty ticker-pair tests and compare an instrumented vs noninstrumented short run. Stage durations can be nested and should be named accordingly.
+
+PS2Link's executable location, mount path, audio scheduling, and game selector are environment-specific; do not hard-code local memory-card or USB paths. The current checkout lacks `PS2DEV`/`PS2SDK` in the connected shell environment, so PS2 compiles need environment setup.
+
+## Acceptance checklist
+
+- [ ] All 11 candidates empirically classified on PS2, with allocation and 10,500-frame evidence.
+- [ ] Exactly N full emulated frames, no load/save/INI/ROM I/O in the interval.
+- [ ] No streaming cache or forced sound suppression, deterministic state/replay validated.
+- [ ] Structured trial output, report parsing, >=3 medians, failures never averaged.
+- [ ] Desktop host tests + affected PS2 builds pass; normal mode remains unchanged.
+- [ ] Physical PS2 GCC data collected and clearly distinguished from PCSX2.
+- [ ] Mixed-link LLVM object manifest verified; compiler comparisons validated.

@@ -1,0 +1,12 @@
+# Core	ROM	Scenario	Status	Notes
+CPS1	slammast	attract	unverified	Verify QSound, graphics, and allocation
+CPS1	dino	attract	unverified	Verify gameplay animation and allocation
+CPS1	punisher	attract	unverified	Verify QSound and decoded assets
+CPS1	sf2hf	attract	unverified	Verify YM2151 and scene determinism
+CPS2	avsp	attract	unverified	Require full decoded GFX in PS2 RAM
+CPS2	19xx	attract	unverified	Require full decoded GFX in PS2 RAM
+CPS2	ssf2t	attract	unverified	Require full decoded GFX in PS2 RAM
+CPS2	sfa3ur1	attract	unverified	Require full decoded GFX in PS2 RAM
+MVS	kof96	attract	unverified	Require full C-ROM and PCM residency
+MVS	mslug	attract	unverified	Require full C-ROM and PCM residency
+MVS	wjammers	attract	unverified	Require full C-ROM and PCM residency
