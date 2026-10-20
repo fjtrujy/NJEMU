@@ -813,6 +813,16 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     size_t i;
     CHECK(ps2_benchmark_median(values, 4) == 1500);
     CHECK(ps2_benchmark_median(values, 0) == 0);
+    {
+        char source_matrix[1024];
+        CHECK(path_join(source_matrix, sizeof(source_matrix),
+            source_dir, "benchmarks/ps2/roms.tsv"));
+        CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "trally"));
+        CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "pbobbl2n"));
+        CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "mslug"));
+        CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "kof96"));
+        CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "sfa3ur1"));
+    }
     CHECK(ps2_benchmark_forbidden_output("resources/cps1/benchmark-reports"));
     CHECK(!ps2_benchmark_forbidden_output(scratch_dir));
     CHECK(path_join(matrix, sizeof(matrix), scratch_dir, "roms.tsv"));
