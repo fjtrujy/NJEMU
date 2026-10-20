@@ -1,13 +1,15 @@
 # Core	ROM	Scenario	Status	Notes
-CPS1	slammast	attract	unverified	PCSX2 loaded complete ROM and ran 30 plus 300 frames; real hardware pending
-CPS1	dino	attract	unverified	Verify gameplay animation and allocation
-CPS1	punisher	attract	unverified	Verify QSound and decoded assets
-CPS1	sf2hf	attract	unverified	Verify YM2151 and scene determinism
-CPS2	avsp	attract	unverified	PCSX2 allocated full 16 MiB GFX and ran 30 plus 300 frames; real hardware pending
-CPS2	19xx	attract	unverified	Require full decoded GFX in PS2 RAM
-CPS2	ssf2t	attract	unverified	Require full decoded GFX in PS2 RAM
+CPS1	slammast	attract	unverified	PCSX2 full 500 plus 10000 frames passed; state trajectory remains unverified
+CPS1	dino	attract	unverified	PCSX2 full 500 plus 10000 frames passed; state trajectory remains unverified
+CPS1	punisher	attract	unverified	PCSX2 full 500 plus 10000 frames passed; state trajectory remains unverified
+CPS1	sf2hf	attract	unverified	PCSX2 full 500 plus 10000 frames passed; state trajectory remains unverified
+CPS2	avsp	attract	unverified	PCSX2 full 500 plus 10000 frames passed; resident 16 MiB GFX and 4 MiB PCM
+CPS2	ddtod	attract	unverified	Dungeons and Dragons Tower of Doom; PCSX2 30 plus 300 frames passed; resident 12 MiB GFX and 4 MiB PCM
+CPS2	ssf2	attract	unverified	Super Street Fighter II; PCSX2 30 plus 300 frames passed; resident 12 MiB GFX and 4 MiB PCM
+CPS2	19xx	attract	ineligible-memory	PCSX2 no-cache loading failed; 16 MiB GFX requires more than observed 14.7 MiB maximum available allocation
+CPS2	ssf2t	attract	ineligible-memory	PCSX2 no-cache loading failed; 16 MiB GFX requires more than observed 12.6 MiB maximum available allocation
 CPS2	sfa3ur1	attract	ineligible-memory	32 MiB decoded GFX plus 8 MiB sound exceeds retail PS2 EE RAM
 MVS	kof96	attract	ineligible-memory	32 MiB C-ROM plus 10 MiB samples exceeds retail PS2 EE RAM
 MVS	pbobbl2n	attract	unverified	Puzzle Bobble 2; PCSX2 500 warm-up plus 10000 frames passed; resident 10 MiB GFX and 8 MiB PCM
 MVS	trally	attract	unverified	Thrash Rally; PCSX2 500 warm-up plus 10000 frames passed; resident 3 MiB GFX and 1.5 MiB PCM
-MVS	wjammers	attract	unverified	PCSX2 allocated full 4 MiB C-ROM and ran 30 plus 300 frames; hardware pending
+MVS	wjammers	attract	unverified	PCSX2 full 500 plus 10000 frames passed; resident 4 MiB GFX and 4 MiB PCM

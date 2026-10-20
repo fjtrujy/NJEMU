@@ -186,6 +186,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
         char display[80];
         const ps2_benchmark_result_t *r = &t->value;
         double ms, mean, sampled_mean, fps, p95;
+        int trial_number = 1;
         memset(t, 0, sizeof(*t));
         if (strlen(logs[i]) >= sizeof(t->path)) {
             fprintf(stderr, "ps2-benchmark: log path too long\n");
@@ -219,6 +220,22 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
                 ++valid;
         }
         host_buffer_free(&raw);
+        /* Trial numbers are local to a core/ROM/compiler/environment group,
+         * not global indices in a mixed multi-ROM report. */
+        if (t->parsed) {
+            int previous;
+            for (previous = 0; previous < i; ++previous) {
+                const trial_t *prior = &trials[previous];
+                if (prior->parsed &&
+                    !strcmp(prior->value.core, r->core) &&
+                    !strcmp(prior->value.rom, r->rom) &&
+                    !strcmp(prior->value.compiler, r->compiler) &&
+                    !strcmp(prior->environment, t->environment))
+                    ++trial_number;
+            }
+        } else {
+            trial_number = i + 1;
+        }
         snprintf(display, sizeof(display), "%s", t->error[0] ? t->error : "accepted");
         ms = (double)r->total_us / 1000.0;
         mean = r->frames ? (double)r->total_us / (1000.0 * r->frames) : 0;
@@ -230,7 +247,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
             t->parsed ? r->rom : "unknown",
             t->parsed ? r->compiler : "unknown",
             t->environment[0] ? t->environment : "unknown",
-            i + 1, r->frames, ms, mean, sampled_mean, fps, p95,
+            trial_number, r->frames, ms, mean, sampled_mean, fps, p95,
             (double)r->core_update_us / 1000.0,
             (double)r->screen_update_us / 1000.0,
             r->ticker_pair_ns, r->io_ops,
@@ -245,7 +262,7 @@ int ps2_benchmark_write_reports(const char *matrix_path, const char *output_dir,
             "| %s | %s | %s | %s | %d | %u | %.3f | %.3f | %.3f | %.3f | %u | %s |\n",
             t->parsed ? r->core : "unknown", t->parsed ? r->rom : "unknown",
             t->environment[0] ? t->environment : "unknown",
-            t->parsed ? r->compiler : "unknown", i + 1, r->frames,
+            t->parsed ? r->compiler : "unknown", trial_number, r->frames,
             ms, mean, fps, p95, r->io_ops, display);
     }
 

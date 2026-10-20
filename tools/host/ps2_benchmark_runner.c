@@ -256,6 +256,7 @@ static void stop_child(pid_t pid)
     waitpid(pid, &status, 0);
 }
 
+/* 1: full capture; -1: explicit failure/incomplete record; 0: still running. */
 static int log_result(const char *path, const char *core, const char *rom,
     const char *compiler, unsigned frames)
 {
@@ -268,9 +269,14 @@ static int log_result(const char *path, const char *core, const char *rom,
         if (ps2_benchmark_parse((char *)file.data, &result, error, sizeof(error)) &&
             strcmp(result.core, core) == 0 &&
             strcmp(result.rom, rom) == 0 &&
-            strcmp(result.compiler, compiler) == 0 &&
-            result.expected == frames && result.frames == frames)
-            ok = 1;
+            strcmp(result.compiler, compiler) == 0) {
+            if (result.expected != frames || result.frames != frames ||
+                !strcmp(result.status, "failed") ||
+                !strcmp(result.status, "rejected"))
+                ok = -1;
+            else
+                ok = 1;
+        }
     }
     host_buffer_free(&file);
     return ok;
@@ -354,10 +360,13 @@ int ps2_benchmark_run(int argc, char **argv)
         started = time(NULL);
         while ((time(NULL) - started) < (time_t)timeout) {
             int child_status;
-            if (log_result(log, core, rom, compiler, frames)) {
+            int progress = log_result(log, core, rom, compiler, frames);
+            if (progress > 0) {
                 completed = 1;
                 break;
             }
+            if (progress < 0)
+                break;
             /* Do not burn the full timeout when PCSX2 rejects an ELF or
              * exits before the benchmark record has been written. */
             if (waitpid(launch, &child_status, WNOHANG) == launch)

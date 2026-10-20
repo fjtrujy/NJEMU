@@ -56,6 +56,9 @@ static uint32_t resident_cpu_bytes;
 static uint32_t resident_gfx_bytes;
 static uint32_t resident_pcm_bytes;
 static uint64_t state_fingerprint;
+static uint64_t m68k_fingerprint;
+static uint64_t z80_fingerprint;
+static uint64_t ram_fingerprint;
 static uint64_t configuration_fingerprint;
 static uint64_t cpu_start_us;
 static uint64_t render_start_us;
@@ -101,29 +104,54 @@ static void capture_state(void)
         Z80_R, Z80_I, Z80_IM, Z80_IFF1, Z80_IFF2, Z80_HALT
     };
     uint64_t hash = UINT64_C(14695981039346656037);
+    uint64_t m68k_hash = UINT64_C(14695981039346656037);
+    uint64_t z80_hash = UINT64_C(14695981039346656037);
+    uint64_t ram_hash = UINT64_C(14695981039346656037);
     unsigned i;
-    for (i = 0; i < sizeof(m68k_regs) / sizeof(m68k_regs[0]); ++i)
-        hash_register(&hash, m68000_get_reg(m68k_regs[i]));
-    for (i = 0; i < sizeof(z80_regs) / sizeof(z80_regs[0]); ++i)
-        hash_register(&hash, z80_get_reg(z80_regs[i]));
+    for (i = 0; i < sizeof(m68k_regs) / sizeof(m68k_regs[0]); ++i) {
+        uint32_t value = m68000_get_reg(m68k_regs[i]);
+        hash_register(&hash, value);
+        hash_register(&m68k_hash, value);
+    }
+    for (i = 0; i < sizeof(z80_regs) / sizeof(z80_regs[0]); ++i) {
+        uint32_t value = z80_get_reg(z80_regs[i]);
+        hash_register(&hash, value);
+        hash_register(&z80_hash, value);
+    }
 #if EMU_SYSTEM == CPS1
     hash_bytes(&hash, cps1_ram, sizeof(cps1_ram));
+    hash_bytes(&ram_hash, cps1_ram, sizeof(cps1_ram));
     hash_bytes(&hash, cps1_gfxram, sizeof(cps1_gfxram));
+    hash_bytes(&ram_hash, cps1_gfxram, sizeof(cps1_gfxram));
     hash_bytes(&hash, cps1_output, sizeof(cps1_output));
+    hash_bytes(&ram_hash, cps1_output, sizeof(cps1_output));
 #elif EMU_SYSTEM == CPS2
     hash_bytes(&hash, cps1_ram, sizeof(cps1_ram));
+    hash_bytes(&ram_hash, cps1_ram, sizeof(cps1_ram));
     hash_bytes(&hash, cps2_ram, sizeof(cps2_ram));
+    hash_bytes(&ram_hash, cps2_ram, sizeof(cps2_ram));
     hash_bytes(&hash, cps1_gfxram, sizeof(cps1_gfxram));
+    hash_bytes(&ram_hash, cps1_gfxram, sizeof(cps1_gfxram));
     hash_bytes(&hash, cps2_objram, sizeof(cps2_objram));
+    hash_bytes(&ram_hash, cps2_objram, sizeof(cps2_objram));
     hash_bytes(&hash, cps2_output, sizeof(cps2_output));
+    hash_bytes(&ram_hash, cps2_output, sizeof(cps2_output));
 #elif EMU_SYSTEM == MVS
     hash_bytes(&hash, neogeo_ram, sizeof(neogeo_ram));
+    hash_bytes(&ram_hash, neogeo_ram, sizeof(neogeo_ram));
     hash_bytes(&hash, neogeo_sram16, sizeof(neogeo_sram16));
+    hash_bytes(&ram_hash, neogeo_sram16, sizeof(neogeo_sram16));
     hash_bytes(&hash, neogeo_memcard, sizeof(neogeo_memcard));
-    if (memory_region_user3 != NULL)
+    hash_bytes(&ram_hash, neogeo_memcard, sizeof(neogeo_memcard));
+    if (memory_region_user3 != NULL) {
         hash_bytes(&hash, memory_region_user3, memory_length_user3);
+        hash_bytes(&ram_hash, memory_region_user3, memory_length_user3);
+    }
 #endif
     state_fingerprint = hash;
+    m68k_fingerprint = m68k_hash;
+    z80_fingerprint = z80_hash;
+    ram_fingerprint = ram_hash;
 }
 
 static void note_io(uint64_t bytes)
@@ -150,6 +178,9 @@ void ps2_benchmark_reset(void)
     resident_gfx_bytes = 0;
     resident_pcm_bytes = 0;
     state_fingerprint = 0;
+    m68k_fingerprint = 0;
+    z80_fingerprint = 0;
+    ram_fingerprint = 0;
     configuration_fingerprint = 0;
     cpu_start_us = render_start_us = 0;
     cpu_total_us = render_total_us = 0;
@@ -338,6 +369,12 @@ void ps2_benchmark_report(void)
         /* No state/replay oracle yet: never label the trial comparable. */
         status = "unverified";
 
+    /* Diagnostic only: the split fingerprints help identify a varying CPU,
+     * sound co-processor or RAM region between same-compiler trials. They do
+     * not turn an end-state snapshot into a deterministic replay oracle. */
+    printf("NJEMU_BENCHMARK_STATE_PARTS_V1 m68k=%016" PRIx64
+           " z80=%016" PRIx64 " ram=%016" PRIx64 "\n",
+           m68k_fingerprint, z80_fingerprint, ram_fingerprint);
     printf("NJEMU_BENCHMARK_V1 core=%s rom=%s compiler=%s "
            "warmup=%u frames=%u expected=%u total_us=%" PRIu64 " "
            "sample_sum_us=%" PRIu64 " mean_us=%" PRIu64 " "

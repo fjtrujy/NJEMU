@@ -821,9 +821,13 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
             source_dir, "benchmarks/ps2/roms.tsv"));
         CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "trally"));
         CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "pbobbl2n"));
+        CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "ddtod"));
+        CHECK(ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "ssf2"));
         CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "mslug"));
         CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "MVS", "kof96"));
         CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "sfa3ur1"));
+        CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "19xx"));
+        CHECK(!ps2_benchmark_matrix_can_attempt(source_matrix, "CPS2", "ssf2t"));
     }
     CHECK(ps2_benchmark_forbidden_output("resources/cps1/benchmark-reports"));
     CHECK(!ps2_benchmark_forbidden_output(scratch_dir));
@@ -890,6 +894,35 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
     CHECK(buffer_contains(&summary, "1.1667"));
     CHECK(buffer_contains(&summary, "14.29"));
     host_buffer_free(&summary);
+    CHECK(path_join(report_path, sizeof(report_path), output, "trials.csv"));
+    CHECK(host_read_file(report_path, &summary));
+    CHECK(buffer_contains(&summary, "CPS1,sf2hf,GCC,unknown,1,10000"));
+    CHECK(buffer_contains(&summary, "CPS1,sf2hf,GCC,unknown,3,10000"));
+    CHECK(buffer_contains(&summary, "CPS1,sf2hf,LLVM,unknown,1,10000"));
+    CHECK(buffer_contains(&summary, "CPS1,sf2hf,LLVM,unknown,3,10000"));
+    host_buffer_free(&summary);
+    CHECK(path_join(report_path, sizeof(report_path), output, "summary.md"));
+    /* Identical state metadata must not authorize a comparison between
+     * differently identified emulator environments. */
+    {
+        host_buffer_t original;
+        host_buffer_t tagged;
+        host_buffer_init(&original);
+        host_buffer_init(&tagged);
+        CHECK(host_read_file(log_path[4], &original));
+        CHECK(host_buffer_append_string(&tagged, "PCSX2 v2.9.93\n"));
+        CHECK(host_buffer_append(&tagged, original.data, original.size));
+        CHECK(host_write_file(log_path[4], tagged.data, tagged.size));
+        CHECK(ps2_benchmark_write_reports(matrix, output, 6, logs) == 0);
+        CHECK(host_read_file(report_path, &summary));
+        CHECK(buffer_contains(&summary, "PCSX2-v2.9.93"));
+        CHECK(buffer_contains(&summary, "divergent_state_or_configuration"));
+        CHECK(!buffer_contains(&summary, "1.1667"));
+        host_buffer_free(&summary);
+        CHECK(host_write_file(log_path[4], original.data, original.size));
+        host_buffer_free(&tagged);
+        host_buffer_free(&original);
+    }
     /* Preserve three accepted LLVM records but change the final fingerprint:
      * the report must not calculate a speedup from divergent emulated states. */
     {
