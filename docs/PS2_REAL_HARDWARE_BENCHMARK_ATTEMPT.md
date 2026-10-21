@@ -36,6 +36,24 @@ Before any renewed physical attempt: inspect the GS finish, VSYNC and GIF DMA sy
 
 **The ten-ROM / three-trial real-hardware GCC-vs-phase3 result is pending; do not substitute PCSX2 timings for physical PS2 results.**
 
+## One protected 240p GCC hardware retry (2026-10-21)
+
+With the user explicitly confirming PS2Link was ready, **one** additional supervised `CPS1`/`dino` GCC hardware trial was launched (500 warm-up + 10,000 measured frames; sound on, cache off). The private immutable ELF copy had SHA-256 `d8e417561e46e7197203edd9cbc6f1e2272b2b7e7294fdec9c25e7e1d1facdc2`. The CMake source build was 240p, `PS2_BENCHMARK_PS2LINK=ON`, external IRX image off. The platform object was independently verified to reference `SifIopSync` and `sceSifInitRpc`, but **not `SifIopReset`**. Neither `ps2client reset` nor a second automatic ELF launch was performed.
+
+The real console successfully loaded the ELF and printed startup messages through:
+
+```
+===> main, .../src/emumain.c:689
+FREEMTAP v1.0
+Pad Driver for OSD
+```
+
+The host log then **stopped growing for over 90 seconds**, without reaching the post-`pad_init()` message at `emumain.c:694`, CLUT allocation, `ROM set "dino"`, or any benchmark record. The launch client was stopped (without issuing an IOP reset or any additional remote ELF launch). PS2Link remained reachable on TCP port 18193 afterwards. The sole captured log and generated rejected-trial CSV/summary are preserved under `build_ps2_compiler_ps2link_20261021/hardware_gcc_240p_dino_supervised_20261021/`. The reporter correctly recorded **0 frames and `missing benchmark record`**, not an elapsed-time measurement.
+
+This latest block occurs **inside or immediately around pad initialization**, before video initialization, not at the older GS/CLUT wait. `pad_init()` delegates to `ps2_input.c:ps2_init()`, whose first external operation is `init_joystick_driver(true)` in the precompiled `ps2_drivers` library, followed by multitap initialization and pad polling. The PADMAN/MTAPMAN/PS2Link IOP interaction is now a better **hypothesis for this particular retry**, but the last stdout line does not prove the precise blocked function. Do not conflate this with the earlier trial that reached CLUT allocation, or imply that the video-mode change solved the full problem.
+
+The hardware tester has been left idle: no PS2Client process remains, the user-owned `src/ps2/ps2_video.c` edit remains unchanged, and **zero successful physical benchmark trials** have been collected. Before another physical launch, instrument the pad-init path only (outside timing), or evaluate a benchmark-only inputless attract-mode boot that uses exactly the same configuration for both compiler builds. Do not relaunch unattended while the console lifecycle remains unproven.
+
 ## Offline follow-up and confirmed diagnostic build error (2026-10-21)
 
 The second diagnostic ELF was **inadvertently rebuilt with `SifIopReset()` active**, after reverting the temporary platform source guard. This has now been confirmed by the GCC platform object's linker relocation and explains the loss of PS2Link during that diagnostic launch much more concretely than the earlier reset speculation. The original first trial, which got past IOP initialization to CLUT allocation, remains a **separate unproven GS/video hang**. Its archived ELF is a symlink into a subsequently overwritten build, not a preserved snapshot. Earlier successful physical tests were 240p; the failed first run was 480i and used a corrected GS FINISH predicate that reveals a precedence bug in earlier source. Both video modes pass short offline PCSX2 tests. See [PS2Link Startup Offline Investigation](PS2LINK_COMPILER_BENCHMARK_STARTUP_INVESTIGATION.md) for logs, C99 predicate demonstration, the new default-OFF `PS2_BENCHMARK_PS2LINK` build guard, safe rebuilt 240p candidates, and the requirement not to perform unattended hardware relaunches.
