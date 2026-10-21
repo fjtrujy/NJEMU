@@ -276,6 +276,10 @@ The PS2/GCC benchmark builds were rebuilt for **all three cores** after adding t
 
 The original 37 GCC timing observations remain useful as a *provisional* historical reference, but were collected before writable-stage isolation and should be rerun with frozen fixtures before any GCC-vs-LLVM comparison. The new validations reside in ignored directories named `build_ps2_compiler_smoke/mvs_fixed_rtc_*_20261020/`, `build_ps2_compiler_smoke/mvs_extended_io_diag_20261020/`, and `build_ps2_compiler_smoke/m3_extended_io_*_20261020/`. The benchmark record format and per-frame logging have not changed. PCSX2 host timing is not physical PS2 timing.
 
+### First LLVM/R5900 integration attempt (2026-10-21)
+
+The first Clang 24/R5900 build reached 64/68 CPS1, 61/64 CPS2 and 64/68 MVS LLVM-compiled objects; the remaining objects fail because the backend emits floating-point comparison instructions not supported by the R5900 assembler. A **diagnostic hybrid** CPS1 ELF using four GCC-compiled NJEMU objects linked and completed 10,000 frames in PCSX2, but is **not** a valid LLVM-only benchmark or GCC-versus-LLVM comparison. The old GCC baseline is also based on a different source fingerprint from the user-provided LZW replacement. Full compiler errors, a standalone C reproduction, object ownership, workaround findings, and next steps are in [PS2 LLVM/R5900 First Compiler Integration Report](PS2_LLVM_R5900_INITIAL_REPORT.md).
+
 ## Acceptance checklist
 
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).

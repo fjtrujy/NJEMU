@@ -12,11 +12,17 @@
 #include <stdio.h>
 #endif
 
+#if defined(PS2_FAST_CACHE)
 static bool cache_storage_available;
+#endif
 
 void ps2_cache_storage_set_available(bool available)
 {
+#if defined(PS2_FAST_CACHE)
 	cache_storage_available = available;
+#else
+	(void)available;
+#endif
 }
 
 static int ps2_cache_storage_open(const char *path)
