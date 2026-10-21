@@ -443,7 +443,7 @@ static void usage(void)
         "usage:\n"
         "  njemu-tool ps2-benchmark report MATRIX.tsv OUT_DIR [TRIAL.log ...]\n"
         "  njemu-tool ps2-benchmark matrix MATRIX.tsv\n"
-        "  njemu-tool ps2-benchmark run MATRIX.tsv CORE ROM COMPILER PS2CLIENT PS2_IP BUILD_DIR ELF_NAME OUT_DIR TRIALS TIMEOUT_SEC FRAMES\n"
+        "  njemu-tool ps2-benchmark run MATRIX.tsv CORE ROM COMPILER PS2CLIENT PS2_IP BUILD_DIR ELF_NAME OUT_DIR 1 TIMEOUT_SEC FRAMES\n"
         "  njemu-tool ps2-benchmark pcsx2 MATRIX.tsv CORE ROM COMPILER PCSX2_BIN BUILD_DIR ELF_NAME OUT_DIR TRIALS TIMEOUT_SEC FRAMES\n");
 }
 

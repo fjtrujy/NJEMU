@@ -1048,6 +1048,16 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         while ((entry = readdir(dir)) != NULL)
             CHECK(strncmp(entry->d_name, "ps2-stage-", 10) != 0);
         closedir(dir);
+        /* Never permit automatic multiple PS2Link EE launches. A failed
+         * program may leave the console in the OSD rather than PS2Link. */
+        {
+            char *hardware_args[14] = {
+                "ps2-benchmark", "run", source_matrix, "CPS1", "sf2hf",
+                "GCC", script, "192.0.2.1", build_dir, "CPS1.ELF",
+                out_dir, "3", "4", "10000"
+            };
+            CHECK(ps2_benchmark_run(14, hardware_args) == 2);
+        }
     }
 #endif
     (void)source_dir;

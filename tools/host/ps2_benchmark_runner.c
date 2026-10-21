@@ -340,13 +340,21 @@ int ps2_benchmark_run(int argc, char **argv)
     if ((strcmp(core, "CPS1") && strcmp(core, "CPS2") && strcmp(core, "MVS")) ||
         (strcmp(compiler, "GCC") && strcmp(compiler, "LLVM")) ||
         !safe_component(rom) || !safe_component(elf_name) ||
-        !parse_bounded(argv[pcsx2 ? 10 : 11], pcsx2 ? 1 : 3,
+        !parse_bounded(argv[pcsx2 ? 10 : 11], 1,
             PS2_BENCHMARK_MAX_TRIALS, &repeat) ||
         !parse_bounded(argv[pcsx2 ? 11 : 12], 1, 86400, &timeout) ||
         !parse_bounded(argv[pcsx2 ? 12 : 13], 1, 100000, &frames) ||
         ps2_benchmark_forbidden_output(output_dir) ||
         !host_make_directories(output_dir)) {
         fprintf(stderr, "ps2-benchmark: invalid launch arguments\n");
+        return 2;
+    }
+    /* A completed EE program does not necessarily return control to the
+     * resident PS2Link server. Never hot-relaunch unattended: each hardware
+     * trial requires a separately verified PS2Link session. */
+    if (!pcsx2 && repeat != 1) {
+        fprintf(stderr, "ps2-benchmark: PS2Link allows one trial per invocation; "
+            "re-verify the console session before the next launch\n");
         return 2;
     }
     if (!ps2_benchmark_matrix_can_attempt(matrix, core, rom)) {

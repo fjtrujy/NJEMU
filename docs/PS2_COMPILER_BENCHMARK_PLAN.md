@@ -288,6 +288,8 @@ The **complete three-trial, ten-ROM matrix** was subsequently executed for the L
 
 GCC and LLVM phase3 hybrid benchmark ELFs were built for all three cores, but real-hardware runs were **stopped without any valid trial** after two CPS1 startup failures returned the console to the OSD. The first reached video CLUT allocation; the second stopped earlier. The user reopened PS2Link. Neither automated PS2Link reset nor unattended relaunch is safe until diagnosed. See [PS2 Real-Hardware Benchmark — Incomplete Attempt](PS2_REAL_HARDWARE_BENCHMARK_ATTEMPT.md) for the preserved diagnostic artifacts, temporary IOP-reset workaround, and safe next steps. No real-PS2 performance comparison is available yet.
 
+The subsequent [offline startup investigation](PS2LINK_COMPILER_BENCHMARK_STARTUP_INVESTIGATION.md) found the second diagnostic ELF had **accidentally regained its `SifIopReset()` call** after a source restoration and incremental rebuild; the old manual compile flag was ineffective. The first GS/video hang remains unproven. An explicit default-OFF `PS2_BENCHMARK_PS2LINK=ON` build option now retains IOP-reset suppression across rebuilds, and the host runner prohibits unattended multi-trial PS2Link launches. New guarded GCC/phase3 CPS1 **240p** candidates were compiled and their platform objects audited, but not launched on the console. PCSX2 smoke tests passed in both 240p and 480i. Hardware timing remains pending.
+
 ## Acceptance checklist
 
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).

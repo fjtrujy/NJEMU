@@ -33,6 +33,10 @@
 typedef struct ps2_platform {
 } ps2_platform_t;
 
+#if defined(PS2_LINK_BENCHMARK) && !defined(PS2_BENCHMARK_PS2LINK)
+#error "PS2_LINK_BENCHMARK does not suppress IOP reset; configure with -DPS2_BENCHMARK_PS2LINK=ON"
+#endif
+
 #if defined(PS2_FAST_CACHE)
 static bool cacheio_driver_initialized;
 static bool cacheio_driver_requested;
@@ -41,8 +45,11 @@ static bool cacheio_driver_requested;
 static void reset_IOP()
 {
     SifInitRpc(0);
-	/* Comment this line if you don't wanna debug the output */
+    /* The resident PS2Link IOP server must not be reset by an EE benchmark.
+     * This opt-in mode is rejected for ordinary/non-PS2 CMake builds. */
+#if !defined(PS2_BENCHMARK_PS2LINK)
     while (!SifIopReset(NULL, 0)) {}
+#endif
     while (!SifIopSync()) {}
 }
 
