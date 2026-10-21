@@ -40,6 +40,18 @@ The GS interrupt wait can block if the registered INTC_GS callback does not sign
 
 ## Safe next investigation
 
+### Full-length 240p offline control (2026-10-21)
+
+In addition to the short 30+300-frame mode checks above, a fresh **normal-IOP 240p GCC CPS1** build completed **500 warm-up + 10,000 measured `slammast` frames in PCSX2 v2.9.93**. The log is retained at `build_ps2_compiler_ps2link_20261021/control_240p_pcsx2_results/CPS1_slammast_GCC_001.log`, with its own CSV and summary. It reports:
+
+- `CLUT VRAM: 0x230000` and successful `ROM set "slammast"` / audio initialization.
+- `total_us=65541527`, `frames=10000`, `io_ops=0`, `sound=on`, `cache=off`, `resident=on`, `status=unverified`.
+- `state_hash=cc8190d50bb2133f`, matching the recorded GCC PCSX2 `slammast` baseline; configuration fingerprint is different because this is a **240p** control rather than the earlier **480i** matrix.
+
+This confirms that the updated benchmark workload can reach completion using a 240p GS mode in PCSX2. It does **not** establish that 480i caused the physical hang. Another deliberately PS2Link-guarded 240p ELF stalled shortly after its startup banner when run in PCSX2, as expected from its reliance on the resident PS2Link IOP environment: **PCSX2 cannot validate the PS2Link IOP lifecycle with this setup**. That experiment was stopped; no physical-console launch was made. The two environments must not be conflated.
+
+The protected 240p GCC and phase3 hardware candidates in `safe_240p_10k/` were rechecked. Both have `PS2_BENCHMARK_PS2LINK=ON`, `PS2_EXTERNAL_IRX_IMAGE=OFF`, `PS2_VIDEO_MODE=240p`, and **no `SifIopReset` relocation** in their platform objects. Neither has been executed on the real PS2. The first physical attempt's original ELF is still unrecoverable as an immutable file because the runner staged it as a symlink to a subsequently rebuilt output.
+
 1. Keep hardware idle until a supervised **single** test is arranged with the user. Start from a protected GCC **240p** candidate, matching the previously working video configuration. Do not automatically reset the console or hot-launch the next ELF. Inspect IOP reset relocations again before that session.
 2. If startup still stalls after CLUT, instrument **only startup**, before the timed frame region, with markers before/after each clear and GS submit/wait; capture GS CSR FINISH, GS IMR, GIF DMA CHCR, `FirstFrame`, and callback/semaphore completion counts. Avoid logging from interrupt context. Ensure a missed interrupt cannot trigger repeated unattended launches. Prefer determining the failing fence over reverting an actual GS completion check.
 3. When a first entire hardware trial succeeds and PS2Link can be returned to a usable state reliably, schedule the remaining 30-trial GCC/phase3 matrix with **one supervised trial per console session**, preserving exactly matched ROM, sound, cache, video mode, sources and compiler provenance.
