@@ -284,6 +284,10 @@ The first Clang 24/R5900 build reached 64/68 CPS1, 61/64 CPS2 and 64/68 MVS LLVM
 
 The **complete three-trial, ten-ROM matrix** was subsequently executed for the LLVM 24 hybrid builds: **30/30** 500+10,000-frame trials finished in PCSX2 v2.9.93 with sound on, cache off, resident ROMs and zero wrapped I/O. Descriptive hybrid elapsed times range from **5.26% to 18.26% slower** than GCC 15.2.0; the ten-ROM equal-weight geometric mean slowdown is **11.26%**. This is **not** an all-LLVM performance measurement: per-core GCC fallback objects remain and source-worktree provenance differs from the historical GCC reference. Combined final-state hashes reproduce in six ROMs; CPS1 `sf2hf` diverges in main CPU/RAM and MVS titles still diverge in Z80 state. The interrupted first `trally` attempt was preserved and excluded, with three fresh trials completed. See [PS2 LLVM 24 Hybrid Benchmark Report](PS2_LLVM_24_HYBRID_BENCHMARK_REPORT.md) and the locally generated `build_ps2_compiler_llvm_20261021/hybrid_matrix_20261021/aggregate/exploratory_gcc_vs_llvm24_hybrid.csv` for the full result matrix and exact build provenance. Official compiler-speedup acceptance remains blocked until the R5900 backend is fixed, both compilers use an identical source snapshot, and state/I/O equivalence is verified.
 
+### Real PS2Link hardware follow-up (2026-10-21)
+
+GCC and LLVM phase3 hybrid benchmark ELFs were built for all three cores, but real-hardware runs were **stopped without any valid trial** after two CPS1 startup failures returned the console to the OSD. The first reached video CLUT allocation; the second stopped earlier. The user reopened PS2Link. Neither automated PS2Link reset nor unattended relaunch is safe until diagnosed. See [PS2 Real-Hardware Benchmark — Incomplete Attempt](PS2_REAL_HARDWARE_BENCHMARK_ATTEMPT.md) for the preserved diagnostic artifacts, temporary IOP-reset workaround, and safe next steps. No real-PS2 performance comparison is available yet.
+
 ## Acceptance checklist
 
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
