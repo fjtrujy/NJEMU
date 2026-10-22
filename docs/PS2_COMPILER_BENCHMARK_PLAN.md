@@ -308,6 +308,8 @@ The follow-up [Windjammers LLVM/R5900 regression investigation](PS2_WJAMMERS_LLV
 
 The [C68k dispatch code hotspot investigation](PS2_C68K_DISPATCH_LLVM_HOTSPOT.md) narrows the interpreter gap to the inlined bus-error exception block, records the dominant executed Windjammers opcodes, and validates an unlikely-branch hint under both compilers. Extracting the cold exception handler currently triggers another R5900 LLVM backend problem (`branch out of range`); the source report preserves its exact scope and limitations.
 
+For external LLVM/MIPS/R5900 developers, send the **single self-contained [LLVM/R5900 code-generation issue report](LLVM_R5900_CODEGEN_ISSUE_REPORT.md)**. It consolidates all benchmark tables, source-level isolations, assembly evidence, toolchain revisions, reproduction commands, logs, and the distinction between a measured performance difference and a proven LLVM version regression. The individual investigation reports remain archived for traceability.
+
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
 - [x] Exactly N completed frames, cache off and sound on for all 10 successful PCSX2 runs; no results were claimed for allocation failures.
 - [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; POSIX/stdio plus direct fileXio/fio entry points are now wrapped, but indirect/intra-object and low-level RPC bypasses are not yet certified.
