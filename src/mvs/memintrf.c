@@ -42,6 +42,12 @@
 #define M68K_AMASK M68K_ADDR_MASK
 #define Z80_AMASK Z80_ADDR_MASK
 
+#ifdef PS2_MVS_RAM_FASTPATH
+/* Keep frequent 0x1xxxxx RAM accesses ahead of the sparse address decoder.
+ * Without this hint, Clang folds the explicit RAM check into its jump table. */
+#define MVS_RAM_PAGE_LIKELY(offset) __builtin_expect((((offset) >> 20) == 0x1), 1)
+#endif
+
 #define READ_BYTE(mem, offset)							mem[offset ^ 1]
 #define WRITE_BYTE(mem, offset, data)					mem[offset ^ 1] = data
 
@@ -2207,7 +2213,7 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 
 	offset &= M68K_AMASK;
 #ifdef PS2_MVS_RAM_FASTPATH
-	if ((offset >> 20) == 0x1)
+	if (MVS_RAM_PAGE_LIKELY(offset))
 		return READ_MIRROR_BYTE(neogeo_ram, offset, 0x00ffff);
 #endif
 
@@ -2247,7 +2253,7 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 {
 	offset &= M68K_AMASK;
 #ifdef PS2_MVS_RAM_FASTPATH
-	if ((offset >> 20) == 0x1)
+	if (MVS_RAM_PAGE_LIKELY(offset))
 		return READ_MIRROR_WORD(neogeo_ram, offset, 0x00ffff);
 #endif
 
@@ -2290,7 +2296,7 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 
 	offset &= M68K_AMASK;
 #ifdef PS2_MVS_RAM_FASTPATH
-	if ((offset >> 20) == 0x1) {
+	if (MVS_RAM_PAGE_LIKELY(offset)) {
 		WRITE_MIRROR_BYTE(neogeo_ram, offset, data, 0x00ffff);
 		return;
 	}
@@ -2329,7 +2335,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 {
 	offset &= M68K_AMASK;
 #ifdef PS2_MVS_RAM_FASTPATH
-	if ((offset >> 20) == 0x1) {
+	if (MVS_RAM_PAGE_LIKELY(offset)) {
 		WRITE_MIRROR_WORD(neogeo_ram, offset, data, 0x00ffff);
 		return;
 	}
