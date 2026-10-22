@@ -65,6 +65,33 @@ To isolate the PADMAN/MTAP startup problem from the actual emulator workload, `P
 
 **No valid real-PS2 compiler timings were obtained.** The next useful physical action is **a single launch of the already-built protected and startup-instrumented ELF after a confirmed PS2Link EE restart**. The markers should then distinguish whether initial clears, GIF DMA, GS FINISH, VSYNC, or queue submission is blocking. Keep startup diagnostics outside measured frames; do not change GS synchronization based only on the last uninstrumented CLUT log. The full GCC/LLVM matrix should not be launched until an individual real-console test reliably completes and the next-launch lifecycle is proven safe.
 
+## Fresh PS2Link diagnostic — video initialization and ROM loading succeed (2026-10-22)
+
+After the user restarted PS2Link and confirmed readiness, one immutable, protected **GCC CPS1 `dino` startup-diagnostic** ELF was launched. The exact artifact is `build_ps2_compiler_ps2link_20261022/immutable_hardware_gcc_video_startup_diagnostic/CPS1.ELF`, SHA-256 `06cb8b8f786af0c803c95d56107c184923441ef9f0afc661182e38cff0ed30fc`. The build uses 240p video, `PS2_BENCHMARK_PS2LINK=ON`, `PS2_BENCHMARK_NO_INPUT=ON`, 500 warm-up and 10,000 measured frames; its platform object has **no IOP reset relocation**. The user-owned uncommitted `src/ps2/ps2_video.c` is byte-identical to its original pre-diagnostic backup; only the copied ELF contains diagnostic markers.
+
+This time, the real PS2 printed successful startup markers all the way through the initial GS queue, GIF submission, FINISH fence, and flip:
+
+```
+[video-diag] before initial-flip
+[video-diag] flip first wait CSR=551b600e first=0
+[video-diag] submit before GS wait first=0 tag=121 csr=551b600e
+[video-diag] submit before GIF wait
+[video-diag] submit before GIF send
+[video-diag] submit GIF issued mode=1
+[video-diag] flip GS finish complete
+[video-diag] after initial flip
+Checking ROM info...
+ROM set "dino"
+```
+
+It subsequently printed all ROM loads, initialized audio and ended the captured startup log with `Done.` **This disproves a consistent GS-video startup deadlock** with this guarded binary and confirms both pad bypass and real-console game loading are possible; it does not explain the earlier intermittent hangs. The last output was *not* a benchmark result.
+
+**Runner timeout mistake:** The supervised host invocation used a **90-second timeout**, which covered initial startup and ROM loading but not the additional 10,000 measured frames. The benchmark host runner stops its `ps2client execee` and `listen` children and deletes the private runtime staging directory when that timeout elapses. The resulting CSV correctly contains `missing benchmark record` and **zero valid measured frames**, even though the game finished loading on the console. An attempt to reconnect **only** `ps2client listen` without relaunching or resetting the console yielded no new output. Reconnection was stopped; PS2Link TCP port 18193 still accepted connections, but that does not establish that the remote EE program is ready for the next launch.
+
+- Captured startup trace: `build_ps2_compiler_ps2link_20261022/hardware_gcc_video_startup_diagnostic_002/CPS1_dino_GCC_001.log`.
+- The corrected next **single-trial** hardware invocation should use a **900-second host capture timeout** to encompass network ROM loading plus 10,000 emulated frames, and should begin only after the real console's PS2Link EE launcher has been rearmed; **do not issue an automatic remote `reset`, and do not hot-launch an ELF into an active EE program**. The 900 seconds is only a host safety timeout, *not* a performance measurement. Record the complete `NJEMU_BENCHMARK_V1` line and verify `frames=10000`, I/O, ROM, compiler, state, and source provenance before accepting it.
+- No physical LLVM phase3 ELF has been executed yet. Do not publish a physical GCC/LLVM comparison before independently completing both compiler configurations, with separate verified PS2Link launch sessions.
+
 ## Offline follow-up and confirmed diagnostic build error (2026-10-21)
 
 The second diagnostic ELF was **inadvertently rebuilt with `SifIopReset()` active**, after reverting the temporary platform source guard. This has now been confirmed by the GCC platform object's linker relocation and explains the loss of PS2Link during that diagnostic launch much more concretely than the earlier reset speculation. The original first trial, which got past IOP initialization to CLUT allocation, remains a **separate unproven GS/video hang**. Its archived ELF is a symlink into a subsequently overwritten build, not a preserved snapshot. Earlier successful physical tests were 240p; the failed first run was 480i and used a corrected GS FINISH predicate that reveals a precedence bug in earlier source. Both video modes pass short offline PCSX2 tests. See [PS2Link Startup Offline Investigation](PS2LINK_COMPILER_BENCHMARK_STARTUP_INVESTIGATION.md) for logs, C99 predicate demonstration, the new default-OFF `PS2_BENCHMARK_PS2LINK` build guard, safe rebuilt 240p candidates, and the requirement not to perform unattended hardware relaunches.
