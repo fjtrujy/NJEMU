@@ -137,7 +137,7 @@ C68k_Exec_Next:
 			if (CPU->ICount > 0)
 			{
 
-				if (BusErrHandling) {
+				if (__builtin_expect(BusErrHandling != 0, 0)) {
 					printf("BusError occured\n");
 					SWAP_SP();
 					PUSH_32_F(GET_PC() - 2);

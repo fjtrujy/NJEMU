@@ -161,6 +161,11 @@ a smaller opcode-level reproducer is still needed.
   `C68k_Exec`, then `Cz80_Exec`, then the YM2610 synthesis path.
   Prefer small backend reproductions and register/branch/instruction
   comparisons before changing emulator semantics.
+- The [C68k dispatch source investigation](PS2_C68K_DISPATCH_LLVM_HOTSPOT.md)
+  identifies the inlined, normally inactive bus-error branch in
+  `C68k_Exec` as the strongest concrete LLVM codegen sensitivity.
+  A semantics-preserving unlikely-branch hint improves 10,000-frame
+  LLVM timing by about 0.59 seconds without a meaningful GCC penalty.
 - The original `origin/llvm:ps2dev_llvm.cmake` is still separate.
   Consolidating the experimental LLVM toolchain flags into a canonical
   tracked configuration is recommended before broader compiler matrix

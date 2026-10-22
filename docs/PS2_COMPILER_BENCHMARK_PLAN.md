@@ -306,6 +306,8 @@ The [LLVM a6b9e2f PCSX2 unlimited-mode rerun report](PS2_LLVM_A6B9E2F_UNLIMITED_
 
 The follow-up [Windjammers LLVM/R5900 regression investigation](PS2_WJAMMERS_LLVM_REGRESSION.md) uses matched GCC/LLVM `-O3 -ffast-math` builds and isolated object relinks. It identifies `m68000_read_memory_8`, the `C68k_Exec` interpreter, the `Cz80_Exec` core, and the YM2610 synthesis source as the primary contributors. PS2 MVS RAM-branch hints recover approximately 3.20 seconds per 10,000 PCSX2 frames without changing access semantics; the strict verification gate remains unmet.
 
+The [C68k dispatch code hotspot investigation](PS2_C68K_DISPATCH_LLVM_HOTSPOT.md) narrows the interpreter gap to the inlined bus-error exception block, records the dominant executed Windjammers opcodes, and validates an unlikely-branch hint under both compilers. Extracting the cold exception handler currently triggers another R5900 LLVM backend problem (`branch out of range`); the source report preserves its exact scope and limitations.
+
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
 - [x] Exactly N completed frames, cache off and sound on for all 10 successful PCSX2 runs; no results were claimed for allocation failures.
 - [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; POSIX/stdio plus direct fileXio/fio entry points are now wrapped, but indirect/intra-object and low-level RPC bypasses are not yet certified.
