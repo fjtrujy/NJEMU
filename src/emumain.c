@@ -618,6 +618,16 @@ void save_snapshot(void)
 
 
 int main(int argc, char *argv[]) {
+#if defined(PS2_BENCHMARK_MASS_BOOT)
+	/* PS2Link starts us in host:. Select the USB ROM volume before
+	 * platform_driver->init() and its boot-device driver discovery.
+	 * Never silently fall back to host: for a mass benchmark. */
+	if (chdir("mass:/NJEMU/" TARGET_STR) != 0) {
+		perror("[ps2-benchmark] early mass: chdir failed");
+		return 1;
+	}
+	printf("[ps2-benchmark] early boot cwd=mass:/NJEMU/%s\n", TARGET_STR);
+#endif
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		printf("%s %s [%s/%s]\n", APPNAME_STR, NJEMU_RUNTIME_BUILD_ID, TARGET_STR, PLATFORM_STR);
 

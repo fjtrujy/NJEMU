@@ -94,6 +94,16 @@ void file_browser(void) {
 	if (!path_format(cache_dir, sizeof(cache_dir), "%scache", launchDir))
 		return;
 #endif
+#if defined(PS2_BENCHMARK_MASS_BOOT)
+	/* Keep every ROM choice read-only and independent of the USB
+	 * volume's game_name.ini. The build selects the benchmark ROM. */
+	if (snprintf(game_name, sizeof(game_name), "%s", PS2_BENCHMARK_ROM) >=
+		(int)sizeof(game_name)) {
+		printf("[ps2-benchmark] configured ROM name too long\n");
+		return;
+	}
+	printf("[ps2-benchmark] USB ROM selector: %s\n", game_name);
+#else
 	// Get the game name from a file called game_name.ini
 	{
 		char path[PATH_MAX];
@@ -114,6 +124,7 @@ void file_browser(void) {
 			close(fd);
 		}
 	}
+#endif
 #if (EMU_SYSTEM == NCDZ)
 	{
 		const char *ext;
