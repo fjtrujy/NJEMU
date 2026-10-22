@@ -1000,10 +1000,10 @@ static int test_ps2_benchmark(const char *source_dir, const char *scratch_dir)
         CHECK(path_join(script, sizeof(script), scratch_dir, "fake-pcsx2.sh"));
         CHECK(write_text(script,
             "#!/bin/sh\n"
-            "test \"$1\" = -nogui && test \"$2\" = -batch && test \"$3\" = -elf || exit 2\n"
-            "case \"$4\" in /*) ;; *) exit 3;; esac\n"
-            "test -f \"$4\" && test ! -L \"$4\" || exit 4\n"
-            "test \"$(cat \"$4\")\" = fake-elf || exit 5\n"
+            "test \"$1\" = -nogui && test \"$2\" = -batch && test \"$3\" = -unlimited && test \"$4\" = -elf || exit 2\n"
+            "case \"$5\" in /*) ;; *) exit 3;; esac\n"
+            "test -f \"$5\" && test ! -L \"$5\" || exit 4\n"
+            "test \"$(cat \"$5\")\" = fake-elf || exit 5\n"
             "test \"$(cat game_name.ini)\" = sf2hf || exit 6\n"
             "test -L asset.txt && test \"$(cat asset.txt)\" = shared-asset || exit 7\n"
             "test -d nvram && test ! -L nvram && test \"$(cat nvram/sf2hf.nv)\" = original-nvram || exit 9\n"

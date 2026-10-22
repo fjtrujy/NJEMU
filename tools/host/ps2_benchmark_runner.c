@@ -269,7 +269,9 @@ static pid_t spawn_pcsx2(const char *binary, const char *elf,
             dup2(output, STDERR_FILENO) < 0 || chdir(cwd) != 0)
             _exit(126);
         close(output);
-        execlp(binary, binary, "-nogui", "-batch", "-elf", elf, (char *)NULL);
+        /* Uncap PCSX2 itself, not only NJEMU's guest-side frame limiter. */
+        execlp(binary, binary, "-nogui", "-batch", "-unlimited", "-elf", elf,
+            (char *)NULL);
         _exit(127);
     }
     return pid;
