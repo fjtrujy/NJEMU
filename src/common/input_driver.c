@@ -6,6 +6,9 @@
 
 #include <stddef.h>
 #include <time.h>
+#if defined(PS2_BENCHMARK_NO_INPUT)
+#include <stdio.h>
+#endif
 
 #include "input_driver.h"
 #ifdef PS2_COMPILER_BENCHMARK
@@ -44,13 +47,22 @@ bool pad_init(void)
 	pressed_count = 0;
 	pressed_delay = 0;
 	menu_combo_down = false;
+#if defined(PS2_BENCHMARK_NO_INPUT)
+	/* Attract-mode benchmarks force neutral controls. Avoid initializing
+	 * the IOP pad/multitap stack when running under a resident PS2Link. */
+	input_info = NULL;
+	puts("[ps2-benchmark] physical controller initialization skipped");
+	return true;
+#else
 	input_info = input_driver->init();
 	return input_info != NULL;
+#endif
 }
 
 void pad_exit(void)
 {
-	input_driver->free(input_info);
+	if (input_info)
+		input_driver->free(input_info);
 	input_info = NULL;
 }
 
