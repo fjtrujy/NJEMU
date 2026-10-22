@@ -123,6 +123,27 @@ effects are possible.
    assigning all of the cost to `YM2610ContextUpdate`.
    Swapping `2610intf.c` and `sndintrf.c` does not explain the gap.
 
+### Static R5900 instruction census (diagnostic, not sampled execution)
+
+GNU MIPS `objdump -d` over the interpreter's respective object sections yields:
+
+| Function | Compiler | Total instructions | `addiu` | `nop` | `jalr` |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `C68k_Exec` | GCC | 53,884 | 4,592 | 371 | 3,080 |
+| `C68k_Exec` | LLVM | 60,778 | 9,525 | 1,117 | 3,082 |
+| `Cz80_Exec` | GCC | 5,860 | - | 972 | 76 |
+| `Cz80_Exec` | LLVM | 3,784 | - | 120 | 75 |
+
+LLVM's 68000 interpreter has 6,894 more static instructions, including
+4,933 more `addiu` and 746 more `nop` instructions. Repeated
+address arithmetic, immediate folding, and delay-slot scheduling are
+plausible **LLVM backend audit targets**, not proven dynamic causes:
+the 68000 opcode interpreter has many distinct basic blocks, and these
+counts do not weight how frequently each block executes. LLVM's
+smaller `Cz80_Exec` is a useful counterexample to treating code
+size as a direct performance predictor. Per-block execution profiling or
+a smaller opcode-level reproducer is still needed.
+
 ## Remaining validation limits and next steps
 
 - PCSX2 guest-clock measurements are **not physical PS2 performance**.
