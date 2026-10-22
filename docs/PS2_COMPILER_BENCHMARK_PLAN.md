@@ -302,6 +302,8 @@ The subsequent [offline startup investigation](PS2LINK_COMPILER_BENCHMARK_STARTU
 
 ## Acceptance checklist
 
+The [LLVM a6b9e2f PCSX2 unlimited-mode rerun report](PS2_LLVM_A6B9E2F_UNLIMITED_BENCHMARK_REPORT.md) records 90/90 completed descriptive trials, including the new all-Clang CPS1/CPS2/MVS object builds. Compiler-speedup validation remains gated by state equivalence and I/O coverage.
+
 - [x] All 10 active candidates completed 500+10,000 frames under PCSX2; four additional matrix entries are ineligible (two static, two empirical).
 - [x] Exactly N completed frames, cache off and sound on for all 10 successful PCSX2 runs; no results were claimed for allocation failures.
 - [ ] Comprehensive runtime filesystem/IOP-RPC audit proves no disk I/O during timing; POSIX/stdio plus direct fileXio/fio entry points are now wrapped, but indirect/intra-object and low-level RPC bypasses are not yet certified.
