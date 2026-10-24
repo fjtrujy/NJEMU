@@ -697,3 +697,95 @@ Recommended next step: run **full NJEMU on a real PS2**, or replay a larger
 trace of executed C68k opcode handlers with the production memory callbacks
 on the EE. PCSX2 alone cannot resolve whether the remaining ~11% difference
 is an actual R5900 hardware performance issue.
+
+## 2026-10-25 — new R5900 Clang `455ff9dd` Windjammers rerun
+
+The freshly installed Clang 24.0.0git reports
+`455ff9dd4b8a1c119df8046ddb19320d95f13fa8` from
+`rickgaiser/llvm-project` (`r5900-feature`). NJEMU source was at
+`f58bef110ac8810c5b37455afed0b8ccb668f420`; both compilers were
+freshly built from this identical snapshot, without source modifications.
+GCC is 15.2.0; existing GCC-built PS2SDK/gsKit/ps2_drivers and the
+GNU linker are used for both applications. No LLD or PS2Link was used.
+
+Each executable uses `-O3 -ffast-math`, the PS2 MVS RAM/native-word
+fast paths, `GUI=OFF`, `USE_CACHE=OFF`, sound enabled and the default
+**inlined** C68k bus-error handler. The benchmark runs in
+**PCSX2 v2.9.142**, unlimited mode, with 500 warm-up and 10,000 measured
+frames, three independent trials per configuration. All trials completed
+with their expected frame count, 4 MiB resident graphics, 4 MiB resident
+PCM, and zero *wrapped* I/O operations.
+
+### Actual repeated-run timing
+
+Numbers below are **guest-reported elapsed seconds**, not host wall time.
+Smaller is better. Previous results came from the same PCSX2 version;
+comparing the fresh GCC control with the fresh Clang run is the most
+controlled comparison.
+
+| Build | Individual 10,000-frame trials (s) | Median (s) | Difference vs current GCC |
+| --- | --- | ---: | ---: |
+| GCC 15.2.0 (fresh) | 55.313896, 55.326542, 55.326542 | **55.326542** | baseline |
+| Previous Clang `6f31245b` | historical three trials | **61.442633** | +11.02% (against its contemporaneous GCC baseline) |
+| New Clang `455ff9dd` | 58.574831, 58.534310, 58.579214 | **58.574831** | **+5.87%** |
+
+The new Clang median is **2.867802 s (4.67%) faster** than the old
+Clang median in PCSX2, but **3.248289 s slower (5.87%)** than the current
+fresh GCC control. Roughly half of the previous relative regression has
+been recovered, **not all** of it. CPU-core update time increased from
+about **45.754 s** (GCC) to **48.061 s** (Clang), and screen update time
+from about **9.101 s** to **10.040 s**. Timing spread was less than
+0.08% for each pure-compiler build.
+
+### Isolating the remaining code-generation gap
+
+The following **three-trial exploratory hybrids** were made only inside
+ignored build directories. Starting from the new LLVM MVS link, selected
+NJEMU translation-unit objects were replaced with fresh GCC `-O3` objects;
+all other LLVM objects, SDKs and linker remained unchanged. The hybrid
+logs call themselves `compiler=LLVM`, meaning *majority compiler*, not
+that every object was built by Clang. Swapping objects may also change
+link layout; the values are diagnostic rather than accepted speedups.
+
+| Objects replaced with GCC in new Clang ELF | Median (s) | Compared with pure new Clang |
+| --- | ---: | ---: |
+| None | 58.574831 | baseline |
+| `src/cpu/m68000/c68k.c.obj` | **56.826993** | -1.747838 s |
+| `c68k.c.obj`, `src/mvs/memintrf.c.obj`, `src/cpu/z80/cz80.c.obj`, `src/sound/ym2610.c.obj` | **55.171087** | -3.403744 s |
+| Pure GCC (no substitutions) | **55.326542** | -3.248289 s |
+
+Replacing **C68k alone recovers ~54% of the observed gap**. Replacing
+those **four known hot translation units** brings the largely LLVM
+binary within approximately 0.28% of the pure-GCC control (slightly
+faster in this linker-layout-sensitive experiment). These same units
+were independently identified in the earlier Windjammers investigation;
+the current regression remains concentrated there rather than being
+spread indiscriminately through the emulator.
+
+The static `C68k_Exec` symbol size is **223,204 bytes** under new Clang,
+versus **227,436 bytes** with previous Clang and **214,616 bytes** with
+fresh GCC. Smaller code alone does not establish faster execution.
+
+### Correctness and provenance limits
+
+All fresh pure-GCC, pure-Clang and hybrid trials have matching sampled
+M68000 fingerprint `1087498fd82be399` and RAM fingerprint
+`d9c70061d1a1352e`. The Z80 fingerprint **varies between trials of
+the same compiler**, so full end-state equivalence remains unverified.
+Reported `state=unverified` and `status=unverified` are intentional;
+the official report rightly rejects these as *validated speedups*.
+The I/O wrapper does not audit every possible IOP operation.
+
+All raw logs, individual `trials.csv`, `summary.md`, source revision,
+installed compiler version, matched build directories and the temporary
+hybrid script are preserved under the ignored
+`build_ps2_wjammers_llvm455_20261025/`. The standalone LLVM
+`MVS.ELF` and `c68k.c.obj` were restored **SHA-256 byte-for-byte**
+after both hybrid runs. The existing ROMs and `resources/` were
+neither modified nor committed.
+
+**Recommended next compiler investigation:** compare the executed
+`C68k_Exec` hot opcode handler paths and MVS memory callbacks in
+GCC vs Clang first; also compare `Cz80_Exec` and
+`YM2610ContextUpdate`. The benchmark shows real remaining **PCSX2**
+overhead but says nothing conclusive about **physical EE** throughput.
