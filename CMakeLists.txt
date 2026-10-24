@@ -93,6 +93,13 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
 option(PS2_COMPILER_BENCHMARK "PS2: deterministic no-cache compiler benchmark" OFF)
+option(PS2_C68K_OUTLINE_BUS_ERROR "PS2: compare out-of-line 68000 bus-error exception handling" OFF)
+if(PS2_C68K_OUTLINE_BUS_ERROR)
+    if(NOT PLATFORM STREQUAL "PS2")
+        message(FATAL_ERROR "PS2_C68K_OUTLINE_BUS_ERROR requires PLATFORM=PS2")
+    endif()
+    add_compile_definitions(C68K_OUTLINE_BUS_ERROR=1)
+endif()
 option(PS2_BENCHMARK_PS2LINK "PS2 compiler benchmark under resident PS2Link: preserve the IOP" OFF)
 option(PS2_BENCHMARK_NO_INPUT "PS2 headless compiler benchmark: omit physical pad/IRX initialization" OFF)
 option(PS2_BENCHMARK_MASS_BOOT "PS2Link benchmark: use mass:/NJEMU/<TARGET> before any driver initialization" OFF)
@@ -1725,6 +1732,21 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    if("${TARGET}" STREQUAL "MVS")
+        foreach(mode IN ITEMS inline outlined)
+            add_executable(c68k_bus_error_${mode}_tests
+                tests/c68k_bus_error_tests.c
+                src/cpu/m68000/c68k.c)
+            target_include_directories(c68k_bus_error_${mode}_tests PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/src")
+            if(mode STREQUAL "outlined")
+                target_compile_definitions(c68k_bus_error_${mode}_tests PRIVATE
+                    C68K_OUTLINE_BUS_ERROR=1)
+            endif()
+            add_test(NAME c68k_bus_error_${mode}_tests
+                COMMAND c68k_bus_error_${mode}_tests)
+        endforeach()
+    endif()
     add_test(NAME elf_footprint_host_tests
         COMMAND "${NJEMU_HOST_TEST}"
             --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"

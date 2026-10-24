@@ -560,3 +560,140 @@ For tracking, two separate LLVM issues may be appropriate:
 **Issue B — MIPS/R5900 branch range / assembler:** semantic-preserving outlining or simple profiling growth causes invalid out-of-range branches in Clang-generated `c68k.c` assembly. Attach the actual failing `.s` plus the exact compiler and GNU-as versions and the offending branch/target. This is separate from source-optimization quality and may be a stronger initial compiler correctness reproducer.
 
 **Bottom line:** This is a credible and reproducible *compiler code-generation issue candidate* worth investigating, but calling it conclusively an "LLVM regression" or a proven "R5900 backend bug" would overstate the available evidence. The source bisection and assembler failure make it actionable without that claim.
+
+## 13. Retest: newly installed Clang, 2026-10-24
+
+This section supersedes the **compiler revision and timing** in the
+historical sections above; the older measurements are retained for comparison.
+The LLVM developer's response to this report described two changes on
+`r5900-feature`: `c93727950240` (long-branch expansion accounts for
+aligned-block padding) and `b9274b908116` (fold repeated R5900 address
+additions into memory offsets after register allocation). The developer also
+reported a **separate synthetic real-PS2 test**, exercising about 11 C68k
+handlers, where GCC 15.2 ran at 50.34 Mcycles/s and Clang at 49.95 before,
+49.85 after the fold. That experiment did **not** exercise NJEMU's full
+memory callbacks or its much larger game-specific instruction footprint.
+Those hardware results are the developer's, **not** measurements reproduced
+in the NJEMU checkout.
+
+### Installed compiler and fix verification
+
+- New installed Clang: **24.0.0git**, `rickgaiser/llvm-project` revision
+  **`6f31245b7434ed1c55d341d544d10a7e8d003766`** (branch `r5900-feature`).
+  Installed compiler SHA-256:
+  `24bdb817d20adc1e17623f5cb98412c23efd21e5705df58d65b38adc5f7a9d1c`.
+- GCC reference stays PS2DEV **15.2.0**.
+- `c93727950240` is an ancestor of the installed revision. The specific
+  `b9274b908116` hash from the developer's response was **not** verified as
+  an ancestor under that exact hash; the new generated code directly shows
+  the expected reduction in address additions. Do not assume a commit's
+  identity solely from its intended effect.
+- All four **complete** NJEMU MVS benchmark ELFs compiled successfully:
+  GCC/Clang with the existing inline bus-error handling and GCC/Clang with a
+  guarded `noinline` helper. The outlined Clang object previously failed
+  GNU `as` with `branch out of range`; this compilation now succeeds.
+- The existing RAM-page and bus-error `__builtin_expect` hints remain enabled
+  in every trial, and the two compilers still use matched
+  `-O3 -ffast-math -fomit-frame-pointer` settings, the same prebuilt GCC
+  libraries and GCC linker, `-mvu0` **off**, and the same local source edit
+  to `src/ps2/ps2_video.c` (left untouched).
+
+### 3 x 10,000-frame Windjammers controls (PCSX2 only)
+
+Warm-up **500** frames; sound on; GUI off; no streaming cache;
+`-nogui -batch -unlimited -elf`; no VU0. Values are medians of **three**
+successful 10,000-frame samples each, in seconds of measured guest time.
+
+| Build | Inlined bus-error handler | Outlined handler | Outlining effect |
+| --- | ---: | ---: | ---: |
+| GCC 15.2.0 | **55.341542 s** | **55.304675 s** | -0.036867 s |
+| New Clang `6f31245b` | **61.442633 s** | **61.188186 s** | **-0.254447 s** |
+
+With the original inlined handler, the new Clang is about **11.0% slower**
+than GCC in PCSX2, down from about **13.1%** for old Clang with the same
+RAM/bus-error hints. Its median time improves from **62.575038 s** to
+**61.442633 s**, or **1.132405 s (1.81%)**. No real-PS2 hardware timing
+can be inferred from this comparison.
+
+The outline variant improves the new Clang by about **0.41%** under PCSX2;
+it does **not** explain the remaining gap. GCC changes by less than 0.1%.
+The option is therefore retained as **opt-in**, not applied by default to
+the released emulator. To build the variant, add
+`-DPS2_C68K_OUTLINE_BUS_ERROR=ON` to a PS2 CMake configuration. Its
+default is `OFF`; it is rejected for non-PS2 platforms.
+
+The updated, *inlined* LLVM build was additionally tested on two more
+resident MVS attract-mode ROMs, each with **three** 10,000-frame trials and
+identical benchmark flags:
+
+| MVS ROM | GCC 15.2.0 median | New Clang median | Clang time increase |
+| --- | ---: | ---: | ---: |
+| `wjammers` | 55.341542 s | 61.442633 s | **11.02%** |
+| `pbobbl2n` | 65.930692 s | 70.789812 s | **7.37%** |
+| `trally` | 72.036340 s | 79.511911 s | **10.38%** |
+
+These results are consistent with a remaining PCSX2 timing difference
+across MVS workloads. They still do **not** establish a comparable gap
+on the real EE, whose cache/pipeline behavior PCSX2 does not accurately
+reproduce. Only Windjammers was retested with the outlined handler.
+
+### Current static C68k machine code
+
+Instructions counted directly from the function's section in the retained
+PS2 GCC/Clang `.obj` files with GNU `objdump -d`; static counts are **not**
+dynamic instruction counts.
+
+| Object | `C68k_Exec` bytes | Instructions | `addiu` | `nop` | `jalr` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Previous Clang `a6b9e2f`, inline, with hints | 246,084 | 61,522 | 9,623 | 1,180 | 3,082 |
+| New Clang `6f31245b`, inline, with hints | **227,436** | **56,860** | **5,122** | 935 | 3,082 |
+| New Clang `6f31245b`, outlined | 225,868 | 56,468 | 4,665 | 983 | 3,075 |
+| GCC 15.2.0, inline | 214,616 | 53,654 | 4,588 | 366 | 3,080 |
+| GCC 15.2.0, outlined | 213,184 | 53,296 | 4,670 | 358 | 3,073 |
+
+New Clang reduces the same inlined interpreter by **18,648 bytes (7.58%)**
+and **4,501 static `addiu`** instructions. These numbers strongly support
+the address-fold optimization described in the developer's response; they
+do **not** prove that code-size reduction causes the observed PCSX2
+performance change or that it has the same effect on R5900 hardware.
+
+### Source change, semantic check and limitations
+
+- `src/cpu/m68000/c68k.c` now has a guarded
+  `C68k_HandleBusError(c68k_struc *, uintptr_t)` helper, containing **all**
+  the original bus-error stack/PC/flag operations. The original inline
+  implementation is still the default. The helper is only compiled when
+  `C68K_OUTLINE_BUS_ERROR` is defined; PS2 CMake exposes this through the
+  opt-in switch noted above.
+- A new C99 host test builds the genuine interpreter with the handler both
+  inline and outlined, forces `BusErrHandling=1`, injects an exception
+  vector targeting a NOP, and checks the resulting PC, stack pointer,
+  supervisor state, write count/order checksum and cycle consumption.
+  Both configurations **pass** and produce identical expected states;
+  the two new registered Desktop MVS CTest cases both passed.
+- **All** captured emulator runs still report `status=unverified` because
+  asynchronous sound/Z80 state diverges between otherwise repeated runs;
+  wrapper I/O counts are zero but do not cover all possible SDK/IOP paths.
+  These are *descriptive PCSX2 measurements*, not validated speedups.
+- The old PS2Link-based **full-emulator hardware benchmarking** path remains
+  blocked by a previous GS/CLUT startup problem. No new physical hardware
+  experiment was completed. The compiler developer's small, real-hardware
+  C68k test and this full NJEMU PCSX2 test must not be conflated.
+
+### Reproduce locally (ignored artifacts)
+
+`build_ps2_compiler_r5900_20261024/` contains all four PS2
+build directories (`gcc`, `llvm`, `gcc_outline`, `llvm_outline`), raw
+Windjammers, Puzzle Bobble 2 and Thrash Rally trials under `trials/`,
+corresponding CMake configure/build logs and
+the small, ignored exception-path comparison harness.
+
+The old Clang objects and logs are preserved under
+`build_ps2_compiler_wjammers_aligned_20261022/`. The new configuration
+uses the existing ignored `r5900-feature-toolchain.cmake` and the **updated
+installed LLVM binary** rather than modifying that historical file.
+
+Recommended next step: run **full NJEMU on a real PS2**, or replay a larger
+trace of executed C68k opcode handlers with the production memory callbacks
+on the EE. PCSX2 alone cannot resolve whether the remaining ~11% difference
+is an actual R5900 hardware performance issue.

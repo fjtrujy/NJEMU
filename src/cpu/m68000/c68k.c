@@ -114,6 +114,27 @@ void C68k_Reset(c68k_struc *CPU)
 extern uint32_t BusErrHandling;
 extern uint32_t BusErrAdr;
 
+#ifdef C68K_OUTLINE_BUS_ERROR
+/* Keep the rare exception work outside the computed-goto interpreter.
+ * This is also useful for comparing R5900 backends with identical semantics. */
+static __attribute__((noinline)) uintptr_t C68k_HandleBusError(c68k_struc *CPU, uintptr_t PC)
+{
+	uint32_t res;
+	printf("BusError occured\n");
+	SWAP_SP();
+	PUSH_32_F(GET_PC() - 2);
+	PUSH_16_F(GET_SR());
+	CPU->A[7] -= 2;
+	PUSH_32_F(BusErrAdr);
+	CPU->A[7] -= 2;
+	CPU->flag_S = C68K_SR_S;
+	PC = READ_MEM_32((C68K_BUS_ERROR_EX) << 2);
+	SET_PC(PC);
+	BusErrHandling = 0;
+	return PC;
+}
+#endif
+
 int32_t C68k_Exec(c68k_struc *CPU, int32_t cycles)
 {
 	if (CPU)
@@ -138,6 +159,9 @@ C68k_Exec_Next:
 			{
 
 				if (__builtin_expect(BusErrHandling != 0, 0)) {
+#ifdef C68K_OUTLINE_BUS_ERROR
+					PC = C68k_HandleBusError(CPU, PC);
+#else
 					printf("BusError occured\n");
 					SWAP_SP();
 					PUSH_32_F(GET_PC() - 2);
@@ -149,6 +173,7 @@ C68k_Exec_Next:
 					PC = READ_MEM_32((C68K_BUS_ERROR_EX) << 2);
 					SET_PC(PC);
 					BusErrHandling = 0;
+#endif
 				}
 
 
