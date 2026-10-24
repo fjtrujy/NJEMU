@@ -140,3 +140,41 @@ benchmark flag is rejected.
 
 The canonical release toolchains, default PS2 linker, ROM files and
 `resources/` were not changed.
+
+## One supervised retry after PS2Link was manually rearmed (2026-10-24)
+
+The user confirmed that PS2Link was ready again. Before attempting the
+new LLVM diagnostic, the Mac could connect to `192.168.1.10:18193`;
+no previous `ps2client` processes were running. The candidate retained
+the expected PS2Link/CPS1/240p/no-input/no-cache/no-external-IRX settings.
+The platform object still had **no** `SifIopReset` relocation.
+
+Exactly **one** `execee host:CPS1.ELF` invocation was performed with
+concurrent `listen` and a preceding `netdump` request; no remote reset,
+automatic retry or other ELF launch was issued. The preserved immutable
+ELF, SHA-256
+`1e181be19c06e1eaa8b16a76b9afb6aa53d045e143f31ba81defccdfb0dc0b39`,
+is under
+`build_ps2_link_llvm_cps1_dino_20261024/hardware_single_trial_20261024_retry/`.
+
+**Result: no output.** All three files `listen.log`, `launch.log` and
+`netdump.log` remained **0 bytes** despite more than 90 seconds of
+host capture. Neither a PS2Link `loadelf` banner nor any application
+checkpoint was observed, so this attempt provides **no evidence that
+the ELF actually reached the EE loader or `main()`**. The prior,
+separate physical run remains the only confirmed execution of LLVM
+NJEMU on this console.
+
+The PS2Link TCP endpoint stopped responding during capture. Both local
+`ps2client` processes were terminated; their exits were collected,
+and no remote reset/relaunch was sent. The endpoint was still
+unreachable afterward. The extra ROM path/CRC logging thus **has not
+yet run on real hardware**, and the cause of the previous missing-ROM
+message remains unknown.
+
+**Next action:** the physical PS2Link EE execution service must be
+rearmed and confirmed functional at the console. An open TCP port alone
+does not establish that the EE launcher is ready. Once independently
+verified, attempt at most one new supervised run. If there is still no
+`loadelf` banner, diagnose the PS2Link loader/EE session before
+changing NJEMU's ROM or GS code.
