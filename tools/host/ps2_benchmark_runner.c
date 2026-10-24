@@ -1,3 +1,7 @@
+#ifndef _WIN32
+/* realpath() is XSI; _POSIX_C_SOURCE alone does not expose it on musl. */
+#define _XOPEN_SOURCE 700
+#endif
 #define _POSIX_C_SOURCE 200809L
 #if defined(__APPLE__)
 #define _DARWIN_C_SOURCE 1
