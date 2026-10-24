@@ -201,6 +201,10 @@ void ps2_benchmark_apply_options(void)
 void ps2_benchmark_frame_begin(void)
 {
     if (!residency_checked) {
+#if defined(PS2_STARTUP_TRACE)
+        printf("[ps2-boot] benchmark: entering first frame; calibration begin\n");
+        fflush(stdout);
+#endif
         uint64_t begin_calibration;
         uint64_t end_calibration;
         volatile uint64_t sink = 0;
@@ -231,6 +235,12 @@ void ps2_benchmark_frame_begin(void)
         hash_register(&configuration_fingerprint, (uint32_t)option_video_offset_y);
         hash_register(&configuration_fingerprint, (uint32_t)machine_sound_type);
         residency_checked = true;
+#if defined(PS2_STARTUP_TRACE)
+        printf("[ps2-boot] benchmark: residency checked cpu=%lu gfx=%lu pcm=%lu\n",
+            (unsigned long)resident_cpu_bytes, (unsigned long)resident_gfx_bytes,
+            (unsigned long)resident_pcm_bytes);
+        fflush(stdout);
+#endif
         resident_cpu_bytes = memory_length_cpu1;
         resident_pcm_bytes = memory_length_sound1;
 #if EMU_SYSTEM == MVS
@@ -300,6 +310,13 @@ void ps2_benchmark_frame_end(void)
 
     if (warmup_completed < PS2_BENCHMARK_WARMUP) {
         ++warmup_completed;
+#if defined(PS2_STARTUP_TRACE)
+        if (warmup_completed == 1 || warmup_completed == PS2_BENCHMARK_WARMUP) {
+            printf("[ps2-boot] benchmark: warmup=%lu/%u\n",
+                (unsigned long)warmup_completed, (unsigned)PS2_BENCHMARK_WARMUP);
+            fflush(stdout);
+        }
+#endif
         return;
     }
     if (measured_completed >= PS2_BENCHMARK_FRAMES)
@@ -310,6 +327,13 @@ void ps2_benchmark_frame_end(void)
     samples_us[measured_completed] =
         delta > UINT32_MAX ? UINT32_MAX : (uint32_t)delta;
     ++measured_completed;
+#if defined(PS2_STARTUP_TRACE)
+    if (measured_completed == 1 || (measured_completed % 1000u) == 0u) {
+        printf("[ps2-boot] benchmark: measured=%lu/%u\n",
+            (unsigned long)measured_completed, (unsigned)PS2_BENCHMARK_FRAMES);
+        fflush(stdout);
+    }
+#endif
     if (measured_completed == PS2_BENCHMARK_FRAMES) {
         stop_us = now;
         measuring = 0;

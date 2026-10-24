@@ -5,6 +5,7 @@
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
 #include "ps2/ps2_cache_storage.h"
+#include "ps2/ps2_startup_trace.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
@@ -44,13 +45,16 @@ static bool cacheio_driver_requested;
 
 static void reset_IOP()
 {
+    PS2_BOOT_TRACE("IOP SifInitRpc begin; resident ps2link, reset disabled");
     SifInitRpc(0);
     /* The resident PS2Link IOP server must not be reset by an EE benchmark.
      * This opt-in mode is rejected for ordinary/non-PS2 CMake builds. */
 #if !defined(PS2_BENCHMARK_PS2LINK)
     while (!SifIopReset(NULL, 0)) {}
 #endif
+    PS2_BOOT_TRACE("IOP SifIopSync begin");
     while (!SifIopSync()) {}
+    PS2_BOOT_TRACE("IOP SifIopSync complete");
 }
 
 static bool stage_drivers_before_iop_reset(void)
@@ -103,20 +107,29 @@ static bool stage_drivers_before_iop_reset(void)
 
 static bool prepare_IOP()
 {
+    PS2_BOOT_TRACE("IOP staging begin");
 	if (!stage_drivers_before_iop_reset())
 		return false;
 
+    PS2_BOOT_TRACE("IOP staging complete, RPC startup");
     reset_IOP();
+    PS2_BOOT_TRACE("IOP RPC reinit");
     SifInitRpc(0);
+    PS2_BOOT_TRACE("IOP apply LMB patch");
     sbv_patch_enable_lmb();
+    PS2_BOOT_TRACE("IOP apply prefix patch");
     sbv_patch_disable_prefix_check();
+    PS2_BOOT_TRACE("IOP apply fileio patch");
     sbv_patch_fileio();
+    PS2_BOOT_TRACE("IOP patches complete");
 	return true;
 }
 
 static bool init_drivers()
 {
+    PS2_BOOT_TRACE("filesystem driver initialization begin");
 	init_only_boot_ps2_filesystem_driver();
+    PS2_BOOT_TRACE("filesystem driver initialization complete");
 #if defined(PS2_FAST_CACHE)
 	if (cacheio_driver_requested) {
 		enum CACHEIO_INIT_STATUS cacheio_status = init_cacheio_driver(false);
@@ -132,7 +145,9 @@ static bool init_drivers()
 		ps2_cache_storage_set_available(false);
 	}
 #endif
+    PS2_BOOT_TRACE("audio IOP driver initialization begin");
 	if (init_audio_driver() != AUDIO_INIT_STATUS_OK) {
+        PS2_BOOT_TRACE("audio IOP driver initialization FAILED");
 #if defined(PS2_FAST_CACHE)
 		if (cacheio_driver_initialized) {
 			ps2_cache_storage_set_available(false);
@@ -143,6 +158,7 @@ static bool init_drivers()
 		deinit_only_boot_ps2_filesystem_driver();
 		return false;
 	}
+    PS2_BOOT_TRACE("audio IOP driver initialization complete");
 
 	/* Keep fileXio's default 16 KiB RW buffer. Increasing it to the 64 KiB
 	 * emulation cache block size has proved unreliable on real PS2 hardware,
@@ -164,10 +180,12 @@ static void deinit_drivers()
 }
 
 static void *ps2_init(void) {
+    PS2_BOOT_TRACE("platform init begin");
 	ps2_platform_t *ps2 = (ps2_platform_t*)calloc(1, sizeof(ps2_platform_t));
 	if (ps2 == NULL)
 		return NULL;
 
+    PS2_BOOT_TRACE("platform object allocated");
 	if (!prepare_IOP()) {
 		free(ps2);
 		return NULL;
@@ -181,6 +199,7 @@ static void *ps2_init(void) {
 		return NULL;
 	}
 
+    PS2_BOOT_TRACE("platform init complete");
 	return ps2;
 }
 

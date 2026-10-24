@@ -19,6 +19,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(PS2_STARTUP_TRACE)
+#include <errno.h>
+#include <sys/stat.h>
+#endif
 #include "common/zip_archive.h"
 
 #if (EMU_SYSTEM != NCDZ)
@@ -120,6 +124,12 @@ rom_file_open_result_t file_open(const char *fname1, const char *fname2, const u
 	char path[PATH_MAX];
 
 	file_close();
+#if defined(PS2_STARTUP_TRACE)
+    printf("[ps2-rom] request set=%s parent=%s entry=%s crc=%08lx dir=%s\n",
+        fname1 ? fname1 : "(none)", fname2 ? fname2 : "(none)",
+        fname ? fname : "(none)", (unsigned long)crc, game_dir);
+    fflush(stdout);
+#endif
 
 	for (i = 0; i < 3; i++)
 	{
@@ -130,20 +140,53 @@ rom_file_open_result_t file_open(const char *fname1, const char *fname2, const u
 		case 2: if (!path_format(path, sizeof(path), "%sroms/%s.zip", launchDir, fname2)) continue; break;
 		}
 
+#if defined(PS2_STARTUP_TRACE)
+        {
+            struct stat info_stat;
+            int found;
+            errno = 0;
+            found = stat(path, &info_stat);
+            printf("[ps2-rom] candidate=%d path=%s stat=%d bytes=%ld errno=%d\n",
+                i, path, found, found == 0 ? (long)info_stat.st_size : -1L, errno);
+            fflush(stdout);
+        }
+#endif
 		if (zip_archive_open(&rom_archive, path))
 		{
+#if defined(PS2_STARTUP_TRACE)
+            printf("[ps2-rom] archive opened: %s\n", path);
+            fflush(stdout);
+#endif
 			if (zip_archive_find_crc(&rom_archive, crc, &info))
 			{
+#if defined(PS2_STARTUP_TRACE)
+                printf("[ps2-rom] CRC match: %s size=%lu\n",
+                    info.name, (unsigned long)info.size);
+                fflush(stdout);
+#endif
 				if (fname)
 					strcpy(fname, info.name);
 				if (zip_entry_open(&rom_archive, info.name, &rom_entry))
 				{
+#if defined(PS2_STARTUP_TRACE)
+                    printf("[ps2-rom] entry opened: %s\n", info.name);
+                    fflush(stdout);
+#endif
 					return ROM_FILE_OPEN_OK;
 				}
+#if defined(PS2_STARTUP_TRACE)
+                printf("[ps2-rom] FAILED to open matching entry: %s\n", info.name);
+                fflush(stdout);
+#endif
 				zip_archive_close(&rom_archive);
 				return ROM_FILE_OPEN_NOT_FOUND;
 			}
 
+#if defined(PS2_STARTUP_TRACE)
+            printf("[ps2-rom] CRC not found in archive; requested=%s\n",
+                fname ? fname : "(none)");
+            fflush(stdout);
+#endif
 			if (fname && zip_archive_stat(&rom_archive, fname, &info))
 			{
 				zip_archive_close(&rom_archive);
@@ -152,6 +195,12 @@ rom_file_open_result_t file_open(const char *fname1, const char *fname2, const u
 
 			zip_archive_close(&rom_archive);
 		}
+#if defined(PS2_STARTUP_TRACE)
+        else {
+            printf("[ps2-rom] archive open FAILED: %s\n", path);
+            fflush(stdout);
+        }
+#endif
 
 		if (fname2 == NULL)
 			break;

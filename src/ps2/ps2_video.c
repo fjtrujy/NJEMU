@@ -13,6 +13,7 @@
 #include "common/display_mode.h"
 #include "ps2/ps2_video_filter_policy.h"
 #include "ps2/ps2_native_240p_policy.h"
+#include "ps2/ps2_startup_trace.h"
 #include <string.h>
 
 #include <stdlib.h>
@@ -229,6 +230,15 @@ typedef struct ps2_video {
 static int32_t finish_sema_id = -1;
 static int32_t vsync_sema_id = -1;
 static int32_t gif_dma_sema_id = -1;
+#if defined(PS2_STARTUP_TRACE)
+static volatile unsigned startup_finish_irqs;
+static volatile unsigned startup_gif_irqs;
+static volatile unsigned startup_vsync_irqs;
+static int startup_video_tracing = 1;
+#define PS2_VIDEO_TRACE(...) do { if (startup_video_tracing) PS2_BOOT_TRACE(__VA_ARGS__); } while (0)
+#else
+#define PS2_VIDEO_TRACE(...) ((void)0)
+#endif
 
 /*--------------------------------------------------------
 	Video Processing Initialization
@@ -236,6 +246,9 @@ static int32_t gif_dma_sema_id = -1;
 
 static int finish_handler(int reason)
 {
+#if defined(PS2_STARTUP_TRACE)
+    ++startup_finish_irqs;
+#endif
 	(void)reason;
 	if (GS_CSR_FINISH && finish_sema_id >= 0) {
 		iSignalSema(finish_sema_id);
@@ -247,6 +260,9 @@ static int finish_handler(int reason)
 
 static int vsync_handler(int reason)
 {
+#if defined(PS2_STARTUP_TRACE)
+    ++startup_vsync_irqs;
+#endif
 	(void)reason;
 	if (vsync_sema_id >= 0)
 		iSignalSema(vsync_sema_id);
@@ -257,6 +273,9 @@ static int vsync_handler(int reason)
 
 static int gif_dma_handler(int channel)
 {
+#if defined(PS2_STARTUP_TRACE)
+    ++startup_gif_irqs;
+#endif
 	(void)channel;
 	if (gif_dma_sema_id >= 0)
 		iSignalSema(gif_dma_sema_id);
@@ -562,6 +581,7 @@ static inline u32 lzw(u32 val)
 
 static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 {
+    PS2_VIDEO_TRACE("GS FINISH fence entry first=%d CSR=%08lx sema=%ld", gsGlobal->FirstFrame, (unsigned long)(u32)*GS_CSR, (long)finish_sema_id);
 	if (gsGlobal->FirstFrame)
 		return;
 	if (finish_sema_id < 0)
@@ -569,11 +589,15 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 
 	/* A late notification for an earlier frame is not a completion for
 	 * the current queue. Recheck hardware state only after being woken. */
-	while (!(GS_CSR_FINISH))
+	while (!(GS_CSR_FINISH)) {
+        PS2_VIDEO_TRACE("GS FINISH WaitSema begin irq=%u CSR=%08lx", (unsigned)startup_finish_irqs, (unsigned long)(u32)*GS_CSR);
 		WaitSema(finish_sema_id);
+        PS2_VIDEO_TRACE("GS FINISH WaitSema woke irq=%u CSR=%08lx", (unsigned)startup_finish_irqs, (unsigned long)(u32)*GS_CSR);
+    }
 
 	/* max_count=1, so one nonblocking poll discards any old token. */
 	PollSema(finish_sema_id);
+    PS2_VIDEO_TRACE("GS FINISH fence exit irq=%u", (unsigned)startup_finish_irqs);
 }
 
 /* FINISH can arrive while GIF DMA is still active, so it is not a DMA fence.
@@ -581,9 +605,14 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
  * Rechecking CHCR handles stale IRQ notifications and other GIF transfers. */
 static void ps2_wait_gif_dma(void)
 {
-	while ((*R_EE_D2_CHCR & 0x100u) != 0)
+    PS2_VIDEO_TRACE("GIF DMA fence entry CHCR=%08lx sema=%ld", (unsigned long)*R_EE_D2_CHCR, (long)gif_dma_sema_id);
+	while ((*R_EE_D2_CHCR & 0x100u) != 0) {
+        PS2_VIDEO_TRACE("GIF DMA WaitSema begin irq=%u CHCR=%08lx", (unsigned)startup_gif_irqs, (unsigned long)*R_EE_D2_CHCR);
 		WaitSema(gif_dma_sema_id);
+        PS2_VIDEO_TRACE("GIF DMA WaitSema woke irq=%u CHCR=%08lx", (unsigned)startup_gif_irqs, (unsigned long)*R_EE_D2_CHCR);
+    }
 	PollSema(gif_dma_sema_id);
+    PS2_VIDEO_TRACE("GIF DMA fence exit irq=%u", (unsigned)startup_gif_irqs);
 }
 
 /* gsKit_queue_exec_real() spins on GS_CSR_FINISH and GIF DMA. Serialize both
@@ -596,6 +625,7 @@ static void ps2_submit_gs_queue(GSGLOBAL *gsGlobal, GSQUEUE *queue)
 	if (!queue->tag_size)
 		return;
 
+    PS2_VIDEO_TRACE("GS queue submit begin tags=%lu persistent=%d first=%d", (unsigned long)queue->tag_size, queue->mode == GS_PERSISTENT, gsGlobal->FirstFrame);
 	previous = gsKit_set_finish(gsGlobal);
 	*(u64 *)queue->dma_tag = DMA_TAG(queue->tag_size, 0, DMA_END, 0, 0, 0);
 	if (queue->last_type != GIF_AD)
@@ -604,7 +634,9 @@ static void ps2_submit_gs_queue(GSGLOBAL *gsGlobal, GSQUEUE *queue)
 	gsKit_wait_finish(gsGlobal);
 	ps2_wait_gif_dma();
 	GS_SETREG_CSR_FINISH(1);
+    PS2_VIDEO_TRACE("GS queue calling dmaKit_send_chain_ucab");
 	dmaKit_send_chain_ucab(DMA_CHANNEL_GIF, queue->pool[queue->dbuf]);
+    PS2_VIDEO_TRACE("GS queue DMA issued; CHCR=%08lx", (unsigned long)*R_EE_D2_CHCR);
 	/* A first-frame submission may be followed by a second (persistent)
 	 * queue. Both completion events are required before its submission. */
 	gsGlobal->FirstFrame = GS_SETTING_OFF;
@@ -850,6 +882,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	GSGLOBAL *gsGlobal;
 	const ps2_output_mode_t *output_mode;
 
+    PS2_BOOT_TRACE("video init: begin, layers=%u", (unsigned)layer_textures_count);
 	ps2 = (ps2_video_t*)calloc(1, sizeof(ps2_video_t));
 	if (!ps2)
 		return NULL;
@@ -860,17 +893,20 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->output_mode_valid = 1;
 	output_mode = ps2_selected_output_mode();
 
+    PS2_BOOT_TRACE("video init: gsKit_init_global begin");
 	gsGlobal = gsKit_init_global();
 	if (!gsGlobal) {
 		free(ps2);
 		return NULL;
 	}
+    PS2_BOOT_TRACE("video init: gsKit_init_global complete");
 
    	sema.init_count = 0;
    	sema.max_count  = 1;
    	sema.option     = 0;
 
 	finish_sema_id = CreateSema(&sema);
+    PS2_BOOT_TRACE("video init: finish sema=%ld", (long)finish_sema_id);
 	if (finish_sema_id < 0) {
 		gsKit_deinit_global(gsGlobal);
 		free(ps2);
@@ -907,13 +943,19 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	gsGlobal->Test->ATST = 4; // TEQUAL to AREF passes
 	gsGlobal->Test->AREF = 0x00;
 
+    PS2_BOOT_TRACE("video init: dmaKit_init begin mode=%d geometry=%dx%d", (int)ps2->output_mode, gsGlobal->Width, gsGlobal->Height);
 	dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
 	dmaKit_chan_init(DMA_CHANNEL_GIF);
+    PS2_BOOT_TRACE("video init: dmaKit initialized");
 
 
+    PS2_BOOT_TRACE("video init: gsKit_vram_clear begin");
 	gsKit_vram_clear(gsGlobal);
+    PS2_BOOT_TRACE("video init: gsKit_vram_clear complete");
 
+    PS2_BOOT_TRACE("video init: gsKit_init_screen begin");
 	gsKit_init_screen(gsGlobal);
+    PS2_BOOT_TRACE("video init: gsKit_init_screen complete");
 	ps2->gsGlobal = gsGlobal;
 	ps2_setOutputOffset(ps2, option_video_offset_x, option_video_offset_y);
 
@@ -942,7 +984,9 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	gsGlobal->Test->ZTST = 1;
 
 	gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+    PS2_BOOT_TRACE("video init: initial gsKit_clear begin");
     gsKit_clear(gsGlobal, GS_BLACK);
+    PS2_BOOT_TRACE("video init: initial gsKit_clear complete");
 
 	// Original buffers containing clut indexes
 	size_t totalTextureSize = 0;
@@ -999,6 +1043,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	}
 	printf("CLUT VRAM: %p (banks=%d, entries/bank=%d, height=%d, size/bank=%lu)\n",
 		   vram_cluts, ps2->clut_bank_count, ps2->clut_entries_per_bank, ps2->clut_bank_height, (unsigned long)clut_vram_size);
+    PS2_BOOT_TRACE("video init: CLUT allocated; registering GS IRQ callbacks");
 	ps2->clut_vram_size = clut_vram_size;
 	ps2->vram_cluts = vram_cluts;
 
@@ -1016,6 +1061,7 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	ps2->clearScreenColor = color_to_RGBAQ(0x00, 0x00, 0x00, 0x80, 0);
 
 	ps2->finish_callback_id = gsKit_add_finish_handler(finish_handler);
+    PS2_BOOT_TRACE("video init: finish callback=%ld", (long)ps2->finish_callback_id);
 	if (ps2->finish_callback_id < 0) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
@@ -1024,11 +1070,13 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	/* The GIF channel can outlive GS FINISH; its own completion IRQ fences
 	 * submissions without occupying the EE while audio threads are ready. */
 	gif_dma_sema_id = CreateSema(&sema);
+    PS2_BOOT_TRACE("video init: GIF DMA sema=%ld", (long)gif_dma_sema_id);
 	if (gif_dma_sema_id < 0) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}
 	ps2->gif_dma_callback_id = AddDmacHandler(DMA_CHANNEL_GIF, gif_dma_handler, 0);
+    PS2_BOOT_TRACE("video init: GIF callback=%ld; enabling DMAC", (long)ps2->gif_dma_callback_id);
 	if (ps2->gif_dma_callback_id < 0 || EnableDmac(DMA_CHANNEL_GIF) < 0) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
@@ -1037,20 +1085,31 @@ static void *ps2_init(layer_texture_info_t *layer_textures, uint8_t layer_textur
 	/* An interrupt wakes the presentation thread without consuming EE CPU
 	 * time while other threads (notably audio) are ready to run. */
 	vsync_sema_id = CreateSema(&sema);
+    PS2_BOOT_TRACE("video init: vsync sema=%ld", (long)vsync_sema_id);
 	if (vsync_sema_id < 0) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}
 	ps2->vsync_callback_id = gsKit_add_vsync_handler(vsync_handler);
+    PS2_BOOT_TRACE("video init: vsync callback=%ld", (long)ps2->vsync_callback_id);
 	if (ps2->vsync_callback_id < 0) {
 		ps2_cleanup_failed_init(ps2);
 		return NULL;
 	}
 
+    PS2_BOOT_TRACE("video init: clear show begin");
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SHOW_FRAME_BUFFER);
+    PS2_BOOT_TRACE("video init: clear show complete; clear draw begin");
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
+    PS2_BOOT_TRACE("video init: clear draw complete; clear bitmap begin");
 	video_driver->clearFrame(ps2, COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP);
+    PS2_BOOT_TRACE("video init: clear bitmap complete; initial flip begin");
 	ps2_flipScreen(ps2, true);
+    PS2_BOOT_TRACE("video init: initial flip complete finish_irqs=%u gif_irqs=%u vsync_irqs=%u",
+        (unsigned)startup_finish_irqs, (unsigned)startup_gif_irqs, (unsigned)startup_vsync_irqs);
+#if defined(PS2_STARTUP_TRACE)
+    startup_video_tracing = 0;
+#endif
 
 	video_set_pixel_aspect_ratio(output_mode->pixel_aspect_num,
 		output_mode->pixel_aspect_den);
@@ -1157,17 +1216,26 @@ static void ps2_flipScreen(void *data, bool vsync)
 {
 	ps2_video_t *ps2 = (ps2_video_t*)data;
 
+    PS2_VIDEO_TRACE("flip begin vsync=%u first=%d", (unsigned)vsync, ps2->gsGlobal->FirstFrame);
 	gsKit_wait_finish(ps2->gsGlobal);
+    PS2_VIDEO_TRACE("flip executing GS queue");
 	ps2_execute_gs_queue(ps2->gsGlobal);
 	/* Only expose the back buffer after its GPU commands have completed.
 	 * This wait sleeps, leaving the EE available to audio threads. */
 	gsKit_wait_finish(ps2->gsGlobal);
+    PS2_VIDEO_TRACE("flip GS queue completed");
 
 	/* gsKit_sync_flip spins on GS_CSR. Use the interrupt-driven, sleepable
 	 * wait instead, preserving gsKit's FirstFrame behavior. */
 	if (vsync && !ps2->gsGlobal->FirstFrame)
+    {
+        PS2_VIDEO_TRACE("flip vsync wait begin");
 		ps2_wait_for_vblank();
+        PS2_VIDEO_TRACE("flip vsync wait complete");
+    }
+    PS2_VIDEO_TRACE("flip gsKit_flip begin");
 	gsKit_flip(ps2->gsGlobal);
+    PS2_VIDEO_TRACE("flip gsKit_flip complete");
 }
 
 static void ps2_beginFrame(void *data)
