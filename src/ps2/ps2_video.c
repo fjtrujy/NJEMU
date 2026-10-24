@@ -569,7 +569,7 @@ static inline void gsKit_wait_finish(GSGLOBAL *gsGlobal)
 
 	/* A late notification for an earlier frame is not a completion for
 	 * the current queue. Recheck hardware state only after being woken. */
-	while (!GS_CSR_FINISH)
+	while (!(GS_CSR_FINISH))
 		WaitSema(finish_sema_id);
 
 	/* max_count=1, so one nonblocking poll discards any old token. */
