@@ -13,7 +13,7 @@ cat > "$fixture/bin/cmake" <<'MOCK'
 set -euo pipefail
 case "$1" in
   -S)
-    build='' core='' cache=OFF fast=OFF irx=OFF dirty=OFF
+    build='' core='' cache=OFF fast=OFF irx=OFF dirty=OFF toolchain=''
     for arg in "$@"; do
       case "$arg" in
         -B) ;; # -B is followed by the actual build directory
@@ -22,6 +22,7 @@ case "$1" in
         -DPS2_FAST_CACHE=*) fast="${arg#-DPS2_FAST_CACHE=}" ;;
         -DPS2_EXTERNAL_IRX_IMAGE=*) irx="${arg#-DPS2_EXTERNAL_IRX_IMAGE=}" ;;
         -DPS2_DIRTY_SPRITE_UPLOADS=*) dirty="${arg#-DPS2_DIRTY_SPRITE_UPLOADS=}" ;;
+        -DCMAKE_TOOLCHAIN_FILE=*) toolchain="${arg#-DCMAKE_TOOLCHAIN_FILE=}" ;;
       esac
     done
     while (( $# > 0 )); do
@@ -30,7 +31,7 @@ case "$1" in
     done
     [[ -n "$build" && -n "$core" ]]
     mkdir -p "$build"
-    printf 'GUI:BOOL=ON\nSAVE_STATE:BOOL=ON\nCOMMAND_LIST:BOOL=ON\nUSE_CACHE:BOOL=%s\nPS2_FAST_CACHE:BOOL=%s\nPS2_EXTERNAL_IRX_IMAGE:BOOL=%s\nPS2_DIRTY_SPRITE_UPLOADS:BOOL=%s\n' "$cache" "$fast" "$irx" "$dirty" > "$build/CMakeCache.txt"
+    printf 'GUI:BOOL=ON\nSAVE_STATE:BOOL=ON\nCOMMAND_LIST:BOOL=ON\nUSE_CACHE:BOOL=%s\nPS2_FAST_CACHE:BOOL=%s\nPS2_EXTERNAL_IRX_IMAGE:BOOL=%s\nPS2_DIRTY_SPRITE_UPLOADS:BOOL=%s\nCMAKE_TOOLCHAIN_FILE:FILEPATH=%s\n' "$cache" "$fast" "$irx" "$dirty" "$toolchain" > "$build/CMakeCache.txt"
     ;;
   --build)
     core="${2##*build-release-}"
@@ -75,6 +76,10 @@ for platform in DESKTOP PSP PS2 PSVITA; do
   for core in CPS1 CPS2 MVS NCDZ; do
     test -f "$root/release-stage/$core/core.txt"
   done
+  if [[ "$platform" == PS2 ]]; then
+    grep -q '^CMAKE_TOOLCHAIN_FILE:FILEPATH=/mock/ps2dev/share/ps2dev.cmake$' \
+      "$root/build-release-cps1/CMakeCache.txt"
+  fi
   # The first two cores must overlap instead of finishing serially.
   awk '
     /^start:cps1$/ { first_start=NR }
@@ -108,3 +113,26 @@ grep -q 'Release build failed' "$root/output.txt"
 test -f "$root/release-stage/CPS1/core.txt"
 test ! -f "$root/release-stage/MVS/core.txt"
 echo 'PASS failure handling: logs surfaced, later batches skipped'
+
+# Explicit LLVM override must not change the default GCC release layout.
+root="$fixture/llvm-override"
+mkdir -p "$root/cmake"
+: > "$root/CMakeLists.txt"
+: > "$root/cmake/NJEMUReleasePackage.cmake"
+(
+  cd "$root"
+  PATH="$fixture/bin:$PATH" \
+    PS2DEV=/mock/ps2dev PS2SDK=/mock/ps2sdk \
+    NJEMU_TEST_EVENTS="$root/events.txt" \
+    NJEMU_RELEASE_CORE_CONCURRENCY=2 NJEMU_RELEASE_CORE_BUILD_JOBS=1 \
+    NJEMU_PS2_RELEASE_TOOLCHAIN_FILE=/mock/llvm/PS2LLVMToolchain.cmake \
+    NJEMU_RELEASE_OUTPUT_ROOT="$root/isolated" \
+    bash "$script" PS2 > "$root/output.txt"
+)
+for core in CPS1 CPS2 MVS NCDZ; do
+  test -f "$root/isolated/release-stage/$core/core.txt"
+done
+grep -q '^CMAKE_TOOLCHAIN_FILE:FILEPATH=/mock/llvm/PS2LLVMToolchain.cmake$' \
+  "$root/isolated/build-release-cps1/CMakeCache.txt"
+test ! -e "$root/release-stage"
+echo 'PASS PS2 LLVM override: isolated paths, GCC defaults unaffected'

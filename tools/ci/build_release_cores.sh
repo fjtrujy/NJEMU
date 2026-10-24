@@ -17,7 +17,7 @@ case "$platform" in
     ;;
   PS2)
     : "${PS2DEV:?PS2DEV is required}"
-    toolchain_file="$PS2DEV/share/ps2dev.cmake"
+    toolchain_file="${NJEMU_PS2_RELEASE_TOOLCHAIN_FILE:-$PS2DEV/share/ps2dev.cmake}"
     ;;
   PSVITA)
     : "${VITASDK:?VITASDK is required}"
@@ -55,7 +55,12 @@ if [[ ! "$jobs_per_core" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
-log_dir="$PWD/build_release_core_logs"
+# Keep the CI/GCC directory layout unchanged unless an alternate output root
+# is explicitly requested (e.g. when producing LLVM artifacts locally).
+output_root="${NJEMU_RELEASE_OUTPUT_ROOT:-$PWD}"
+mkdir -p "$output_root"
+output_root="$(cd "$output_root" && pwd)"
+log_dir="$output_root/build_release_core_logs"
 mkdir -p "$log_dir"
 echo "Release $platform: $core_concurrency concurrent cores, $jobs_per_core build jobs per core"
 
@@ -65,8 +70,8 @@ build_core() {
   local -a feature_args=()
 
   core_lower="$(printf '%s' "$core" | tr '[:upper:]' '[:lower:]')"
-  build="build-release-$core_lower"
-  install="$PWD/release-stage/$core"
+  build="$output_root/build-release-$core_lower"
+  install="$output_root/release-stage/$core"
 
   if [[ "$platform" == PS2 ]]; then
     # Preserve the canonical PS2 release matrix, including IRX packaging.

@@ -125,7 +125,7 @@ static void cdrom_state_insert_pcm(const char *fname, int bank, uint32_t offset,
 
 static int hextodec(char c)
 {
-	switch (tolower(c))
+	switch (tolower((unsigned char)c))
 	{
 	case '0': return 0;
 	case '1': return 1;
@@ -799,7 +799,7 @@ int cdrom_process_ipl(void)
 		j = 0;
 		while (linebuf[i] != ',')
 		{
-			file->name[j++] = toupper(linebuf[i++]);
+			file->name[j++] = (char)toupper((unsigned char)linebuf[i++]);
 		}
 		file->name[j] = '\0';
 

@@ -1141,7 +1141,7 @@ void file_browser(void)
 			i = 0;
 			while (game_name[i])
 			{
-				game_name[i] = tolower(game_name[i]);
+				game_name[i] = (char)tolower((unsigned char)game_name[i]);
 				i++;
 			}
 			free_game_metadata();

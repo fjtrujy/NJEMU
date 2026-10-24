@@ -89,7 +89,6 @@ static uint32_t upload_offset1;
 static uint32_t upload_offset2;
 static uint32_t upload_length;
 static uint16_t upload_pattern;
-static int upload_executing;
 static uint32_t z80_cdda_offset;
 
 static uint8_t  exmem[0x100];
@@ -285,7 +284,6 @@ void neogeo_driver_reset(void)
 	upload_offset2 = 0;
 	upload_length = 0;
 	upload_pattern = 0;
-	upload_executing = 0;
 
 	memcpy(memory_region_cpu1, neogeo_vectors[1], 0x100);	// game vector
 
@@ -1607,7 +1605,6 @@ STATE_LOAD( driver )
 	upload_offset2 = 0;
 	upload_length = 0;
 	upload_pattern = 0;
-	upload_executing = 0;
 }
 
 #endif /* SAVE_STATE */
