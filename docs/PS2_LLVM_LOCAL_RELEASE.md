@@ -98,3 +98,58 @@ Using the installed LLVM revision above:
   hardware or guaranteeing LLVM performance there. See
   `docs/LLVM_R5900_CODEGEN_ISSUE_REPORT.md` for the separate PCSX2 and
   real-hardware performance evidence and its limitations.
+
+## LLD linker feasibility investigation (2026-10-24)
+
+**Outcome: LLVM LLD links small R5900/N32 programs, but cannot yet replace
+the GCC/binutils link step for the current full NJEMU release and installed
+SDK.** The existing GCC linker remains the supported default.
+
+LLD 24.0.0 was built from the same `r5900-feature` revision,
+`6f31245b7434ed1c55d341d544d10a7e8d003766`, in separate LLVM build
+directories, without installing or modifying the compiler toolchain:
+
+- The installed `$PS2DEV/llvm/bin` contains Clang but **no `ld.lld`**;
+  its original LLVM build had `LLVM_ENABLE_PROJECTS=clang` and
+  `LLVM_ENABLE_ZLIB=OFF`.
+- A standalone LLD built against that LLVM installation could not consume
+  PS2SDK's `ELFCOMPRESS_ZLIB` debug sections, so a separate LLD was built
+  with `LLVM_ENABLE_ZLIB=FORCE_ON` and the host's zlib library.
+- The resulting LLD accepts `-m elf32ltsmipn32`. A simple
+  `--target=mips64el -mcpu=r5900 -mabi=n32` test object assembled by
+  **Clang's integrated assembler** links to an ELF32/N32 executable
+  retaining `EF_MIPS_MACH_5900`. A GNU-assembled object works as well
+  after normalizing its symbol table with `llvm-objcopy`.
+- Unmodified GNU-assembled objects such as `crt0.o`, `crtbegin.o` and
+  `ps2_drivers.a` fail LLD's symbol table checks
+  (`symbol (...) has invalid binding: 0`). Their `.symtab` tables have
+  `STB_LOCAL` symbols at or after the advertised first-global index
+  (`sh_info`). On temporary copies, `llvm-objcopy` reorders symbols
+  and updates `sh_info`, allowing the link to progress.
+- Current NJEMU Clang objects advertise `-mdouble-float` in
+  `.MIPS.abiflags`, whereas GCC/PS2SDK use **`-msingle-float`**.
+  LLD rejects the incompatible FP ABIs. Adding `-msingle-float` to Clang
+  produces the expected single-precision ABI metadata. A separate full
+  CPS1 configuration was successfully compiled and GNU-linked with that
+  flag. This is a diagnostic build, **not** a release-validated flag change.
+- After normalizing copies of the CPS1 objects, startup files and required
+  archives and compiling CPS1 with `-msingle-float`, LLD still reports
+  unresolved `gsKit_*` and `dmaKit_*` symbols. The installed
+  GCC-built `libgskit.a` contains GCC LTO objects whose definitions
+  are visible to `gcc-nm` with the GCC plugin, but not as ordinary native
+  symbols to `nm` or LLD. `llvm-objcopy` cannot turn GCC LTO bytecode
+  into native definitions. This is an **independent, remaining blocker**.
+
+All reproductions are retained in ignored local directories:
+`build_llvm_ps2_release/lld-link-probe/`,
+`llvm-project/build-ps2-r5900-feature-lld/` and
+`llvm-project/build-ps2-r5900-feature-lld-zlib/`. No SDK archive or
+installed compiler/linker was overwritten.
+
+Before enabling LLD for production, provide native/non-GCC-LTO copies of
+the required PS2SDK/gsKit/ps2_drivers libraries (or a validated equivalent
+link-plugin solution), fix the symbol-table interoperability rather than
+requiring per-build copies, align Clang's FP ABI with PS2SDK, and then verify
+**all four** canonical PS2 ELF layouts, release packaging, emulator startup
+and real hardware. Passing a library-free linker smoke test alone is not
+enough to change the release linker.
