@@ -789,3 +789,13 @@ neither modified nor committed.
 GCC vs Clang first; also compare `Cz80_Exec` and
 `YM2610ContextUpdate`. The benchmark shows real remaining **PCSX2**
 overhead but says nothing conclusive about **physical EE** throughput.
+
+### Follow-up: generic MIPS versus R5900-specific lowering
+
+The [2026-10-25 backend follow-up](LLVM_MIPS_GENERIC_BACKEND_WJAMMERS_20261025.md)
+contains per-object GCC substitutions, a standalone C99 reproduction of
+redundant zero-extension after `lbu` (reproduced with both Clang MIPS3 and
+R5900 targets), generic-MIPS3 Z80 controls, and MIPS pass-ablation trials.
+The investigation demonstrates a remaining *generic* MIPS optimization
+miss, but does **not** establish that a single generic-MIPS root cause
+accounts for the remaining four-object PCSX2 performance gap.
