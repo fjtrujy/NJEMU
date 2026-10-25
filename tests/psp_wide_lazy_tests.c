@@ -4,6 +4,10 @@
  * with PSP defined, to check lazy load and repeated on/off transitions.
  * Mock only the profile/parser and 68000 memory access boundaries.
  */
+/* Assertions must run in CMake's Release/CI builds too. */
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>

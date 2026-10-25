@@ -1902,6 +1902,8 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
             ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_compile_definitions(psp_wide_lazy_tests PRIVATE
             PSP=1 RELEASE=1 MVS_WIDESCREEN=1 CPS_WIDESCREEN=1 TEST_${TARGET}=1)
+        # GUI is a directory-wide definition; these PSP-mock tests have no UI.
+        target_compile_options(psp_wide_lazy_tests PRIVATE -UGUI)
         add_test(NAME psp_wide_lazy_tests COMMAND psp_wide_lazy_tests)
     endif()
 

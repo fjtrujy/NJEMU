@@ -36,6 +36,9 @@ No new runtime profile I/O occurs per frame.
   Desktop target using PSP-specific compile switches and mocked profile
   services. It verifies native-mode zero loads, OFF/ON/OFF/ON behavior,
   repeated validation after re-enable, failed-load suppression, and reset.
+  Assertions remain active in Release, and the PSP-mock target drops the
+  directory-wide Desktop GUI definition; all three tests also pass with
+  the parent build configured `GUI=ON`.
 - Desktop `ctest` before changes to this document: **MVS 53/53,
   CPS1 44/44, CPS2 46/46**, including each lifecycle test.
 - Cross-compiled PSP Release GUI-on, cache-off binaries:
