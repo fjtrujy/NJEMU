@@ -9,6 +9,8 @@
 #ifndef CPS1_SPRITE_H
 #define CPS1_SPRITE_H
 
+#include "cps1/wide.h"
+
 void blit_clear_all_sprite(void);
 void blit_palette_mark_dirty(int palno);
 void blit_scrollh_clear_sprite(uint16_t tpens);

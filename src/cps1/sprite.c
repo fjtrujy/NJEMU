@@ -70,6 +70,17 @@ static video_point_vertex_t *vertices_stars;
 	Portable helpers
 ******************************************************************************/
 
+/* Visible hardware X [64,448), or the wide view, in work-frame X. */
+static int16_t cps_view_left(void)
+{
+	return (int16_t)(64 - cps1_wide_margin - cps1_wide_bias);
+}
+
+static int16_t cps_view_right(void)
+{
+	return (int16_t)(448 + cps1_wide_margin - cps1_wide_bias);
+}
+
 static RECT cps_presentation_rect(int native_width, int native_height)
 {
 	return display_mode_presentation_rect_aspect(option_display_mode,
@@ -155,7 +166,7 @@ static void cps_set_sprite_vertices(video_sprite_vertex_t *vertices,
 	int atlas_y;
 
 	cps_atlas_position(index, tile_size, &atlas_x, &atlas_y);
-	vertices[0].x = vertices[1].x = x;
+	vertices[0].x = vertices[1].x = x - cps1_wide_bias;
 	vertices[0].y = vertices[1].y = y;
 	vertices[0].u = vertices[1].u = (uint16_t)atlas_x;
 	vertices[0].v = vertices[1].v = (uint16_t)atlas_y;
@@ -246,7 +257,7 @@ void blit_start(int high_layer)
 
 	video_driver->beginFrame(video_data);
 	video_driver->startWorkFrame(video_data, 0);
-	video_driver->scissor(video_data, 64, 16, 448, 240);
+	video_driver->scissor(video_data, cps_view_left(), 16, cps_view_right(), 240);
 	if (cps1_palette_upload_needed()) {
 		video_driver->uploadClut(video_data, clut, 0);
 		cps1_palette_upload_complete();
@@ -259,6 +270,8 @@ void blit_finish(void)
 	const bool rotates_to_upright = cps_orientation_rotates_to_upright(
 		machine_screen_type == SCREEN_VERTICAL, cps_screen_orientation);
 
+	cps_src_clip.left = cps_view_left();
+	cps_src_clip.right = cps_view_right();
 	if (rotates_to_upright) {
 		if (cps_flip_screen) {
 			video_driver->copyRectFlip(video_data,
@@ -278,7 +291,11 @@ void blit_finish(void)
 			COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
 			&cps_src_clip, &dst_clip);
 	} else {
-		dst_clip = cps_presentation_rect(384, 224);
+		/* The wide view keeps the arcade pixel aspect: 480 pixels are 5:3. */
+		dst_clip = cps1_wide_margin ?
+			display_mode_presentation_rect_aspect(option_display_mode,
+				CPS1_WIDE_WIDTH, 224, CPS1_WIDE_WIDTH * 4, 384 * 3) :
+			cps_presentation_rect(384, 224);
 		if (cps_flip_screen)
 			video_driver->copyRectFlip(video_data,
 				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
@@ -298,7 +315,7 @@ void blit_draw_object(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 	uint32_t key;
 	uint16_t *sprite_clut;
 
-	if (x <= 47 || x >= 448 || y <= 0 || y >= 239)
+	if (x <= 47 - cps1_wide_margin || x >= 448 + cps1_wide_margin || y <= 0 || y >= 239)
 		return;
 	key = MAKE_KEY(code, attr);
 	index = object_get_sprite(key);
@@ -439,7 +456,7 @@ void blit_draw_scroll2(int16_t x, int16_t y, uint32_t code, uint16_t attr)
 void blit_finish_scroll2(void)
 {
 	if (!scroll2_clut0_num && !scroll2_clut1_num) return;
-	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
+	video_driver->scissor(video_data, cps_view_left(), scroll2_min_y, cps_view_right(), scroll2_max_y);
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL2);
 	if (scroll2_clut0_num)
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2,
@@ -447,7 +464,7 @@ void blit_finish_scroll2(void)
 	if (scroll2_clut1_num)
 		video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLL2,
 			&clut[80 << 4], 0, scroll2_clut1_num, vertices_scroll2_clut1);
-	video_driver->scissor(video_data, 64, 16, 448, 240);
+	video_driver->scissor(video_data, cps_view_left(), 16, cps_view_right(), 240);
 	/* Each row-scroll band is an independent draw. Keeping previous bands in
 	 * these arrays makes later bands resubmit all earlier vertices under a new
 	 * scissor rectangle, which grows quadratically on heavy CPS1 row-scroll
@@ -559,10 +576,10 @@ void blit_finish_scroll2h(void)
 {
 	if (!scrollh_num) return;
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLLH);
-	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
+	video_driver->scissor(video_data, cps_view_left(), scroll2_min_y, cps_view_right(), scroll2_max_y);
 	video_driver->blitSpriteVertices(video_data, TEXTURE_LAYER_SCROLLH,
 		NULL, 0, scrollh_num, vertices_scrollh);
-	video_driver->scissor(video_data, 64, 16, 448, 240);
+	video_driver->scissor(video_data, cps_view_left(), 16, cps_view_right(), 240);
 	scrollh_num = 0;
 }
 
@@ -611,7 +628,7 @@ void blit_draw_stars(uint16_t stars_x, uint16_t stars_y, uint8_t *col,
 	for (offs = 0; offs < STARS_MAX_POINTS; offs++, col += 8) {
 		if (*col != 0x0f) {
 			vertex->x = (int16_t)((((offs >> 8) << 5) - stars_x +
-				(*col & 0x1f)) & 0x1ff);
+				(*col & 0x1f)) & 0x1ff) - cps1_wide_bias;
 			vertex->y = (int16_t)(((offs & 0xff) - stars_y) & 0xff);
 			vertex->z = 0;
 			vertex->color = pal[(*col & 0xe0) >> 1];

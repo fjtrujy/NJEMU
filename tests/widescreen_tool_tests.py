@@ -251,6 +251,62 @@ class ProfileTests(unittest.TestCase):
         patched = wide.apply_profile(test_profile, bytes(synthetic), enable=True)
         self.assertEqual(wide.apply_profile(test_profile, patched, enable=False), bytes(synthetic))
 
+    def test_cps1_sf2_profile_respects_the_nop_scan(self):
+        profile = wide.load_profile(ROOT / 'resources/cps1/widescreen/sf2.ini')
+        self.assertEqual((profile.game, profile.status, profile.layers), ('sf2', 'verified', None))
+        self.assertEqual((profile.program_size, profile.program_crc32), (0x200000, 0x661a8e65))
+        self.assertEqual(len(profile.words), 99)
+        self.assertEqual(sum(w.original != w.wide for w in profile.words), 74)
+        # The game resets to its test menu if 0x166a-0x1832 contains a NOP.
+        self.assertFalse([w for w in profile.words if 0x166a <= w.offset < 0x1832 and w.wide == 0x4e71])
+        # Routines only in the unused upper half of the program region.
+        routines = [w for w in profile.words if w.offset >= 0x100000]
+        self.assertTrue(routines and all(w.original == 0 and w.offset >= 0x1ff000 for w in routines))
+        synthetic = bytearray(profile.program_size)
+        for w in profile.words:
+            struct.pack_into('>H', synthetic, w.offset, w.original)
+        test_profile = replace(profile, program_crc32=wide.fingerprint(synthetic))
+        patched = wide.apply_profile(test_profile, bytes(synthetic), enable=True)
+        self.assertEqual(wide.apply_profile(test_profile, patched, enable=False), bytes(synthetic))
+
+    def test_cps1_sf2ce_profile_uses_the_unused_program_tail(self):
+        profile = wide.load_profile(ROOT / 'resources/cps1/widescreen/sf2ce.ini')
+        self.assertEqual((profile.game, profile.status, profile.layers), ('sf2ce', 'verified', None))
+        self.assertEqual((profile.program_size, profile.program_crc32), (0x200000, 0x7778f388))
+        self.assertEqual(len(profile.words), 93)
+        self.assertEqual(sum(w.original != w.wide for w in profile.words), 72)
+        words = {w.offset: w for w in profile.words}
+        self.assertEqual([words[0x15a2 + i].wide for i in (0, 2, 4)], [0x4ef9, 0x001f, 0xf040])
+        # The scroll routine returns to the instruction after the replaced ones.
+        self.assertEqual([words[0x1ff06a + i].wide for i in (0, 2, 4)], [0x4ef9, 0x0000, 0x15aa])
+        # Routines only past the 1.5 MiB the game's ROMs fill.
+        routines = [w for w in profile.words if w.offset >= 0x180000]
+        self.assertTrue(routines and all(w.original == 0 and w.offset >= 0x1ff000 for w in routines))
+        synthetic = bytearray(profile.program_size)
+        for w in profile.words:
+            struct.pack_into('>H', synthetic, w.offset, w.original)
+        test_profile = replace(profile, program_crc32=wide.fingerprint(synthetic))
+        patched = wide.apply_profile(test_profile, bytes(synthetic), enable=True)
+        self.assertEqual(wide.apply_profile(test_profile, patched, enable=False), bytes(synthetic))
+
+    def test_cps2_sfa_profile_patches_the_decrypted_region(self):
+        profile = wide.load_profile(ROOT / 'resources/cps2/widescreen/sfa.ini')
+        self.assertEqual((profile.game, profile.status, profile.layers), ('sfa', 'verified', None))
+        self.assertEqual((profile.program_size, profile.program_crc32), (0x80000, 0x2baea2c3))
+        self.assertEqual(len(profile.words), 81)
+        self.assertEqual(sum(w.original != w.wide for w in profile.words), 65)
+        words = {w.offset: w for w in profile.words}
+        self.assertEqual([words[0x16c0 + i].wide for i in (0, 2, 4)], [0x4ef9, 0x0007, 0xf000])
+        self.assertEqual([words[0x122a0 + i].wide for i in (0, 2, 4)], [0x4ef9, 0x0007, 0xf080])
+        # Routines only where the encrypted ROM is unused fill, inside the decrypted region.
+        self.assertTrue(all(0x6f088 <= w.offset < 0x80000 for w in profile.words if w.offset >= 0x20000))
+        synthetic = bytearray(profile.program_size)
+        for w in profile.words:
+            struct.pack_into('>H', synthetic, w.offset, w.original)
+        test_profile = replace(profile, program_crc32=wide.fingerprint(synthetic))
+        patched = wide.apply_profile(test_profile, bytes(synthetic), enable=True)
+        self.assertEqual(wide.apply_profile(test_profile, patched, enable=False), bytes(synthetic))
+
     def test_scan_finds_new_unsigned_windows_without_known_constants(self):
         program = bytearray(self.program)
         # Deliberately use constants absent from the old width-constant heuristic.

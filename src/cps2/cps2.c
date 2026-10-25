@@ -69,6 +69,7 @@ static int cps2_init(void)
 #ifdef ADHOC
 	if (!cps2_video_init())
 		return 0;
+	cps2_wide_init();
 
 	if (adhoc_enable)
 	{
@@ -103,7 +104,10 @@ static int cps2_init(void)
 
 	return 1;
 #else
-	return cps2_video_init();
+	if (!cps2_video_init())
+		return 0;
+	cps2_wide_init();
+	return 1;
 #endif
 }
 
@@ -162,6 +166,7 @@ static void cps2_exit(void)
 
 	msg_printf(TEXT(PLEASE_WAIT2));
 
+	cps2_wide_exit();
 	cps2_video_exit();
 	cps2_driver_exit();
 
@@ -258,6 +263,8 @@ static void cps2_run(void)
 				}
 
 				apply_cheat();//davex
+				/* Change ROM patches and view geometry only between frames. */
+				cps2_wide_update();
 				timer_update_cpu();
 				cps2_sound_offload_frame_completed();
 				update_screen();

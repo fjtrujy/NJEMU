@@ -9,6 +9,8 @@
 #ifndef CPS2_SPRITE_H
 #define CPS2_SPRITE_H
 
+#include "cps2/wide.h"
+
 void blit_clear_all_sprite(void);
 
 void blit_reset(void);

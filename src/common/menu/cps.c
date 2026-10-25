@@ -20,6 +20,9 @@ static gamecfg2_t gamecfg_normal[] =
 	MENU_BLANK,
 #endif
 	{ DISPLAY_MODE, &option_display_mode, CFG_CONTINUE, DISPLAY_MENU_MAX, DISPLAY_MENU_VALUES, 0},
+#if CPS_WIDESCREEN
+	{ WIDESCREEN,     &option_cps_widescreen, CFG_CONTINUE, 1, { OFF, ON } , 0},
+#endif
 	{ VIDEO_SYNC,     &option_vsync,         CFG_CONTINUE, 2,  { OFF, ON, ADAPTIVE } , 0},
 	{ AUTO_FRAMESKIP, &option_autoframeskip, CFG_CONTINUE, 1,  { DISABLE, ENABLE } , 0},
 	{ FRAMESKIP,      &option_frameskip,     CFG_CONTINUE, 11, { OFF,SKIP1,SKIP2,SKIP3,SKIP4,SKIP5,SKIP6,SKIP7,SKIP8,SKIP9,SKIP10,SKIP11 } , 0},

@@ -229,6 +229,16 @@ else()
     set(MVS_WIDESCREEN OFF)
     add_definitions(-DMVS_WIDESCREEN=0)
 endif()
+# CPS1/CPS2 widescreen profiles (resources/cps1|cps2/widescreen) do the same
+# for a 480x224 view, which fits the 480-pixel work frame of every backend.
+if(("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "CPS2") AND
+   (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PSVITA"))
+    set(CPS_WIDESCREEN ON)
+    add_definitions(-DCPS_WIDESCREEN=1)
+else()
+    set(CPS_WIDESCREEN OFF)
+    add_definitions(-DCPS_WIDESCREEN=0)
+endif()
 
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
@@ -849,6 +859,10 @@ if (${TARGET} STREQUAL "CPS1")
         cps1/eeprom.h
         cps1/eeprom.c
         cps1/kabuki.c
+        cps1/wide.h
+        cps1/wide.c
+        common/wide_profile.h
+        common/wide_profile.c
     )
 
     # Set SOUND_2151 flag for CPS1
@@ -881,6 +895,10 @@ if (${TARGET} STREQUAL "CPS2")
         cps2/sprite.c
         cps2/eeprom.h
         cps2/eeprom.c
+        cps2/wide.h
+        cps2/wide.c
+        common/wide_profile.h
+        common/wide_profile.c
     )
 
     # Set SOUND_QSOUND flag for CPS2
@@ -1173,7 +1191,18 @@ if("${TARGET}" STREQUAL "CPS1")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         rominfo.cps1
     )
+    if(CPS_WIDESCREEN)
+        list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+            widescreen/sf2.ini
+            widescreen/sf2ce.ini
+        )
+    endif()
 elseif("${TARGET}" STREQUAL "CPS2")
+    if(CPS_WIDESCREEN)
+        list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+            widescreen/sfa.ini
+        )
+    endif()
 elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         rominfo.mvs
@@ -1266,8 +1295,14 @@ if(COMMAND_LIST)
 endif()
 if("${TARGET}" STREQUAL "CPS1")
     list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES nvram)
+    if(CPS_WIDESCREEN)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES widescreen)
+    endif()
 elseif("${TARGET}" STREQUAL "CPS2")
     list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES nvram)
+    if(CPS_WIDESCREEN)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES widescreen)
+    endif()
     if(USE_CACHE)
         list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES cache)
     endif()

@@ -35,6 +35,17 @@ static void blit_render_object_zb(int start_pri, int end_pri);
 
 static RECT cps_src_clip = { 64, 16, 64 + 384, 16 + 224 };
 
+/* Visible hardware X [64,448), or the wide view, in work-frame X. */
+static int16_t cps_view_left(void)
+{
+	return (int16_t)(64 - cps2_wide_margin - cps2_wide_bias);
+}
+
+static int16_t cps_view_right(void)
+{
+	return (int16_t)(448 + cps2_wide_margin - cps2_wide_bias);
+}
+
 static RECT cps_presentation_rect(int native_width, int native_height)
 {
 	return display_mode_presentation_rect_aspect(option_display_mode,
@@ -86,7 +97,7 @@ static void cps_set_sprite_vertices(video_sprite_vertex_t *vertices,
 	int atlas_y;
 
 	cps_atlas_position(index, tile_size, &atlas_x, &atlas_y);
-	vertices[0].x = vertices[1].x = x;
+	vertices[0].x = vertices[1].x = x - cps2_wide_bias;
 	vertices[0].y = vertices[1].y = y;
 	vertices[0].z = vertices[1].z = (int16_t)z;
 	vertices[0].u = vertices[1].u = (uint16_t)atlas_x;
@@ -229,6 +240,8 @@ void blit_finish(void)
 	if (cps2_has_mask)
 		video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
+	cps_src_clip.left = cps_view_left();
+	cps_src_clip.right = cps_view_right();
 	if (rotates_to_upright) {
 		if (cps_flip_screen) {
 			video_driver->copyRectFlip(video_data,
@@ -248,7 +261,11 @@ void blit_finish(void)
 			COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER,
 			&cps_src_clip, &dst_clip);
 	} else {
-		dst_clip = cps_presentation_rect(384, 224);
+		/* The wide view keeps the arcade pixel aspect: 480 pixels are 5:3. */
+		dst_clip = cps2_wide_margin ?
+			display_mode_presentation_rect_aspect(option_display_mode,
+				CPS2_WIDE_WIDTH, 224, CPS2_WIDE_WIDTH * 4, 384 * 3) :
+			cps_presentation_rect(384, 224);
 		if (cps_flip_screen)
 			video_driver->copyRectFlip(video_data,
 				COMMON_GRAPHIC_OBJECTS_SCREEN_BITMAP,
@@ -268,7 +285,7 @@ void blit_finish(void)
 
 void blit_draw_object(int16_t x, int16_t y, uint16_t z, int16_t pri, uint32_t code, uint16_t attr)
 {
-	if ((x > 48 && x < 448) && (y > object_min_y && y < clip_max_y))
+	if ((x > 48 - cps2_wide_margin && x < 448 + cps2_wide_margin) && (y > object_min_y && y < clip_max_y))
 	{
 		int16_t idx;
 		OBJECT *object;
@@ -333,7 +350,7 @@ static void blit_render_object(int start_pri, int end_pri)
 	if (!size) return;
 
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
-	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
+	video_driver->scissor(video_data, cps_view_left(), clip_min_y, cps_view_right(), clip_max_y);
 
 	vertices_tmp = vertices = vertices_object_flat;
 
@@ -380,7 +397,7 @@ static void blit_render_object_zb0(void)
 	video_sprite_vertex_t *vertices, *vertices_tmp;
 	OBJECT *object;
 
-	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
+	video_driver->scissor(video_data, cps_view_left(), clip_min_y, cps_view_right(), clip_max_y);
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->enableDepthTest(video_data);
 
@@ -426,7 +443,7 @@ static void blit_render_object_zb(int start_pri, int end_pri)
 
 	if (!size) return;
 
-	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
+	video_driver->scissor(video_data, cps_view_left(), clip_min_y, cps_view_right(), clip_max_y);
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_OBJECT);
 	video_driver->enableDepthTest(video_data);
 
@@ -523,7 +540,7 @@ void blit_finish_scroll1(void)
 	if (clut0_num + clut1_num == 0) return;
 
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL1);
-	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
+	video_driver->scissor(video_data, cps_view_left(), clip_min_y, cps_view_right(), clip_max_y);
 
 	if (clut0_num)
 	{
@@ -607,7 +624,7 @@ void blit_finish_scroll2(void)
 
 	if (clut0_num + clut1_num == 0) return;
 
-	video_driver->scissor(video_data, 64, scroll2_min_y, 448, scroll2_max_y);
+	video_driver->scissor(video_data, cps_view_left(), scroll2_min_y, cps_view_right(), scroll2_max_y);
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL2);
 
 	if (clut0_num)
@@ -622,7 +639,7 @@ void blit_finish_scroll2(void)
 	}
 
 	/* Restore full screen scissor */
-	video_driver->scissor(video_data, 64, 16, 448, 240);
+	video_driver->scissor(video_data, cps_view_left(), 16, cps_view_right(), 240);
 
 	clut0_num = 0;
 	clut1_num = 0;
@@ -685,7 +702,7 @@ void blit_finish_scroll3(void)
 	if (clut0_num + clut1_num == 0) return;
 
 	video_driver->commitTextureUpdates(video_data, TEXTURE_LAYER_SCROLL3);
-	video_driver->scissor(video_data, 64, clip_min_y, 448, clip_max_y);
+	video_driver->scissor(video_data, cps_view_left(), clip_min_y, cps_view_right(), clip_max_y);
 
 	if (clut0_num)
 	{

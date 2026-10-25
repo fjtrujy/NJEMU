@@ -65,6 +65,10 @@ limits, dumps and traces unset for normal play. On macOS, launch through a norma
 interactive app/terminal when evaluating performance, not as a background
 service child; see the measured launch effect in `MSLUG3_WIDESCREEN.md`.
 
+CPS1 and CPS2 use the same format, loader and patching engine
+(`src/common/wide_profile.c`) for its own 480x224 view; see
+[CPS_WIDESCREEN.md](CPS_WIDESCREEN.md).
+
 ## File format, version 1
 
 Version 1 deliberately fixes geometry to **400x225** with a centered native
