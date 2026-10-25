@@ -1887,6 +1887,24 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software;NJEMU_DUMP_FRAMES="
     )
 
+    # Exercise the PSP-specific lazy profile lifecycle on the host with mock
+    # ROM/profile services, including repeated off/on/off transitions.
+    if("${TARGET}" STREQUAL "MVS" OR "${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "CPS2")
+        string(TOLOWER "${TARGET}" PSP_WIDE_TEST_TARGET)
+        set(PSP_WIDE_TEST_SRC
+            tests/psp_wide_lazy_tests.c
+            src/${PSP_WIDE_TEST_TARGET}/wide.c)
+        if("${TARGET}" STREQUAL "MVS")
+            list(APPEND PSP_WIDE_TEST_SRC src/mvs/wide_runtime.c)
+        endif()
+        add_executable(psp_wide_lazy_tests ${PSP_WIDE_TEST_SRC})
+        target_include_directories(psp_wide_lazy_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        target_compile_definitions(psp_wide_lazy_tests PRIVATE
+            PSP=1 RELEASE=1 MVS_WIDESCREEN=1 CPS_WIDESCREEN=1 TEST_${TARGET}=1)
+        add_test(NAME psp_wide_lazy_tests COMMAND psp_wide_lazy_tests)
+    endif()
+
     if(${TARGET} STREQUAL "MVS")
         add_executable(mvs_wide_tests
             tests/mvs_wide_tests.c

@@ -215,6 +215,10 @@ static SPRITE_LIST sprite_list[MAX_SPRITES_PER_LINE];
 static void draw_sprites(int min_y, int max_y)
 {
 	const mvs_view_geometry_t *view = mvs_get_view_geometry();
+#if defined(PSP) && MVS_WIDESCREEN
+	/* Native mode never uses per-sprite profile pans. Check once per batch. */
+	const bool wide = mvs_true_wide_enabled() != 0;
+#endif
 	int y = 0;
 	int x = 0;
 	int rows = 0;
@@ -250,8 +254,11 @@ static void draw_sprites(int min_y, int max_y)
 				if ((rows = y_control & 0x3f) == 0) continue;
 
 				y = 0x200 - (y_control >> 7);
-				x = (sprite_x_control[sprite_number] >> 7) + view->x_bias +
-					mvs_wide_sprite_pan[sprite_number];
+				x = (sprite_x_control[sprite_number] >> 7) + view->x_bias;
+#if defined(PSP) && MVS_WIDESCREEN
+				if (wide)
+#endif
+					x += mvs_wide_sprite_pan[sprite_number];
 				zoom_y = (zoom_control & 0xff) << 6;
 
 				if (rows > 0x20)

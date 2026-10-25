@@ -56,10 +56,9 @@ void cps1_wide_exit(void)
 	cps1_wide_set_active(false);
 }
 
-void cps1_wide_init(void)
-{
-	cps1_wide_exit();
 #if CPS_WIDESCREEN
+static void cps1_wide_load_profile(void)
+{
 	char path[PATH_MAX];
 	const char *directory = getenv("NJEMU_CPS1_PROFILE_DIR");
 	const char *experimental = getenv("NJEMU_CPS1_ALLOW_EXPERIMENTAL");
@@ -105,6 +104,17 @@ void cps1_wide_init(void)
 		snprintf(cps1_wide_error, sizeof(cps1_wide_error), "program was already patched before profile initialization");
 	if (!cps1_wide_supported)
 		printf("[CPS1_WIDE] %s: %s.\n", game_name, cps1_wide_error);
+}
+#endif
+
+void cps1_wide_init(void)
+{
+	cps1_wide_exit();
+#if CPS_WIDESCREEN
+	cps1_wide_warning_emitted = false;
+#ifndef PSP
+	cps1_wide_load_profile();
+#endif
 #endif
 }
 
@@ -117,6 +127,10 @@ static void cps1_wide_transition(bool requested)
 		option_cps_widescreen = cps1_wide_margin != 0;
 		return;
 	}
+#ifdef PSP
+	if (requested && !cps1_profile)
+		cps1_wide_load_profile();
+#endif
 	if (!cps1_wide_supported ||
 		!wide_profile_apply(cps1_profile, (uint16_t *)memory_region_cpu1,
 			memory_length_cpu1, requested, cps1_wide_error, sizeof(cps1_wide_error)))
@@ -131,12 +145,28 @@ static void cps1_wide_transition(bool requested)
 			ui_popup(TEXT(WIDESCREEN_NOT_AVAILABLE));
 #endif
 		}
+#ifdef PSP
+		if (cps1_wide_margin == 0)
+		{
+			free(cps1_profile);
+			cps1_profile = NULL;
+			cps1_wide_supported = false;
+		}
+#endif
 		return;
 	}
 	cps1_wide_set_active(requested);
 	printf("[CPS1_WIDE] %s: %s; profile %s.\n", game_name,
 		requested ? "480x224 viewport" : "Native viewport",
 		requested ? "enabled" : "restored");
+#ifdef PSP
+	if (!requested)
+	{
+		free(cps1_profile);
+		cps1_profile = NULL;
+		cps1_wide_supported = false;
+	}
+#endif
 }
 #endif
 

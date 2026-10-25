@@ -65,10 +65,9 @@ void cps2_wide_exit(void)
 	cps2_wide_set_active(false);
 }
 
-void cps2_wide_init(void)
-{
-	cps2_wide_exit();
 #if CPS_WIDESCREEN
+static void cps2_wide_load_profile(void)
+{
 	char path[PATH_MAX];
 	const char *directory = getenv("NJEMU_CPS2_PROFILE_DIR");
 	const char *experimental = getenv("NJEMU_CPS2_ALLOW_EXPERIMENTAL");
@@ -117,6 +116,17 @@ void cps2_wide_init(void)
 		snprintf(cps2_wide_error, sizeof(cps2_wide_error), "program was already patched before profile initialization");
 	if (!cps2_wide_supported)
 		printf("[CPS2_WIDE] %s: %s.\n", game_name, cps2_wide_error);
+}
+#endif
+
+void cps2_wide_init(void)
+{
+	cps2_wide_exit();
+#if CPS_WIDESCREEN
+	cps2_wide_warning_emitted = false;
+#ifndef PSP
+	cps2_wide_load_profile();
+#endif
 #endif
 }
 
@@ -129,6 +139,10 @@ static void cps2_wide_transition(bool requested)
 		option_cps_widescreen = cps2_wide_margin != 0;
 		return;
 	}
+#ifdef PSP
+	if (requested && !cps2_profile)
+		cps2_wide_load_profile();
+#endif
 	size_t length;
 	uint16_t *program = cps2_wide_program(&length);
 
@@ -146,12 +160,28 @@ static void cps2_wide_transition(bool requested)
 			ui_popup(TEXT(WIDESCREEN_NOT_AVAILABLE));
 #endif
 		}
+#ifdef PSP
+		if (cps2_wide_margin == 0)
+		{
+			free(cps2_profile);
+			cps2_profile = NULL;
+			cps2_wide_supported = false;
+		}
+#endif
 		return;
 	}
 	cps2_wide_set_active(requested);
 	printf("[CPS2_WIDE] %s: %s; profile %s.\n", game_name,
 		requested ? "480x224 viewport" : "Native viewport",
 		requested ? "enabled" : "restored");
+#ifdef PSP
+	if (!requested)
+	{
+		free(cps2_profile);
+		cps2_profile = NULL;
+		cps2_wide_supported = false;
+	}
+#endif
 }
 #endif
 
