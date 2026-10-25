@@ -15,6 +15,8 @@
 #include <psp2/apputil.h>
 #include <psp2/io/dirent.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/cpu.h>
+#include <psp2/kernel/threadmgr.h>
 #include <psp2/system_param.h>
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
@@ -38,6 +40,10 @@ static void *psvita_init(void)
 	SceAppUtilInitParam init_param = { 0 };
 	SceAppUtilBootParam boot_param = { 0 };
 
+	/* Keep emulation and rendering on one core; psvita_thread.c places the
+	 * worker threads on the other two. */
+	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(),
+		SCE_KERNEL_CPU_MASK_USER_0);
 	if (psvita != NULL)
 		psvita->apputil_ready = sceAppUtilInit(&init_param, &boot_param) == 0;
 	return psvita;
