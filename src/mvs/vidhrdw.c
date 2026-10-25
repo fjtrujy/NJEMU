@@ -250,7 +250,8 @@ static void draw_sprites(int min_y, int max_y)
 				if ((rows = y_control & 0x3f) == 0) continue;
 
 				y = 0x200 - (y_control >> 7);
-				x = (sprite_x_control[sprite_number] >> 7) + view->x_bias;
+				x = (sprite_x_control[sprite_number] >> 7) + view->x_bias +
+					mvs_wide_sprite_pan[sprite_number];
 				zoom_y = (zoom_control & 0xff) << 6;
 
 				if (rows > 0x20)

@@ -1,5 +1,7 @@
 #include "mvs/wide.h"
 
+#include <string.h>
+
 static const mvs_view_geometry_t native_view =
 {
 	24, 16, 328, 240,
@@ -18,6 +20,7 @@ static const mvs_view_geometry_t wide_view =
 };
 
 static bool wide_active;
+int8_t mvs_wide_sprite_pan[MVS_WIDE_PAN_SPRITES];
 
 const mvs_view_geometry_t *mvs_view_geometry_for_mode(bool wide)
 {
@@ -27,6 +30,8 @@ const mvs_view_geometry_t *mvs_view_geometry_for_mode(bool wide)
 void mvs_wide_set_active(bool active)
 {
 	wide_active = active;
+	if (!active)
+		memset(mvs_wide_sprite_pan, 0, sizeof(mvs_wide_sprite_pan));
 }
 
 int mvs_true_wide_enabled(void)

@@ -20,6 +20,10 @@ spec.loader.exec_module(wide)
 RUNTIME_VALIDATOR: str | None = None
 
 
+LAYERS = ('[layers]\naddress = 0x10b0ae\ncount = 8\nstride = 0x100\nactive = 0x90\n'
+          'active_mask = 0x8000\nx = 0x18\nwidth = 0x7a\nsprite = 0x70\ncolumns = 0x78\nmain = 0\n')
+
+
 def fixture() -> tuple[str, bytes]:
     program = bytearray(0x400)
     program[0x100:0x107] = b'NEO-GEO'
@@ -95,9 +99,29 @@ class ProfileTests(unittest.TestCase):
                  self.text.replace('0x200', '512').replace('0x20\n', '32\n'),
                  self.text.replace('0x200', '0x200 # a comment'),
                  self.text.replace('status = verified', 'status = draft'),
-                 self.text.split('[patch')[0] + 'viewport_only = 1\n']
+                 self.text.split('[patch')[0] + 'viewport_only = 1\n',
+                 self.text.replace('version = 1', 'version = 2'),
+                 self.text.replace('version = 1', 'version = 2') + LAYERS,
+                 self.text.replace('version = 1', 'version = 2').replace('\n[patch', '\n' + LAYERS + '\n[patch'),
+                 self.text.replace('version = 1', 'version = 2') + LAYERS.replace('0x10b0ae', '1093806')]
+        version2 = self.text.replace('version = 1', 'version = 2')
         invalid = [
-            self.text.replace('version = 1', 'version = 2'),
+            self.text.replace('version = 1', 'version = 3'),
+            self.text + LAYERS,
+            version2 + LAYERS + LAYERS,
+            version2 + LAYERS.replace('main = 0\n', ''),
+            version2 + LAYERS + 'flag = 4\n',
+            version2 + LAYERS.replace('0x10b0ae', '0x10b0af'),
+            version2 + LAYERS.replace('0x10b0ae', '0x0fff00'),
+            version2 + LAYERS.replace('0x10b0ae', '0x10f900'),
+            version2 + LAYERS.replace('count = 8', 'count = 0'),
+            version2 + LAYERS.replace('count = 8', 'count = 17'),
+            version2 + LAYERS.replace('stride = 0x100', 'stride = 0x101'),
+            version2 + LAYERS.replace('active = 0x90', 'active = 0x91'),
+            version2 + LAYERS.replace('active = 0x90', 'active = 0x100'),
+            version2 + LAYERS.replace('active_mask = 0x8000', 'active_mask = 0'),
+            version2 + LAYERS.replace('columns = 0x78', 'columns = 0x10000'),
+            version2 + LAYERS.replace('main = 0', 'main = 8'),
             self.text.replace('ngh = 0x0214', ''),
             self.text.replace('ngh = 0x0214', 'ngh = 0x10000'),
             self.text.replace('ngh = 0x0214', 'ngh = -1'),
@@ -170,26 +194,56 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(sum(w.original != w.wide for w in profile.words), 131)
         self.assertEqual(len(profile.words), 487)
 
-    def test_kof96_different_units_and_reversible_profile(self):
+    def test_kof96_layers_and_reversible_profile(self):
         profile = wide.load_profile(ROOT / 'resources/mvs/widescreen/kof96.ini')
-        self.assertEqual(profile.status, 'experimental')
+        self.assertEqual(profile.status, 'verified')
         self.assertEqual(profile.program_crc32, 0xcb72d23c)
-        self.assertEqual(len(profile.words), 53)
-        self.assertEqual(sum(w.original != w.wide for w in profile.words), 17)
-        fixed = (0x6fe0, 0x7004, 0x7262, 0x728e)
-        integer = (0x7042, 0x706a, 0x72d8, 0x7308)
+        self.assertEqual(len(profile.words), 134)
+        self.assertEqual(sum(w.original != w.wide for w in profile.words), 64)
+        self.assertEqual(profile.layers, dict(address=0x10b0ae, count=8, stride=0x100, active=0x90,
+                                              active_mask=0x8000, x=0x18, width=0x7a, sprite=0x70,
+                                              columns=0x78, main=0))
         words = {w.offset: w for w in profile.words}
-        for offset in fixed:
-            self.assertEqual((words[offset + 2].original, words[offset + 2].wide), (0x0780, 0x1b80))
-            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (0xa200, 0xcf00))
-        for offset in integer:
-            self.assertEqual((words[offset + 2].original, words[offset + 2].wide), (15, 55))
-            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (324, 414))
-        for raw in range(65536):
-            self.assertEqual(((raw + 0x1b80) & 0xffff) <= 0xcf00,
-                             raw <= 359 * 128 or raw >= (512 - 55) * 128)
-            signed = raw if raw < 32768 else raw - 65536
-            self.assertEqual(((raw + 55) & 0xffff) <= 414, -55 <= signed <= 359)
+        # Column gates open fully: the 32-column ring is unique modulo 512.
+        for offset in (0x6fe0, 0x7004, 0x7262, 0x728e):
+            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (0xa200, 0xffff))
+        for offset in (0x7042, 0x706a, 0x72d8, 0x7308):
+            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (324, 0xffff))
+        # Streaming keeps [X-48, X+376) loaded; the 514-pixel window still has hysteresis.
+        self.assertEqual((words[0x76ac].original, words[0x76ac].wide), (0x150, 0x178))
+        self.assertEqual((words[0x76c4].original, words[0x76c4].wide), (0x10, 0x30))
+        # Both trampolines are absolute JSRs into guarded 0xffff fill.
+        self.assertEqual([words[0x53b2 + i].wide for i in (0, 2, 4)], [0x4eb9, 0x0006, 0xbe00])
+        self.assertEqual([words[0x536e + i].wide for i in (0, 2, 4)], [0x4eb9, 0x0006, 0xbe60])
+        routines = [w for w in profile.words if 0x6be00 <= w.offset < 0x6bf00]
+        self.assertTrue(all(w.original == 0xffff for w in routines))
+        self.assertEqual(routines[-1].wide, 0x4e75)
+        synthetic = bytearray(profile.program_size)
+        for w in profile.words:
+            struct.pack_into('>H', synthetic, w.offset, w.original)
+        test_profile = replace(profile, program_crc32=wide.fingerprint(synthetic))
+        patched = wide.apply_profile(test_profile, bytes(synthetic), enable=True)
+        self.assertEqual(wide.apply_profile(test_profile, patched, enable=False), bytes(synthetic))
+
+    def test_kof98_layers_windows_and_reversible_profile(self):
+        profile = wide.load_profile(ROOT / 'resources/mvs/widescreen/kof98.ini')
+        self.assertEqual((profile.game, profile.ngh, profile.status), ('kof98', 0x242, 'verified'))
+        self.assertEqual(profile.program_crc32, 0xc84c6f28)
+        self.assertEqual(len(profile.words), 152)
+        self.assertEqual(sum(w.original != w.wide for w in profile.words), 68)
+        self.assertEqual(profile.layers['address'], 0x10b0b4)
+        words = {w.offset: w for w in profile.words}
+        for offset in (0x7fc8, 0x7fec, 0x824a, 0x8276):
+            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (0xa600, 0xffff))
+        for offset in (0x802a, 0x8052, 0x82c0, 0x82f0):
+            self.assertEqual((words[offset + 6].original, words[offset + 6].wide), (332, 0xffff))
+        # Both window initializers and the streamer: [X-64, X+384), thresholds summing to it.
+        left, width = words[0x7b58].wide, words[0x7b60].wide
+        self.assertEqual((left, width), (0x40, 0x1c0))
+        self.assertEqual((words[0x7bf4].wide, words[0x7bfe].wide), (0x40, 0x180))
+        self.assertEqual(words[0x8694].wide + words[0x86ac].wide, width)
+        self.assertEqual([words[0x627a + i].wide for i in (0, 2, 4)], [0x4eb9, 0x000a, 0x7e00])
+        self.assertEqual([words[0x6236 + i].wide for i in (0, 2, 4)], [0x4eb9, 0x000a, 0x7e60])
         synthetic = bytearray(profile.program_size)
         for w in profile.words:
             struct.pack_into('>H', synthetic, w.offset, w.original)

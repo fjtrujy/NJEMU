@@ -16,16 +16,18 @@ Profiles are staged with the MVS resources by CMake. The current files are:
 | File | Status | Scope |
 | --- | --- | --- |
 | `widescreen/mslug3.ini` | `verified` | Original decrypted MVS revision; 131 changed words, 487 guarded words. Prior scene comparisons and independent instruction tests retained. |
-| `widescreen/kof96.ini` | `experimental` | Original KOF '96 revision; eight background visibility gates and the foreground right-hand drawing rejection. Stage-edge and off-screen-actor coverage is incomplete. |
+| `widescreen/kof96.ini` | `verified` | Original KOF '96 revision, version 2; 64 changed words, 134 guarded words and the stage-layer records. Near the stage edges the view shifts inward (up to 40 pixels) instead of leaving the 768-pixel maps; camera and gameplay unchanged. All eleven stage indices checked at both camera limits. |
+| `widescreen/kof98.ini` | `verified` | Original decrypted KOF '98 revision, version 2; 68 changed words, 152 guarded words. Same method; also widens the 352-pixel stage column windows. All nine stage indices checked at both camera limits. |
 
 `verified` records the author's tested profile, not exhaustive compatibility
 with every mission, state, clone or gameplay situation. `experimental` requires
 explicit opt-in. `draft` is never activated by the emulator, even with opt-in.
 
-KOF '96 has a known finite-map discontinuity at a camera edge. The attempted
-camera clamp also changed the demonstration's progression and is not shipped.
-See [the recorded KOF '96 investigation](KOF96_WIDESCREEN_RESEARCH.md) for exact
-coverage, paired-capture differences and the camera/parallax evidence.
+KOF '96 stage maps end exactly at the native view's camera limits. Its profile
+keeps the wide view inside each map by shifting the stage layers and world
+objects, not the camera. See [the recorded KOF '96 investigation](KOF96_WIDESCREEN_RESEARCH.md)
+for the layer records, the object routine, the coverage and why paired
+demonstration runs diverge.
 
 Profiles are available on Desktop, PSP and PS Vita, where the screen is 16:9.
 In GUI builds, enable **Widescreen (16:9)** in the game's Video settings; it is
@@ -39,7 +41,10 @@ Without the GUI, or to force it in tests, use the environment:
 # Metal Slug 3: put mslug3 in game_name.ini for a GUI=OFF build.
 NJEMU_MVS_TRUE_WIDE=1 ./MVS
 
-# KOF '96: put kof96 in game_name.ini; explicitly allow the experimental profile.
+# KOF '96: the same, with kof96 in game_name.ini.
+NJEMU_MVS_TRUE_WIDE=1 ./MVS
+
+# An experimental profile must be explicitly allowed.
 NJEMU_MVS_ALLOW_EXPERIMENTAL=1 NJEMU_MVS_TRUE_WIDE=1 ./MVS
 ```
 
@@ -123,6 +128,44 @@ mismatched word-list lengths, embedded control bytes and oversized input.
 Limits are 64 KiB per profile, 2047 bytes per line, 128 patch sections, 128
 numbers per list, 128 repetitions and 4096 expanded guard words. Programs are
 even-sized and limited to 64 MiB. Patches cannot write below offset `0x100`.
+
+## Version 2: stage layers
+
+`version = 2` accepts everything version 1 does plus an optional `[layers]`
+section, at most once, anywhere after `[profile]`. It describes a game's
+background-layer records in 68000 work RAM so that the renderer can shift
+each layer horizontally and keep the wide view inside its finite map:
+
+```ini
+[layers]
+address = 0x10b0ae     # first record, in 0x100000..0x10ffff
+count = 8              # records, 1..16
+stride = 0x100         # bytes between records, even
+active = 0x90          # word offsets inside a record, even and < stride
+active_mask = 0x8000   # nonzero: (word & mask) != 0 marks a running layer
+x = 0x18               # signed scroll X in pixels (16.16 integer part)
+width = 0x7a           # map width in 16-pixel tiles
+sprite = 0x70          # first SCB1 word of the layer (sprite = value / 64)
+columns = 0x78         # number of sprite columns
+main = 0               # record whose X is the camera
+```
+
+All keys are required and decimal or `0x`-prefixed. Every emulated frame,
+before the CPU runs, the engine reads the records. If the main record is
+running and at least 400 pixels wide, each running layer that is streamed
+(its map is wider than its columns) and that wide gets the shift
+`clamp(0, 40-X, W-360-X)`, bounded to `[-40,40]`; other running layers get
+the main layer's shift. The renderer moves those sprites' chain
+origins by the negated shift. Everything else, including the FIX layer, is
+untouched, and without a running main layer every shift is zero. Reading the
+records at frame start matches games that build their sprite list during the
+frame and upload it at the next vblank.
+
+The section moves layer sprites only. Objects drawn in world coordinates need
+the same shift applied by the game, through guarded patches, and the game's
+column visibility and streaming must cover the shifted view. KOF '96 shows
+one way to do both, and KOF '98 a narrower streaming window that had to be
+widened as well.
 
 ## Revision identity and atomic application
 
@@ -273,6 +316,8 @@ Do not treat sprite counts or allocator bounds as image dimensions.
 
 `tests/mvs_wide_tests.c` retains an independent Metal Slug instruction fixture
 and tests the generic C engine, geometry, failure atomicity and exact restoration.
+It also checks the stage-layer shifts against synthetic KOF '96 records for
+every camera position.
 `tests/widescreen_tool_tests.py` tests both shipped profiles, full fingerprints,
 malformed inputs, the structural scanner and PPM comparison. CTest runs a shared
 valid/invalid profile corpus through both the Python and actual C parsers to

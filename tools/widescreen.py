@@ -23,6 +23,8 @@ MAX_WORDS = 4096
 MAX_LIST = 128
 MAX_SECTIONS = 128
 MAX_FILE = 65536
+LAYER_KEYS = ('address', 'count', 'stride', 'active', 'active_mask', 'x', 'width',
+              'sprite', 'columns', 'main')
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,22 @@ class Profile:
     viewport_only: bool
     description: str
     words: tuple[Word, ...]
+    layers: dict[str, int] | None = None
+
+
+def load_layers(section) -> dict[str, int]:
+    """Version 2 stage-layer records in 68000 RAM; word offsets per record."""
+    if set(section) != set(LAYER_KEYS):
+        raise ValueError('missing or unknown fields in [layers]')
+    layers = {key: number(section[key], 0xffffff if key == 'address' else 0xffff) for key in LAYER_KEYS}
+    fields = [layers[key] for key in ('active', 'x', 'width', 'sprite', 'columns')]
+    if (not 1 <= layers['count'] <= 16 or layers['stride'] < 2 or layers['stride'] % 2 or
+            layers['address'] % 2 or layers['address'] < 0x100000 or
+            layers['address'] + layers['count'] * layers['stride'] > 0x110000 or
+            layers['main'] >= layers['count'] or not layers['active_mask'] or
+            any(f % 2 or f > layers['stride'] - 2 for f in fields)):
+        raise ValueError('invalid [layers] record description')
+    return layers
 
 
 def number(text: str, maximum: int = 0xffffffff, *, word: bool = False) -> int:
@@ -92,7 +110,7 @@ def load_profile(path: Path) -> Profile:
     required = {'version', 'game', 'ngh', 'program_size', 'program_crc32', 'status'}
     if not required <= set(meta) or set(meta) - required - {'description', 'viewport_only'}:
         raise ValueError('missing or unknown profile metadata')
-    if meta['version'] != '1' or not re.fullmatch(r'[a-z0-9_-]{1,15}', meta['game']):
+    if meta['version'] not in ('1', '2') or not re.fullmatch(r'[a-z0-9_-]{1,15}', meta['game']):
         raise ValueError('unsupported version or invalid game identifier')
     size = number(meta['program_size'], MAX_PROGRAM)
     if size < 0x100 or size % 2:
@@ -105,6 +123,12 @@ def load_profile(path: Path) -> Profile:
     viewport = bool(number(meta.get('viewport_only', '0'), 1))
     words: list[Word] = []
     sections = cfg.sections()[1:]
+    layers = None
+    if 'layers' in sections:
+        if meta['version'] != '2':
+            raise ValueError('[layers] requires version = 2')
+        layers = load_layers(cfg['layers'])
+        sections.remove('layers')
     if len(sections) > MAX_SECTIONS:
         raise ValueError('too many patch sections')
     for name in sections:
@@ -135,7 +159,7 @@ def load_profile(path: Path) -> Profile:
     if changed == viewport:
         raise ValueError('use viewport_only=1 only for profiles with no program changes')
     return Profile(meta['game'], number(meta['ngh'], 0xffff), size,
-                   number(meta['program_crc32']), meta['status'], viewport, description, tuple(words))
+                   number(meta['program_crc32']), meta['status'], viewport, description, tuple(words), layers)
 
 
 def read_program(path: Path) -> bytes:
@@ -201,6 +225,7 @@ def describe(profile: Profile) -> dict:
                 program_size=profile.program_size, crc32=f'{profile.program_crc32:08x}',
                 guard_words=len(profile.words),
                 changed_words=sum(w.original != w.wide for w in profile.words),
+                stage_layers=profile.layers is not None,
                 description=profile.description)
 
 

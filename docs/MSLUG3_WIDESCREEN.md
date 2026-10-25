@@ -137,7 +137,7 @@ window. Independently, its background writer assigns zero SCB3 height to
 columns outside the same window. Increasing only NJEMU's viewport therefore
 exposes mostly blank margins.
 
-[`src/mvs/wide_profile.c`](../src/mvs/wide_profile.c) validates and applies the
+[`src/common/wide_profile.c`](../src/common/wide_profile.c) validates and applies the
 INI's guarded substitutions in the emulator's host-endian program memory.
 `src/mvs/wide.c` now owns only the shared geometry. The MS3 filters are:
 

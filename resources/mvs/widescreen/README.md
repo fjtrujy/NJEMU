@@ -4,10 +4,10 @@ Place one `<game_name>.ini` here. NJEMU loads it when the game starts; no rebuil
 is needed after editing a runtime profile. Source copies are staged into build
 and install resources by CMake.
 
-`mslug3.ini` is the migrated original MVS profile. `kof96.ini` is experimental:
-request wide mode and set `NJEMU_MVS_ALLOW_EXPERIMENTAL=1` to try it. Neither
-profile is assumed compatible with other ROM revisions or clones. `draft`
-profiles are never activated.
+`mslug3.ini` is the migrated original MVS profile; `kof96.ini` and `kof98.ini`
+are the original KOF '96 and KOF '98 ones. No profile is assumed compatible
+with other ROM revisions or clones. `experimental` profiles need `NJEMU_MVS_ALLOW_EXPERIMENTAL=1` and
+`draft` profiles are never activated.
 
 From the source tree, `python3 tools/widescreen.py --help` lists the authoring
 commands. `draft` creates an inert fingerprinted template, `scan` searches for

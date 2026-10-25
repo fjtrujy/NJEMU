@@ -1,4 +1,4 @@
-#include "mvs/wide_profile.h"
+#include "common/wide_profile.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -68,7 +68,7 @@ typedef struct patch_section {
 	unsigned int seen;
 } patch_section_t;
 
-static int append_section(mvs_wide_profile_t *profile, const patch_section_t *patch)
+static int append_section(wide_profile_t *profile, const patch_section_t *patch)
 {
 	int i, j;
 	uint32_t repetition;
@@ -81,8 +81,8 @@ static int append_section(mvs_wide_profile_t *profile, const patch_section_t *pa
 			{
 				uint64_t offset = (uint64_t)patch->offsets[i] +
 					(uint64_t)repetition * patch->stride + (unsigned int)j * 2u;
-				mvs_wide_patch_word_t *word;
-				if (profile->word_count == MVS_WIDE_PROFILE_MAX_WORDS ||
+				wide_patch_word_t *word;
+				if (profile->word_count == WIDE_PROFILE_MAX_WORDS ||
 					offset < 0x100 || (offset & 1) || offset + 2 > profile->program_size) return 0;
 				word = &profile->words[profile->word_count++];
 				word->offset = (uint32_t)offset;
@@ -92,9 +92,32 @@ static int append_section(mvs_wide_profile_t *profile, const patch_section_t *pa
 	return 1;
 }
 
+static const char *const layer_keys[] = {
+	"address", "count", "stride", "active", "active_mask", "x", "width",
+	"sprite", "columns", "main"
+};
+#define LAYER_KEYS (sizeof(layer_keys) / sizeof(layer_keys[0]))
+
+/* Records must lie in the 64 KiB of 68000 work RAM and fields inside them. */
+static int layers_valid(const wide_layers_t *layers, unsigned int seen)
+{
+	const uint16_t fields[] = {
+		layers->active, layers->x, layers->width, layers->sprite, layers->columns
+	};
+	size_t i;
+	if (seen != (1u << LAYER_KEYS) - 1 || layers->count == 0 || layers->count > 16 ||
+		layers->stride < 2 || (layers->stride & 1) || (layers->address & 1) ||
+		layers->address < 0x100000 ||
+		layers->address + (uint32_t)layers->count * layers->stride > 0x110000 ||
+		layers->main >= layers->count || layers->active_mask == 0) return 0;
+	for (i = 0; i < sizeof(fields) / sizeof(fields[0]); i++)
+		if ((fields[i] & 1) || fields[i] > layers->stride - 2) return 0;
+	return 1;
+}
+
 static int compare_words(const void *left, const void *right)
 {
-	const mvs_wide_patch_word_t *a = left, *b = right;
+	const wide_patch_word_t *a = left, *b = right;
 	return (a->offset > b->offset) - (a->offset < b->offset);
 }
 
@@ -124,13 +147,13 @@ static int read_line(FILE *file, char line[MAX_LINE], size_t *total)
 	return used != 0;
 }
 
-mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t error_size)
+wide_profile_t *wide_profile_load(const char *path, char *error, size_t error_size)
 {
 	FILE *file;
-	mvs_wide_profile_t *profile;
+	wide_profile_t *profile;
 	patch_section_t patch;
 	char line[MAX_LINE], section_names[MAX_SECTIONS][64];
-	unsigned int line_no = 0, meta_seen = 0;
+	unsigned int line_no = 0, meta_seen = 0, layers_seen = 0, version = 0;
 	size_t total = 0, i;
 	int section = 0, sections = 0, changed = 0, line_status;
 	const char *failure = "invalid profile";
@@ -161,7 +184,15 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 			text++;
 			if (section == 2 && !append_section(profile, &patch))
 			{ failure = "invalid or out-of-range patch section"; goto fail; }
+			if (section == 3 && !layers_valid(&profile->layers, layers_seen))
+			{ failure = "invalid layers section"; goto fail; }
 			if (strcmp(text, "profile") == 0 && section == 0) section = 1;
+			else if (strcmp(text, "layers") == 0 && section != 0 && version >= 2 && !profile->has_layers)
+			{
+				if ((meta_seen & 63) != 63) { failure = "missing metadata"; goto fail; }
+				profile->has_layers = true;
+				section = 3;
+			}
 			else if (strncmp(text, "patch ", 6) == 0 && text[6] && section != 0)
 			{
 				if ((meta_seen & 63) != 63 || sections == MAX_SECTIONS || strlen(text) >= 64)
@@ -184,7 +215,11 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 		if (section == 1)
 		{
 			if (strcmp(key, "version") == 0)
-			{ bit = 1; if (strcmp(value, "1") != 0) { failure = "unsupported profile version"; goto fail; } }
+			{
+				bit = 1;
+				if (strcmp(value, "1") != 0 && strcmp(value, "2") != 0) { failure = "unsupported profile version"; goto fail; }
+				version = (unsigned int)(value[0] - '0');
+			}
 			else if (strcmp(key, "game") == 0)
 			{
 				bit = 2;
@@ -199,7 +234,7 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 			else if (strcmp(key, "program_size") == 0)
 			{
 				bit = 8;
-				if (!number(value, 0, MVS_WIDE_PROFILE_MAX_PROGRAM, &parsed) || parsed < 0x100 || (parsed & 1)) goto fail;
+				if (!number(value, 0, WIDE_PROFILE_MAX_PROGRAM, &parsed) || parsed < 0x100 || (parsed & 1)) goto fail;
 				profile->program_size = parsed;
 			}
 			else if (strcmp(key, "program_crc32") == 0)
@@ -207,9 +242,9 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 			else if (strcmp(key, "status") == 0)
 			{
 				bit = 32;
-				if (strcmp(value, "verified") == 0) profile->status = MVS_WIDE_PROFILE_VERIFIED;
-				else if (strcmp(value, "experimental") == 0) profile->status = MVS_WIDE_PROFILE_EXPERIMENTAL;
-				else if (strcmp(value, "draft") == 0) profile->status = MVS_WIDE_PROFILE_DRAFT;
+				if (strcmp(value, "verified") == 0) profile->status = WIDE_PROFILE_VERIFIED;
+				else if (strcmp(value, "experimental") == 0) profile->status = WIDE_PROFILE_EXPERIMENTAL;
+				else if (strcmp(value, "draft") == 0) profile->status = WIDE_PROFILE_DRAFT;
 				else goto fail;
 			}
 			else if (strcmp(key, "description") == 0)
@@ -220,10 +255,27 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 			if (meta_seen & bit) { failure = "duplicate metadata key"; goto fail; }
 			meta_seen |= bit;
 		}
+		else if (section == 3)
+		{
+			uint16_t *const targets[LAYER_KEYS] = {
+				NULL, &profile->layers.count, &profile->layers.stride,
+				&profile->layers.active, &profile->layers.active_mask,
+				&profile->layers.x, &profile->layers.width,
+				&profile->layers.sprite, &profile->layers.columns, &profile->layers.main
+			};
+			for (i = 0; i < LAYER_KEYS && strcmp(key, layer_keys[i]) != 0; i++);
+			if (i == LAYER_KEYS) { failure = "unknown layers key"; goto fail; }
+			bit = 1u << i;
+			if (layers_seen & bit) { failure = "duplicate layers key"; goto fail; }
+			if (!number(value, 0, i ? 0xffff : 0xffffff, &parsed)) goto fail;
+			if (i) *targets[i] = (uint16_t)parsed;
+			else profile->layers.address = parsed;
+			layers_seen |= bit;
+		}
 		else
 		{
 			if (strcmp(key, "offsets") == 0)
-			{ bit = 1; patch.offsets_count = numbers(value, 0, MVS_WIDE_PROFILE_MAX_PROGRAM, patch.offsets); }
+			{ bit = 1; patch.offsets_count = numbers(value, 0, WIDE_PROFILE_MAX_PROGRAM, patch.offsets); }
 			else if (strcmp(key, "original") == 0)
 			{ bit = 2; patch.original_count = numbers(value, 16, 0xffff, patch.original); }
 			else if (strcmp(key, "wide") == 0)
@@ -231,7 +283,7 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 			else if (strcmp(key, "repeat") == 0)
 			{ bit = 8; if (!number(value, 0, MAX_LIST, &patch.repeat)) goto fail; }
 			else if (strcmp(key, "stride") == 0)
-			{ bit = 16; if (!number(value, 0, MVS_WIDE_PROFILE_MAX_PROGRAM, &patch.stride) || (patch.stride & 1)) goto fail; }
+			{ bit = 16; if (!number(value, 0, WIDE_PROFILE_MAX_PROGRAM, &patch.stride) || (patch.stride & 1)) goto fail; }
 			else { failure = "unknown patch key"; goto fail; }
 			if (patch.seen & bit) { failure = "duplicate patch key"; goto fail; }
 			patch.seen |= bit;
@@ -241,6 +293,7 @@ mvs_wide_profile_t *mvs_wide_profile_load(const char *path, char *error, size_t 
 	if (ferror(file)) { failure = "read error"; goto fail; }
 	if ((meta_seen & 63) != 63) { failure = "missing required metadata"; goto fail; }
 	if (section == 2 && !append_section(profile, &patch)) { failure = "invalid final patch section"; goto fail; }
+	if (section == 3 && !layers_valid(&profile->layers, layers_seen)) { failure = "invalid layers section"; goto fail; }
 	qsort(profile->words, profile->word_count, sizeof(profile->words[0]), compare_words);
 	for (i = 0; i < profile->word_count; i++)
 	{
@@ -260,7 +313,7 @@ fail:
 }
 
 static uint32_t program_crc32(const uint16_t *program, size_t byte_length,
-	const mvs_wide_profile_t *profile)
+	const wide_profile_t *profile)
 {
 	uint32_t table[256], crc = UINT32_MAX;
 	size_t i, next = 0;
@@ -271,7 +324,7 @@ static uint32_t program_crc32(const uint16_t *program, size_t byte_length,
 		for (bit = 0; bit < 8; bit++) entry = (entry >> 1) ^ ((entry & 1) ? 0xedb88320u : 0);
 		table[i] = entry;
 	}
-	for (i = MVS_WIDE_PROFILE_CRC_START; i < byte_length; i += 2)
+	for (i = WIDE_PROFILE_CRC_START; i < byte_length; i += 2)
 	{
 		uint16_t word = program[i / 2];
 		if (profile && next < profile->word_count && profile->words[next].offset == i)
@@ -282,14 +335,14 @@ static uint32_t program_crc32(const uint16_t *program, size_t byte_length,
 	return crc ^ UINT32_MAX;
 }
 
-uint32_t mvs_wide_program_crc32(const uint16_t *program, size_t byte_length)
+uint32_t wide_program_crc32(const uint16_t *program, size_t byte_length)
 {
-	if (!program || byte_length < 0x100 || byte_length > MVS_WIDE_PROFILE_MAX_PROGRAM ||
+	if (!program || byte_length < 0x100 || byte_length > WIDE_PROFILE_MAX_PROGRAM ||
 		(byte_length & 1)) return 0;
 	return program_crc32(program, byte_length, NULL);
 }
 
-int mvs_wide_profile_check(const mvs_wide_profile_t *profile,
+int wide_profile_check(const wide_profile_t *profile,
 	const uint16_t *program, size_t byte_length, char *error, size_t error_size)
 {
 	size_t i;
@@ -297,12 +350,12 @@ int mvs_wide_profile_check(const mvs_wide_profile_t *profile,
 	uint32_t crc;
 	if (error && error_size) error[0] = '\0';
 	if (!profile || !program || byte_length != profile->program_size ||
-		byte_length < 0x100 || byte_length > MVS_WIDE_PROFILE_MAX_PROGRAM ||
-		(byte_length & 1) || profile->word_count > MVS_WIDE_PROFILE_MAX_WORDS)
+		byte_length < 0x100 || byte_length > WIDE_PROFILE_MAX_PROGRAM ||
+		(byte_length & 1) || profile->word_count > WIDE_PROFILE_MAX_WORDS)
 	{ explain(error, error_size, "program size/profile mismatch"); return -1; }
 	for (i = 0; i < profile->word_count; i++)
 	{
-		const mvs_wide_patch_word_t *p = &profile->words[i];
+		const wide_patch_word_t *p = &profile->words[i];
 		uint16_t actual;
 		int word_mode;
 		if (p->offset < 0x100 || (p->offset & 1) || p->offset > byte_length - 2 ||
@@ -323,12 +376,55 @@ int mvs_wide_profile_check(const mvs_wide_profile_t *profile,
 	return mode < 0 ? 0 : mode;
 }
 
-bool mvs_wide_profile_apply(const mvs_wide_profile_t *profile,
+bool wide_profile_apply(const wide_profile_t *profile,
 	uint16_t *program, size_t byte_length, bool enable, char *error, size_t error_size)
 {
 	size_t i;
-	if (mvs_wide_profile_check(profile, program, byte_length, error, error_size) < 0) return false;
+	if (wide_profile_check(profile, program, byte_length, error, error_size) < 0) return false;
 	for (i = 0; i < profile->word_count; i++)
 		program[profile->words[i].offset / 2] = enable ? profile->words[i].wide : profile->words[i].original;
 	return true;
+}
+
+/* Shift that keeps [X+left+s, X+right+s) inside a W-pixel map, preferring
+ * no shift; bounded by the extra width beyond the 320-pixel screen. */
+static int layer_shift(int x, int width, int left, int right)
+{
+	const int limit = (right - left - 320) / 2;
+	int shift = 0;
+	if (shift < -left - x) shift = -left - x;
+	if (shift > width - right - x) shift = width - right - x;
+	if (shift > limit) shift = limit;
+	if (shift < -limit) shift = -limit;
+	return shift;
+}
+
+void wide_layers_pan(const wide_layers_t *layers,
+	uint16_t (*read16)(uint32_t address), int left, int right,
+	int8_t *pan, size_t sprites)
+{
+	uint32_t base = layers->address + (uint32_t)layers->main * layers->stride;
+	int main_shift, width;
+	unsigned int i;
+
+	memset(pan, 0, sprites);
+	width = (int)read16(base + layers->width) * 16;
+	if (!(read16(base + layers->active) & layers->active_mask) || width < right - left) return;
+	main_shift = layer_shift((int16_t)read16(base + layers->x), width, left, right);
+	for (i = 0, base = layers->address; i < layers->count; i++, base += layers->stride)
+	{
+		size_t first = read16(base + layers->sprite) / 64, last;
+		const uint16_t columns = read16(base + layers->columns);
+		int shift = main_shift;
+		if (!(read16(base + layers->active) & layers->active_mask)) continue;
+		/* A map wider than its resident columns is streamed and repeats
+		 * modulo its width. Fully resident or narrow maps are scenery
+		 * pieces placed in the main world. */
+		width = (int)read16(base + layers->width) * 16;
+		if (columns * 16 < width && width >= right - left)
+			shift = layer_shift((int16_t)read16(base + layers->x), width, left, right);
+		last = first + columns;
+		for (; first < last && first < sprites; first++)
+			pan[first] = (int8_t)-shift;
+	}
 }

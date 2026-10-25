@@ -1,5 +1,5 @@
 #include "mvs/wide.h"
-#include "mvs/wide_profile.h"
+#include "common/wide_profile.h"
 
 /* Keep the checks active when CTest is built with -DNDEBUG as well. */
 #ifdef NDEBUG
@@ -24,12 +24,12 @@ static const uint16_t branches[] = {
 };
 #define PROGRAM_BYTES 0x18300u
 
-static mvs_wide_profile_t *test_profile;
+static wide_profile_t *test_profile;
 
 /* Exercise the file-backed generic engine against the independent old oracle. */
 static bool mvs_wide_patch_program(uint16_t *program, size_t size, bool enable)
 {
-	return mvs_wide_profile_apply(test_profile, program, size, enable, NULL, 0);
+	return wide_profile_apply(test_profile, program, size, enable, NULL, 0);
 }
 
 static void make_program(uint16_t *program)
@@ -76,7 +76,7 @@ static void test_patch(void)
 	/* Synthetic fixture identity; the production profile's real identity is
 	 * checked separately against locally supplied program dumps. */
 	test_profile->program_size = PROGRAM_BYTES;
-	test_profile->program_crc32 = mvs_wide_program_crc32(program, PROGRAM_BYTES);
+	test_profile->program_crc32 = wide_program_crc32(program, PROGRAM_BYTES);
 
 	assert(mvs_wide_patch_program(program, PROGRAM_BYTES, false));
 	assert(memcmp(program, original, PROGRAM_BYTES) == 0);
@@ -195,6 +195,76 @@ static void test_geometry(void)
 	}
 }
 
+static uint16_t layer_ram[0x8000];
+
+static uint16_t read_layer_ram(uint32_t address)
+{
+	assert(address >= 0x100000 && address < 0x110000 && !(address & 1));
+	return layer_ram[(address - 0x100000) / 2];
+}
+
+static void set_layer(const wide_layers_t *layers, int index, bool active,
+	int x, int width, int sprite, int columns)
+{
+	uint32_t base = layers->address + (uint32_t)index * layers->stride - 0x100000;
+	layer_ram[(base + layers->active) / 2] = active ? 0x8000 : 0x7fff;
+	layer_ram[(base + layers->x) / 2] = (uint16_t)x;
+	layer_ram[(base + layers->width) / 2] = (uint16_t)width;
+	layer_ram[(base + layers->sprite) / 2] = (uint16_t)(sprite * 64);
+	layer_ram[(base + layers->columns) / 2] = (uint16_t)columns;
+}
+
+/* Hardware X [-40,360) must stay inside every full-width layer's map. */
+static void test_layers_pan(void)
+{
+	char error[192];
+	wide_profile_t *profile = wide_profile_load(TEST_PROFILE_DIR "/kof96.ini",
+		error, sizeof(error));
+	const wide_layers_t *layers;
+	int8_t pan[MVS_WIDE_PAN_SPRITES];
+	int camera, i;
+	if (!profile) { fprintf(stderr, "%s\n", error); exit(1); }
+	assert(profile->has_layers && profile->status == WIDE_PROFILE_VERIFIED);
+	layers = &profile->layers;
+	assert(layers->address == 0x10b0ae && layers->count == 8 && layers->main == 0);
+	for (camera = 0; camera <= 448; camera++)
+	{
+		memset(layer_ram, 0, sizeof(layer_ram));
+		set_layer(layers, 0, true, camera, 48, 121, 32);		/* 768-pixel main map */
+		set_layer(layers, 1, true, camera / 2, 34, 89, 32);	/* half-speed parallax */
+		set_layer(layers, 2, true, camera * 2 / 7, 24, 1, 24);	/* 384 pixels: scenery */
+		set_layer(layers, 4, true, camera * 4 / 7 - 80, 28, 179, 28);	/* resident, 448 */
+		set_layer(layers, 3, false, 0, 48, 333, 32);		/* stale record */
+		wide_layers_pan(layers, read_layer_ram, -40, 360, pan, MVS_WIDE_PAN_SPRITES);
+		for (i = 0; i < 2; i++)
+		{
+			const int x = i ? camera / 2 : camera, width = i ? 544 : 768;
+			const int shift = -pan[i ? 89 : 121];
+			assert(x - 40 + shift >= 0 && x + 360 + shift <= width);
+			assert(shift >= -40 && shift <= 40);
+			/* No shift away from the edges. */
+			if (x >= 40 && x + 360 <= width) assert(shift == 0);
+		}
+		assert(pan[152] == pan[121] && pan[120] == pan[89] && pan[1] == pan[121]);
+		assert(pan[179] == pan[121] && pan[206] == pan[121]);
+		assert(pan[0] == 0 && pan[25] == 0 && pan[153] == 0 && pan[333] == 0);
+	}
+	/* An inactive or narrow main layer leaves every sprite in place. */
+	set_layer(layers, 0, false, 448, 48, 121, 32);
+	wide_layers_pan(layers, read_layer_ram, -40, 360, pan, MVS_WIDE_PAN_SPRITES);
+	for (i = 0; i < MVS_WIDE_PAN_SPRITES; i++) assert(pan[i] == 0);
+	set_layer(layers, 0, true, 0, 22, 121, 32);
+	wide_layers_pan(layers, read_layer_ram, -40, 360, pan, MVS_WIDE_PAN_SPRITES);
+	for (i = 0; i < MVS_WIDE_PAN_SPRITES; i++) assert(pan[i] == 0);
+	free(profile);
+	/* Same engine and record layout in KOF '98, at A5+0x30b4. */
+	profile = wide_profile_load(TEST_PROFILE_DIR "/kof98.ini", error, sizeof(error));
+	if (!profile) { fprintf(stderr, "%s\n", error); exit(1); }
+	assert(profile->has_layers && profile->layers.address == 0x10b0b4 &&
+		profile->layers.stride == 0x100 && profile->layers.active_mask == 0x8000);
+	free(profile);
+}
+
 static void test_presentation(void)
 {
 	int w, h;
@@ -223,12 +293,12 @@ int main(int argc, char **argv)
 	char error[192];
 	if (argc == 2)
 	{
-		mvs_wide_profile_t *profile = mvs_wide_profile_load(argv[1], error, sizeof(error));
+		wide_profile_t *profile = wide_profile_load(argv[1], error, sizeof(error));
 		if (!profile) { fprintf(stderr, "%s\n", error); return 1; }
 		free(profile);
 		return 0;
 	}
-	test_profile = mvs_wide_profile_load(TEST_PROFILE_DIR "/mslug3.ini", error, sizeof(error));
+	test_profile = wide_profile_load(TEST_PROFILE_DIR "/mslug3.ini", error, sizeof(error));
 	if (!test_profile) { fprintf(stderr, "%s\n", error); return 1; }
 	assert(test_profile->program_size == 0x900000);
 	assert(test_profile->program_crc32 == 0x714dc992);
@@ -236,6 +306,7 @@ int main(int argc, char **argv)
 	test_patch();
 	test_clipping();
 	test_geometry();
+	test_layers_pan();
 	test_presentation();
 	free(test_profile);
 	puts("MVS widescreen tests passed");

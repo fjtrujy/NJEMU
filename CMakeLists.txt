@@ -803,8 +803,8 @@ if (${TARGET} STREQUAL "MVS")
         mvs/sprite.c
         mvs/wide.h
         mvs/wide.c
-        mvs/wide_profile.h
-        mvs/wide_profile.c
+        common/wide_profile.h
+        common/wide_profile.c
         mvs/wide_debug.h
         mvs/wide_debug.c
         mvs/wide_runtime.c
@@ -1181,6 +1181,7 @@ elseif("${TARGET}" STREQUAL "MVS")
     if(MVS_WIDESCREEN)
         list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
             widescreen/kof96.ini
+            widescreen/kof98.ini
             widescreen/mslug3.ini
         )
     endif()
@@ -1855,7 +1856,7 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         add_executable(mvs_wide_tests
             tests/mvs_wide_tests.c
             src/mvs/wide.c
-            src/mvs/wide_profile.c
+            src/common/wide_profile.c
         )
         target_include_directories(mvs_wide_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
