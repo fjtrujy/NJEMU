@@ -267,7 +267,7 @@ ROM file names inside the ZIP can be anything, but **CRC values must match** MAM
 
 | System | Supported Games | Notes |
 |--------|-----------------|-------|
-| **CPS1** | 137 sets | Street Fighter II, Final Fight, Ghouls'n Ghosts, etc. |
+| **CPS1** | 138 sets | Street Fighter II, Final Fight, Ghouls'n Ghosts, etc. |
 | **CPS2** | 286 sets | Including Phoenix Edition decrypted sets |
 | **MVS** | 305 sets | Including bootlegs and homebrew |
 | **NCDZ** | All official releases | All officially released Neo-Geo CD games |

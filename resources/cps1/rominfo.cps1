@@ -1915,6 +1915,35 @@ END
 
 FILENAME( sf2ce, cps1, 2, 17, 0, 0 )
 	REGION( 0x200000, CPU1, 0 )
+	ROM( 0, s92e_23b.8f, 0x000000, 0x80000, 0x0aaa1a3a )
+	ROM( 0, s92_22b.7f, 0x080000, 0x80000, 0x2bbe15ed )
+	ROM( 0, s92_21a.bin, 0x100000, 0x80000, 0x925a7877 )
+
+	REGION( 0x600000, GFX1, 0 )
+	ROMX( 0, s92_01.bin, 0x000000, 0x80000, 0x03b0d852, 2, 6 )
+	ROMX( 0, s92_02.bin, 0x000002, 0x80000, 0x840289ec, 2, 6 )
+	ROMX( 0, s92_03.bin, 0x000004, 0x80000, 0xcdb5f027, 2, 6 )
+	ROMX( 0, s92_04.bin, 0x000006, 0x80000, 0xe2799472, 2, 6 )
+	ROMX( 0, s92_05.bin, 0x200000, 0x80000, 0xba8a2761, 2, 6 )
+	ROMX( 0, s92_06.bin, 0x200002, 0x80000, 0xe584bfb5, 2, 6 )
+	ROMX( 0, s92_07.bin, 0x200004, 0x80000, 0x21e3f87d, 2, 6 )
+	ROMX( 0, s92_08.bin, 0x200006, 0x80000, 0xbefc47df, 2, 6 )
+	ROMX( 0, s92_10.bin, 0x400000, 0x80000, 0x960687d5, 2, 6 )
+	ROMX( 0, s92_11.bin, 0x400002, 0x80000, 0x978ecd18, 2, 6 )
+	ROMX( 0, s92_12.bin, 0x400004, 0x80000, 0xd6ec9a0a, 2, 6 )
+	ROMX( 0, s92_13.bin, 0x400006, 0x80000, 0xed2c67f6, 2, 6 )
+
+	REGION( 0x28000, CPU2, 0 )
+	ROM( 0, s92_09.bin, 0x00000, 0x08000, 0x08f6b60e )
+	ROM( 1, 0x10000, 0x08000, 0x00000000 )
+
+	REGION( 0x40000, SOUND1, 0 )
+	ROM( 0, s92_18.bin, 0x00000, 0x20000, 0x7f162009 )
+	ROM( 0, s92_19.bin, 0x20000, 0x20000, 0xbeade53f )
+END
+
+FILENAME( sf2ceea, sf2ce, 2, 17, 0, 0 )
+	REGION( 0x200000, CPU1, 0 )
 	ROM( 0, sf2ce.23, 0x000000, 0x80000, 0x3f846b74 )
 	ROM( 0, sf2ce.22, 0x080000, 0x80000, 0x99f1cca4 )
 	ROM( 0, s92_21a.bin, 0x100000, 0x80000, 0x925a7877 )

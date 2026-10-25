@@ -181,7 +181,7 @@ static int test_metadata(const char *source_dir, const char *scratch_dir)
         host_game_core_t core;
         size_t count;
     } cases[] = {
-        {"cps1", HOST_CORE_CPS1, 137},
+        {"cps1", HOST_CORE_CPS1, 138},
         {"cps2", HOST_CORE_CPS2, 286},
         {"mvs", HOST_CORE_MVS, 305},
         {"ncdz", HOST_CORE_NCDZ, 97},
