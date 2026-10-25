@@ -7,10 +7,12 @@
     exactly like the vitaGL backend (psvita_video_gl.c), with the same
     shaders (psvita_shaders.h) and geometry (psvita_video_common.h):
 
-    - One GXM scene per frame.  Draws are recorded while the core renders
-      and replayed straight into the display back buffer by
-      transferWorkFrame(), which knows the destination rectangle and the
-      orientation.  No off-screen work target.
+    - Recorded frames.  Draws are recorded while the core renders and
+      replayed by transferWorkFrame(), which knows the destination rectangle
+      and the orientation: at a whole-number scale straight into the display
+      back buffer (one GXM scene per frame), otherwise into an off-screen
+      target at the largest whole scale that the display scene filters
+      bilinearly onto the destination (sharp bilinear, see hw_sharp_target).
 
     - GPU-visible textures.  Indexed layers are stacked into one U8 texture
       that writeIndexedTextureRect() fills in place on a cache miss (no
@@ -141,6 +143,8 @@ typedef struct psvita_video {
     uint32_t draw_fill;
     uint32_t screen_fill;
     bool screen_fill_valid;
+    vita2d_texture *sharp;		/* sharp bilinear target (hw_sharp_target) */
+    bool sharp_failed;			/* allocation failed: keep the direct replay */
     vita2d_texture *scratch;	/* INITIAL_TEXTURE_LAYER */
     vita2d_texture *ui_atlas_tex;
     psvita_ui_atlas_t *ui_atlas;
@@ -421,6 +425,22 @@ static void v2d_frame_sync(psvita_video_t *v)
     }
 }
 
+/* Pipeline state every scene starts from: no culling, depth and stencil off. */
+static void v2d_scene_defaults(SceGxmContext *ctx)
+{
+    sceGxmSetCullMode(ctx, SCE_GXM_CULL_NONE);
+    sceGxmSetFrontPolygonMode(ctx, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
+    sceGxmSetBackPolygonMode(ctx, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
+    sceGxmSetFrontDepthFunc(ctx, SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetBackDepthFunc(ctx, SCE_GXM_DEPTH_FUNC_ALWAYS);
+    sceGxmSetFrontDepthWriteEnable(ctx, SCE_GXM_DEPTH_WRITE_DISABLED);
+    sceGxmSetBackDepthWriteEnable(ctx, SCE_GXM_DEPTH_WRITE_DISABLED);
+    sceGxmSetFrontStencilFunc(ctx, SCE_GXM_STENCIL_FUNC_ALWAYS, SCE_GXM_STENCIL_OP_KEEP,
+        SCE_GXM_STENCIL_OP_KEEP, SCE_GXM_STENCIL_OP_KEEP, 0xff, 0xff);
+    sceGxmSetBackStencilFunc(ctx, SCE_GXM_STENCIL_FUNC_ALWAYS, SCE_GXM_STENCIL_OP_KEEP,
+        SCE_GXM_STENCIL_OP_KEEP, SCE_GXM_STENCIL_OP_KEEP, 0xff, 0xff);
+}
+
 /* Opens the display scene if needed; a new scene starts cleared to black. */
 static void v2d_open_scene(psvita_video_t *v)
 {
@@ -437,17 +457,7 @@ static void v2d_open_scene(psvita_video_t *v)
     vita2d_start_drawing_advanced(NULL, 0);
     vita2d_set_region_clip(SCE_GXM_REGION_CLIP_NONE, 0, 0,
         PSVITA_DISPLAY_WIDTH - 1, PSVITA_DISPLAY_HEIGHT - 1);
-    sceGxmSetCullMode(ctx, SCE_GXM_CULL_NONE);
-    sceGxmSetFrontPolygonMode(ctx, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
-    sceGxmSetBackPolygonMode(ctx, SCE_GXM_POLYGON_MODE_TRIANGLE_FILL);
-    sceGxmSetFrontDepthFunc(ctx, SCE_GXM_DEPTH_FUNC_ALWAYS);
-    sceGxmSetBackDepthFunc(ctx, SCE_GXM_DEPTH_FUNC_ALWAYS);
-    sceGxmSetFrontDepthWriteEnable(ctx, SCE_GXM_DEPTH_WRITE_DISABLED);
-    sceGxmSetBackDepthWriteEnable(ctx, SCE_GXM_DEPTH_WRITE_DISABLED);
-    sceGxmSetFrontStencilFunc(ctx, SCE_GXM_STENCIL_FUNC_ALWAYS, SCE_GXM_STENCIL_OP_KEEP,
-        SCE_GXM_STENCIL_OP_KEEP, SCE_GXM_STENCIL_OP_KEEP, 0xff, 0xff);
-    sceGxmSetBackStencilFunc(ctx, SCE_GXM_STENCIL_FUNC_ALWAYS, SCE_GXM_STENCIL_OP_KEEP,
-        SCE_GXM_STENCIL_OP_KEEP, SCE_GXM_STENCIL_OP_KEEP, 0xff, 0xff);
+    v2d_scene_defaults(ctx);
     vita2d_set_clear_color(RGBA8(0, 0, 0, 255));
     vita2d_clear_screen();
 
@@ -535,26 +545,89 @@ static void v2d_replay_draw(psvita_video_t *v, const hw_cmd_t *cmd,
     }
 }
 
-/*
- * Replays the recorded work frame into the display back buffer, mapping the
- * work frame rectangle `src_rect` onto `dst_rect` with the given orientation.
- */
-static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst_rect,
-                        int orient)
+static void *v2d_ui_alloc(psvita_video_t *v, size_t bytes, size_t align);
+
+/* (Re)creates the sharp bilinear target at w x h; false keeps the direct replay. */
+static bool v2d_sharp_target(psvita_video_t *v, int w, int h)
 {
+    if (v->sharp != NULL && vita2d_texture_get_width(v->sharp) == (unsigned)w &&
+        vita2d_texture_get_height(v->sharp) == (unsigned)h)
+        return true;
+    /* vita2d strides the colour surface by the width and the texture by the
+     * 8-aligned width: they only agree for multiples of 8. */
+    if (v->sharp_failed || (w & 7) != 0)
+        return false;
+    if (v->sharp != NULL) {
+        vita2d_wait_rendering_done();
+        vita2d_free_texture(v->sharp);
+    }
+    v->sharp = vita2d_create_empty_texture_rendertarget(w, h, SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
+    if (v->sharp == NULL) {
+        psvita_video_log("vita2d: %dx%d sharp bilinear target failed\n", w, h);
+        v->sharp_failed = true;
+        return false;
+    }
+    vita2d_texture_set_filters(v->sharp, SCE_GXM_TEXTURE_FILTER_LINEAR,
+        SCE_GXM_TEXTURE_FILTER_LINEAR);
+    sceGxmTextureSetUAddrMode(&v->sharp->gxm_tex, SCE_GXM_TEXTURE_ADDR_CLAMP);
+    sceGxmTextureSetVAddrMode(&v->sharp->gxm_tex, SCE_GXM_TEXTURE_ADDR_CLAMP);
+    return true;
+}
+
+/*
+ * Sharp bilinear presentation (hw_sharp_target): the work frame is replayed
+ * at a whole scale into the off-screen target in a scene of its own, which
+ * the display scene then filters bilinearly onto `dst` as its first draw.
+ */
+static void v2d_present_sharp(psvita_video_t *v, const RECT *src_rect, const RECT *dst,
+                              int orient)
+{
+    SceGxmContext *ctx = vita2d_get_context();
+    const int w = (int)vita2d_texture_get_width(v->sharp);
+    const int h = (int)vita2d_texture_get_height(v->sharp);
+    const RECT target = { 0, 0, (int16_t)w, (int16_t)h };
     hw_xform_t m;
     RECT d;
     float row_x[3], row_y[3];
+    hw_vertex_t *q;
 
-    hw_rec_flush(&v->rec);
-    v2d_frame_sync(v);
-
-    if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, &d, &m))
+    if (!hw_present_geometry(src_rect, &target, HW_ORIENT_NORMAL, w, h, &d, &m))
         return;
-    v->last_present_xform = m;
-    v->last_present_valid = true;
-    hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+    hw_clip_rows(&m, w, h, row_x, row_y);
 
+    vita2d_start_drawing_advanced(v->sharp, 0);
+    vita2d_set_region_clip(SCE_GXM_REGION_CLIP_NONE, 0, 0, w - 1, h - 1);
+    v2d_scene_defaults(ctx);
+    /* GXM restores its default viewport when a scene ends, so only this
+     * scene needs one matching its target. */
+    sceGxmSetViewport(ctx, w * 0.5f, w * 0.5f, h * 0.5f, -h * 0.5f, 0.5f, 0.5f);
+    for (uint32_t i = 0; i < v->rec.cmd_count; i++)
+        v2d_replay_draw(v, &v->rec.cmds[i], row_x, row_y);
+    v2d_set_depth(HW_DEPTH_OFF);
+    /* The display scene's notification also fences this scene's memory. */
+    sceGxmEndScene(ctx, NULL, NULL);
+    v->stat_scenes++;
+
+    v2d_open_scene(v);
+    if (!hw_present_geometry(&target, dst, orient, PSVITA_DISPLAY_WIDTH,
+            PSVITA_DISPLAY_HEIGHT, &d, &m) ||
+        (q = v2d_ui_alloc(v, 4 * sizeof(*q), 16)) == NULL)
+        return;
+    hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+    hw_write_quad(q, 0, 0, (int16_t)w, (int16_t)h, 0.0f, 0.0f, (float)w, (float)h, 0, 0);
+    /* The target is opaque with alpha 0, which the inverted blend keeps. */
+    const hw_cmd_t quad = { HW_PROG_DIRECT, HW_DEPTH_OFF, (uint16_t)w, (uint16_t)h,
+        &v->sharp->gxm_tex, q, NULL, 0, 1 };
+    v2d_replay_draw(v, &quad, row_x, row_y);
+}
+
+/*
+ * Direct presentation: replays the recording straight into the display scene
+ * through the work frame -> display rows; only `d` (display pixels) shows it.
+ */
+static bool v2d_present_direct(psvita_video_t *v, const RECT *d,
+                               const float row_x[3], const float row_y[3])
+{
     /*
      * Only the source rectangle is visible, at pixel precision.  GXM's region
      * clip works on whole tiles, so build a stencil mask of the destination
@@ -565,11 +638,11 @@ static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst
     const uint32_t cmd_first = rec->cmd_count;
     hw_rec_fill(rec, &display, 0x8000, HW_DEPTH_OFF);
     hw_rec_flush(rec);
-    hw_rec_fill(rec, &d, 0x8000, HW_DEPTH_OFF);
+    hw_rec_fill(rec, d, 0x8000, HW_DEPTH_OFF);
     hw_rec_flush(rec);
     if (rec->cmd_count != cmd_first + 2 || rec->cmds[cmd_first].quads != 1 ||
         rec->cmds[cmd_first + 1].quads != 1)
-        return;
+        return false;
     rec->cmd_count -= 2;
     const hw_cmd_t mask_all = rec->cmds[rec->cmd_count];
     const hw_cmd_t mask_dst = rec->cmds[rec->cmd_count + 1];
@@ -592,6 +665,38 @@ static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst
 
     v2d_set_depth(HW_DEPTH_OFF);
     v2d_set_stencil(SCE_GXM_STENCIL_FUNC_ALWAYS, SCE_GXM_STENCIL_OP_KEEP, SCE_GXM_STENCIL_OP_KEEP);
+    return true;
+}
+
+/*
+ * Presents the recorded work frame, mapping the work frame rectangle
+ * `src_rect` onto `dst_rect` of the display with the given orientation.
+ */
+static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst_rect,
+                        int orient)
+{
+    hw_xform_t m;
+    RECT d;
+    float row_x[3], row_y[3];
+    int target_w, target_h;
+
+    hw_rec_flush(&v->rec);
+    v2d_frame_sync(v);
+
+    if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, &d, &m))
+        return;
+    v->last_present_xform = m;
+    v->last_present_valid = true;
+    hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+
+    /* The off-screen scene must come before the display scene opens. */
+    if (!v->in_scene &&
+        hw_sharp_target(src_rect, d.right - d.left, d.bottom - d.top, orient,
+            V2D_MAX_TEXTURE_DIM, &target_w, &target_h) &&
+        v2d_sharp_target(v, target_w, target_h))
+        v2d_present_sharp(v, src_rect, &d, orient);
+    else if (!v2d_present_direct(v, &d, row_x, row_y))
+        return;
 
     if (psvita_dump_wanted(++v->presented)) {
         v->dump_pending = true;
@@ -690,6 +795,8 @@ static void psvita_free(void *data)
     }
     for (uint8_t p = 0; p < v->page_count; p++)
         vita2d_free_texture(v->pages[p].texture);
+    if (v->sharp != NULL)
+        vita2d_free_texture(v->sharp);
     if (v->scratch != NULL)
         vita2d_free_texture(v->scratch);
     if (v->ui_atlas_tex != NULL)
