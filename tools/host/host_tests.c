@@ -1,3 +1,8 @@
+#ifndef _WIN32
+/* Expose symlink() when the host tests are built in strict C99 mode. */
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include "crc32.h"
 #include "dip_metadata.h"
 #include "endian.h"
