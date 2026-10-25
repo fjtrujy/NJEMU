@@ -46,18 +46,14 @@ void mvs_wide_exit(void)
 	mvs_wide_set_active(false);
 }
 
-void mvs_wide_init(void)
-{
-	mvs_wide_exit();
+/* PSP only resolves this ~32 KiB profile when the player requests widescreen. */
 #if MVS_WIDESCREEN
+static void mvs_wide_load_profile(void)
+{
 	char path[PATH_MAX];
 	const char *directory = getenv("NJEMU_MVS_PROFILE_DIR");
 	const char *experimental = getenv("NJEMU_MVS_ALLOW_EXPERIMENTAL");
 	int length, program_mode;
-	mvs_wide_warning_emitted = false;
-#if defined(DESKTOP) && !RELEASE
-	mvs_wide_debug_init();
-#endif
 	if (strspn(game_name, "abcdefghijklmnopqrstuvwxyz0123456789_-") != strlen(game_name))
 	{
 		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "invalid game identifier");
@@ -90,6 +86,20 @@ void mvs_wide_init(void)
 	mvs_wide_supported = program_mode == 0;
 	if (program_mode == 1)
 		snprintf(mvs_wide_error, sizeof(mvs_wide_error), "program was already patched before profile initialization");
+}
+#endif
+
+void mvs_wide_init(void)
+{
+	mvs_wide_exit();
+#if MVS_WIDESCREEN
+	mvs_wide_warning_emitted = false;
+#if defined(DESKTOP) && !RELEASE
+	mvs_wide_debug_init();
+#endif
+#ifndef PSP
+	mvs_wide_load_profile();
+#endif
 #endif
 }
 
@@ -102,6 +112,10 @@ static void mvs_wide_transition(bool requested)
 		option_mvs_widescreen = mvs_true_wide_enabled();
 		return;
 	}
+#ifdef PSP
+	if (requested && !mvs_profile)
+		mvs_wide_load_profile();
+#endif
 	if (!mvs_wide_supported ||
 		!wide_profile_apply(mvs_profile, (uint16_t *)memory_region_cpu1,
 			memory_length_cpu1, requested, mvs_wide_error, sizeof(mvs_wide_error)))
@@ -116,6 +130,14 @@ static void mvs_wide_transition(bool requested)
 			ui_popup(TEXT(WIDESCREEN_NOT_AVAILABLE));
 #endif
 		}
+#ifdef PSP
+		if (!mvs_true_wide_enabled())
+		{
+			free(mvs_profile);
+			mvs_profile = NULL;
+			mvs_wide_supported = false;
+		}
+#endif
 		return;
 	}
 	mvs_wide_set_active(requested);
@@ -123,6 +145,15 @@ static void mvs_wide_transition(bool requested)
 		requested ? "400x225 viewport" : "Native viewport",
 		requested ? "enabled" : "restored",
 		mvs_profile->viewport_only ? " (viewport only)" : "");
+#ifdef PSP
+	/* The ROM has been restored; keep no profile allocation in native mode. */
+	if (!requested)
+	{
+		free(mvs_profile);
+		mvs_profile = NULL;
+		mvs_wide_supported = false;
+	}
+#endif
 }
 #endif
 
