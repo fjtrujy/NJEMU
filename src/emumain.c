@@ -94,6 +94,7 @@ int option_video_output_mode = DEFAULT_VIDEO_OUTPUT_MODE;
 int option_video_offset_x;
 int option_video_offset_y;
 int option_video_backend = VIDEO_BACKEND_AUTO;
+int option_video_filter = VIDEO_FILTER_NONE;
 int option_cache_read_size = CACHE_READ_SIZE_AUTO;
 int option_audio_processor = AUDIO_PROCESSOR_AUTO;
 
@@ -722,6 +723,8 @@ int main(int argc, char *argv[]) {
 				option_video_backend = VIDEO_BACKEND_AUTO;
 			}
 			video_backend_select(option_video_backend);
+			if (option_video_filter >= video_filter_count())
+				option_video_filter = VIDEO_FILTER_NONE;
 			printf("Video backend: %s\n", video_driver->ident);
 			printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		if (!pad_init()) {

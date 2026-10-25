@@ -7,6 +7,7 @@ enum menu_setting_kind {
     SETTING_TOGGLE,
     SETTING_OFFSET,
     SETTING_VIDEO_BACKEND,
+    SETTING_VIDEO_FILTER,
     SETTING_VIDEO_OUTPUT,
     SETTING_AUDIO_PROCESSOR,
     SETTING_CACHE_SIZE,
@@ -95,6 +96,12 @@ static const char *menu_setting_text(const menu_setting_row_t *row,
         return buffer;
     case SETTING_VIDEO_BACKEND:
         return video_backend_choice_at(value).name;
+    case SETTING_VIDEO_FILTER: {
+        static const char *const filters[VIDEO_FILTER_COUNT] = {
+            NULL, "CRT", "CRT Bleeding", "CRT Bleeding Flat"
+        };
+        return value == VIDEO_FILTER_NONE ? TEXT(OFF) : filters[value];
+    }
     case SETTING_VIDEO_OUTPUT:
         return TEXT(modes[value]);
     case SETTING_AUDIO_PROCESSOR:
@@ -139,6 +146,7 @@ static int menu_settings_page(int section, int title, int icon)
     int fps_x_before = option_fps_offset_x;
     int fps_y_before = option_fps_offset_y;
     int backend_before = option_video_backend;
+    int filter_before = option_video_filter;
     int processor_before = option_audio_processor;
     int cache_before = option_cache_read_size;
     int output_mode_before = option_video_output_mode;
@@ -203,6 +211,10 @@ static int menu_settings_page(int section, int title, int icon)
         if (video_backend_choice_count() > 1) {
             menu_setting_add(items, &count, SETTING_VIDEO_BACKEND, VIDEO_BACKEND,
                              &option_video_backend, 0, video_backend_choice_count() - 1);
+        }
+        if (video_filter_count() > 1) {
+            menu_setting_add(items, &count, SETTING_VIDEO_FILTER, VIDEO_FILTER,
+                             &option_video_filter, VIDEO_FILTER_NONE, video_filter_count() - 1);
         }
 #ifdef PS2
         menu_setting_add(items, &count, SETTING_VIDEO_OUTPUT, VIDEO_OUTPUT_MODE,
@@ -431,7 +443,7 @@ static int menu_settings_page(int section, int title, int icon)
         output_x_before != option_video_offset_x || output_y_before != option_video_offset_y ||
         output_mode_before != option_video_output_mode ||
         backend_before != option_video_backend || processor_before != option_audio_processor ||
-        cache_before != option_cache_read_size)
+        cache_before != option_cache_read_size || filter_before != option_video_filter)
         save_settings();
     if (backend_before != option_video_backend || processor_before != option_audio_processor ||
         cache_before != option_cache_read_size)

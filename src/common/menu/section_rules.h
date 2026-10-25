@@ -50,6 +50,7 @@ static inline int menu_setting_order(int section, int label)
         case VIDEO_OUTPUT_MODE: return 3;
         case VIDEO_X_OFFSET: return 4;
         case VIDEO_Y_OFFSET: return 5;
+        case VIDEO_FILTER: return 6;
         case VIDEO_SYNC: return 10;
         case FRAME_LIMIT: return 11;
         case AUTO_FRAMESKIP: return 12;

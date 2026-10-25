@@ -738,7 +738,7 @@ static void gld_present(desktop_gl_video_t *g, const RECT *src, const RECT *dst,
 	const int vp_x = (win_w - vp_w) / 2, vp_y = (win_h - vp_h) / 2;
 
 	sharp = hw_sharp_target(src, (int)((d.right - d.left) * scale),
-			(int)((d.bottom - d.top) * scale), orient, GLD_MAX_TEXTURE_DIM,
+			(int)((d.bottom - d.top) * scale), orient, false, GLD_MAX_TEXTURE_DIM,
 			&target_w, &target_h) &&
 		gld_sharp_target(g, target_w, target_h) &&
 		gld_render_sharp(g, src);

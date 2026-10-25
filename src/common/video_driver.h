@@ -236,6 +236,9 @@ typedef struct video_backend_choice
  * platform returns one read-only choice; multi-backend builds return all
  * compiled choices plus any policy choice such as Auto. */
 int video_backend_choice_count(void);
+/* Presentation filters the platform's video backends implement: the first
+ * video_filter_count() values of VIDEO_FILTER_*, so 1 means none. */
+int video_filter_count(void);
 video_backend_choice_t video_backend_choice_at(int index);
 int video_backend_option_available(int id);
 void video_backend_select(int id);

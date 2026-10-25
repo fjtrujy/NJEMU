@@ -41,6 +41,7 @@
 #include <psp2/kernel/sysmem.h>
 #include <vita2d.h>
 
+#include "common/emulator_options.h"
 #include "common/hw_recorder.h"
 #include "common/ui_draw_driver.h"
 #include "common/video_driver.h"
@@ -106,6 +107,13 @@ typedef struct psvita_video {
     const SceGxmProgramParameter *u_row_x;
     const SceGxmProgramParameter *u_row_y;
     const SceGxmProgramParameter *u_tex_scale;
+
+    /* Presentation filters ([VIDEO_FILTER_NONE] unused), opaque output */
+    SceGxmShaderPatcherId filter_ids[VIDEO_FILTER_COUNT];
+    SceGxmFragmentProgram *filter_programs[VIDEO_FILTER_COUNT];
+    const SceGxmProgramParameter *filter_time[VIDEO_FILTER_COUNT];
+    const SceGxmProgramParameter *filter_size[VIDEO_FILTER_COUNT];
+    bool filters_ready;
 
     /* GPU-mapped memory */
     SceUID ring_uid;
@@ -250,6 +258,27 @@ static bool v2d_create_programs(psvita_video_t *v)
                 &v->fragment_programs[i]) < 0)
             return false;
     }
+
+    /* Filters are optional: without them only the plain bilinear pass remains. */
+    static const SceGxmProgram *const filters[VIDEO_FILTER_COUNT] = {
+        [VIDEO_FILTER_CRT] = (const SceGxmProgram *)psvita_shader_crt_gxp,
+        [VIDEO_FILTER_CRT_BLEEDING] = (const SceGxmProgram *)psvita_shader_crt_bleeding_gxp,
+        [VIDEO_FILTER_CRT_BLEEDING_FLAT] = (const SceGxmProgram *)psvita_shader_crt_bleeding_flat_gxp,
+    };
+    v->filters_ready = true;
+    for (int f = VIDEO_FILTER_NONE + 1; f < VIDEO_FILTER_COUNT; f++) {
+        if (sceGxmProgramCheck(filters[f]) < 0 ||
+            sceGxmShaderPatcherRegisterProgram(patcher, filters[f], &v->filter_ids[f]) < 0 ||
+            sceGxmShaderPatcherCreateFragmentProgram(patcher, v->filter_ids[f],
+                SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4, SCE_GXM_MULTISAMPLE_NONE,
+                NULL, vertex, &v->filter_programs[f]) < 0 ||
+            (v->filter_size[f] = sceGxmProgramFindParameterByName(filters[f], "uOutputSize")) == NULL) {
+            psvita_video_log("vita2d: presentation filter %d unavailable\n", f);
+            v->filters_ready = false;
+            continue;
+        }
+        v->filter_time[f] = sceGxmProgramFindParameterByName(filters[f], "iTime");
+    }
     return true;
 }
 
@@ -260,6 +289,12 @@ static void v2d_release_programs(psvita_video_t *v)
     for (int i = 0; i < HW_PROG_COUNT; i++) {
         if (v->fragment_programs[i])
             sceGxmShaderPatcherReleaseFragmentProgram(patcher, v->fragment_programs[i]);
+    }
+    for (int f = 0; f < VIDEO_FILTER_COUNT; f++) {
+        if (v->filter_programs[f])
+            sceGxmShaderPatcherReleaseFragmentProgram(patcher, v->filter_programs[f]);
+        if (v->filter_ids[f])
+            sceGxmShaderPatcherUnregisterProgram(patcher, v->filter_ids[f]);
     }
     if (v->vertex_program)
         sceGxmShaderPatcherReleaseVertexProgram(patcher, v->vertex_program);
@@ -575,12 +610,49 @@ static bool v2d_sharp_target(psvita_video_t *v, int w, int h)
 }
 
 /*
+ * Draws the sharp target's quad `q` through presentation filter `filter`:
+ * opaque, with the filter's time and destination size (`out_w` x `out_h`
+ * along the frame's own rows) uniforms.
+ */
+static void v2d_draw_filtered(psvita_video_t *v, int filter, const hw_vertex_t *q,
+                              const float row_x[3], const float row_y[3],
+                              float out_w, float out_h)
+{
+    SceGxmContext *ctx = vita2d_get_context();
+    const float scale[4] = { 1.0f / vita2d_texture_get_width(v->sharp),
+                             1.0f / vita2d_texture_get_height(v->sharp), 0.0f, 0.0f };
+    const float rx[4] = { row_x[0], row_x[1], row_x[2], 0.0f };
+    const float ry[4] = { row_y[0], row_y[1], row_y[2], 0.0f };
+    const float size[2] = { out_w, out_h };
+    const float time = v->presented / 60.0f;
+    void *uniforms;
+
+    v2d_set_depth(HW_DEPTH_OFF);
+    sceGxmSetVertexProgram(ctx, v->vertex_program);
+    sceGxmSetFragmentProgram(ctx, v->filter_programs[filter]);
+    sceGxmSetFragmentTexture(ctx, 0, &v->sharp->gxm_tex);
+    sceGxmReserveVertexDefaultUniformBuffer(ctx, &uniforms);
+    sceGxmSetUniformDataF(uniforms, v->u_row_x, 0, 4, rx);
+    sceGxmSetUniformDataF(uniforms, v->u_row_y, 0, 4, ry);
+    sceGxmSetUniformDataF(uniforms, v->u_tex_scale, 0, 4, scale);
+    sceGxmReserveFragmentDefaultUniformBuffer(ctx, &uniforms);
+    sceGxmSetUniformDataF(uniforms, v->filter_size[filter], 0, 2, size);
+    if (v->filter_time[filter] != NULL)
+        sceGxmSetUniformDataF(uniforms, v->filter_time[filter], 0, 1, &time);
+    sceGxmSetVertexStream(ctx, 0, q);
+    sceGxmDraw(ctx, SCE_GXM_PRIMITIVE_TRIANGLES, SCE_GXM_INDEX_FORMAT_U16, v->quad_indices, 6);
+    v->stat_draws++;
+    v->stat_quads++;
+}
+
+/*
  * Sharp bilinear presentation (hw_sharp_target): the work frame is replayed
  * at a whole scale into the off-screen target in a scene of its own, which
- * the display scene then filters bilinearly onto `dst` as its first draw.
+ * the display scene then filters bilinearly onto `dst` as its first draw,
+ * through a presentation filter when one is selected.
  */
 static void v2d_present_sharp(psvita_video_t *v, const RECT *src_rect, const RECT *dst,
-                              int orient)
+                              int orient, int filter)
 {
     SceGxmContext *ctx = vita2d_get_context();
     const int w = (int)vita2d_texture_get_width(v->sharp);
@@ -615,6 +687,14 @@ static void v2d_present_sharp(psvita_video_t *v, const RECT *src_rect, const REC
         return;
     hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
     hw_write_quad(q, 0, 0, (int16_t)w, (int16_t)h, 0.0f, 0.0f, (float)w, (float)h, 0, 0);
+    if (filter != VIDEO_FILTER_NONE) {
+        /* The filters work along the frame's own rows, rotated or not. */
+        const bool rotated = orient == HW_ORIENT_ROTATE || orient == HW_ORIENT_ROTATE_FLIP;
+        v2d_draw_filtered(v, filter, q, row_x, row_y,
+            (float)(rotated ? d.bottom - d.top : d.right - d.left),
+            (float)(rotated ? d.right - d.left : d.bottom - d.top));
+        return;
+    }
     /* The target is opaque with alpha 0, which the inverted blend keeps. */
     const hw_cmd_t quad = { HW_PROG_DIRECT, HW_DEPTH_OFF, (uint16_t)w, (uint16_t)h,
         &v->sharp->gxm_tex, q, NULL, 0, 1 };
@@ -679,6 +759,7 @@ static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst
     RECT d;
     float row_x[3], row_y[3];
     int target_w, target_h;
+    const int filter = v->filters_ready ? option_video_filter : VIDEO_FILTER_NONE;
 
     hw_rec_flush(&v->rec);
     v2d_frame_sync(v);
@@ -692,9 +773,9 @@ static void v2d_present(psvita_video_t *v, const RECT *src_rect, const RECT *dst
     /* The off-screen scene must come before the display scene opens. */
     if (!v->in_scene &&
         hw_sharp_target(src_rect, d.right - d.left, d.bottom - d.top, orient,
-            V2D_MAX_TEXTURE_DIM, &target_w, &target_h) &&
+            filter != VIDEO_FILTER_NONE, V2D_MAX_TEXTURE_DIM, &target_w, &target_h) &&
         v2d_sharp_target(v, target_w, target_h))
-        v2d_present_sharp(v, src_rect, &d, orient);
+        v2d_present_sharp(v, src_rect, &d, orient, filter);
     else if (!v2d_present_direct(v, &d, row_x, row_y))
         return;
 

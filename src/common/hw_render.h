@@ -137,10 +137,11 @@ static inline bool hw_present_geometry(const RECT *src, const RECT *dst, int ori
  *
  * `out_w` x `out_h` is the destination in physical pixels.  Returns false
  * when it already is a whole multiple of `src`, where the direct replay is
- * exact; otherwise the target size, at most `max_dim` on each side.
+ * exact, unless `force` (a presentation filter samples the target anyway);
+ * otherwise the target size, at most `max_dim` on each side.
  */
 static inline bool hw_sharp_target(const RECT *src, int out_w, int out_h, int orient,
-								   int max_dim, int *target_w, int *target_h)
+								   bool force, int max_dim, int *target_w, int *target_h)
 {
 	const int sw = src->right - src->left;
 	const int sh = src->bottom - src->top;
@@ -154,7 +155,7 @@ static inline bool hw_sharp_target(const RECT *src, int out_w, int out_h, int or
 	scale = dw / sw < dh / sh ? dw / sw : dh / sh;
 	if (scale < 1)
 		scale = 1;
-	if (dw == sw * scale && dh == sh * scale)
+	if (!force && dw == sw * scale && dh == sh * scale)
 		return false;
 	while (scale > 1 && (sw * scale > max_dim || sh * scale > max_dim))
 		scale--;
