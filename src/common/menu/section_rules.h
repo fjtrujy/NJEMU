@@ -15,6 +15,7 @@ static inline int menu_setting_group_for_label(int label)
     switch (label) {
     case DISPLAY_MODE:
     case SCREEN_ORIENTATION:
+    case WIDESCREEN:
     case VIDEO_SYNC:
     case AUTO_FRAMESKIP:
     case FRAMESKIP:
@@ -46,10 +47,12 @@ static inline int menu_setting_order(int section, int label)
         switch (label) {
         case DISPLAY_MODE: return 0;
         case SCREEN_ORIENTATION: return 1;
+        case WIDESCREEN: return 1;  /* MVS only; orientation is CPS only */
         case VIDEO_BACKEND: return 2;
         case VIDEO_OUTPUT_MODE: return 3;
         case VIDEO_X_OFFSET: return 4;
         case VIDEO_Y_OFFSET: return 5;
+        case VIDEO_FILTER: return 6;
         case VIDEO_SYNC: return 10;
         case FRAME_LIMIT: return 11;
         case AUTO_FRAMESKIP: return 12;

@@ -6,10 +6,12 @@
 
 	It renders like the PS Vita backends, so it doubles as their test bench:
 	the frame is recorded by common/hw_recorder while the core draws (indexed
-	atlas + 555 CLUT rows, CPU clipping, quads per batch) and replayed straight
-	into the back buffer by transferWorkFrame() with the same shaders and the
-	same work frame -> canvas geometry (common/hw_render.h).  The canvas is
-	the Vita's 960x544, letterboxed into the window.
+	atlas + 555 CLUT rows, CPU clipping, quads per batch) and replayed by
+	transferWorkFrame() with the same shaders and the same work frame ->
+	canvas geometry (common/hw_render.h): straight into the back buffer at a
+	whole-number scale, otherwise through the sharp bilinear target
+	(hw_sharp_target).  The canvas is the Vita's 960x544, letterboxed into
+	the window.
 
 	GL entry points are loaded through SDL_GL_GetProcAddress, so no GL loader
 	or extra library is needed.  NJEMU_DUMP_FRAMES (desktop_frame_dump.h)
@@ -221,6 +223,7 @@ typedef struct gld_program {
 typedef struct desktop_gl_video {
 	SDL_Window *window;
 	SDL_GLContext context;
+	int swap_interval_request;
 
 	gld_layer_t *layers;
 	uint8_t layer_count;
@@ -250,6 +253,13 @@ typedef struct desktop_gl_video {
 	GLuint dump_color;
 	GLuint dump_depth;
 	uint32_t presented_frames;
+
+	/* Sharp bilinear target (hw_sharp_target), sized on demand */
+	GLuint sharp_fbo;
+	GLuint sharp_color;
+	GLuint sharp_depth;
+	int sharp_w;
+	int sharp_h;
 
 	/* Statistics (NJEMU_VIDEO_STATS=1) */
 	bool stats;
@@ -604,12 +614,111 @@ static void gld_dump(desktop_gl_video_t *g, const RECT *src)
 	gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+static void gld_free_sharp(desktop_gl_video_t *g)
+{
+	if (g->sharp_fbo) gl.DeleteFramebuffers(1, &g->sharp_fbo);
+	if (g->sharp_depth) gl.DeleteRenderbuffers(1, &g->sharp_depth);
+	if (g->sharp_color) gl.DeleteTextures(1, &g->sharp_color);
+	g->sharp_fbo = g->sharp_depth = g->sharp_color = 0;
+	g->sharp_w = g->sharp_h = 0;
+}
+
+/* (Re)creates the sharp bilinear target, bilinear-filtered, at w x h. */
+static bool gld_sharp_target(desktop_gl_video_t *g, int w, int h)
+{
+	bool complete;
+
+	if (g->sharp_fbo && g->sharp_w == w && g->sharp_h == h)
+		return true;
+	gld_free_sharp(g);
+
+	gl.GenTextures(1, &g->sharp_color);
+	gl.BindTexture(GL_TEXTURE_2D, g->sharp_color);
+	gld_texture_params();
+	gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	gl.TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	gl.TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	gl.GenRenderbuffers(1, &g->sharp_depth);
+	gl.BindRenderbuffer(GL_RENDERBUFFER, g->sharp_depth);
+	gl.RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+	gl.GenFramebuffers(1, &g->sharp_fbo);
+	gl.BindFramebuffer(GL_FRAMEBUFFER, g->sharp_fbo);
+	gl.FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g->sharp_color, 0);
+	gl.FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+		g->sharp_depth);
+	complete = gl.CheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+	gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (!complete) {
+		printf("desktop_gl: sharp bilinear framebuffer incomplete\n");
+		gld_free_sharp(g);
+		return false;
+	}
+	g->sharp_w = w;
+	g->sharp_h = h;
+	return true;
+}
+
+/* Replays the work frame `src` at the sharp target's whole scale. */
+static bool gld_render_sharp(desktop_gl_video_t *g, const RECT *src)
+{
+	const RECT target = { 0, 0, (int16_t)g->sharp_w, (int16_t)g->sharp_h };
+	hw_xform_t m;
+	RECT d;
+	float row_x[3], row_y[3];
+
+	if (!hw_present_geometry(src, &target, HW_ORIENT_NORMAL, g->sharp_w, g->sharp_h, &d, &m))
+		return false;
+	hw_clip_rows(&m, g->sharp_w, g->sharp_h, row_x, row_y);
+
+	gl.BindFramebuffer(GL_FRAMEBUFFER, g->sharp_fbo);
+	gl.Viewport(0, 0, g->sharp_w, g->sharp_h);
+	gl.Disable(GL_SCISSOR_TEST);
+	gl.ClearDepth(1.0);
+	gl.DepthMask(GL_TRUE);
+	gl.Clear(GL_DEPTH_BUFFER_BIT);
+	gld_replay(g, row_x, row_y);
+	return true;
+}
+
+/* Filters the sharp target bilinearly onto `dst` of the bound canvas viewport. */
+static void gld_draw_sharp(desktop_gl_video_t *g, const RECT *dst, int orient)
+{
+	const gld_program_t *p = &g->progs[HW_PROG_DIRECT];
+	const RECT target = { 0, 0, (int16_t)g->sharp_w, (int16_t)g->sharp_h };
+	hw_vertex_t q[4];
+	hw_xform_t m;
+	RECT d;
+	float row_x[3], row_y[3];
+
+	if (!hw_present_geometry(&target, dst, orient, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT, &d, &m))
+		return;
+	hw_clip_rows(&m, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT, row_x, row_y);
+	/* GL render targets are bottom-up: the frame's top row is t = 1. */
+	hw_write_quad(q, 0, 0, (int16_t)g->sharp_w, (int16_t)g->sharp_h,
+		0.0f, (float)g->sharp_h, (float)g->sharp_w, 0.0f, 0, 0);
+
+	gl.Disable(GL_DEPTH_TEST);
+	gl.Disable(GL_BLEND);
+	gl.UseProgram(p->id);
+	gl.Uniform4f(p->u_row_x, row_x[0], row_x[1], row_x[2], 0.0f);
+	gl.Uniform4f(p->u_row_y, row_y[0], row_y[1], row_y[2], 0.0f);
+	gl.Uniform4f(p->u_tex_scale, 1.0f / g->sharp_w, 1.0f / g->sharp_h, 0.0f, 0.0f);
+	gl.ActiveTexture(GL_TEXTURE0);
+	gl.BindTexture(GL_TEXTURE_2D, g->sharp_color);
+	gld_bind_vertex_buffer(g, g->ui_vbo);
+	gl.BufferData(GL_ARRAY_BUFFER, sizeof(q), q, GL_STREAM_DRAW);
+	gl.DrawArrays(GL_TRIANGLE_FAN, 0, 4);
+	g->stat_draws++;
+}
+
 static void gld_present(desktop_gl_video_t *g, const RECT *src, const RECT *dst, int orient)
 {
 	hw_xform_t m;
 	RECT d;
 	float row_x[3], row_y[3];
 	int win_w, win_h;
+	int target_w, target_h;
+	bool sharp;
 
 	hw_rec_flush(&g->rec);
 	if (!hw_present_geometry(src, dst, orient, GLD_CANVAS_WIDTH, GLD_CANVAS_HEIGHT, &d, &m))
@@ -628,6 +737,12 @@ static void gld_present(desktop_gl_video_t *g, const RECT *src, const RECT *dst,
 	const int vp_w = (int)(GLD_CANVAS_WIDTH * scale), vp_h = (int)(GLD_CANVAS_HEIGHT * scale);
 	const int vp_x = (win_w - vp_w) / 2, vp_y = (win_h - vp_h) / 2;
 
+	sharp = hw_sharp_target(src, (int)((d.right - d.left) * scale),
+			(int)((d.bottom - d.top) * scale), orient, false, GLD_MAX_TEXTURE_DIM,
+			&target_w, &target_h) &&
+		gld_sharp_target(g, target_w, target_h) &&
+		gld_render_sharp(g, src);
+
 	gl.BindFramebuffer(GL_FRAMEBUFFER, 0);
 	gl.Viewport(0, 0, win_w, win_h);
 	gl.Disable(GL_SCISSOR_TEST);
@@ -636,13 +751,17 @@ static void gld_present(desktop_gl_video_t *g, const RECT *src, const RECT *dst,
 	gl.DepthMask(GL_TRUE);
 	gl.Clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	/* Only the destination rectangle shows the work frame. */
 	gl.Viewport(vp_x, vp_y, vp_w, vp_h);
-	gl.Enable(GL_SCISSOR_TEST);
-	gl.Scissor(vp_x + (int)(d.left * scale), vp_y + (int)((GLD_CANVAS_HEIGHT - d.bottom) * scale),
-		(int)((d.right - d.left) * scale), (int)((d.bottom - d.top) * scale));
-	gld_replay(g, row_x, row_y);
-	gl.Disable(GL_SCISSOR_TEST);
+	if (sharp) {
+		gld_draw_sharp(g, dst, orient);
+	} else {
+		/* Only the destination rectangle shows the work frame. */
+		gl.Enable(GL_SCISSOR_TEST);
+		gl.Scissor(vp_x + (int)(d.left * scale), vp_y + (int)((GLD_CANVAS_HEIGHT - d.bottom) * scale),
+			(int)((d.right - d.left) * scale), (int)((d.bottom - d.top) * scale));
+		gld_replay(g, row_x, row_y);
+		gl.Disable(GL_SCISSOR_TEST);
+	}
 
 	/* Also dump what the window shows (scaling, letterbox, orientation). */
 	if (desktop_dump_wanted(g->presented_frames)) {
@@ -696,6 +815,7 @@ static void *desktop_gl_init(layer_texture_info_t *layer_textures, uint8_t layer
 	if (!gld_load_functions())
 		goto fail;
 	SDL_GL_SetSwapInterval(1);
+	g->swap_interval_request = 1;
 	printf("desktop_gl: %s / %s\n", gl.GetString(GL_RENDERER), gl.GetString(GL_VERSION));
 
 	if (!gld_create_programs(g) || !gld_create_layers(g, layer_textures, layer_textures_count))
@@ -809,6 +929,7 @@ static void desktop_gl_free(void *data)
 		gl.DeleteTextures(1, &g->dump_color);
 		gl.DeleteRenderbuffers(1, &g->dump_depth);
 		gl.DeleteFramebuffers(1, &g->dump_fbo);
+		gld_free_sharp(g);
 		gl.DeleteBuffers(1, &g->vbo);
 		gl.DeleteBuffers(1, &g->ibo);
 		gl.DeleteVertexArrays(1, &g->vao);
@@ -843,7 +964,15 @@ static void desktop_gl_flipScreen(void *data, bool vsync)
 {
 	desktop_gl_video_t *g = data;
 
-	SDL_GL_SetSwapInterval(vsync ? 1 : 0);
+	const int interval = vsync ? 1 : 0;
+	/* Changing context presentation state can synchronize the graphics
+	 * driver. Do it when the option changes, not once per displayed frame. */
+	if (g->swap_interval_request != interval) {
+		if (SDL_GL_SetSwapInterval(interval) != 0)
+			printf("desktop_gl: cannot set swap interval %d: %s\n",
+				interval, SDL_GetError());
+		g->swap_interval_request = interval;
+	}
 	SDL_GL_SwapWindow(g->window);
 
 	if (g->stats && ++g->stat_frames == 300) {

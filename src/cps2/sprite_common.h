@@ -24,23 +24,31 @@
 #define OBJECT_TEXTURE_SIZE		((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
 #define OBJECT_MAX_SPRITES		0x1400
 
+/* Widest visible area the scroll layers are drawn for: the 480-pixel
+ * widescreen view where it is built (cps2/wide.h), else the native 384. */
+#if CPS_WIDESCREEN
+#define CPS_VIEW_MAX_WIDTH		480
+#else
+#define CPS_VIEW_MAX_WIDTH		384
+#endif
+
 /* SCROLL1: 8x8 tiles */
 #define SCROLL1_HASH_SIZE		0x200
 #define SCROLL1_HASH_MASK		0x1ff
 #define SCROLL1_TEXTURE_SIZE	((BUF_WIDTH/8)*(TEXTURE_HEIGHT/8))
-#define SCROLL1_MAX_SPRITES		((384/8 + 2) * (224/8 + 2))
+#define SCROLL1_MAX_SPRITES		((CPS_VIEW_MAX_WIDTH/8 + 2) * (224/8 + 2))
 
 /* SCROLL2: 16x16 tiles */
 #define SCROLL2_HASH_SIZE		0x100
 #define SCROLL2_HASH_MASK		0xff
 #define SCROLL2_TEXTURE_SIZE	((BUF_WIDTH/16)*(TEXTURE_HEIGHT/16))
-#define SCROLL2_MAX_SPRITES		((384/16 + 2) * (224/16 + 2))
+#define SCROLL2_MAX_SPRITES		((CPS_VIEW_MAX_WIDTH/16 + 2) * (224/16 + 2))
 
 /* SCROLL3: 32x32 tiles */
 #define SCROLL3_HASH_SIZE		0x40
 #define SCROLL3_HASH_MASK		0x3f
 #define SCROLL3_TEXTURE_SIZE	((BUF_WIDTH/32)*(TEXTURE_HEIGHT/32))
-#define SCROLL3_MAX_SPRITES		((384/32 + 2) * (224/32 + 2))
+#define SCROLL3_MAX_SPRITES		((CPS_VIEW_MAX_WIDTH/32 + 2) * (224/32 + 2))
 
 /******************************************************************************
 	Structures

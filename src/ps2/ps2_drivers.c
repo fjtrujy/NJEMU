@@ -28,6 +28,7 @@ ticker_driver_t *const ticker_driver = &ticker_ps2;
 video_driver_t *video_driver = &video_ps2;
 
 int video_backend_choice_count(void) { return 1; }
+int video_filter_count(void) { return 1; }
 video_backend_choice_t video_backend_choice_at(int index)
 {
     return index == 0 ? (video_backend_choice_t){ 1, "PS2 GS" }

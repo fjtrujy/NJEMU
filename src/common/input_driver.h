@@ -26,6 +26,7 @@ void pad_update(void);
 bool pad_pressed(uint32_t code);
 bool pad_pressed_any(void);
 bool pad_menu_combo_pressed(uint32_t buttons);
+bool pad_accept_is_cross(void);
 void pad_wait_clear(void);
 void pad_wait_press(int msec);
 
@@ -55,6 +56,10 @@ typedef struct input_driver
 	/* Optional high-frequency edge capture can be disabled in UI screens to
 	 * prevent replaying menu controls as if they were gameplay actions. */
 	void (*setEdgeCapture)(void *data, bool enabled);
+	/* Optional: true when PLATFORM_PAD_B1 (accept) is the cross button and B2
+	 * (cancel) the circle, as on western PS Vita consoles. The UI then draws
+	 * the <CIRCLE>/<CROSS> glyphs swapped. NULL means circle accepts. */
+	bool (*acceptIsCross)(void *data);
 } input_driver_t;
 
 

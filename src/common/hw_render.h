@@ -125,6 +125,45 @@ static inline bool hw_present_geometry(const RECT *src, const RECT *dst, int ori
 	return true;
 }
 
+/*
+ * Sharp bilinear presentation.  Replaying the work frame straight onto a
+ * destination that is not a whole multiple of it puts pixel centres next to
+ * texel edges of the nearest-sampled atlas, and low-precision GPUs (the
+ * Vita's) round them onto the neighbouring texel: vertical seams between
+ * sprite strips.  Instead the frame is replayed at the largest whole scale
+ * that fits into an off-screen target, which is then filtered bilinearly onto
+ * the destination; the fractional rest of the scale is spread evenly rather
+ * than alternating column widths.
+ *
+ * `out_w` x `out_h` is the destination in physical pixels.  Returns false
+ * when it already is a whole multiple of `src`, where the direct replay is
+ * exact, unless `force` (a presentation filter samples the target anyway);
+ * otherwise the target size, at most `max_dim` on each side.
+ */
+static inline bool hw_sharp_target(const RECT *src, int out_w, int out_h, int orient,
+								   bool force, int max_dim, int *target_w, int *target_h)
+{
+	const int sw = src->right - src->left;
+	const int sh = src->bottom - src->top;
+	const bool rotated = orient == HW_ORIENT_ROTATE || orient == HW_ORIENT_ROTATE_FLIP;
+	const int dw = rotated ? out_h : out_w;
+	const int dh = rotated ? out_w : out_h;
+	int scale;
+
+	if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0)
+		return false;
+	scale = dw / sw < dh / sh ? dw / sw : dh / sh;
+	if (scale < 1)
+		scale = 1;
+	if (!force && dw == sw * scale && dh == sh * scale)
+		return false;
+	while (scale > 1 && (sw * scale > max_dim || sh * scale > max_dim))
+		scale--;
+	*target_w = sw * scale;
+	*target_h = sh * scale;
+	return true;
+}
+
 static inline void hw_map_point(const hw_xform_t *m, float x, float y,
 									float *X, float *Y)
 {

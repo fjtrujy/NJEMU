@@ -93,4 +93,5 @@ input_driver_t input_desktop = {
 	desktop_controllerCount,
 	desktop_sample,
 	NULL,
+	NULL,
 };

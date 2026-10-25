@@ -15,6 +15,8 @@
 #include <psp2/apputil.h>
 #include <psp2/io/dirent.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/cpu.h>
+#include <psp2/kernel/threadmgr.h>
 #include <psp2/system_param.h>
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
@@ -38,6 +40,10 @@ static void *psvita_init(void)
 	SceAppUtilInitParam init_param = { 0 };
 	SceAppUtilBootParam boot_param = { 0 };
 
+	/* Keep emulation and rendering on one core; psvita_thread.c places the
+	 * worker threads on the other two. */
+	sceKernelChangeThreadCpuAffinityMask(sceKernelGetThreadId(),
+		SCE_KERNEL_CPU_MASK_USER_0);
 	if (psvita != NULL)
 		psvita->apputil_ready = sceAppUtilInit(&init_param, &boot_param) == 0;
 	return psvita;
@@ -71,7 +77,12 @@ static void copy_file(const char *src, const char *dst)
 }
 
 /* Copies the packaged resources (files and folders) that are missing from dst. */
-static void copy_missing(const char *src_dir, const char *dst_dir)
+/*
+ * Copies the app's read-only resources into the data directory: missing
+ * files always, and existing ones too when `refresh` (another build put them
+ * there). game_name.ini is the user's selection and is only ever created.
+ */
+static void copy_resources(const char *src_dir, const char *dst_dir, bool refresh)
 {
 	SceIoDirent entry;
 	SceUID dir = sceIoDopen(src_dir);
@@ -94,12 +105,42 @@ static void copy_missing(const char *src_dir, const char *dst_dir)
 		snprintf(src, sizeof(src), "%s/%s", src_dir, entry.d_name);
 		snprintf(dst, sizeof(dst), "%s/%s", dst_dir, entry.d_name);
 		if (SCE_S_ISDIR(entry.d_stat.st_mode))
-			copy_missing(src, dst);
-		else if (sceIoGetstat(dst, &st) < 0)
+			copy_resources(src, dst, refresh);
+		else if (sceIoGetstat(dst, &st) < 0 ||
+			(refresh && strcmp(entry.d_name, "game_name.ini") != 0))
 			copy_file(src, dst);
 		memset(&entry, 0, sizeof(entry));
 	}
 	sceIoDclose(dir);
+}
+
+/* ux0:data/<target>/.resources names the build its resources come from. */
+static bool resources_current(const char *base)
+{
+	char path[PATH_MAX];
+	char stamp[128];
+	size_t length = 0;
+	FILE *file;
+
+	if (!path_format(path, sizeof(path), "%s/.resources", base) ||
+		(file = fopen(path, "rb")) == NULL)
+		return false;
+	length = fread(stamp, 1, sizeof(stamp) - 1, file);
+	fclose(file);
+	stamp[length] = '\0';
+	return strcmp(stamp, NJEMU_RUNTIME_BUILD_ID) == 0;
+}
+
+static void resources_stamp(const char *base)
+{
+	char path[PATH_MAX];
+	FILE *file;
+
+	if (path_format(path, sizeof(path), "%s/.resources", base) &&
+		(file = fopen(path, "wb")) != NULL) {
+		fputs(NJEMU_RUNTIME_BUILD_ID, file);
+		fclose(file);
+	}
 }
 
 static void psvita_main(void *data, int argc, char *argv[])
@@ -115,7 +156,14 @@ static void psvita_main(void *data, int argc, char *argv[])
 	for (size_t i = strlen(PSVITA_DATA_ROOT) + 1; i < len; i++)
 		base[i] = (char)tolower((unsigned char)base[i]);
 
-	copy_missing(PSVITA_APP_DIR, base);
+	/* An updated app brings resources (translations, metadata) the data
+	 * directory's older copies would not match. */
+	if (resources_current(base)) {
+		copy_resources(PSVITA_APP_DIR, base, false);
+	} else {
+		copy_resources(PSVITA_APP_DIR, base, true);
+		resources_stamp(base);
+	}
 	if (chdir(base) != 0)
 		printf("psvita: cannot enter %s\n", base);
 

@@ -433,3 +433,6 @@ MENUHELP_PERFORMANCE=Velocidad de CPU y ajustes de caché.
 MENUHELP_TOOLS=Estados guardados, trucos y comandos.
 MENUHELP_SYSTEM_SETTINGS=Reiniciar, cambiar de juego o salir.
 DISPLAY_NATIVE_PIXELS=Píxeles nativos (1:1)
+VIDEO_FILTER=Filtro de pantalla
+WIDESCREEN=Panorámico (16:9)
+WIDESCREEN_NOT_AVAILABLE=El modo panorámico no está disponible para este juego.

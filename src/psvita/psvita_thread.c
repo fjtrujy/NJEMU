@@ -6,9 +6,35 @@
 
 ******************************************************************************/
 
+#include <psp2/kernel/cpu.h>
 #include <psp2/kernel/threadmgr.h>
 #include <stdlib.h>
 #include "common/thread_driver.h"
+
+/* Common code passes PSP-style priorities (lower is more urgent, e.g. 0x08 for
+ * sound). Vita user threads only accept 64..191 and reject anything else, so
+ * shift into that range keeping the order. */
+#define PSVITA_THREAD_PRIORITY_HIGHEST	64
+#define PSVITA_THREAD_PRIORITY_LOWEST	191
+
+static int psvita_thread_priority(uint32_t priority)
+{
+	uint32_t mapped = PSVITA_THREAD_PRIORITY_HIGHEST + priority;
+
+	return mapped > PSVITA_THREAD_PRIORITY_LOWEST ?
+		PSVITA_THREAD_PRIORITY_LOWEST : (int)mapped;
+}
+
+/* The main thread (emulation and rendering) is pinned to user core 0 by the
+ * platform; workers (sound, MP3) alternate between the other two cores so they
+ * never preempt it. */
+static int psvita_thread_cpu_mask(void)
+{
+	static unsigned int next_worker_core;
+
+	return (next_worker_core++ & 1) ?
+		SCE_KERNEL_CPU_MASK_USER_2 : SCE_KERNEL_CPU_MASK_USER_1;
+}
 
 typedef struct psvita_thread {
 	SceUID thread_id;
@@ -60,7 +86,9 @@ static bool psvita_createThread(void *data, const char *name, int32_t (*threadFu
 	psvita->start_sema = sceKernelCreateSema("start_sema", 0, 0, 1, NULL);
 	psvita->end_sema = sceKernelCreateSema("end_sema", 0, 0, 1, NULL);
 	
-	psvita->thread_id = sceKernelCreateThread(name, childThread, priority, stackSize, 0, 0, NULL);
+	psvita->thread_id = sceKernelCreateThread(name, childThread,
+		psvita_thread_priority(priority), stackSize, 0,
+		psvita_thread_cpu_mask(), NULL);
 	
 	if (psvita->thread_id < 0) {
 		return false;

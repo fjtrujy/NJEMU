@@ -433,3 +433,6 @@ MENUHELP_PERFORMANCE=CPU速度とキャッシュの設定。
 MENUHELP_TOOLS=セーブ、チート、コマンド。
 MENUHELP_SYSTEM_SETTINGS=リセット、ゲーム変更、終了。
 DISPLAY_NATIVE_PIXELS=ネイティブピクセル (1:1)
+VIDEO_FILTER=画面フィルター
+WIDESCREEN=ワイドスクリーン (16:9)
+WIDESCREEN_NOT_AVAILABLE=このゲームはワイドスクリーンに対応していません。

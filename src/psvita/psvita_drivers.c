@@ -34,6 +34,12 @@ int video_backend_choice_count(void)
     return 3; /* Auto, native GXM, vitaGL */
 }
 
+/* Both backends implement every filter in their sharp bilinear pass. */
+int video_filter_count(void)
+{
+    return VIDEO_FILTER_COUNT;
+}
+
 video_backend_choice_t video_backend_choice_at(int index)
 {
     static const video_backend_choice_t choices[] = {

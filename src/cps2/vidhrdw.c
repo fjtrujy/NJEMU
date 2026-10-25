@@ -616,8 +616,8 @@ void cps2_scan_object_callback(void)
 	int16_t min_x, max_x, min_y, max_y;										\
 	uint8_t  *pen_usage = cps_pen_usage[TILE08];								\
 																			\
-	min_x = ( 64 + scroll_col) >> 3;										\
-	max_x = (447 + scroll_col) >> 3;										\
+	min_x = ( 64 - cps2_wide_margin + scroll_col) >> 3;					\
+	max_x = (447 + cps2_wide_margin + scroll_col) >> 3;					\
 																			\
 	min_y = cps2_scanline_start & ~0x07;									\
 	min_y = (min_y + scroll_row) >> 3;										\
@@ -687,8 +687,8 @@ void cps2_scan_scroll1_callback(void)
 		logical_col  = cps_scroll2x >> 4;									\
 		scroll_col   = cps_scroll2x & 0x0f;									\
 																			\
-		min_x = ( 64 + scroll_col) >> 4;									\
-		max_x = (447 + scroll_col) >> 4;									\
+		min_x = ( 64 - cps2_wide_margin + scroll_col) >> 4;				\
+		max_x = (447 + cps2_wide_margin + scroll_col) >> 4;				\
 																			\
 		min_y = scroll2[block].start & ~0x0f;								\
 		min_y = (min_y + scroll_row) >> 4;									\
@@ -853,8 +853,8 @@ static void cps2_check_scroll2_distort(int distort)
 	int16_t min_x, max_x, min_y, max_y;										\
 	uint8_t  *pen_usage = cps_pen_usage[TILE32];								\
 																			\
-	min_x = ( 64 + scroll_col) >> 5;										\
-	max_x = (447 + scroll_col) >> 5;										\
+	min_x = ( 64 - cps2_wide_margin + scroll_col) >> 5;					\
+	max_x = (447 + cps2_wide_margin + scroll_col) >> 5;					\
 																			\
 	min_y = cps2_scanline_start & ~0x1f;									\
 	min_y = (min_y + scroll_row) >> 5;										\

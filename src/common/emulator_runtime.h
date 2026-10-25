@@ -23,6 +23,9 @@ extern volatile int Sleep;
 
 void emu_main(void);
 bool emu_test_exit_after_init(void);
+/* NJEMU_TEST_FAST: unthrottled, silent per-game options for Desktop tests. */
+bool emu_test_fast(void);
+void emu_test_apply_fast(void);
 
 void autoframeskip_reset(void);
 uint8_t skip_this_frame(void);

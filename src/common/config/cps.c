@@ -43,6 +43,9 @@ static cfg_type gamecfg_2buttons[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -169,6 +172,9 @@ static cfg_type gamecfg_3buttons[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -298,6 +304,9 @@ static cfg_type gamecfg_4buttons[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -367,6 +376,9 @@ static cfg_type gamecfg_6buttons[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -438,6 +450,9 @@ static cfg_type gamecfg_quiz[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -512,6 +527,9 @@ static cfg_type gamecfg_forgottn[] =
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -571,6 +589,9 @@ static cfg_type gamecfg_sfzch[] =
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -640,6 +661,9 @@ static cfg_type gamecfg_wofch[] =
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -706,6 +730,9 @@ static cfg_type gamecfg_wofch3p[] =
 
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -770,6 +797,9 @@ static cfg_type gamecfg_progear[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
@@ -830,6 +860,9 @@ static cfg_type gamecfg_pzloop2[] =
 #endif
 	{ CFG_NONE,	"[Video Settings]", 0, 0, 0, 0},
 	{ CFG_INT,	"DisplayMode",		&option_display_mode,		1,	DISPLAY_MENU_MAX	, 0},
+#if CPS_WIDESCREEN
+	{ CFG_BOOL,	"Widescreen",		&option_cps_widescreen,	0,	1	, 0},
+#endif
 	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},

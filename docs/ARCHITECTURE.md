@@ -414,7 +414,7 @@ The emulator uses lookup tables (`zoom_x_tables[]`) to determine which pixels to
 | **Tilemaps** | 3 layers: 512×512, 1024×1024, 2048×2048 pixels |
 | **Memory** | 64KB work RAM + 192KB VRAM |
 
-**History:** Released 1988 with *Forgotten Worlds*. In production for 12 years (1988-2000), hosting 32 game titles (~137 with revisions). Notable games include *Street Fighter II*, *Final Fight*, *Ghouls'n Ghosts*, and *Strider*.
+**History:** Released 1988 with *Forgotten Worlds*. In production for 12 years (1988-2000), hosting 32 game titles (~138 with revisions). Notable games include *Street Fighter II*, *Final Fight*, *Ghouls'n Ghosts*, and *Strider*.
 
 #### File Organization
 

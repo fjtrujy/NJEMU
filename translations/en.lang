@@ -433,3 +433,6 @@ MENUHELP_PERFORMANCE=CPU speed and cache settings.
 MENUHELP_TOOLS=Save states, cheats and commands.
 MENUHELP_SYSTEM_SETTINGS=Reset, change game or exit.
 DISPLAY_NATIVE_PIXELS=Native Pixels (1:1)
+VIDEO_FILTER=Screen filter
+WIDESCREEN=Widescreen (16:9)
+WIDESCREEN_NOT_AVAILABLE=Widescreen is not available for this game.

@@ -34,6 +34,9 @@ void m68000_set_irq_line(int irqline, int state);
 void m68000_set_irq_callback(int32_t (*callback)(int32_t irqline));
 uint32_t  m68000_get_reg(int regnum);
 void m68000_set_reg(int regnum, uint32_t val);
+#if defined(BUILD_MVS) && defined(DESKTOP) && !RELEASE
+uint32_t m68000_get_current_instruction_pc(void);
+#endif
 
 #if (EMU_SYSTEM == CPS2)
 void m68000_set_encrypted_range(uint32_t start, uint32_t end, void *decrypted_rom);

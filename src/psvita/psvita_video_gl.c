@@ -6,13 +6,15 @@
 
     Design goals:
 
-    - One GXM scene per frame.  The emulated frame is never rendered into an
-      intermediate framebuffer: while the core draws, the driver only records
+    - Recorded frames.  While the core draws, the driver only records
       commands (draws whose vertices are already in GPU memory, and clears).
-      transferWorkFrame() knows the destination rectangle and orientation, so
-      it replays the recording straight into the display back buffer with an
-      affine transform in the vertex shader (scale, 180 degree flip or
-      rotation).  No FBO scene, no presentation pass.
+      transferWorkFrame() knows the destination rectangle and orientation and
+      replays the recording with an affine transform in the vertex shader
+      (scale, 180 degree flip or rotation).  At a whole-number scale it goes
+      straight into the display back buffer (one GXM scene per frame);
+      otherwise into an off-screen target at the largest whole scale, which
+      the display scene filters bilinearly onto the destination (sharp
+      bilinear, see hw_sharp_target: two scenes, no seams).
 
     - Texture data in place.  Every indexed (1 byte per pixel) layer lives
       inside a vitaGL U8 texture, and writeIndexedTextureRect() copies the
@@ -52,6 +54,7 @@
 #include <psp2/gxm.h>
 #include <vitaGL.h>
 
+#include "common/emulator_options.h"
 #include "common/hw_recorder.h"
 #include "common/ui_draw_driver.h"
 #include "common/video_driver.h"
@@ -61,6 +64,10 @@
 
 #ifndef PSVITA_GL_SHADER_SOURCE
 #define PSVITA_GL_SHADER_SOURCE	0
+#endif
+#if PSVITA_GL_SHADER_SOURCE
+#include <stdio.h>
+#include <psp2/io/stat.h>
 #endif
 
 /* Mid-frame scene splits counted by the vitaGL fork; absent upstream. */
@@ -122,6 +129,8 @@ typedef struct gl_program {
 	GLint u_row_x;
 	GLint u_row_y;
 	GLint u_tex_scale;
+	GLint u_time;				/* presentation filters only */
+	GLint u_output_size;
 	GLint a_uv;
 	GLint a_pos;
 	GLint a_zp;
@@ -143,6 +152,8 @@ typedef struct psvita_gl_video {
 
 	hw_recorder_t rec;
 	gl_program_t progs[HW_PROG_COUNT];
+	gl_program_t filters[VIDEO_FILTER_COUNT];	/* [VIDEO_FILTER_NONE] unused */
+	bool filters_ready;
 	bool pending_flip;
 	uint32_t presented;			/* for PSVITA_DUMP_LIST */
 	hw_xform_t last_present_xform;
@@ -172,6 +183,14 @@ typedef struct psvita_gl_video {
 	GLuint scratch_tex;
 	uint16_t *scratch;			/* INITIAL_TEXTURE_LAYER texels (PSP 5551) */
 	GLuint frame_tex;			/* points at the displayed frame when drawn */
+
+	/* Sharp bilinear target (hw_sharp_target), sized on demand */
+	GLuint sharp_fbo;
+	GLuint sharp_tex;
+	GLuint sharp_rb;
+	int sharp_w;
+	int sharp_h;
+	bool sharp_failed;			/* incomplete framebuffer: keep the direct replay */
 
 	/* Statistics */
 	uint32_t stat_frames;
@@ -213,6 +232,23 @@ static GLuint gl_compile(GLenum type, const char *source,
 		glDeleteShader(shader);
 		return 0;
 	}
+
+	/* Dump the binary (vitaGL header + GXP) in compilation order. */
+	{
+		static int dumped;
+		static uint8_t binary[0x10000];
+		GLsizei size = 0;
+		char path[64];
+		FILE *file;
+
+		vglGetShaderBinary(shader, sizeof(binary), &size, binary);
+		sceIoMkdir("ux0:data/njemu_shaders", 0777);
+		snprintf(path, sizeof(path), "ux0:data/njemu_shaders/%02d.bin", dumped++);
+		if (size > 0 && (file = fopen(path, "wb")) != NULL) {
+			fwrite(binary, 1, (size_t)size, file);
+			fclose(file);
+		}
+	}
 #else
 	/* vitaGL's binary format: matrix uniform count (0), then the GXP. */
 	uint8_t *blob = malloc(sizeof(uint32_t) + gxp_size);
@@ -251,6 +287,8 @@ static bool gl_link(gl_program_t *prog, GLuint vs, const char *fragment_src,
 	prog->u_row_x = glGetUniformLocation(prog->id, "uRowX");
 	prog->u_row_y = glGetUniformLocation(prog->id, "uRowY");
 	prog->u_tex_scale = glGetUniformLocation(prog->id, "uTexScale");
+	prog->u_time = glGetUniformLocation(prog->id, "iTime");
+	prog->u_output_size = glGetUniformLocation(prog->id, "uOutputSize");
 	prog->a_uv = glGetAttribLocation(prog->id, "aUV");
 	prog->a_pos = glGetAttribLocation(prog->id, "aPos");
 	prog->a_zp = glGetAttribLocation(prog->id, "aZP");
@@ -274,6 +312,18 @@ static bool gl_create_programs(psvita_gl_video_t *gl)
 		{ psvita_shader_indexed_depth_cg, psvita_shader_indexed_depth_gxp, sizeof(psvita_shader_indexed_depth_gxp) },
 		{ psvita_shader_direct_cg, psvita_shader_direct_gxp, sizeof(psvita_shader_direct_gxp) },
 	};
+	static const struct {
+		const char *cg;
+		const uint8_t *gxp;
+		size_t gxp_size;
+	} filters[VIDEO_FILTER_COUNT] = {
+		[VIDEO_FILTER_CRT] = { psvita_shader_crt_cg, psvita_shader_crt_gxp,
+			sizeof(psvita_shader_crt_gxp) },
+		[VIDEO_FILTER_CRT_BLEEDING] = { psvita_shader_crt_bleeding_cg,
+			psvita_shader_crt_bleeding_gxp, sizeof(psvita_shader_crt_bleeding_gxp) },
+		[VIDEO_FILTER_CRT_BLEEDING_FLAT] = { psvita_shader_crt_bleeding_flat_cg,
+			psvita_shader_crt_bleeding_flat_gxp, sizeof(psvita_shader_crt_bleeding_flat_gxp) },
+	};
 	GLuint vs = gl_compile(GL_CG_VERTEX_SHADER_EXT, psvita_shader_vertex_cg,
 		psvita_shader_vertex_gxp, sizeof(psvita_shader_vertex_gxp));
 
@@ -283,6 +333,14 @@ static bool gl_create_programs(psvita_gl_video_t *gl)
 	for (int i = 0; i < HW_PROG_COUNT; i++) {
 		if (!gl_link(&gl->progs[i], vs, fragments[i].cg, fragments[i].gxp, fragments[i].gxp_size))
 			return false;
+	}
+	/* Filters are optional: without them only the plain bilinear pass remains. */
+	gl->filters_ready = true;
+	for (int f = VIDEO_FILTER_NONE + 1; f < VIDEO_FILTER_COUNT; f++) {
+		if (!gl_link(&gl->filters[f], vs, filters[f].cg, filters[f].gxp, filters[f].gxp_size)) {
+			gl_log("presentation filter %d unavailable\n", f);
+			gl->filters_ready = false;
+		}
 	}
 	return true;
 }
@@ -618,28 +676,130 @@ static void gl_replay_draw(psvita_gl_video_t *gl, const hw_cmd_t *cmd,
 	}
 }
 
-/*
- * Replays the recorded work frame into the display back buffer, mapping the
- * work frame rectangle `src_rect` onto `dst_rect` with the given orientation.
- * Everything lands in the display scene: no intermediate render target.
- */
-static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
-					   const RECT *dst_rect, int orient)
+static hw_vertex_t *gl_ui_alloc(psvita_gl_video_t *gl, GLint *first);
+
+static void gl_free_sharp(psvita_gl_video_t *gl)
 {
+	if (gl->sharp_fbo) glDeleteFramebuffers(1, &gl->sharp_fbo);
+	if (gl->sharp_rb) glDeleteRenderbuffers(1, &gl->sharp_rb);
+	if (gl->sharp_tex) glDeleteTextures(1, &gl->sharp_tex);
+	gl->sharp_fbo = gl->sharp_rb = gl->sharp_tex = 0;
+	gl->sharp_w = gl->sharp_h = 0;
+}
+
+/* (Re)creates the sharp bilinear target at w x h; false keeps the direct replay. */
+static bool gl_sharp_target(psvita_gl_video_t *gl, int w, int h)
+{
+	bool complete;
+
+	if (gl->sharp_fbo && gl->sharp_w == w && gl->sharp_h == h)
+		return true;
+	if (gl->sharp_failed)
+		return false;
+	gl_free_sharp(gl);
+
+	glGenTextures(1, &gl->sharp_tex);
+	glBindTexture(GL_TEXTURE_2D, gl->sharp_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glGenRenderbuffers(1, &gl->sharp_rb);
+	glBindRenderbuffer(GL_RENDERBUFFER, gl->sharp_rb);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+	glGenFramebuffers(1, &gl->sharp_fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, gl->sharp_fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gl->sharp_tex, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+		gl->sharp_rb);
+	complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	if (!complete) {
+		gl_log("%dx%d sharp bilinear target incomplete\n", w, h);
+		gl_free_sharp(gl);
+		gl->sharp_failed = true;
+		return false;
+	}
+	gl->sharp_w = w;
+	gl->sharp_h = h;
+	return true;
+}
+
+/*
+ * Sharp bilinear presentation (hw_sharp_target): the work frame is replayed
+ * at a whole scale into the off-screen target (a scene of its own), which the
+ * display scene then filters bilinearly onto `dst` as its first draw, through
+ * a presentation filter when one is selected.
+ */
+static void gl_present_sharp(psvita_gl_video_t *gl, const RECT *src_rect, const RECT *dst,
+							 int orient, int filter)
+{
+	const gl_program_t *prog = filter != VIDEO_FILTER_NONE ? &gl->filters[filter]
+		: &gl->progs[HW_PROG_DIRECT];
+	const bool rotated = orient == HW_ORIENT_ROTATE || orient == HW_ORIENT_ROTATE_FLIP;
+	const RECT target = { 0, 0, (int16_t)gl->sharp_w, (int16_t)gl->sharp_h };
 	hw_xform_t m;
 	RECT d;
 	float row_x[3], row_y[3];
+	hw_vertex_t *q;
+	GLint first;
 
-	hw_rec_flush(&gl->rec);
-	gl_frame_sync(gl);
-
-	if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH,
-			PSVITA_DISPLAY_HEIGHT, &d, &m))
+	if (!hw_present_geometry(src_rect, &target, HW_ORIENT_NORMAL, gl->sharp_w, gl->sharp_h,
+			&d, &m))
 		return;
-	gl->last_present_xform = m;
-	gl->last_present_valid = true;
-	hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+	hw_clip_rows(&m, gl->sharp_w, gl->sharp_h, row_x, row_y);
 
+	glBindFramebuffer(GL_FRAMEBUFFER, gl->sharp_fbo);
+	glViewport(0, 0, gl->sharp_w, gl->sharp_h);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glDepthMask(GL_TRUE);
+	glClearDepth(1.0);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	gl_set_blend(gl, false);
+	for (uint32_t i = 0; i < gl->rec.cmd_count; i++)
+		gl_replay_draw(gl, &gl->rec.cmds[i], row_x, row_y);
+	glDisable(GL_DEPTH_TEST);
+
+	gl_open_display(gl, 0, 0);
+	if (!hw_present_geometry(&target, dst, orient, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT,
+			&d, &m) ||
+		(q = gl_ui_alloc(gl, &first)) == NULL)
+		return;
+	hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+	/* vitaGL keeps GL's bottom-up framebuffers: the frame's top row is t = 1. */
+	hw_write_quad(q, 0, 0, (int16_t)gl->sharp_w, (int16_t)gl->sharp_h,
+		0.0f, (float)gl->sharp_h, (float)gl->sharp_w, 0.0f, 0, 0);
+
+	glDisable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glUseProgram(prog->id);
+	glUniform4f(prog->u_row_x, row_x[0], row_x[1], row_x[2], 0.0f);
+	glUniform4f(prog->u_row_y, row_y[0], row_y[1], row_y[2], 0.0f);
+	glUniform4f(prog->u_tex_scale, 1.0f / gl->sharp_w, 1.0f / gl->sharp_h, 0.0f, 0.0f);
+	if (prog->u_time >= 0)
+		glUniform1f(prog->u_time, gl->presented / 60.0f);
+	/* The filters work along the frame's own rows, rotated or not. */
+	if (prog->u_output_size >= 0)
+		glUniform2f(prog->u_output_size,
+			(float)(rotated ? d.bottom - d.top : d.right - d.left),
+			(float)(rotated ? d.right - d.left : d.bottom - d.top));
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gl->sharp_tex);
+	gl_bind_vertices(prog, gl->ui_vbo);
+	glDrawArrays(GL_QUADS, first, 4);
+	gl->stat_draws++;
+}
+
+/*
+ * Direct presentation: replays the recording straight into the display scene
+ * through the work frame -> display rows; only `d` (display pixels) shows it.
+ */
+static bool gl_present_direct(psvita_gl_video_t *gl, const RECT *d,
+							  const float row_x[3], const float row_y[3])
+{
 	/*
 	 * Only the destination rectangle shows the work frame, at pixel precision.
 	 * vitaGL builds glScissor from a tile-granular region clip plus two
@@ -648,10 +808,10 @@ static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
 	 */
 	hw_recorder_t *rec = &gl->rec;
 	const uint32_t cmd_first = rec->cmd_count;
-	hw_rec_fill(rec, &d, 0x8000, HW_DEPTH_OFF);
+	hw_rec_fill(rec, d, 0x8000, HW_DEPTH_OFF);
 	hw_rec_flush(rec);
 	if (rec->cmd_count != cmd_first + 1 || rec->cmds[cmd_first].quads != 1)
-		return;
+		return false;
 	const hw_cmd_t mask = rec->cmds[--rec->cmd_count];
 	const float display_x[3] = { 2.0f / PSVITA_DISPLAY_WIDTH, 0.0f, -1.0f };
 	const float display_y[3] = { 0.0f, -2.0f / PSVITA_DISPLAY_HEIGHT, 1.0f };
@@ -672,6 +832,41 @@ static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
 
 	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_DEPTH_TEST);
+
+	return true;
+}
+
+/*
+ * Presents the recorded work frame, mapping the work frame rectangle
+ * `src_rect` onto `dst_rect` of the display with the given orientation.
+ */
+static void gl_present(psvita_gl_video_t *gl, const RECT *src_rect,
+					   const RECT *dst_rect, int orient)
+{
+	hw_xform_t m;
+	RECT d;
+	float row_x[3], row_y[3];
+	int target_w, target_h;
+	const int filter = gl->filters_ready ? option_video_filter : VIDEO_FILTER_NONE;
+
+	hw_rec_flush(&gl->rec);
+	gl_frame_sync(gl);
+
+	if (!hw_present_geometry(src_rect, dst_rect, orient, PSVITA_DISPLAY_WIDTH,
+			PSVITA_DISPLAY_HEIGHT, &d, &m))
+		return;
+	gl->last_present_xform = m;
+	gl->last_present_valid = true;
+	hw_clip_rows(&m, PSVITA_DISPLAY_WIDTH, PSVITA_DISPLAY_HEIGHT, row_x, row_y);
+
+	/* The off-screen scene must come before the display scene opens. */
+	if (!gl->display_open &&
+		hw_sharp_target(src_rect, d.right - d.left, d.bottom - d.top, orient,
+			filter != VIDEO_FILTER_NONE, GL_MAX_TEXTURE_DIM, &target_w, &target_h) &&
+		gl_sharp_target(gl, target_w, target_h))
+		gl_present_sharp(gl, src_rect, &d, orient, filter);
+	else if (!gl_present_direct(gl, &d, row_x, row_y))
+		return;
 
 	if (psvita_dump_wanted(++gl->presented)) {
 		uint8_t *display = malloc(PSVITA_DISPLAY_WIDTH * PSVITA_DISPLAY_HEIGHT * 4);
@@ -773,6 +968,7 @@ static void psvita_gl_free(void *data)
 
 	glFinish();
 
+	gl_free_sharp(gl);
 	if (gl->vbos[0])
 		glDeleteBuffers(GL_MAX_CHUNKS, gl->vbos);
 	if (gl->ui_vbo)
@@ -796,6 +992,10 @@ static void psvita_gl_free(void *data)
 	for (int i = 0; i < HW_PROG_COUNT; i++) {
 		if (gl->progs[i].id)
 			glDeleteProgram(gl->progs[i].id);
+	}
+	for (int f = 0; f < VIDEO_FILTER_COUNT; f++) {
+		if (gl->filters[f].id)
+			glDeleteProgram(gl->filters[f].id);
 	}
 
 	/* vitaGL has no public shutdown; the GXM context lives until exit. */

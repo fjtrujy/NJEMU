@@ -512,4 +512,5 @@ input_driver_t input_ps2 = {
 	ps2_controllerCount,
 	ps2_sample,
 	ps2_set_edge_capture,
+	NULL,
 };

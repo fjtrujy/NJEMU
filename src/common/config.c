@@ -12,6 +12,7 @@
 #include <strings.h>
 #include "emucfg.h"
 #include "common/emulator_options.h"
+#include "common/emulator_runtime.h"
 #include "common/filer.h"
 #include "common/input_driver.h"
 #include "common/power_driver.h"
@@ -22,7 +23,6 @@
 #if defined(GUI)
 #include "common/ui_menu.h"
 #else
-#include "common/emulator_runtime.h"
 #include "common/video_driver.h"
 #endif
 #endif
@@ -159,6 +159,7 @@ static cfg_type default_options[] =
 	{ CFG_INT,	"INIFileVersion",	&ini_version,	INIVERSION,		INIVERSION   , 0},
 	{ CFG_NONE,	"[Video Backend]", 0, 0, 0, 0},
 	{ CFG_INT,	"VideoBackend",	&option_video_backend,	VIDEO_BACKEND_AUTO,	VIDEO_BACKEND_COUNT - 1, 0},
+	{ CFG_INT,	"VideoFilter",	&option_video_filter,	VIDEO_FILTER_NONE,	VIDEO_FILTER_COUNT - 1, 0},
 	{ CFG_NONE,	"[FPS Overlay]", 0, 0, 0, 0},
 	{ CFG_INT,	"FPSOffsetX",	&option_fps_offset_x,	0,	FPS_OVERLAY_OFFSET_MAX, 0},
 	{ CFG_INT,	"FPSOffsetY",	&option_fps_offset_y,	0,	FPS_OVERLAY_OFFSET_MAX, 0},
@@ -687,6 +688,7 @@ void load_gamecfg(const char *name)
 #endif
 			save_gamecfg(name);
 	}
+	emu_test_apply_fast();
 #if defined(PS2) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 #if defined(GUI)
 	(void)ui_sync_ps2_native_scanout(previous_display_mode);
@@ -710,6 +712,8 @@ void save_gamecfg(const char *name)
 	char path[PATH_MAX];
 	cfg_type *gamecfg;
 
+	/* Never persist the test overrides as the game's settings. */
+	if (emu_test_fast()) return;
 	if (!path_format(path, sizeof(path), "%sconfig/%s.ini", launchDir, name)) return;
 
 #define INCLUDE_SETUP_CONFIG_STRUCT

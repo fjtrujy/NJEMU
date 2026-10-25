@@ -40,6 +40,11 @@ int video_backend_choice_count(void)
 #endif
 }
 
+int video_filter_count(void)
+{
+    return 1;
+}
+
 video_backend_choice_t video_backend_choice_at(int index)
 {
 #ifdef HAVE_VIDEO_BACKEND_OPENGL

@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -93,6 +94,7 @@ int option_video_output_mode = DEFAULT_VIDEO_OUTPUT_MODE;
 int option_video_offset_x;
 int option_video_offset_y;
 int option_video_backend = VIDEO_BACKEND_AUTO;
+int option_video_filter = VIDEO_FILTER_NONE;
 int option_cache_read_size = CACHE_READ_SIZE_AUTO;
 int option_audio_processor = AUDIO_PROCESSOR_AUTO;
 
@@ -324,6 +326,54 @@ static uint32_t emu_test_frame_limit(void)
 #endif
 }
 
+bool emu_test_fast(void)
+{
+#if defined(DESKTOP)
+	const char *value = getenv("NJEMU_TEST_FAST");
+	return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
+#else
+	return false;
+#endif
+}
+
+void emu_test_apply_fast(void)
+{
+#if defined(DESKTOP)
+	if (!emu_test_fast())
+		return;
+	option_speedlimit = 0;
+	option_sound_enable = 0;
+	option_autoframeskip = 0;
+	option_frameskip = FRAMESKIP_LEVELS - 1;
+#endif
+}
+
+static bool emu_test_frame_limit_reached(void)
+{
+	static uint32_t elapsed_frames;
+	static uint64_t start_us;
+	uint32_t frame_limit = emu_test_frame_limit();
+
+	if (frame_limit == 0)
+		return false;
+
+	if (elapsed_frames == 0)
+		start_us = ticker_driver->currentUs(ticker_data);
+	elapsed_frames++;
+	if (elapsed_frames == frame_limit && elapsed_frames > 1)
+	{
+		const uint64_t duration_us = ticker_driver->currentUs(ticker_data) - start_us;
+		/* One summary only for an explicitly frame-limited test. Loading is
+		 * excluded, and N samples cover N-1 emulated frame intervals. */
+		printf("[test] %u frame intervals in %.3fs: %.2f emulated fps "
+			"(frameskip=%d, audio=%d, speedlimit=%d)\n",
+			(unsigned int)(elapsed_frames - 1), duration_us / 1000000.0,
+			duration_us ? (elapsed_frames - 1) * 1000000.0 / duration_us : 0.0,
+			frameskip, option_sound_enable, option_speedlimit);
+	}
+	return elapsed_frames >= frame_limit;
+}
+
 
 /*--------------------------------------------------------
 	Initialize Frameskip
@@ -407,11 +457,8 @@ void update_screen(void)
 
 	frames_displayed++;
 	frames_since_last_fps++;
-	{
-		uint32_t test_frame_limit = emu_test_frame_limit();
-		if (test_frame_limit != 0 && frames_displayed >= test_frame_limit)
-			Loop = LOOP_EXIT;
-	}
+	if (emu_test_frame_limit_reached())
+		Loop = LOOP_EXIT;
 
 	if (!skipped_it)
 	{
@@ -676,6 +723,8 @@ int main(int argc, char *argv[]) {
 				option_video_backend = VIDEO_BACKEND_AUTO;
 			}
 			video_backend_select(option_video_backend);
+			if (option_video_filter >= video_filter_count())
+				option_video_filter = VIDEO_FILTER_NONE;
 			printf("Video backend: %s\n", video_driver->ident);
 			printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		if (!pad_init()) {

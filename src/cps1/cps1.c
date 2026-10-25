@@ -69,6 +69,7 @@ static int cps1_init(void)
 #ifdef ADHOC
 	if (!cps1_video_init())
 		return 0;
+	cps1_wide_init();
 
 	if (adhoc_enable)
 	{
@@ -103,7 +104,10 @@ static int cps1_init(void)
 
 	return 1;
 #else
-	return cps1_video_init();
+	if (!cps1_video_init())
+		return 0;
+	cps1_wide_init();
+	return 1;
 #endif
 }
 
@@ -145,6 +149,7 @@ static void cps1_exit(void)
 
 	msg_printf(TEXT(PLEASE_WAIT2));
 
+	cps1_wide_exit();
 	cps1_video_exit();
 	cps1_driver_exit();
 
@@ -240,6 +245,8 @@ static void cps1_run(void)
 			 * presentation pacing. This removes a full frame of avoidable latency and
 			 * keeps input independent from whether the previous frame was presented. */
 			update_inputport();
+			/* Change ROM patches and view geometry only between frames. */
+			cps1_wide_update();
 			timer_update_cpu();
 			update_screen();
 

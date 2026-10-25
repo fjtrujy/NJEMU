@@ -21,6 +21,7 @@
 #include "mvs.h"
 #include "common/memory_sizes.h"
 #include "common/palette_convert.h"
+#include "mvs/wide_debug.h"
 #include <string.h>
 
 
@@ -94,6 +95,7 @@ static void (*draw_fixed_layer)(void);
 static void draw_fixed_layer_type0(void)
 {
 	uint16_t x, y, code, attr;
+	const int x_bias = mvs_get_view_geometry()->x_bias;
 
 	for (x = 8/8; x < 312/8; x++)
 	{
@@ -106,7 +108,7 @@ static void draw_fixed_layer_type0(void)
 			code &= 0x0fff;
 
 			if (fix_usage[code])
-				blit_draw_fix((x << 3) + 16, y << 3, code, attr);
+				blit_draw_fix((x << 3) + x_bias, y << 3, code, attr);
 		}
 	}
 
@@ -120,6 +122,7 @@ static void draw_fixed_layer_type1(void)
 	int garouoffsets[32];
 	int garoubank = 0;
 	int i = 0;
+	const int x_bias = mvs_get_view_geometry()->x_bias;
 
 	/* Garou: Mark of the Wolves uses extended fix bankswitching at $7500+ */
 	y = 0;
@@ -147,7 +150,7 @@ static void draw_fixed_layer_type1(void)
 			code += (garouoffsets[(y - 2) & 31] ^ 3) << 12;
 
 			if (fix_usage[code])
-				blit_draw_fix((x << 3) + 16, y << 3, code, attr);
+				blit_draw_fix((x << 3) + x_bias, y << 3, code, attr);
 		}
 	}
 
@@ -158,6 +161,7 @@ static void draw_fixed_layer_type1(void)
 static void draw_fixed_layer_type2(void)
 {
 	uint16_t x, y, code, attr;
+	const int x_bias = mvs_get_view_geometry()->x_bias;
 
 	for (x = 8/8; x < 312/8; x++)
 	{
@@ -173,7 +177,7 @@ static void draw_fixed_layer_type2(void)
 			code += (((neogeo_videoram[NEOGEO_VRAM_EXT + ((y - 1) & 31) + ((x / 6) << 5)] >> (5 - (x % 6)) * 2) & 3) ^ 3) << 12;
 
 			if (fix_usage[code])
-				blit_draw_fix((x << 3) + 16, y << 3, code, attr);
+				blit_draw_fix((x << 3) + x_bias, y << 3, code, attr);
 		}
 	}
 
@@ -210,6 +214,7 @@ static SPRITE_LIST sprite_list[MAX_SPRITES_PER_LINE];
  */
 static void draw_sprites(int min_y, int max_y)
 {
+	const mvs_view_geometry_t *view = mvs_get_view_geometry();
 	int y = 0;
 	int x = 0;
 	int rows = 0;
@@ -245,7 +250,8 @@ static void draw_sprites(int min_y, int max_y)
 				if ((rows = y_control & 0x3f) == 0) continue;
 
 				y = 0x200 - (y_control >> 7);
-				x = (sprite_x_control[sprite_number] >> 7) + 16;
+				x = (sprite_x_control[sprite_number] >> 7) + view->x_bias +
+					mvs_wide_sprite_pan[sprite_number];
 				zoom_y = (zoom_control & 0xff) << 6;
 
 				if (rows > 0x20)
@@ -268,7 +274,8 @@ static void draw_sprites(int min_y, int max_y)
 
 			zoom_x = (zoom_control >> 8) & 0x0f;
 
-			if ((x + zoom_x >= 24) && (x < 336))
+			if ((x + zoom_x >= view->render_left) &&
+				(x < view->render_right))
 			{
 				sprite_list[num_sprites].x = x;
 				sprite_list[num_sprites].zoom_x = zoom_x + 1;
@@ -492,6 +499,9 @@ void neogeo_screenrefresh(void)
 	draw_fixed_layer();
 
 	blit_finish();
+#if defined(DESKTOP) && !RELEASE
+	mvs_wide_debug_frame();
+#endif
 
 	next_update_first_line = FIRST_VISIBLE_LINE;
 }

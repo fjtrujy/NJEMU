@@ -63,6 +63,12 @@ void set_gamepad_edge_capture(bool enabled)
 		input_driver->setEdgeCapture(input_info, enabled);
 }
 
+bool pad_accept_is_cross(void)
+{
+	return input_info && input_driver->acceptIsCross &&
+		input_driver->acceptIsCross(input_info);
+}
+
 /*--------------------------------------------------------
 	Get Number of Physical Controllers
 --------------------------------------------------------*/
