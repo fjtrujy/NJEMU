@@ -9,7 +9,7 @@
 #ifndef UI_TEXT_IDS_H
 #define UI_TEXT_IDS_H
 
-#define UI_TEXT_SCHEMA_HASH 0x2108c69fu
+#define UI_TEXT_SCHEMA_HASH 0xafbd49eeu
 
 typedef enum ui_text_id
 {

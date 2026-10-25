@@ -25,7 +25,9 @@ void mvs_wide_set_active(bool active);
 int mvs_true_wide_enabled(void);
 const mvs_view_geometry_t *mvs_get_view_geometry(void);
 
-/* Profile lifecycle (mvs/wide_runtime.c). */
+/* Profile lifecycle (mvs/wide_runtime.c). The per-game option exists where
+ * the build enables profiles (MVS_WIDESCREEN). */
+extern int option_mvs_widescreen;
 void mvs_wide_init(void);
 void mvs_wide_exit(void);
 void mvs_wide_update(void);

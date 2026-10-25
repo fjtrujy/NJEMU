@@ -31,8 +31,8 @@ The startup log confirms successful activation:
 ```
 
 Unsupported or modified program layouts are rejected before any patch word is
-written. They retain legacy rendering. Non-Desktop platforms do not activate
-profiles.
+written. They retain legacy rendering. Profiles are only built for Desktop,
+PSP and PS Vita.
 Keep `widescreen/mslug3.ini` alongside the runtime resources. An optional
 `NJEMU_MVS_PROFILE_DIR` selects a different profile directory without rebuilding.
 

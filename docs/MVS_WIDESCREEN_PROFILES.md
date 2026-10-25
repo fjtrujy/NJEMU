@@ -27,7 +27,13 @@ camera clamp also changed the demonstration's progression and is not shipped.
 See [the recorded KOF '96 investigation](KOF96_WIDESCREEN_RESEARCH.md) for exact
 coverage, paired-capture differences and the camera/parallax evidence.
 
-For normal play from a prepared MVS runtime directory:
+Profiles are available on Desktop, PSP and PS Vita, where the screen is 16:9.
+In GUI builds, enable **Widescreen (16:9)** in the game's Video settings; it is
+saved per game (`Widescreen` in `config/<game>.ini`) and applies between
+frames. When the game has no authorized profile, or its program does not
+match the profile, the option switches back off with a message.
+
+Without the GUI, or to force it in tests, use the environment:
 
 ```sh
 # Metal Slug 3: put mslug3 in game_name.ini for a GUI=OFF build.
@@ -37,10 +43,10 @@ NJEMU_MVS_TRUE_WIDE=1 ./MVS
 NJEMU_MVS_ALLOW_EXPERIMENTAL=1 NJEMU_MVS_TRUE_WIDE=1 ./MVS
 ```
 
-`NJEMU_MVS_TRUE_WIDE` is currently the only way to request wide mode: the
-stretch presets, including the old 16:9 one, were replaced upstream by the
-common display modes, and no menu option replaces that request yet. Unset or
-zero keeps the original program.
+`NJEMU_MVS_TRUE_WIDE=1` requests wide mode regardless of the option; unset or
+zero leaves it to the option. Packaged builds install the verified profiles
+under `widescreen/` next to the other runtime resources (on PS Vita,
+`ux0:data/mvs/widescreen/`).
 
 `NJEMU_MVS_PROFILE_DIR=/path/to/profiles` overrides the profile directory,
 including in release builds. No fallback occurs if a requested directory or

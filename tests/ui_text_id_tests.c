@@ -47,7 +47,9 @@ int main(void)
 	assert(MENUHELP_SYSTEM_SETTINGS == 428);
 	assert(DISPLAY_NATIVE_PIXELS == 429);
 	assert(VIDEO_FILTER == 430);
-	assert(UI_TEXT_MAX == 431);
+	assert(WIDESCREEN == 431);
+	assert(WIDESCREEN_NOT_AVAILABLE == 432);
+	assert(UI_TEXT_MAX == 433);
 	assert(UI_LANG_ENGLISH == 0);
 	assert(UI_LANG_JAPANESE == 1);
 	assert(UI_LANG_SPANISH == 2);

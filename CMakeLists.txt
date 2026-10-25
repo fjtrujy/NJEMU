@@ -219,6 +219,16 @@ if(USE_CACHE AND "${TARGET}" STREQUAL "MVS")
 else()
     add_definitions(-DMVS_PCM_CACHE=0)
 endif()
+# MVS widescreen profiles (resources/mvs/widescreen) patch the game program for
+# a 16:9 view, which the Desktop canvas and the PSP and Vita screens can show.
+if("${TARGET}" STREQUAL "MVS" AND
+   (PLATFORM STREQUAL "DESKTOP" OR PLATFORM STREQUAL "PSP" OR PLATFORM STREQUAL "PSVITA"))
+    set(MVS_WIDESCREEN ON)
+    add_definitions(-DMVS_WIDESCREEN=1)
+else()
+    set(MVS_WIDESCREEN OFF)
+    add_definitions(-DMVS_WIDESCREEN=0)
+endif()
 
 option(CACHE_IO_PROFILE "Profile MVS cache I/O" OFF)
 option(CACHE_IO_FORCE_SEEK "Force legacy seek-before-read MVS cache behavior" OFF)
@@ -1168,6 +1178,12 @@ elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
         rominfo.mvs
     )
+    if(MVS_WIDESCREEN)
+        list(APPEND NJEMU_DISTRIBUTED_RESOURCE_FILES
+            widescreen/kof96.ini
+            widescreen/mslug3.ini
+        )
+    endif()
 endif()
 
 foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
@@ -1256,6 +1272,9 @@ elseif("${TARGET}" STREQUAL "CPS2")
     endif()
 elseif("${TARGET}" STREQUAL "MVS")
     list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES processed memcard nvram)
+    if(MVS_WIDESCREEN)
+        list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES widescreen)
+    endif()
     if(USE_CACHE)
         list(APPEND NJEMU_BUILD_RESOURCE_ENTRIES cache)
     endif()
@@ -1266,6 +1285,8 @@ elseif("${TARGET}" STREQUAL "NCDZ")
     endif()
 endif()
 list(REMOVE_DUPLICATES NJEMU_BUILD_RESOURCE_ENTRIES)
+# Files inside a directory (widescreen/) are staged through that directory.
+list(FILTER NJEMU_BUILD_RESOURCE_ENTRIES EXCLUDE REGEX "/")
 
 # COPY_RESOURCES makes the explicit development staging set self-contained on
 # platforms where symlinks are problematic; it does not broaden the set.
@@ -2232,8 +2253,12 @@ endif()
 # assets, caches and runtime-generated data that must never enter an install
 # output by accident.
 foreach(NJEMU_RESOURCE_FILE IN LISTS NJEMU_DISTRIBUTED_RESOURCE_FILES)
+    get_filename_component(NJEMU_RESOURCE_SUBDIR "${NJEMU_RESOURCE_FILE}" DIRECTORY)
+    if(NJEMU_RESOURCE_SUBDIR STREQUAL "")
+        set(NJEMU_RESOURCE_SUBDIR .)
+    endif()
     install(FILES "${RESOURCE_DIR}${NJEMU_RESOURCE_FILE}"
-        DESTINATION .
+        DESTINATION "${NJEMU_RESOURCE_SUBDIR}"
     )
 endforeach()
 if(DEFINED GAMELIST_OUTPUT)
