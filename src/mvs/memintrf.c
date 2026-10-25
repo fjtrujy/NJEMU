@@ -1102,8 +1102,9 @@ static int load_rom_sound1(void)
 		return 0;
 	}
 
-	if (cache_candidate)
-		disable_sound = 0;
+	/* The PCM is resident now: the planned cache buffer was committed or, in a
+	 * no-cache build, the whole region was allocated. Keep sound enabled. */
+	disable_sound = 0;
 
 	memset(memory_region_sound1, 0, memory_length_sound1);
 
