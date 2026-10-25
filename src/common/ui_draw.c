@@ -12,6 +12,7 @@
 
 #include "common/ui_draw.h"
 #include "common/ui_draw_driver.h"
+#include "common/input_driver.h"
 #include "common/ui_layout.h"
 #include "common/ui.h"
 #include "common/ui_unicode_glyph.h"
@@ -547,6 +548,18 @@ static uint16_t gbk_get_code(const uint8_t *s, int *type)
 	Font code lookup (user interface)
 ------------------------------------------------------*/
 
+/* Graphic glyphs 4/5 are the circle/cross; text uses them for accept/cancel. */
+#define UI_GLYPH_CIRCLE	4
+#define UI_GLYPH_CROSS	5
+
+static inline uint16_t uifont_accept_glyph(uint16_t graphic)
+{
+	if ((graphic == UI_GLYPH_CIRCLE || graphic == UI_GLYPH_CROSS) &&
+		pad_accept_is_cross())
+		return graphic ^ (UI_GLYPH_CIRCLE ^ UI_GLYPH_CROSS);
+	return graphic;
+}
+
 static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance)
 {
 	uint8_t c1 = s[0];
@@ -562,7 +575,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance
 	{
 		*type = FONT_TYPE_GRAPHIC;
 		if (c1 < 0x1a)
-			return c1 - 0x10;
+			return uifont_accept_glyph(c1 - 0x10);
 		return c1 - 0x11;
 	}
 	if (isprintascii(c1))
@@ -584,7 +597,7 @@ static inline uint16_t uifont_get_code(const uint8_t *s, int *type, int *advance
 		{
 			uint16_t graphic = (uint16_t)(codepoint - 0xe000u);
 			*type = FONT_TYPE_GRAPHIC;
-			return graphic < 0x0au ? graphic : graphic - 1u;
+			return graphic < 0x0au ? uifont_accept_glyph(graphic) : graphic - 1u;
 		}
 		if (codepoint >= 0x00a0u && codepoint <= 0x00ffu)
 		{
