@@ -16,6 +16,45 @@ This guide contains the detailed usage, controls, ROM setup, compatibility, and 
 
 > **Menu shortcut:** press START+SELECT during gameplay to open the emulator menu on every platform.
 
+### Desktop Controllers (macOS, Linux and Steam Deck)
+
+Desktop NJEMU supports SDL2-compatible gamepads using SDL's standard
+GameController mappings, including Xbox-style and PlayStation controllers.
+Controllers can be plugged in or disconnected while NJEMU is running. The
+keyboard remains usable without a gamepad and, by default, shares player one
+with the first connected gamepad. Additional gamepads operate players two and
+onward in multiplayer-capable games.
+
+The Desktop **Emulation Settings > Player 1 Input** option is saved in the
+application INI as `Player1Input`:
+
+| Value | Player 1 | Additional players |
+|-------|----------|-------------------|
+| `0` (default) | Keyboard and first controller together | Second controller onwards |
+| `1` | Keyboard only | First controller becomes P2 |
+| `2` | First controller only | Second controller onwards |
+
+Controller-only falls back to keyboard when no gamepad is connected, so the
+menu remains usable after disconnecting the last controller. Source selection
+can be changed while NJEMU is running.
+
+| Control | Keyboard | Gamepad |
+|---------|----------|---------|
+| Directions | Arrow keys | D-pad or left analog stick |
+| Circle (B1) | Z | B / Circle |
+| Cross (B2) | X | A / Cross |
+| Square (B3) | C | X / Square |
+| Triangle (B4) | S | Y / Triangle |
+| L / R | A / D | Left / right shoulder |
+| Start | Return | Start / Options |
+| Select | Space | Back / Share |
+| Exit Desktop application | Escape | Close the application window |
+
+The emulator menu opens with **Start + Select**. On Steam Deck, the usual
+Steam Input gamepad layout should be enabled. For controllers not recognized
+by SDL2, provide a standard SDL game-controller mapping; raw, unmapped HID
+joysticks do not automatically provide the face-button layout.
+
 ### In-Game Controls
 
 Button layouts automatically flip/rotate when:
