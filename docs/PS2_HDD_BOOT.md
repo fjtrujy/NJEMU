@@ -156,11 +156,23 @@ on hardware in this migration. The USB bootstrap binary and NJEMU's
 non-HDD boot logic are unchanged; this is not a substitute for a real
 USB/MX4SIO runtime regression test.
 
-While `ps2_drivers` PR #26 remains unmerged, NJEMU PR #25's PS2 CI selects
-that review commit only for its own branch, while other PS2 CI and the
-release workflow remain on the shared `njemu` branch. Remove that temporary
-CI pin after PR #26 has merged into `njemu`. Do not publish a release of
-this NJEMU code against the old `njemu` driver revision.
+`ps2_drivers` PR #26 merged into its `njemu` branch on October 26, 2026
+(merge commit `d891c7bdd6b1f7e3474390996f990511c7fd8a1a`).
+NJEMU's PS2 CI and release workflow now both consume that shared branch
+without the temporary review-commit pin. Both workflows validate the HDD
+launch helper and require the installed generic HDD bootstrap before
+building or packaging NJEMU. The workflow log prints the resolved driver
+commit so that each CI build can be reproduced.
+
+The merge includes an additional, independently selected ATA-backed BDM
+FAT/exFAT HDD mode. After the merge, the external IRX image is 569,728
+bytes (12,288 more than the earlier tested revision); the USB and APA/PFS
+bootstraps retain their original 300,116-byte and 322,516-byte sizes and
+identical SHA-256 digests. Rebuilding against the merged driver tree passed
+the four driver checks, external MVS and CPS2 builds, and embedded CPS1/NCDZ
+builds. Their canonical four-core PS2 ZIP also packaged successfully with
+both bootstraps. The prior PCSX2 ROM-loading tests above were performed on
+the earlier `2949ebb` revision, not repeated for the merge commit.
 
 Further verification remains valuable on **physical PS2 internal HDD**
 hardware, especially alternate launchers and APA partitions, and for

@@ -116,10 +116,7 @@ jobs:
       uses: actions/checkout@v7
       with:
         repository: fjtrujy/ps2_drivers
-        # PR #25 requires the generic HDD API from ps2_drivers PR #26.
-        # Pin the review revision only for this NJEMU branch; other builds
-        # continue using the shared integration branch until PR #26 merges.
-        ref: ${{ (github.head_ref == 'fix/ps2-hdd-boot' || github.ref_name == 'fix/ps2-hdd-boot') && '2949ebbfe765dca960d639f9d88a31b37ec25f7d' || 'njemu' }}
+        ref: njemu
         path: .ci-deps/ps2_drivers
         persist-credentials: false
 
@@ -133,21 +130,14 @@ jobs:
           --parallel "$(getconf _NPROCESSORS_ONLN)"
         cmake --build .ci-deps/ps2_drivers/build --target \
           ps2_drivers_irximg_check ps2_drivers_irximg_stage_check \
-          ps2_drivers_img_payload_check
-        if [ "$GITHUB_HEAD_REF" = "fix/ps2-hdd-boot" ] || \
-           [ "$GITHUB_REF_NAME" = "fix/ps2-hdd-boot" ]; then
-          cmake --build .ci-deps/ps2_drivers/build --target ps2_drivers_hdd_launch_check
-        fi
+          ps2_drivers_img_payload_check ps2_drivers_hdd_launch_check
         cmake --install .ci-deps/ps2_drivers/build
         test -s "$PS2SDK/ports/lib/libps2_drivers_img.a"
         test -s "$PS2SDK/ports/include/cacheio.h"
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_bootstrap.elf"
-        if [ "$GITHUB_HEAD_REF" = "fix/ps2-hdd-boot" ] || \
-           [ "$GITHUB_REF_NAME" = "fix/ps2-hdd-boot" ]; then
-          test -s "$PS2SDK/ports/include/ps2_hdd_launch.h"
-          test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_hdd_bootstrap.elf"
-        fi
+        test -s "$PS2SDK/ports/include/ps2_hdd_launch.h"
+        test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_hdd_bootstrap.elf"
 
     - name: Resolve cache override
       run: |
