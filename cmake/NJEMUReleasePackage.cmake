@@ -55,10 +55,12 @@ function(_njemu_validate_install core install_dir)
         set(_required_binary "EBOOT.PBP")
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "ps2")
         # PS2 canonical releases intentionally use two layouts. Cached CPS2/MVS
-        # builds use the external IRX-image bootstrap (BOOT.ELF + extensionless
-        # engine), while CPS1/NCDZ remain directly launchable classic ELFs.
+        # builds use the external IRX-image bootstrap, with distinct USB and
+        # HDD entry points, while CPS1/NCDZ remain directly launchable ELFs.
         if(core STREQUAL "CPS2" OR core STREQUAL "MVS")
-            foreach(_required_file IN ITEMS "BOOT.ELF" "${core}" "ps2_drivers.irximg" "elf_path.ini")
+            foreach(_required_file IN ITEMS
+                    "BOOT.ELF" "BOOT_HDD.ELF" "${core}"
+                    "ps2_drivers.irximg" "elf_path.ini")
                 if(NOT EXISTS "${install_dir}/${_required_file}" OR IS_DIRECTORY "${install_dir}/${_required_file}")
                     message(FATAL_ERROR
                         "release packaging: ${core}: external-IRX release file is missing: ${_required_file}")

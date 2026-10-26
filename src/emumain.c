@@ -659,7 +659,9 @@ int main(int argc, char *argv[]) {
 	printf("===> %s, %s:%i\n", __FUNCTION__, __FILE__, __LINE__);
 		printf("%s %s [%s/%s]\n", APPNAME_STR, NJEMU_RUNTIME_BUILD_ID, TARGET_STR, PLATFORM_STR);
 
-	    // Init process
+		    // Init process
+		if (platform_driver->prepareLaunch != NULL)
+			platform_driver->prepareLaunch(argc, argv);
 		platform_data = platform_driver->init();
 		if (platform_data == NULL) {
 			printf("Failed to initialize platform driver\n");

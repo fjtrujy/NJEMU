@@ -1445,6 +1445,16 @@ elseif(PLATFORM STREQUAL "PS2")
                 "ps2_drivers_irximg_bootstrap.elf was not found under the installed PS2SDK ports tree")
         endif()
 
+        find_file(PS2_DRIVERS_IRXIMG_HDD_BOOTSTRAP
+            NAMES ps2_drivers_irximg_hdd_bootstrap.elf
+            HINTS "$ENV{PS2SDK}/ports/share/ps2_drivers"
+            NO_DEFAULT_PATH
+        )
+        if(NOT PS2_DRIVERS_IRXIMG_HDD_BOOTSTRAP)
+            message(FATAL_ERROR
+                "ps2_drivers_irximg_hdd_bootstrap.elf was not found under the installed PS2SDK ports tree")
+        endif()
+
         target_compile_definitions(${TARGET} PRIVATE PS2_EXTERNAL_IRX_IMAGE=1)
         target_link_libraries(${TARGET} PUBLIC ps2_drivers_img)
         file(GENERATE
@@ -1462,6 +1472,12 @@ elseif(PLATFORM STREQUAL "PS2")
                 "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}"
                 "$<TARGET_FILE_DIR:${TARGET}>/BOOT.ELF"
             COMMENT "Staging BOOT.ELF and target configuration beside the PS2 ELF"
+        )
+        add_custom_command(TARGET ${TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${PS2_DRIVERS_IRXIMG_HDD_BOOTSTRAP}"
+                "$<TARGET_FILE_DIR:${TARGET}>/BOOT_HDD.ELF"
+            COMMENT "Staging generic APA/PFS BOOT_HDD.ELF beside the PS2 ELF"
         )
     else()
         target_link_libraries(${TARGET} PUBLIC ps2_drivers)
@@ -2327,6 +2343,7 @@ elseif(PLATFORM STREQUAL "PS2")
         install(PROGRAMS "$<TARGET_FILE:${TARGET}>" DESTINATION .)
         install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
         install(PROGRAMS "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}" DESTINATION . RENAME BOOT.ELF)
+        install(PROGRAMS "${PS2_DRIVERS_IRXIMG_HDD_BOOTSTRAP}" DESTINATION . RENAME BOOT_HDD.ELF)
         install(CODE
             "file(WRITE \"\${CMAKE_INSTALL_PREFIX}/elf_path.ini\" \"${TARGET}\\n\")"
         )

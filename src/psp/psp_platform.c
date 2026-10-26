@@ -235,4 +235,5 @@ platform_driver_t platform_psp = {
 	psp_main,
 	NULL,
 	psp_getSystemLanguage,
+	NULL,
 };
