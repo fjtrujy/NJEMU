@@ -87,16 +87,22 @@ static int MP3SleepCheck(void)
 {
 	if (Sleep)
 	{
-		if (mp3_fd >= 0) close(mp3_fd);
+		if (mp3_fd >= 0)
+		{
+			close(mp3_fd);
+			mp3_fd = -1;
+		}
 
 		mp3_sleep = 1;
 
 		do
 		{
 			usleep(EMULATOR_SLEEP_POLL_US);
-		} while (Sleep);
+		} while (Sleep && mp3_active && mp3_status != MP3_STOP);
 
 		mp3_sleep = 0;
+		if (!mp3_active || mp3_status == MP3_STOP)
+			return 1;
 
 		if ((mp3_fd = open(MP3_file, O_RDONLY, 0777)) < 0)
 		{
@@ -106,7 +112,13 @@ static int MP3SleepCheck(void)
 			return 1;
 		}
 
-		lseek(mp3_fd, mp3_filepos, SEEK_SET);
+		if (lseek(mp3_fd, mp3_filepos, SEEK_SET) < 0)
+		{
+			close(mp3_fd);
+			mp3_fd = -1;
+			mp3_status = MP3_STOP;
+			return 1;
+		}
 	}
 	else if (mp3_status == MP3_STOP)
 	{
@@ -168,7 +180,18 @@ static void MP3Update(void)
 
 			if (MP3SleepCheck()) break;
 
-			ReadSize = read(mp3_fd, ReadStart, ReadSize);
+			{
+				ssize_t bytes_read = read(mp3_fd, ReadStart, ReadSize);
+				if (bytes_read <= 0)
+				{
+					/* A failed/empty read must not be passed to libmad as
+					 * an unsigned length or retried without progress. */
+					cdda_playing = CDDA_STOP;
+					mp3_status = MP3_STOP;
+					break;
+				}
+				ReadSize = (uint32_t)bytes_read;
+			}
 			mp3_filepos += ReadSize;
 			if (mp3_filepos == mp3_fsize)
 			{
@@ -391,9 +414,8 @@ int mp3_play(const char *name)
 {
 	if (mp3_thread)
 	{
-		strcpy(MP3_file, name);
-
 		mp3_stop();
+		strcpy(MP3_file, name);
 
 		if ((mp3_fd = open(MP3_file, O_RDONLY, 0777)) >= 0)
 		{
@@ -421,13 +443,21 @@ void mp3_stop(void)
 {
 	if (mp3_thread)
 	{
+		int was_paused = mp3_status == MP3_PAUSE;
 		mp3_volume = 0;
-
-		if (mp3_status == MP3_PAUSE)
-			thread_driver->resumeThread(mp3_thread);
-
 		mp3_status = MP3_STOP;
+		if (was_paused)
+			thread_driver->resumeThread(mp3_thread);
+		/* Also wake MP3_SLEEP (used by save-state seeking), which can
+		 * otherwise leave mp3_running set indefinitely. */
+		thread_driver->wakeupThread(mp3_thread);
+		if (audio_driver->cancelPannedOutput)
+			audio_driver->cancelPannedOutput(mp3_handle);
 		while (mp3_running) usleep(1);
+		/* A producer entering output just after cancellation may have
+		 * queued its last decoded block; do not carry it to the next track. */
+		if (audio_driver->cancelPannedOutput)
+			audio_driver->cancelPannedOutput(mp3_handle);
 
 		memset(mp3_out[0], 0, MP3_BUFFER_SIZE);
 		memset(mp3_out[1], 0, MP3_BUFFER_SIZE);
@@ -482,9 +512,8 @@ void mp3_seek_set(const char *name, uint32_t frame)
 {
 	if (mp3_thread)
 	{
-		strcpy(MP3_file, name);
-
 		mp3_stop();
+		strcpy(MP3_file, name);
 
 		if ((mp3_fd = open(MP3_file, O_RDONLY, 0777)) < 0)
 		{

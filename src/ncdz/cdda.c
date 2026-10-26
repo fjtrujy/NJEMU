@@ -13,7 +13,10 @@
 #include "common/neogeo_sound_offload.h"
 #include "common/mp3.h"
 #include "common/path_utils.h"
+#include "common/ticker_driver.h"
 #include <stdio.h>
+
+#define CDDA_ACK_TIMEOUT_US 5000000ULL
 
 
 /******************************************************************************
@@ -84,18 +87,24 @@ void cdda_play(int track)
 
 		sprintf(pattern, "%02d.mp3", track);
 
-		if ((fname = find_file(pattern, mp3_dir)))
-		{
-			char path[PATH_MAX];
+			if ((fname = find_file(pattern, mp3_dir)))
+			{
+				char path[PATH_MAX];
 
-			if (!path_format(path, sizeof(path), "%s/%s", mp3_dir, fname)) return;
-			mp3_play(path);
-			autoframeskip_reset();
-		}
-		else
-		{
-			cdda_command_ack = 1;
-		}
+				if (!path_format(path, sizeof(path), "%s/%s", mp3_dir, fname) ||
+				    mp3_play(path) != 0)
+				{
+					cdda_playing = CDDA_STOP;
+					cdda_command_ack = 1;
+					return;
+				}
+				autoframeskip_reset();
+			}
+			else
+			{
+				cdda_playing = CDDA_STOP;
+				cdda_command_ack = 1;
+			}
 	}
 }
 
@@ -247,15 +256,27 @@ static void neogeo_cdda_command(int command, int track)
 			cdda_play_start = frames_displayed;
 			cdda_autoloop = loop;
 			cdda_play(track);
-			if (option_mp3_enable)
-			{
-				if (flag)
+				if (option_mp3_enable)
 				{
-					do
+					if (flag)
 					{
-						usleep(10);
-					} while (!cdda_command_ack);
-				}
+						int polls = 5000;
+						uint64_t deadline = ticker_driver && ticker_data &&
+						    ticker_driver->currentUs ?
+						    ticker_driver->currentUs(ticker_data) + CDDA_ACK_TIMEOUT_US : 0;
+						while (!cdda_command_ack && polls-- > 0)
+						{
+							if (deadline && ticker_driver->currentUs(ticker_data) >= deadline)
+								break;
+							usleep(1000);
+						}
+						if (!cdda_command_ack)
+						{
+							/* A stalled decoder must not freeze the emulated CPU. */
+							printf("[cdda] timed out waiting for track %d acknowledgement\n", track);
+							cdda_command_ack = 1;
+						}
+					}
 			}
 		}
 		break;
