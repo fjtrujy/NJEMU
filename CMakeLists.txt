@@ -1662,6 +1662,29 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    if("${TARGET}" STREQUAL "NCDZ")
+        add_executable(mp3_stop_tests tests/mp3_stop_tests.c)
+        target_include_directories(mp3_stop_tests PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            "${LIBMAD_INCLUDE_DIR}")
+        target_link_libraries(mp3_stop_tests PRIVATE ${LIBMAD_LIBRARY})
+        target_compile_options(mp3_stop_tests PRIVATE ${WARNING_OPTIONS})
+        add_test(NAME mp3_stop_tests COMMAND mp3_stop_tests)
+        set_tests_properties(mp3_stop_tests PROPERTIES TIMEOUT 10)
+
+        add_executable(ps2_cdda_ring_tests
+            tests/ps2_cdda_ring_tests.c
+            src/ps2/ps2_audio.c
+            src/ps2/ps2_audio_submit.c)
+        target_include_directories(ps2_cdda_ring_tests BEFORE PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/ps2_audio_stubs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src")
+        target_compile_options(ps2_cdda_ring_tests PRIVATE ${WARNING_OPTIONS})
+        add_test(NAME ps2_cdda_ring_tests COMMAND ps2_cdda_ring_tests)
+        set_tests_properties(ps2_cdda_ring_tests PROPERTIES TIMEOUT 10)
+    endif()
+
     add_test(NAME elf_footprint_host_tests
         COMMAND "${NJEMU_HOST_TEST}"
             --source-dir "${CMAKE_CURRENT_SOURCE_DIR}"

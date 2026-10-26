@@ -207,4 +207,5 @@ audio_driver_t audio_desktop = {
 	desktop_outputPannedBlocking,
 	desktop_release,
 	NULL,
+	NULL,
 };

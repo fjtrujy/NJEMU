@@ -87,4 +87,5 @@ audio_driver_t audio_psp = {
 	psp_outputPannedBlocking,
 	psp_release,
 	NULL,
+	NULL,
 };

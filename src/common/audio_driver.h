@@ -30,6 +30,9 @@ typedef struct audio_driver
 	/* Optional native stream pause/mute hook. The common sound thread keeps
 	 * feeding silent buffers so queued backends can drain stale audio safely. */
 	void (*setPaused)(void *data, bool paused);
+	/* Optional cancellation hook for a blocking panned-output producer.
+	 * Called before joining a stopped MP3 decoder; must wake any output wait. */
+	void (*cancelPannedOutput)(void *data);
 } audio_driver_t;
 
 

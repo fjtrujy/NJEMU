@@ -55,6 +55,7 @@ static volatile bool g_mp3_active = false;
 /* Semaphore for MP3 thread synchronization */
 static int32_t g_mp3_sema_id = -1;
 static volatile uint32_t g_mp3_last_read_pos = 0;
+static volatile uint32_t g_mp3_cancel_generation = 0;
 
 #if defined(PS2_AUDIO_PROFILE) && PS2_AUDIO_PROFILE_QUEUE_INTERVAL > 0
 static uint32_t profiled_output_blocks;
@@ -164,6 +165,7 @@ static bool ps2_chReserve(void *data, uint16_t samplecount, uint8_t channels) {
 	g_mp3_last_read_pos = 0;
 	g_mp3_left_vol = 0;
 	g_mp3_right_vol = 0;
+	g_mp3_cancel_generation = 0;
 	g_mp3_active = true;
 	
 	printf("PS2 Audio: MP3 mixing channel initialized (%d samples)\n", samplecount);
@@ -353,12 +355,14 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 	uint32_t i;
 	uint32_t write_pos;
 	uint32_t available_space;
+	uint32_t cancel_generation;
 	int32_t sample;
 	
 	if (!g_mp3_ring_buffer || !g_mp3_active) {
 		/* No buffer available, nothing to do */
 		return;
 	}
+	cancel_generation = g_mp3_cancel_generation;
 
 	/* The common NCDZ pause path submits one zero-volume block to silence
 	 * CDDA immediately.  On PSP this changes the channel volume at once; in
@@ -366,6 +370,9 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 	 * buffered MP3 audio audible for a short tail.  Drop the queued CDDA
 	 * samples instead and wake a producer that may be blocked on free space. */
 	if (leftvol <= 0 && rightvol <= 0) {
+		/* Also invalidate a producer suspended in its prior blocking write.
+		 * Otherwise resuming from pause can enqueue stale audible CDDA. */
+		g_mp3_cancel_generation++;
 		g_mp3_left_vol = 0;
 		g_mp3_right_vol = 0;
 		g_mp3_read_pos = 0;
@@ -394,6 +401,8 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 	
 	/* Wait for space if buffer is too full */
 	while (available_space < num_samples && g_mp3_active) {
+		if (cancel_generation != g_mp3_cancel_generation)
+			return;
 		/* Wait on semaphore - will be signaled when samples are consumed */
 		if (g_mp3_sema_id >= 0) {
 			WaitSema(g_mp3_sema_id);
@@ -403,10 +412,14 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 		if (!g_mp3_active) {
 			return;
 		}
+		if (cancel_generation != g_mp3_cancel_generation)
+			return;
 		
 		/* Recalculate available space */
 		available_space = MP3_RING_BUFFER_SIZE - ((write_pos - g_mp3_read_pos) & MP3_RING_BUFFER_MASK) - 1;
 	}
+	if (cancel_generation != g_mp3_cancel_generation)
+		return;
 	
 	/* Write samples to ring buffer with volume applied */
 	/* MP3 is stereo: L, R, L, R, ... */
@@ -427,6 +440,24 @@ static void ps2_outputPannedBlocking(void *data, int leftvol, int rightvol, void
 	}
 	
 	g_mp3_write_pos = write_pos;
+}
+
+static void ps2_cancelPannedOutput(void *data)
+{
+	ps2_audio_t *ps2 = (ps2_audio_t *)data;
+	if (ps2 == NULL || !ps2->is_mp3_channel || !g_mp3_active)
+		return;
+
+	/* A track switch must not wait for the game-audio consumer to make
+	 * space. Invalidate an in-flight producer, discard queued CDDA and wake
+	 * the one possible semaphore waiter before joining the decoder. */
+	g_mp3_cancel_generation++;
+	g_mp3_left_vol = 0;
+	g_mp3_right_vol = 0;
+	g_mp3_read_pos = g_mp3_write_pos;
+	g_mp3_last_read_pos = g_mp3_read_pos;
+	if (g_mp3_sema_id >= 0)
+		SignalSema(g_mp3_sema_id);
 }
 
 static void ps2_setPaused(void *data, bool paused)
@@ -453,4 +484,5 @@ audio_driver_t audio_ps2 = {
 	ps2_outputPannedBlocking,
 	ps2_release,
 	ps2_setPaused,
+	ps2_cancelPannedOutput,
 };

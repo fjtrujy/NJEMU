@@ -208,4 +208,5 @@ audio_driver_t audio_psvita = {
 	psvita_audio_outputPannedBlocking,
 	psvita_audio_release,
 	NULL, /* setPaused: the blocking output drains the silent buffers of a pause */
+	NULL,
 };
