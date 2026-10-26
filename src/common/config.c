@@ -140,6 +140,9 @@ typedef struct cfg2_t
 #define INIVERSION	23
 
 static int ini_version;
+#ifdef DESKTOP
+int option_desktop_p1_input = DESKTOP_P1_INPUT_BOTH;
+#endif
 
 #define INCLUDE_INIFILENAME
 
@@ -160,6 +163,10 @@ static cfg_type default_options[] =
 	{ CFG_NONE,	"[Video Backend]", 0, 0, 0, 0},
 	{ CFG_INT,	"VideoBackend",	&option_video_backend,	VIDEO_BACKEND_AUTO,	VIDEO_BACKEND_COUNT - 1, 0},
 	{ CFG_INT,	"VideoFilter",	&option_video_filter,	VIDEO_FILTER_NONE,	VIDEO_FILTER_COUNT - 1, 0},
+#ifdef DESKTOP
+	{ CFG_NONE,	"[Input Settings]", 0, 0, 0, 0},
+	{ CFG_INT,	"Player1Input", &option_desktop_p1_input,	DESKTOP_P1_INPUT_BOTH,	DESKTOP_P1_INPUT_COUNT - 1, 0},
+#endif
 	{ CFG_NONE,	"[FPS Overlay]", 0, 0, 0, 0},
 	{ CFG_INT,	"FPSOffsetX",	&option_fps_offset_x,	0,	FPS_OVERLAY_OFFSET_MAX, 0},
 	{ CFG_INT,	"FPSOffsetY",	&option_fps_offset_y,	0,	FPS_OVERLAY_OFFSET_MAX, 0},

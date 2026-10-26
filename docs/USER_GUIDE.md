@@ -21,9 +21,22 @@ This guide contains the detailed usage, controls, ROM setup, compatibility, and 
 Desktop NJEMU supports SDL2-compatible gamepads using SDL's standard
 GameController mappings, including Xbox-style and PlayStation controllers.
 Controllers can be plugged in or disconnected while NJEMU is running. The
-keyboard remains usable without a gamepad and shares player one with the
-first connected gamepad. Additional gamepads operate players two and onward
-in multiplayer-capable games.
+keyboard remains usable without a gamepad and, by default, shares player one
+with the first connected gamepad. Additional gamepads operate players two and
+onward in multiplayer-capable games.
+
+The Desktop **Emulation Settings > Player 1 Input** option is saved in the
+application INI as `Player1Input`:
+
+| Value | Player 1 | Additional players |
+|-------|----------|-------------------|
+| `0` (default) | Keyboard and first controller together | Second controller onwards |
+| `1` | Keyboard only | First controller becomes P2 |
+| `2` | First controller only | Second controller onwards |
+
+Controller-only falls back to keyboard when no gamepad is connected, so the
+menu remains usable after disconnecting the last controller. Source selection
+can be changed while NJEMU is running.
 
 | Control | Keyboard | Gamepad |
 |---------|----------|---------|

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <SDL.h>
 #include "common/input_driver.h"
+#include "common/emulator_options.h"
 
 /* Keyboard and the first controller both operate player one; further pads
  * operate additional players. No gamepad is required for keyboard-only use. */
@@ -113,6 +114,8 @@ static uint32_t desktop_controllerCount(void *data)
 	const desktop_input_t *desktop = (const desktop_input_t *)data;
 	if (!desktop)
 		return 0;
+	if (option_desktop_p1_input == DESKTOP_P1_INPUT_KEYBOARD)
+		return desktop->count + 1;
 	return desktop->count ? desktop->count : 1;
 }
 
@@ -190,6 +193,7 @@ static bool desktop_sample(void *data, uint32_t controller, input_state_t *state
 {
 	desktop_input_t *desktop = (desktop_input_t *)data;
 	SDL_GameController *pad;
+	uint32_t gamepad_index = controller;
 	Sint16 lx, ly;
 	if (!desktop || !state)
 		return false;
@@ -199,11 +203,17 @@ static bool desktop_sample(void *data, uint32_t controller, input_state_t *state
 	if (controller >= desktop_controllerCount(desktop))
 		return false;
 	input_state_reset(state);
-	if (controller == 0)
+	if (controller == 0 &&
+	    (option_desktop_p1_input != DESKTOP_P1_INPUT_CONTROLLER || !desktop->count))
 		state->buttons = desktop_keyboard_buttons();
-	if (controller >= desktop->count)
+	if (option_desktop_p1_input == DESKTOP_P1_INPUT_KEYBOARD) {
+		if (controller == 0)
+			return true;
+		gamepad_index = controller - 1;
+	}
+	if (gamepad_index >= desktop->count)
 		return true;
-	pad = desktop->controllers[controller];
+	pad = desktop->controllers[gamepad_index];
 	state->buttons |= desktop_controller_buttons(pad);
 	lx = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
 	ly = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);

@@ -3,9 +3,11 @@
 #include <string.h>
 #include <SDL.h>
 #include "common/input_driver.h"
+#include "common/emulator_options.h"
 
 extern input_driver_t input_desktop;
 volatile int Loop = 1;
+int option_desktop_p1_input = DESKTOP_P1_INPUT_BOTH;
 
 static void key_event(Uint32 type, SDL_Scancode scancode, SDL_Keycode key)
 {
@@ -101,6 +103,30 @@ static void test_controller(void *input)
     s = sample(input, 0);
     assert(s.buttons & PLATFORM_PAD_B3); /* keyboard and gamepad merge */
     key_event(SDL_KEYUP, SDL_SCANCODE_C, SDLK_c);
+    (void)sample(input, 0);
+
+    option_desktop_p1_input = DESKTOP_P1_INPUT_KEYBOARD;
+    assert(input_desktop.controllerCount(input) == 2);
+    key_event(SDL_KEYDOWN, SDL_SCANCODE_C, SDLK_c);
+    s = sample(input, 0);
+    assert(s.buttons == PLATFORM_PAD_B3);
+    assert(s.axis_flags == 0);
+    s = sample(input, 1);
+    assert((s.buttons & PLATFORM_PAD_B1) != 0);
+    assert((s.buttons & PLATFORM_PAD_B3) == 0);
+    key_event(SDL_KEYUP, SDL_SCANCODE_C, SDLK_c);
+    (void)sample(input, 0);
+
+    option_desktop_p1_input = DESKTOP_P1_INPUT_CONTROLLER;
+    assert(input_desktop.controllerCount(input) == 1);
+    key_event(SDL_KEYDOWN, SDL_SCANCODE_C, SDLK_c);
+    s = sample(input, 0);
+    assert((s.buttons & PLATFORM_PAD_B1) != 0);
+    assert((s.buttons & PLATFORM_PAD_B3) == 0);
+    key_event(SDL_KEYUP, SDL_SCANCODE_C, SDLK_c);
+    (void)sample(input, 0);
+
+    option_desktop_p1_input = DESKTOP_P1_INPUT_BOTH;
 
     second_index = attach_virtual();
     assert(second_index == 1);
@@ -114,6 +140,16 @@ static void test_controller(void *input)
     assert(s.buttons == (PLATFORM_PAD_B4 | PLATFORM_PAD_START));
     assert(!input_desktop.sample(input, 2, &s));
 
+    option_desktop_p1_input = DESKTOP_P1_INPUT_KEYBOARD;
+    assert(input_desktop.controllerCount(input) == 3);
+    s = sample(input, 0);
+    assert(s.buttons == 0 && s.axis_flags == 0);
+    s = sample(input, 1);
+    assert(s.buttons & PLATFORM_PAD_B1);
+    s = sample(input, 2);
+    assert(s.buttons == (PLATFORM_PAD_B4 | PLATFORM_PAD_START));
+    option_desktop_p1_input = DESKTOP_P1_INPUT_BOTH;
+
     assert(SDL_JoystickDetachVirtual(first_index) == 0);
     s = sample(input, 0);
     assert(input_desktop.controllerCount(input) == 1);
@@ -124,6 +160,15 @@ static void test_controller(void *input)
     assert(s.buttons == 0);
     assert(s.axis_flags == 0);
     SDL_JoystickClose(second);
+
+    option_desktop_p1_input = DESKTOP_P1_INPUT_CONTROLLER;
+    key_event(SDL_KEYDOWN, SDL_SCANCODE_C, SDLK_c);
+    s = sample(input, 0);
+    /* Controller-only falls back to keyboard when no pad is connected. */
+    assert(s.buttons == PLATFORM_PAD_B3);
+    key_event(SDL_KEYUP, SDL_SCANCODE_C, SDLK_c);
+    (void)sample(input, 0);
+    option_desktop_p1_input = DESKTOP_P1_INPUT_BOTH;
 }
 #endif
 
