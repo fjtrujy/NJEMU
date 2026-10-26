@@ -15,6 +15,7 @@
 #include "ps2/ps2_pad_presence.h"
 #include "ps2/ps2_pad_packet.h"
 #include "ps2/ps2_input_edge_latch.h"
+#include "ps2/ps2_hdd_launch.h"
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -408,6 +409,14 @@ static void *ps2_init(void)
 	}
 
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
+	/* The HDD requirement bundle contains BDM and BDMFS_FATFS alongside
+	 * APA/PFS. These two IRXs are not used by the HDD launch path; release
+	 * only this known pair after all other modules have initialized. */
+	if (ps2_hdd_launch_active() &&
+	    ps2_drivers_img_staged_modules() == 2u) {
+		printf("[ps2-hdd] releasing two unused BDM staging entries\n");
+		ps2_drivers_img_discard_staged();
+	}
 	if (ps2_drivers_img_staged_modules() != 0u ||
 		ps2_drivers_img_staged_bytes() != 0u) {
 		printf("[ps2_drivers] startup left staged modules=%u bytes=%u\n",

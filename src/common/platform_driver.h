@@ -30,6 +30,9 @@ typedef struct platform_driver
 	bool (*queryMemoryInfo)(void *data, platform_memory_info_t *out);
 	/* Maps the platform/OS language to NJEMU's supported translation set. */
 	ui_language_t (*getSystemLanguage)(void *data);
+	/* Optional pre-initialization hook for preserving launch metadata across
+	 * platform resets. Called before init(), while argc/argv are intact. */
+	void (*prepareLaunch)(int argc, char *argv[]);
 
 } platform_driver_t;
 

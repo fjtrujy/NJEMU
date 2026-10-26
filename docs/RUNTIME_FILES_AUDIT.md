@@ -729,6 +729,7 @@ artifacts and stages:
 
 ~~~text
 BOOT.ELF
+BOOT_HDD.ELF
 <core>
 elf_path.ini
 ps2_drivers.irximg
@@ -737,6 +738,7 @@ ps2_drivers.irximg
 Classification:
 
 - `BOOT.ELF`: platform launcher/bootstrap;
+- `BOOT_HDD.ELF`: separate APA/PFS launcher for internal HDD installations (MVS/CPS2);
 - `elf_path.ini`: generated platform bootstrap configuration;
 - `ps2_drivers.irximg`: platform support image;
 - `<core>`: NJEMU executable.

@@ -1445,6 +1445,26 @@ elseif(PLATFORM STREQUAL "PS2")
                 "ps2_drivers_irximg_bootstrap.elf was not found under the installed PS2SDK ports tree")
         endif()
 
+        # The installed upstream bootstrap only recovers USB/MX4SIO after an
+        # IOP reset. Provide a separate HDD entry point which remounts PFS
+        # and passes the original APA partition to the engine. Keep BOOT.ELF
+        # unchanged for existing removable-storage launchers.
+        add_executable(${TARGET}_hdd_bootstrap src/ps2/ps2_hdd_bootstrap.c)
+        set_target_properties(${TARGET}_hdd_bootstrap PROPERTIES
+            OUTPUT_NAME BOOT_HDD SUFFIX ".ELF")
+        target_compile_definitions(${TARGET}_hdd_bootstrap PRIVATE
+            NEWLIB_PORT_AWARE=1
+            NJEMU_HDD_BOOT_TARGET=${TARGET})
+        target_include_directories(${TARGET}_hdd_bootstrap SYSTEM PRIVATE
+            "$ENV{PS2SDK}/ee/include"
+            "$ENV{PS2SDK}/common/include"
+            "$ENV{PS2SDK}/ee/libcglue/include"
+            "$ENV{PS2SDK}/ports/include")
+        target_link_libraries(${TARGET}_hdd_bootstrap PRIVATE
+            ps2_drivers "-lelf-loader" patches "-ldebug")
+        target_link_options(${TARGET}_hdd_bootstrap PRIVATE -Wl,--wrap=stat)
+        add_dependencies(${TARGET} ${TARGET}_hdd_bootstrap)
+
         target_compile_definitions(${TARGET} PRIVATE PS2_EXTERNAL_IRX_IMAGE=1)
         target_link_libraries(${TARGET} PUBLIC ps2_drivers_img)
         file(GENERATE
@@ -2327,6 +2347,7 @@ elseif(PLATFORM STREQUAL "PS2")
         install(PROGRAMS "$<TARGET_FILE:${TARGET}>" DESTINATION .)
         install(FILES "${PS2_DRIVERS_IRX_IMAGE}" DESTINATION .)
         install(PROGRAMS "${PS2_DRIVERS_IRXIMG_BOOTSTRAP}" DESTINATION . RENAME BOOT.ELF)
+        install(PROGRAMS "$<TARGET_FILE:${TARGET}_hdd_bootstrap>" DESTINATION .)
         install(CODE
             "file(WRITE \"\${CMAKE_INSTALL_PREFIX}/elf_path.ini\" \"${TARGET}\\n\")"
         )

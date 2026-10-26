@@ -136,4 +136,5 @@ platform_driver_t platform_desktop = {
 	desktop_main,
 	desktop_queryMemoryInfo,
 	desktop_getSystemLanguage,
+	NULL,
 };
