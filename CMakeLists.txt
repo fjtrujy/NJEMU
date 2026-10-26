@@ -1662,6 +1662,18 @@ if(PLATFORM STREQUAL "PSP")
 endif()
 
 if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
+    add_executable(desktop_gamepad_tests
+        tests/desktop_gamepad_tests.c
+        src/desktop/desktop_input.c
+        src/common/input_state.c)
+    target_include_directories(desktop_gamepad_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src" ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(desktop_gamepad_tests PRIVATE ${NJEMU_SDL2_TARGET})
+    target_compile_options(desktop_gamepad_tests PRIVATE ${WARNING_OPTIONS})
+    add_test(NAME desktop_gamepad_tests COMMAND desktop_gamepad_tests)
+    set_tests_properties(desktop_gamepad_tests PROPERTIES
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
     if("${TARGET}" STREQUAL "NCDZ")
         add_executable(mp3_stop_tests tests/mp3_stop_tests.c)
         target_include_directories(mp3_stop_tests PRIVATE
