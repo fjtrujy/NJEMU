@@ -5,7 +5,6 @@
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
 #include "ps2/ps2_cache_storage.h"
-#include "ps2/ps2_hdd_launch.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
@@ -21,6 +20,7 @@
 #include <ps2_fileXio_driver.h>
 #include <ps2_dev9_driver.h>
 #include <ps2_hdd_driver.h>
+#include <ps2_hdd_launch.h>
 #include <ps2_poweroff_driver.h>
 #include <ps2_audio_driver.h>
 #if defined(PS2_FAST_CACHE)
@@ -38,91 +38,40 @@
 typedef struct ps2_platform {
 } ps2_platform_t;
 
-typedef struct ps2_hdd_launch_context {
-	bool valid;
-	char partition[64];
-	char directory[FILENAME_MAX];
-} ps2_hdd_launch_context_t;
-
 static ps2_hdd_launch_context_t hdd_launch;
-
-bool ps2_hdd_launch_active(void)
-{
-	return hdd_launch.valid;
-}
+static bool hdd_launch_active;
+static bool hdd_launch_invalid;
 
 static void ps2_prepare_launch(int argc, char *argv[])
 {
-	const char *path = NULL, *mount;
-	size_t partition_size, directory_size;
 	char cwd[FILENAME_MAX];
-	int i;
+	int status;
 
 	memset(&hdd_launch, 0, sizeof(hdd_launch));
-	if (argc < 1 || argv == NULL ||
-	    getcwd(cwd, sizeof(cwd)) == NULL ||
-	    strncmp(cwd, "pfs:", 4) != 0)
+	hdd_launch_active = false;
+	hdd_launch_invalid = false;
+	if (getcwd(cwd, sizeof(cwd)) == NULL ||
+	    (strncmp(cwd, "pfs:/", 5) != 0 &&
+	     strncmp(cwd, "pfs0:/", 6) != 0))
 		return;
 
-	for (i = 0; i < argc; ++i) {
-		const char *arg = argv[i];
-		if (arg != NULL &&
-		    (strncmp(arg, "hdd0:", 5) == 0 ||
-		     strncmp(arg, "hdd:", 4) == 0) &&
-		    strstr(arg, ":pfs:") != NULL) {
-			path = arg;
-			break;
-		}
+	status = ps2_hdd_launch_capture_current(&hdd_launch, argc, argv);
+	if (status != PS2_HDD_LAUNCH_OK) {
+		/* A PFS working directory cannot identify its APA partition alone. */
+		hdd_launch_invalid = true;
+		printf("[ps2-hdd] missing or invalid APA launch context (%d)\n", status);
+		return;
 	}
-	if (path == NULL)
-		return;
-	mount = strstr(path, ":pfs:");
-	if (mount == NULL)
-		return;
-	partition_size = (size_t)(mount - path);
-	if (partition_size == 0 || partition_size >= sizeof(hdd_launch.partition))
-		return;
-	memcpy(hdd_launch.partition, path, partition_size);
-	hdd_launch.partition[partition_size] = '\0';
-	directory_size = strlen(cwd);
-	if (directory_size == 0 || directory_size >= sizeof(hdd_launch.directory))
-		return;
-	memcpy(hdd_launch.directory, cwd, directory_size + 1);
-	hdd_launch.valid = true;
+	hdd_launch_active = true;
 	printf("[ps2-hdd] preserving launch partition %s and cwd %s\n",
 	       hdd_launch.partition, hdd_launch.directory);
 }
 
-static bool ps2_restore_hdd_filesystem(void)
-{
-	int status;
-	status = init_fileXio_driver();
-	if (status < 0)
-		return false;
-	if (init_poweroff_driver() < 0 ||
-	    init_dev9_driver() < 0 ||
-	    init_hdd_driver(false, false) != HDD_INIT_STATUS_IRX_OK) {
-		printf("[ps2-hdd] driver initialization failed\n");
-		return false;
-	}
-	status = mount_hdd_partition("pfs:", hdd_launch.partition);
-	if (status != HDD_MOUNT_STATUS_OK) {
-		printf("[ps2-hdd] mount %s failed (%d)\n",
-		       hdd_launch.partition, status);
-		return false;
-	}
-	if (chdir(hdd_launch.directory) != 0) {
-		printf("[ps2-hdd] failed to restore cwd %s\n", hdd_launch.directory);
-		return false;
-	}
-	printf("[ps2-hdd] mounted %s at pfs:, cwd=%s\n",
-	       hdd_launch.partition, hdd_launch.directory);
-	return true;
-}
-
 static void ps2_shutdown_hdd_filesystem(void)
 {
-	umount_hdd_partition("pfs:");
+	const char *mountpoint =
+		strncmp(hdd_launch.directory, "pfs0:/", 6) == 0 ? "pfs0:" : "pfs:";
+	umount_hdd_partition(mountpoint);
 	deinit_hdd_driver(false);
 	deinit_dev9_driver();
 	deinit_poweroff_driver();
@@ -144,6 +93,8 @@ static void reset_IOP()
 
 static bool stage_drivers_before_iop_reset(void)
 {
+	if (hdd_launch_invalid)
+		return false;
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 	uint32_t application_requirements =
 		PS2_DRIVER_REQ_AUDIO | PS2_DRIVER_REQ_JOYSTICK;
@@ -154,7 +105,7 @@ static bool stage_drivers_before_iop_reset(void)
 		uint32_t boot_requirements = 0u;
 
 		cacheio_driver_requested = false;
-		if (!hdd_launch.valid &&
+		if (!hdd_launch_active &&
 		    ps2_drivers_img_requirements_for_current_boot(
 		         0u, &boot_requirements) == PS2_DRIVERS_IMG_OK &&
 			(boot_requirements & (PS2_DRIVER_REQ_USB | PS2_DRIVER_REQ_MX4SIO)) != 0u) {
@@ -164,9 +115,9 @@ static bool stage_drivers_before_iop_reset(void)
 	}
 #endif
 
-	/* Stage HDD dependencies before the IOP reset. The downstream input
-	 * initialization releases the two BDM modules unused by APA/PFS. */
-	result = hdd_launch.valid ?
+	/* The PFS cwd is not a boot-device identity; the saved APA
+	 * partition requires explicit HDD dependency selection. */
+	result = hdd_launch_active ?
 		ps2_drivers_img_stage_default_for_boot_device(
 			BOOT_DEVICE_HDD0, application_requirements) :
 		ps2_drivers_img_stage_default_for_current_boot(application_requirements);
@@ -211,9 +162,12 @@ static bool prepare_IOP()
 
 static bool init_drivers()
 {
-	if (hdd_launch.valid) {
-		if (!ps2_restore_hdd_filesystem())
+	if (hdd_launch_active) {
+		int status = ps2_hdd_launch_restore(&hdd_launch);
+		if (status != PS2_HDD_LAUNCH_OK) {
+			printf("[ps2-hdd] filesystem restore failed (%d)\n", status);
 			return false;
+		}
 	} else {
 		init_only_boot_ps2_filesystem_driver();
 	}
@@ -240,7 +194,7 @@ static bool init_drivers()
 			cacheio_driver_initialized = false;
 		}
 #endif
-		if (hdd_launch.valid)
+		if (hdd_launch_active)
 			ps2_shutdown_hdd_filesystem();
 		else
 			deinit_only_boot_ps2_filesystem_driver();
@@ -263,7 +217,7 @@ static void deinit_drivers()
 		cacheio_driver_initialized = false;
 	}
 #endif
-	if (hdd_launch.valid) {
+	if (hdd_launch_active) {
 		ps2_shutdown_hdd_filesystem();
 	} else {
 		deinit_only_boot_ps2_filesystem_driver();
