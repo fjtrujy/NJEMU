@@ -126,8 +126,7 @@ static void desktop_process_events(desktop_input_t *desktop)
 			break;
 		case SDL_KEYDOWN:
 		case SDL_KEYUP:
-			if (event.key.keysym.scancode >= 0 &&
-			    event.key.keysym.scancode < SDL_NUM_SCANCODES)
+			if ((unsigned)event.key.keysym.scancode < SDL_NUM_SCANCODES)
 				key_states[event.key.keysym.scancode] = event.type == SDL_KEYDOWN;
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
 				Loop = 0;
