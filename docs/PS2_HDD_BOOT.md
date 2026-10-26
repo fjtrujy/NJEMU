@@ -171,8 +171,32 @@ bootstraps retain their original 300,116-byte and 322,516-byte sizes and
 identical SHA-256 digests. Rebuilding against the merged driver tree passed
 the four driver checks, external MVS and CPS2 builds, and embedded CPS1/NCDZ
 builds. Their canonical four-core PS2 ZIP also packaged successfully with
-both bootstraps. The prior PCSX2 ROM-loading tests above were performed on
-the earlier `2949ebb` revision, not repeated for the merge commit.
+both bootstraps.
+
+### Post-merge PCSX2 runtime verification
+
+After rebuilding against the merged `ps2_drivers/njemu` source tree, both
+external-core configurations were also exercised in PCSX2 2.9.142 using a
+copy-on-write clone of the isolated 8 GiB APA/PFS test image and a copied
+PCSX2 profile. Neither the normal PCSX2 configuration nor the original
+isolated test image was modified:
+
+- **MVS / Windjammers** (`GUI=OFF`): launched `BOOT_HDD.ELF` from
+  `pfs:/NJEMU/MVS`, loaded the MVS core without an extra IOP reset,
+  preserved `hdd0:__common`, loaded all Windjammers ROM components,
+  initialized audio and controller input, and ran without a reported
+  crash or HDD staging error for approximately 25 seconds of PCSX2 play.
+- **CPS2 / Alien vs. Predator** (`GUI=OFF`): launched `BOOT_HDD.ELF`
+  from `pfs:/NJEMU/CPS2`, preserved the same APA partition, loaded the
+  ROM and 16 MiB graphics cache, completed 100% decryption, initialized
+  audio/controller input, and ran without a reported crash or HDD staging
+  error for approximately 29 seconds of PCSX2 play.
+
+Logs: `build_issue23_hdd_probe/generic_merged_validation/`
+(`mvs_merged_stdout.log` and `cps2_merged_stdout.log`). These results
+validate the merged driver revision on PCSX2; physical PS2 internal HDD,
+USB/MX4SIO runtime boot, and quantitative FPS regression testing still
+require separate validation.
 
 Further verification remains valuable on **physical PS2 internal HDD**
 hardware, especially alternate launchers and APA partitions, and for
