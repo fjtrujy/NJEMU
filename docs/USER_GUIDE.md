@@ -190,6 +190,51 @@ NJEMU does not intercept PSP system buttons. HOME is left to the firmware and
 uses the standard PSP exit callback; VOL +/- are likewise left entirely to the
 firmware so the normal system volume behavior/overlay can be used.
 
+### Optional Command Lists (`command.dat`)
+
+NJEMU can display game instructions, special moves, and button/direction
+combinations supplied in the MAME Plus! `command.dat` format. **This file is
+optional, user-supplied data**: it is not part of NJEMU downloads, and the
+emulator runs games normally when it is absent.
+
+1. Obtain a compatible file. One public example is the
+   [MAME Plus! 0.168 command archive](https://e2j.net/files/command_0.168.zip).
+   Extract **`command.dat`** from the ZIP; do not copy the ZIP itself.
+2. Copy `command.dat` to the selected core's runtime root, alongside the
+   emulator's other per-core files, **not** inside `roms/`:
+
+   A single `command.dat` can contain commands for thousands of games. You
+   only need one file in each emulator core's directory, not one per ROM.
+
+   | Platform | Example location |
+   | --- | --- |
+   | PSP | `/PSP/GAME/MVSPSP/command.dat` (or `CPS1PSP`, `CPS2PSP`, `NCDZPSP`) |
+   | PS2 | `command.dat` in the core's launch working directory (which may depend on the ELF/HDD launcher) |
+   | PS Vita | `ux0:data/mvs/command.dat` (or the matching `cps1`, `cps2`, `ncdz` data directory) |
+   | Desktop | `command.dat` in the current working directory from which NJEMU is launched |
+
+3. Launch a game. During gameplay press **Start + Select** to open the emulator
+   menu, then select **Command List**. If the file is absent or has no entry
+   for that game, NJEMU reports that the list is unavailable.
+
+The command-list feature is compiled into official release packages.
+Developer builds may disable it with `-DCOMMAND_LIST=OFF`; copying a data file
+cannot enable a feature omitted at compile time.
+
+The MAME Plus! 0.168 file includes **UTF-8 Japanese** text. Full UTF-8 parsing
+and the additional Japanese font mapping require a NJEMU build that includes
+the [issue #24 fix](https://github.com/fjtrujy/NJEMU/pull/26); older tagged
+versions may show unreadable characters. Supported input formats include
+Latin-1, GBK, and UTF-8, with only legacy fallback rendering for Shift-JIS.
+Command direction/button markers are interpreted as controller icons.
+
+The file browser can also offer an optional **size-reduction** operation when
+selecting `command.dat`. This creates a `command.org` backup and filters out
+game sections not relevant to the current core. It is not required to use
+Command List, and should not be confused with opening the list during gameplay.
+For the technical format, font coverage, and RAM improvements, see
+[COMMAND_LIST_UTF8.md](COMMAND_LIST_UTF8.md).
+
 #### AdHoc Mode
 
 Ad Hoc is a PSP/MVS-only optional build capability. When that capability is

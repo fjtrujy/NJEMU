@@ -17,6 +17,7 @@
             <a class="site-brand" href="./">NJEMU</a>
             <div class="site-nav-links">
                 <a href="#downloads">Downloads</a>
+                <a href="#command-lists">Command lists</a>
                 <a href="converter.html">ROM Converter</a>
                 <a href="stats.html">Statistics</a>
                 <a href="https://github.com/fjtrujy/NJEMU/tree/master/docs">Documentation</a>
@@ -138,6 +139,53 @@
                 and NCDZ builds for the selected host. Desktop downloads are split by operating system
                 because native executables are not cross-platform.
             </p>
+        </section>
+
+        <section class="site-section" id="command-lists" aria-labelledby="command-lists-heading">
+            <div class="site-section-heading">
+                <p class="site-eyebrow">Optional game reference</p>
+                <h2 id="command-lists-heading">Command lists</h2>
+                <p class="site-muted">
+                    View game instructions, special moves and button combinations from the emulator menu.
+                    Command lists are optional: games work normally without a command.dat file.
+                </p>
+            </div>
+
+            <div class="site-command-steps">
+                <article class="site-command-step">
+                    <span class="site-command-step-number" aria-hidden="true">01</span>
+                    <div>
+                        <h3>Download command data</h3>
+                        <p>Obtain a MAME Plus! command.dat archive and extract the file named command.dat. It is supplied separately from NJEMU.</p>
+                        <p><a href="https://e2j.net/files/command_0.168.zip">MAME Plus! 0.168 command data (external ZIP)</a></p>
+                    </div>
+                </article>
+                <article class="site-command-step">
+                    <span class="site-command-step-number" aria-hidden="true">02</span>
+                    <div>
+                        <h3>Copy to the emulator folder</h3>
+                        <p>Place command.dat next to the selected core's executable or in its runtime data directory, not inside roms/. One file covers multiple games; you do not need one per ROM.</p>
+                        <div class="site-command-paths" aria-label="Example command list paths">
+                            <span>PSP</span><code>PSP/GAME/MVSPSP/command.dat</code>
+                            <span>PS2</span><code>command.dat</code>
+                            <span>PS Vita</span><code>ux0:data/mvs/command.dat</code>
+                            <span>Desktop</span><code>command.dat</code>
+                        </div>
+                    </div>
+                </article>
+                <article class="site-command-step">
+                    <span class="site-command-step-number" aria-hidden="true">03</span>
+                    <div>
+                        <h3>Open Command List in a game</h3>
+                        <p>Launch a supported game, press Start + Select to open the emulator menu, and select Command List. If no matching entry exists, NJEMU shows a message instead of blocking gameplay.</p>
+                    </div>
+                </article>
+            </div>
+
+            <p class="site-command-footnote">
+                Compatibility: MAME Plus! command.dat format, including the UTF-8 MAME Plus! 0.168 file in NJEMU builds with issue #24 support. Older tagged releases may not display its Japanese text correctly.
+            </p>
+            <p><a href="https://github.com/fjtrujy/NJEMU/blob/master/docs/USER_GUIDE.md">See the user guide for core-specific installation details</a></p>
         </section>
 
         <section class="site-section site-tool-callout" aria-labelledby="converter-heading">

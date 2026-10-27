@@ -21,6 +21,7 @@ NJEMU focuses on keeping the original low-memory console targets practical while
 - Streaming cache support for memory-constrained CPS2/MVS configurations
 - Platform-specific rendering, audio, input, threading, timing, and memory optimizations behind common driver contracts
 - Browser-based MVS/CPS2 ROM conversion tool for processed/cache assets
+- Optional MAME Plus! command lists with user-supplied `command.dat` (move lists and button combinations)
 
 Optional or platform-specific capabilities are documented separately and are not implied to be available on every core/platform combination.
 
@@ -58,6 +59,7 @@ See [docs/BUILDING.md](docs/BUILDING.md) for prerequisites, toolchains, supporte
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) - controls, ROM setup, compatibility, and ROM conversion
+- [Optional command lists](docs/USER_GUIDE.md#optional-command-lists-commanddat) - obtain and install `command.dat`, with per-platform paths
 - [Building NJEMU](docs/BUILDING.md) - toolchains, CMake options, builds, and install outputs
 - [Platform notes](docs/PLATFORMS.md) - platform-specific capabilities and differences
 - [Runtime files and assets](docs/RUNTIME_FILES_AUDIT.md) - authoritative external-file contract
