@@ -1,6 +1,82 @@
 # PS2 internal HDD boot (issue #23)
 
-## Scope and launch selection
+## Current universal launch (ps2_drivers PR #29)
+
+Canonical PS2 CPS2/MVS releases use **one universal `BOOT.ELF`** copied from
+the installed `ps2_drivers_irximg_bootstrap.elf`. It is the **same byte-for-byte
+bootstrap** on USB FAT32, MX4SIO and internal APA/PFS HDD; ATA-backed BDM
+FAT/exFAT is also handled by the generic driver bootstrap. NJEMU no longer
+installs or packages `BOOT_HDD.ELF` or `BOOT_ATA.ELF`.
+
+Each target directory must contain the universal `BOOT.ELF`, the extensionless
+core executable (`MVS` or `CPS2`), `elf_path.ini` naming that executable,
+`ps2_drivers.irximg`, and the core's installed `lang/`, `font/`, databases,
+and user-provided ROM/cache files. Run the `BOOT.ELF` *in that directory*.
+
+On APA/PFS, wLaunchELF must pass a partition-qualified launch argument such
+as `hdd0:__common:pfs:/NJEMU/MVS/BOOT.ELF`. The generic bootstrap accepts
+wLaunchELF `-r`/`-nr` options, recovers an initially malformed cwd, remounts
+the correct PFS partition and passes launch context to NJEMU. NJEMU still
+captures the partition before its own IOP reset and restores it afterward via
+the public `ps2_hdd_launch_*()` APIs. FAST CACHE remains disabled on HDD.
+
+**Real-hardware status:** the standalone universal-bootstrap `HDD_SMOKE.zip`
+from `ps2_drivers` PR #29 passed on a physical PS2 with wLaunchELF, including
+IRX staging, a further IOP reset and PFS re-read. This proves the generic
+bootstrap, **not** NJEMU gameplay. NJEMU MVS/CPS2 need their own real-hardware
+validation.
+
+### NJEMU PCSX2 validation with the universal bootstrap
+
+Against merged `ps2_drivers/njemu` commit `069f6cbd`, all four canonical GCC
+PS2 cores built and a complete canonical ZIP was generated. The MVS and CPS2
+`BOOT.ELF` copies match the installed universal bootstrap byte-for-byte
+(SHA-256 `dc25723bceebd9271f66a7bbfaec0cde588a80eb1305f1fab6fa4536bdde042e`).
+The release tests reject missing, mismatched or obsolete bootstraps.
+
+The following checks used PCSX2 2.9.142 and **clones** of existing isolated
+test storage images and profiles. Original test images, normal emulator
+settings, ROM sources and all `resources/` files were left untouched:
+
+- **APA/PFS HDD, MVS:** A PFS-resident newer wLaunchELF was started using a
+  host-loaded diagnostic handoff, then its auto-launch opened
+  `pfs0:/NJEMU/MVS/BOOT.ELF` on the cloned 8 GiB HDD. The universal
+  bootstrap recovered a malformed startup cwd and loaded the core; NJEMU
+  captured and restored `hdd0:__common` after its own IOP reset. A GUI-off
+  Windjammers build loaded its Neo Geo BIOS and all ROM members from PFS,
+  initialized audio, and visibly continued to attract mode at 60 FPS.
+- **APA/PFS HDD, CPS2:** The same wLaunchELF method loaded
+  `pfs0:/NJEMU/CPS2/BOOT.ELF`. An Alien vs. Predator GUI-off build loaded
+  the ROM members, initialized the 16 MiB graphics cache and PS2 audio.
+  The standard GUI-on MVS and CPS2 builds also reached their video backends.
+- **USB FAT32, MVS:** A cloned 256 MiB virtual USB image received the same
+  universal bootstrap SHA, external driver image, core and game files.
+  A host-loaded USB launch helper loaded `mass0:/UNIVERSAL_TEST/BOOT.ELF`
+  **from FAT32**, not a host-side NJEMU binary. The bootstrap identified and
+  reused live USB storage; NJEMU completed its IOP reset, loaded Windjammers
+  ROM members from USB and initialized audio. PCSX2 printed an `ohci_die:
+  DMA error` warning during USB startup, but subsequent game-file reads and
+  audio initialization succeeded. This warning warrants separate follow-up
+  if it occurs on hardware.
+
+The initial attempt with an **older** wLaunchELF binary failed inside that
+loader (`memory allocation failed`) before the bootstrap executed. Replacing
+only the wLaunchELF test binary with the newer validated one allowed the
+identical universal `BOOT.ELF` to boot. This is not evidence of a NJEMU
+bootstrap regression.
+
+These tests establish functional HDD/USB bootstrap and game-loading paths,
+not physical NJEMU compatibility, MX4SIO hardware operation, long-duration
+stability or quantitative audio/frame pacing accuracy. Evidence and logs are
+in the ignored `build_universal_ps2/` test directory.
+
+### Historical two-bootstrap investigation (prior to PR #29)
+
+The remainder of this document records the previous HDD-only bootstrap
+investigation for comparison. Names such as `BOOT_HDD.ELF` below describe
+**old test artifacts**, not current NJEMU releases.
+
+## Scope and launch selection (historical)
 
 The canonical PS2 CPS2/MVS release uses an extensionless core executable
 (`CPS2` or `MVS`) and the external `ps2_drivers.irximg`. It now packages

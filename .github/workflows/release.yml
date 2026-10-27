@@ -228,13 +228,13 @@ jobs:
           cmake --build .ci-deps/ps2_drivers/build --parallel "$(getconf _NPROCESSORS_ONLN)"
           cmake --build .ci-deps/ps2_drivers/build --target \
             ps2_drivers_irximg_check ps2_drivers_irximg_stage_check \
-            ps2_drivers_img_payload_check ps2_drivers_hdd_launch_check
+            ps2_drivers_img_payload_check ps2_drivers_hdd_launch_check \
+            ps2_drivers_bootstrap_args_check
           cmake --install .ci-deps/ps2_drivers/build
           test -s "$PS2SDK/ports/lib/libps2_drivers_img.a"
           test -s "$PS2SDK/ports/include/ps2_hdd_launch.h"
           test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
           test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_bootstrap.elf"
-          test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_hdd_bootstrap.elf"
 
       - name: Build canonical PS2 package
         shell: bash
