@@ -23,10 +23,9 @@ static const char *inifile_name = "njemu.ini";
 
 #if (EMU_SYSTEM == CPS1)
 #define DEFAULT_SAMPLERATE	0	// 11025Hz
-#define DEFAULT_VSYNC		VSYNC_MODE_OFF
-#else
-#define DEFAULT_VSYNC		VSYNC_MODE_ON
 #endif
+
+#define DEFAULT_VSYNC NJEMU_DEFAULT_VSYNC
 
 /******************************************************************************
 	構造体
@@ -50,7 +49,7 @@ static cfg_type gamecfg_2buttons[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -114,7 +113,7 @@ static cfg_type gamecfg_2buttons_rot[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -179,7 +178,7 @@ static cfg_type gamecfg_3buttons[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -249,7 +248,7 @@ static cfg_type gamecfg_3buttons_rot[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -311,7 +310,7 @@ static cfg_type gamecfg_4buttons[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -383,7 +382,7 @@ static cfg_type gamecfg_6buttons[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -457,7 +456,7 @@ static cfg_type gamecfg_quiz[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -534,7 +533,7 @@ static cfg_type gamecfg_forgottn[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -596,7 +595,7 @@ static cfg_type gamecfg_sfzch[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -668,7 +667,7 @@ static cfg_type gamecfg_wofch[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -737,7 +736,7 @@ static cfg_type gamecfg_wofch3p[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -804,7 +803,7 @@ static cfg_type gamecfg_progear[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -867,7 +866,7 @@ static cfg_type gamecfg_pzloop2[] =
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},

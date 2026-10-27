@@ -16,6 +16,32 @@ This guide contains the detailed usage, controls, ROM setup, compatibility, and 
 
 > **Menu shortcut:** press START+SELECT during gameplay to open the emulator menu on every platform.
 
+### Video Sync and Frame Limit
+
+The **Video Settings** menu stores VSync (`VideoSync`) and Frame Limit
+(`60FPSLimit`) separately for each game in `config/<game>.ini`.
+
+| Platform | Default VSync | Default Frame Limit |
+| --- | --- | --- |
+| PSP and PS2 (all four cores) | On | Off |
+| Desktop and PS Vita (CPS2) | On | On |
+| Desktop and PS Vita (CPS1, MVS, NCDZ) | Off | On |
+
+PSP and PS2 normally synchronize framebuffer swaps with the display's VBlank
+instead of adding a separate software sleep. This avoids tearing from
+unsynchronized flips, but the physical display refresh (~60 Hz) is not exactly
+the native CPS2/MVS/NCDZ arcade frame rate. Slow frames can still miss a VBlank
+and lower the effective emulation speed. Change either option for a specific
+game if needed; **existing per-game configuration files keep their saved
+values**. Only new or missing game configurations use these defaults.
+
+Frame Limit applies to software pacing at the selected arcade core's native
+frame rate (despite its historical `60FPSLimit` filename). Auto Frame Skip and
+manual Frame Skip are independent settings and both default to Off.
+PSP Ad Hoc multiplayer intentionally overrides several per-game options while
+connected, including VSync Off and Frame Limit On, to preserve its existing
+network synchronization policy.
+
 ### Desktop Controllers (macOS, Linux and Steam Deck)
 
 Desktop NJEMU supports SDL2-compatible gamepads using SDL's standard
