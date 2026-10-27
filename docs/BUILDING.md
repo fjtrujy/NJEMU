@@ -151,9 +151,9 @@ cmake --build build-ps2-mvs --parallel
 cmake --install build-ps2-mvs
 ```
 
-Without `NJEMU_CANONICAL_RELEASE=ON`, the default PS2 build embeds its IRX drivers and installs the directly launchable core ELF. Canonical PS2 releases instead enable `PS2_EXTERNAL_IRX_IMAGE=ON` for cached CPS2/MVS builds and ship `BOOT.ELF`, `BOOT_HDD.ELF`, `ps2_drivers.irximg`, the extensionless core executable, and `elf_path.ini`. CPS1/NCDZ releases retain the classic embedded-driver ELF layout.
+Without `NJEMU_CANONICAL_RELEASE=ON`, the default PS2 build embeds its IRX drivers and installs the directly launchable core ELF. Canonical PS2 releases instead enable `PS2_EXTERNAL_IRX_IMAGE=ON` for cached CPS2/MVS builds and ship the universal `BOOT.ELF`, `ps2_drivers.irximg`, the extensionless core executable, and `elf_path.ini`. CPS1/NCDZ releases retain the classic embedded-driver ELF layout.
 
-Launch `BOOT.ELF` on USB/MX4SIO as before. When installed on a PS2 internal HDD (APA/PFS), launch **`BOOT_HDD.ELF`** instead, using an ELF launcher that supplies the original `hdd0:<partition>:pfs:/...` launch argument. Both launchers start the same core executable; neither changes `USE_CACHE` ROM requirements. The PS2 accelerated FAST CACHE driver stays disabled on HDD, while USB/MX4SIO retain their existing acceleration path. Details and PCSX2 validation are documented in `docs/PS2_HDD_BOOT.md`, and the external-image size history in `docs/BINARY_SIZE_AUDIT.md`.
+The **same `BOOT.ELF`** works on USB, MX4SIO and internal HDD when the storage is supported by `ps2_drivers`. On APA/PFS use an ELF launcher such as wLaunchELF that supplies the original `hdd0:<partition>:pfs:/...` launch argument. No separate HDD/ATA bootstrap is packaged. This does not change `USE_CACHE` ROM requirements. The PS2 accelerated FAST CACHE driver stays disabled on HDD, while USB/MX4SIO retain their existing acceleration path. Details and PCSX2 validation are documented in `docs/PS2_HDD_BOOT.md`, and the external-image size history in `docs/BINARY_SIZE_AUDIT.md`.
 
 ## PlayStation Vita
 
