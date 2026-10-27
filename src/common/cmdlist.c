@@ -98,11 +98,8 @@ static int command_title_width(const char *title, int encoding)
 void load_commandlist(const char *game_name, const char *parent_name)
 {
     char path[PATH_MAX];
-    unsigned char *raw = NULL;
     command_data_document_t parsed = {0};
-    off_t size;
     int fd, i;
-    size_t n = 0;
 
     if (cmdbuf != NULL)
         free_commandlist();
@@ -113,29 +110,11 @@ void load_commandlist(const char *game_name, const char *parent_name)
     fd = open(path, O_RDONLY);
     if (fd < 0)
         return;
-    size = lseek(fd, 0, SEEK_END);
-    if (size <= 0 || size > 16 * 1024 * 1024 || lseek(fd, 0, SEEK_SET) != 0) {
-        close(fd);
-        return;
-    }
-    raw = malloc((size_t)size);
-    if (raw == NULL) {
-        close(fd);
-        return;
-    }
-    while (n < (size_t)size) {
-        ssize_t got = read(fd, raw + n, (size_t)size - n);
-        if (got <= 0)
-            break;
-        n += (size_t)got;
-    }
+    /* A fixed-size scan finds the game; only its section enters heap RAM. */
+    i = command_data_load_fd(fd, game_name, parent_name, &parsed, NULL);
     close(fd);
-    if (n != (size_t)size ||
-        !command_data_parse(raw, n, game_name, parent_name, &parsed)) {
-        free(raw);
+    if (!i)
         return;
-    }
-    free(raw);
 
     num_items = (int)parsed.item_count;
     charset = parsed.encoding;

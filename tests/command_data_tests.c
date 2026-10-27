@@ -1,11 +1,52 @@
+#define _POSIX_C_SOURCE 200809L
 #ifdef NDEBUG
 #undef NDEBUG
 #endif
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "common/command_data.h"
+
+static void check_same_document(const command_data_document_t *a,
+                                const command_data_document_t *b)
+{
+    size_t i, j;
+    assert(a->encoding == b->encoding);
+    assert(a->item_count == b->item_count);
+    for (i = 0; i < a->item_count; ++i) {
+        assert(a->line_counts[i] == b->line_counts[i]);
+        for (j = 0; j < a->line_counts[i]; ++j)
+            assert(strcmp(a->items[i][j], b->items[i][j]) == 0);
+    }
+}
+
+static void check_stream(const unsigned char *input, size_t bytes,
+                         const char *game, const char *parent,
+                         int expected, size_t max_section)
+{
+    FILE *file = tmpfile();
+    command_data_document_t streamed = {0}, buffered = {0};
+    size_t loaded = 0;
+    int result;
+    assert(file != NULL);
+    assert(fwrite(input, 1, bytes, file) == bytes);
+    assert(fflush(file) == 0);
+    result = command_data_load_fd(fileno(file), game, parent, &streamed, &loaded);
+    assert(result == expected);
+    if (result) {
+        assert(command_data_parse(input, bytes, game, parent, &buffered));
+        check_same_document(&streamed, &buffered);
+        assert(loaded <= max_section);
+    } else {
+        assert(loaded == 0);
+    }
+    command_data_free(&streamed);
+    command_data_free(&buffered);
+    fclose(file);
+}
 
 static void check_selection(const unsigned char *input, size_t bytes,
                             const char *game, const char *parent,
@@ -77,11 +118,23 @@ int main(int argc, char **argv)
                     COMMAND_DATA_LATIN1, "CR", 1);
     check_selection((const unsigned char *)legacy, strlen(legacy), "kof98", NULL,
                     COMMAND_DATA_SHIFTJIS, "Legacy", 1);
+    check_stream((const unsigned char *)sample, strlen(sample), "kof98", NULL, 1, 128);
+    check_stream((const unsigned char *)sample, strlen(sample), "mslug3", NULL, 1, 64);
+    check_stream((const unsigned char *)sample, strlen(sample), "kof98j", "kof98", 1, 128);
+    check_stream((const unsigned char *)sample, strlen(sample), "missing", NULL, 0, 0);
+    check_stream((const unsigned char *)lf, strlen(lf), "kof98", NULL, 1, 32);
+    check_stream((const unsigned char *)cr, strlen(cr), "kof98", NULL, 1, 32);
+    check_stream((const unsigned char *)legacy, strlen(legacy), "kof98", NULL, 1, 32);
     check_invalid((const unsigned char *)bad1, strlen(bad1));
     check_invalid((const unsigned char *)bad2, strlen(bad2));
     check_invalid((const unsigned char *)bad3, strlen(bad3));
     check_invalid(nul, sizeof(nul));
     check_invalid((const unsigned char *)"", 0);
+    check_stream((const unsigned char *)bad1, strlen(bad1), "kof98", NULL, 0, 0);
+    check_stream((const unsigned char *)bad2, strlen(bad2), "kof98", NULL, 0, 0);
+    check_stream((const unsigned char *)bad3, strlen(bad3), "kof98", NULL, 0, 0);
+    check_stream(nul, sizeof(nul), "kof98", NULL, 0, 0);
+    check_stream((const unsigned char *)"", 0, "kof98", NULL, 0, 0);
     assert(command_data_reduce((const unsigned char *)sample, strlen(sample),
                                games, 1, &reduced, &reduced_size));
     assert(reduced_size < strlen(sample));
@@ -105,7 +158,32 @@ int main(int argc, char **argv)
         n = (size_t)snprintf(large, 12000, "$info=kof98\n$cmd\n%s\n$end\n", long_line);
         check_selection((const unsigned char *)large, n, "kof98", NULL,
                         COMMAND_DATA_LATIN1, long_line, 1);
+        check_stream((const unsigned char *)large, n, "kof98", NULL, 1, n);
         free(large);
+    }
+    {
+        /* CRLF split across the 4096-byte scanning boundary, plus a
+         * game selected after a parent alias encountered earlier. */
+        char *boundary = malloc(10000);
+        size_t pad = 4095, bytes;
+        assert(boundary != NULL);
+        memset(boundary, '#', pad);
+        boundary[pad] = '\r';
+        bytes = pad + 1 + (size_t)snprintf(boundary + pad + 1, 10000 - pad - 1,
+            "\n$info=parent\n$cmd\nParent\n$end\n"
+            "$info=kof98\n$cmd\nPrimary\n$end\n");
+        check_stream((const unsigned char *)boundary, bytes, "kof98", "parent",
+                     1, 40);
+        check_stream((const unsigned char *)boundary, bytes, "missing", "parent",
+                     1, 45);
+        free(boundary);
+    }
+    {
+        const char late_tag[] =
+            "$info=kof98\n$cmd\nOne\n$end\n"
+            "$info=unrelated\n$charset=Shift_JIS\n";
+        check_stream((const unsigned char *)late_tag, strlen(late_tag),
+                     "kof98", NULL, 1, 20);
     }
     free(long_line);
 
@@ -127,10 +205,28 @@ int main(int argc, char **argv)
         assert(doc.item_count >= 1);
         assert(strstr(doc.items[0][0], "[ ") != NULL);
         command_data_free(&doc);
+        check_stream(data, (size_t)length, "kof98", NULL, 1, 64 * 1024);
         assert(command_data_parse(data, (size_t)length, "mslug3", NULL, &doc));
         assert(doc.encoding == COMMAND_DATA_UTF8);
         assert(doc.item_count >= 1);
         command_data_free(&doc);
+        check_stream(data, (size_t)length, "mslug3", NULL, 1, 32 * 1024);
+        {
+            int fd = open(argv[1], O_RDONLY);
+            size_t retained = 0;
+            assert(fd >= 0);
+            assert(command_data_load_fd(fd, "kof98", NULL, &doc, &retained));
+            printf("streaming KOF98: file=%ld B, selected section=%lu B, file-buffer reduction=%.2f%%\n",
+                   length, (unsigned long)retained,
+                   100.0 * (1.0 - (double)retained / (double)length));
+            command_data_free(&doc);
+            assert(command_data_load_fd(fd, "mslug3", NULL, &doc, &retained));
+            printf("streaming Metal Slug 3: file=%ld B, selected section=%lu B, file-buffer reduction=%.2f%%\n",
+                   length, (unsigned long)retained,
+                   100.0 * (1.0 - (double)retained / (double)length));
+            command_data_free(&doc);
+            close(fd);
+        }
         assert(command_data_reduce(data, (size_t)length, games, 1,
                                    &reduced, &reduced_size));
         assert(reduced_size < (size_t)length);
