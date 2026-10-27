@@ -38,11 +38,11 @@ static cfg_type gamecfg_mvs[] =
 #if MVS_WIDESCREEN
 	{ CFG_BOOL,	"Widescreen",		&option_mvs_widescreen,	0,	1	, 0},
 #endif
-	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			NJEMU_DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -113,11 +113,11 @@ static cfg_type gamecfg_irrmaze[] =
 #if MVS_WIDESCREEN
 	{ CFG_BOOL,	"Widescreen",		&option_mvs_widescreen,	0,	1	, 0},
 #endif
-	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			NJEMU_DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -189,11 +189,11 @@ static cfg_type gamecfg_popbounc[] =
 #if MVS_WIDESCREEN
 	{ CFG_BOOL,	"Widescreen",		&option_mvs_widescreen,	0,	1	, 0},
 #endif
-	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			NJEMU_DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -265,11 +265,11 @@ static cfg_type gamecfg_vliner[] =
 #if MVS_WIDESCREEN
 	{ CFG_BOOL,	"Widescreen",		&option_mvs_widescreen,	0,	1	, 0},
 #endif
-	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			NJEMU_DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},
@@ -343,11 +343,11 @@ static cfg_type gamecfg_jockeygp[] =
 #if MVS_WIDESCREEN
 	{ CFG_BOOL,	"Widescreen",		&option_mvs_widescreen,	0,	1	, 0},
 #endif
-	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			0,	VSYNC_MODE_COUNT - 1, 0},
+	{ CFG_VSYNC,	"VideoSync",			&option_vsync,			NJEMU_DEFAULT_VSYNC,	VSYNC_MODE_COUNT - 1, 0},
 	{ CFG_BOOL,	"AutoFrameSkip",		&option_autoframeskip,	0,	1	, 0},
 	{ CFG_INT,	"FrameSkipLevel",		&option_frameskip,		0,	11	, 0},
 	{ CFG_BOOL,	"ShowFPS",				&option_showfps,		0,	1	, 0},
-	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		1,	1	, 0},
+	{ CFG_BOOL,	"60FPSLimit",			&option_speedlimit,		NJEMU_DEFAULT_FRAME_LIMIT,	1	, 0},
 
 	{ CFG_NONE,	"[Audio Settings]", 0, 0, 0, 0},
 	{ CFG_BOOL,	"EnableSound",			&option_sound_enable,	1,	1	, 0},

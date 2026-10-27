@@ -12,6 +12,7 @@
 #include <strings.h>
 #include "emucfg.h"
 #include "common/emulator_options.h"
+#include "common/game_pacing_defaults.h"
 #include "common/emulator_runtime.h"
 #include "common/filer.h"
 #include "common/input_driver.h"

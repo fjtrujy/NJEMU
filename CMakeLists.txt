@@ -2074,6 +2074,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
     )
     add_test(NAME frame_pacing_tests COMMAND frame_pacing_tests)
 
+    add_executable(game_pacing_defaults_tests
+        tests/game_pacing_defaults_tests.c
+    )
+    target_include_directories(game_pacing_defaults_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME game_pacing_defaults_tests COMMAND game_pacing_defaults_tests)
+
     add_executable(auto_frameskip_tests
         tests/auto_frameskip_tests.c
     )
