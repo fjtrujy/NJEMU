@@ -1255,6 +1255,100 @@ static inline void gbk_draw(int sx, int sy, int r, int g, int b, const char *s)
 	}
 }
 
+/* UTF-8 command lists share the UI Unicode glyph map, but command tokens
+ * must be recognized first so _A, _6 and ^E remain button/direction icons. */
+static void utf8_command_draw(int sx, int sy, int r, int g, int b, const char *s)
+{
+	const uint8_t *p = (const uint8_t *)s;
+	struct font_t font;
+	int res = 1;
+
+	r >>= 4;
+	g >>= 4;
+	b >>= 4;
+	while (*p && res)
+	{
+		uint16_t code = command_font_get_code(p);
+		uint32_t point = 0;
+		size_t advance = 1;
+		int type = FONT_TYPE_ASCII;
+		int rr = r, gg = g, bb = b;
+		int width = FONTSIZE / 2;
+
+		if (code != CODE_NOTFOUND)
+		{
+			type = FONT_TYPE_COMMAND;
+			advance = 2;
+		}
+		else if (*p >= 0x80)
+		{
+			advance = ui_utf8_decode(p, &point);
+			if (advance == 0)
+				advance = 1;
+			if (point == 0xfeffu)
+			{
+				p += advance;
+				continue;
+			}
+			if (point == 0x30fbu)
+			{
+				/* Japanese middle dot: use the existing Latin-1 bullet glyph. */
+				type = FONT_TYPE_LATIN1;
+				code = 0xb7u - 0x80u;
+			}
+			else if (point >= 0xa0u && point <= 0xffu)
+			{
+				type = FONT_TYPE_LATIN1;
+				code = (uint16_t)(point - 0x80u);
+			}
+			else if (ui_unicode_glyph_lookup(point, &code))
+				type = FONT_TYPE_GBKSIMHEI;
+			else
+				code = '?' - 0x20;
+		}
+		else
+			code = *p >= 0x20 && *p < 0x7f ? *p - 0x20 : 0;
+
+		switch (type)
+		{
+		case FONT_TYPE_COMMAND:
+			if (code == CODE_UNDERBAR)
+			{
+				code = *p - 0x20;
+				res = ascii_14_get_gryph(&font, code);
+			}
+			else
+			{
+				if (CODE_HASCOLOR(code))
+				{
+					uint32_t color = command_font_color[code >> 8];
+					rr = GETR16(color);
+					gg = GETG16(color);
+					bb = GETB16(color);
+					code &= 0xff;
+				}
+				res = command_font_get_gryph(&font, code);
+				width = FONTSIZE;
+			}
+			break;
+		case FONT_TYPE_LATIN1:
+			res = latin1_14_get_gryph(&font, code);
+			break;
+		case FONT_TYPE_GBKSIMHEI:
+			res = gbk_s14_get_gryph(&font, code);
+			width = FONTSIZE;
+			break;
+		default:
+			res = ascii_14_get_gryph(&font, code);
+			break;
+		}
+		if (res)
+			res = internal_font_putc(&font, sx, sy, rr, gg, bb);
+		sx += width;
+		p += advance;
+	}
+}
+
 
 /*------------------------------------------------------
 	Print text font
@@ -1262,7 +1356,9 @@ static inline void gbk_draw(int sx, int sy, int r, int g, int b, const char *s)
 
 void textfont_print(int sx, int sy, int r, int g, int b, const char *s, int flag)
 {
-	if (flag & CHARSET_GBK)
+	if (flag == CHARSET_UTF8)
+		utf8_command_draw(sx, sy, r, g, b, s);
+	else if (flag == CHARSET_GBK || flag == CHARSET_SHIFTJIS)
 		gbk_draw(sx, sy, r, g, b, s);
 	else
 		latin1_draw(sx, sy, r, g, b, s);

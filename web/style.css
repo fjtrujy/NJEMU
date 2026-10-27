@@ -913,6 +913,74 @@ footer a:hover {
     line-height: 1.6;
 }
 
+.site-command-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.4rem;
+}
+
+.site-command-step {
+    display: flex;
+    gap: 1rem;
+    min-width: 0;
+    padding: 1.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+}
+
+.site-command-step-number {
+    flex: 0 0 auto;
+    color: var(--accent-primary);
+    font: 700 0.85rem 'JetBrains Mono', monospace;
+    padding-top: 0.3rem;
+}
+
+.site-command-step > div {
+    min-width: 0;
+}
+
+.site-command-step h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.55rem;
+}
+
+.site-command-step p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.site-command-step p + p {
+    margin-top: 0.9rem;
+}
+
+.site-command-paths {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.45rem 0.8rem;
+    margin-top: 1rem;
+    font-size: 0.78rem;
+}
+
+.site-command-paths span {
+    color: var(--text-muted);
+}
+
+.site-command-paths code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.site-command-footnote {
+    margin-bottom: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
 .site-download-heading {
     display: flex;
     align-items: flex-end;
@@ -998,6 +1066,10 @@ footer a:hover {
 }
 
 @media (max-width: 800px) {
+    .site-command-steps {
+        grid-template-columns: 1fr;
+    }
+
     .site-card-grid-small {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }

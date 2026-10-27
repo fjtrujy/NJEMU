@@ -7,9 +7,10 @@
 ******************************************************************************/
 
 #include <limits.h>
-#include <stdarg.h>
 #include "emucfg.h"
 #include "common/cmdlist.h"
+#include "common/command_data.h"
+#include "common/ui_utf8.h"
 #include "common/emulator_runtime.h"
 #if (EMU_SYSTEM == CPS2)
 #include "common/game_database.h"
@@ -48,62 +49,8 @@
 #include "ncdz/sprite.h"
 #endif
 
-static void fd_printf(int fd, const char *fmt, ...)
-{
-	char buf[512];
-	va_list args;
-	int n;
-	va_start(args, fmt);
-	n = vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-	if (n > 0) { ssize_t io_result = write(fd, buf, (size_t)n); (void)io_result; }
-}
-
-static ssize_t fd_readline(int fd, char *buf, size_t size)
-{
-	size_t i = 0;
-	char c;
-	while (i < size - 1) {
-		if (read(fd, &c, 1) <= 0) break;
-		buf[i++] = c;
-		if (c == '\n') break;
-	}
-	buf[i] = '\0';
-	return (ssize_t)i;
-}
-
-
 /******************************************************************************
 	Constants/Macros
-******************************************************************************/
-
-#define gbk1(c)	(((c) >= 0x81 && (c) <= 0xfe))
-#define gbk2(c)	((c) >= 0x40 && (c) <= 0xfe && (c) != 0x7f && (c) != 0xff)
-
-#define _CR		0x0d
-#define _LF		0x0a
-#define _CRLF	"\x0d\x0a"
-
-enum
-{
-	LF_WIN = 0,
-	LF_MAC,
-	LF_UNIX,
-	LF_MAX
-};
-
-enum
-{
-	TAG_INFO = 0,
-	TAG_CMD,
-	TAG_END,
-	TAG_CHARSET,
-	TAG_MAX
-};
-
-
-/******************************************************************************
-	Local Structures/Variables
 ******************************************************************************/
 
 typedef struct cmdlist_t
@@ -114,424 +61,105 @@ typedef struct cmdlist_t
 
 static CMDLIST **cmd;
 
-static const char *tag_str[TAG_MAX] =
-{
-	"info",
-	"cmd",
-	"end",
-	"charset"
-};
-
-static int lf_code;
 static int charset;
 
 static char *cmdbuf;
-static char **cmdline;
 static int num_items, show_items, rows_item, sel_item, prev_item, top_item;
 static int num_lines, show_lines, rows_line, sel_line, prev_line;
 static int item_sx;
 static int menu_open;
+
+static int command_title_width(const char *title, int encoding)
+{
+    const unsigned char *p = (const unsigned char *)title;
+    int width = 0;
+    while (*p != 0) {
+        uint32_t codepoint = 0;
+        size_t consumed = encoding == CHARSET_UTF8 && *p >= 0x80
+            ? ui_utf8_decode(p, &codepoint) : 0;
+        if (consumed > 0) {
+            if (codepoint != 0xfeffu)
+                width += (codepoint <= 0xffu || codepoint == 0x30fbu) ? 7 : 14;
+            p += consumed;
+        } else {
+            width += 7;
+            ++p;
+        }
+    }
+    return width;
+}
+
 
 
 /******************************************************************************
 	Command List Viewer
 ******************************************************************************/
 
-/*--------------------------------------------------------
-	Get Tag from Line Buffer
---------------------------------------------------------*/
-
-static int cmdlist_get_tag(char *buf)
-{
-	int i;
-
-	for (i = 0; i < TAG_MAX; i++)
-		if (strncasecmp(&buf[1], tag_str[i], strlen(tag_str[i])) == 0)
-			return i;
-
-	return -1;
-}
-
-
-/*--------------------------------------------------------
-	Get Value from Line Buffer
---------------------------------------------------------*/
-
-static char *cmdlist_get_value(char *buf)
-{
-	if (strtok(buf, " =\r\n\t") != NULL)
-		return strtok(NULL, " =\r\n\t");
-
-	return NULL;
-}
-
-
-/*--------------------------------------------------------
-	Detect Text Line Feed Code
---------------------------------------------------------*/
-
-static int check_linefeed_code(const char *buf)
-{
-	if (strstr(buf, _CRLF) != NULL)
-	{
-		// Windows / MS-DOS
-		return LF_WIN;
-	}
-	else if (strchr(buf, _CR) != NULL)
-	{
-		// Mac
-		return LF_MAC;
-	}
-
-	// Unix
-	return LF_UNIX;
-}
-
-
-/*--------------------------------------------------------
-	Detect Text Character Encoding
---------------------------------------------------------*/
-
-static int check_text_encode(char *buf, int size)
-{
-	int i;
-	int count1, count2, per;
-	uint8_t *p = (uint8_t *)buf;
-
-	count1 = 0;
-	count2 = 0;
-
-	for (i= 0; i < size;)
-	{
-		if (p[i] <= 0x20)
-		{
-			count2++;
-			i++;
-		}
-		else if (p[i] == 0x97 && p[i + 1] == 0x97)
-		{
-			count2 += 2;
-			i += 2;
-		}
-		else if (gbk1(p[i]) && gbk2(p[i + 1]))
-		{
-			count1++;
-			i += 2;
-		}
-		else i++;
-	}
-
-	per = (count1 * 100) / (size - count2);
-
-	if (per > 20)
-		return CHARSET_GBK;
-	else
-		return CHARSET_LATIN1;
-}
-
-
-/*--------------------------------------------------------
-	Load Command List
---------------------------------------------------------*/
-
 void load_commandlist(const char *game_name, const char *parent_name)
 {
-	int fd;
-	off_t file_size;
-	char path[PATH_MAX];
-	char lf, *p, *buf, linebuf[512];//256
-	const char *name = game_name;
-	int i, found, line, item;
-	int size, start, end, pos;
+    char path[PATH_MAX];
+    command_data_document_t parsed = {0};
+    int fd, i;
 
-	cmdbuf    = NULL;
-	cmdline   = NULL;
-	cmd       = NULL;
-	charset   = CHARSET_DEFAULT;
-	num_lines = 0;
-	num_items = 0;
+    if (cmdbuf != NULL)
+        free_commandlist();
+    num_lines = num_items = 0;
+    charset = CHARSET_DEFAULT;
+    if (!path_format(path, sizeof(path), "%scommand.dat", launchDir))
+        return;
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return;
+    /* A fixed-size scan finds the game; only its section enters heap RAM. */
+    i = command_data_load_fd(fd, game_name, parent_name, &parsed, NULL);
+    close(fd);
+    if (!i)
+        return;
 
-	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return;
+    num_items = (int)parsed.item_count;
+    charset = parsed.encoding;
+    cmdbuf = parsed.storage;
+    parsed.storage = NULL;
+    cmd = calloc(parsed.item_count, sizeof(*cmd));
+    if (cmd == NULL)
+        goto error;
+    for (i = 0; i < num_items; ++i) {
+        cmd[i] = calloc(1, sizeof(*cmd[i]));
+        if (cmd[i] == NULL)
+            goto error;
+        cmd[i]->lines = (int)parsed.line_counts[i];
+        cmd[i]->line = parsed.items[i];
+        parsed.items[i] = NULL;
+    }
+    command_data_free(&parsed);
 
-	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		return;
+    sel_line = prev_line = 0;
+    rows_line = (ui_layout_get()->logical_height - 48) /
+        ((charset == CHARSET_GBK || charset == CHARSET_SHIFTJIS ||
+          charset == CHARSET_UTF8) ? 14 : 16);
+    if (rows_line < 1) rows_line = 1;
+    show_lines = rows_line;
+    num_lines = cmd[0]->lines;
+    if (num_lines < show_lines) show_lines = num_lines;
 
-	file_size = lseek(fd, 0, SEEK_END);
-	lseek(fd, 0, SEEK_SET);
-
-	if (file_size <= 0 || (buf = (char *)malloc((size_t)file_size)) == NULL)
-	{
-		close(fd);
-		return;
-	}
-	size = (int)file_size;
-
-	{ ssize_t io_result = read(fd, buf, (size_t)size); (void)io_result; }
-	close(fd);
-
-	// Line feed code check
-	lf_code = check_linefeed_code(linebuf);
-	if (lf_code == LF_MAC)
-		lf = _CR;
-	else
-		lf = _LF;
-
-	// Start command parsing
-retry:
-	found = 0;
-	line  = 0;
-	start = 0;
-	end   = 0;
-	pos   = 0;
-
-	i = 0;
-	while (i < size)
-	{
-		p = &buf[i];
-
-		while (buf[i] != lf && buf[i] != '\0' && buf[i] != EOF)
-			i++;
-
-		buf[i++] = '\0';
-
-		strcpy(linebuf, p);
-		strcat(linebuf, "\n");
-
-		if (linebuf[0] == '$')
-		{
-			switch (cmdlist_get_tag(linebuf))
-			{
-			case TAG_INFO:
-				if (found && start && end)
-				{
-					// Normal termination
-					found = 2;
-				}
-				else if (found)
-				{
-					// No command or abnormal format
-					found = 0;
-				}
-				else if ((p = cmdlist_get_value(linebuf)) != NULL)
-				{
-					char *name2 = strtok(p, ",");
-
-					do
-					{
-						if (strcasecmp(name2, name) == 0)
-						{
-							found = 1;
-							break;
-						}
-					} while ((name2 = strtok(NULL, ",")) != NULL);
-				}
-				break;
-
-			case TAG_CMD:
-				if (found)
-				{
-					if (!start) start = pos;
-					num_items++;
-				}
-				break;
-
-			case TAG_END:
-				if (start)
-				{
-					end = i;
-					num_lines = line + 1;
-				}
-				break;
-
-			case TAG_CHARSET:
-				if ((p = cmdlist_get_value(linebuf)) != NULL)
-				{
-					if (strcasecmp(p, "GBK") == 0)
-					{
-						charset = CHARSET_GBK;
-					}
-					else if (strcasecmp(p, "Shift_JIS") == 0)
-					{
-						charset = CHARSET_SHIFTJIS;
-					}
-					else if (strcasecmp(p, "ISO-8859-1") == 0)
-					{
-						charset = CHARSET_ISO8859_1;
-					}
-					else if (strcasecmp(p, "Latin1") == 0)
-					{
-						charset = CHARSET_ISO8859_1;
-					}
-				}
-				break;
-			}
-
-			if (found == 2) break;
-		}
-
-		if (start) line++;
-		else pos = i;
-	}
-
-	if (!found)
-	{
-		if (parent_name && name != parent_name)
-		{
-			name = parent_name;
-			goto retry;
-		}
-
-		// Exit if not found
-		free(buf);
-		return;
-	}
-
-	free(buf);
-
-	// Allocate buffer and read
-	size = end - start;
-
-	if ((cmdbuf = calloc(1, size)) == NULL)
-		return;
-
-	fd = open(path, O_RDONLY);
-	lseek(fd, start, SEEK_SET);
-	{ ssize_t io_result = read(fd, cmdbuf, size); (void)io_result; }
-	close(fd);
-
-	// Character code check
-	if (charset == CHARSET_DEFAULT)
-		charset = check_text_encode(cmdbuf, size);
-
-	// Allocate memory for line splitting
-	if ((cmdline = calloc(num_lines, sizeof(char *))) == NULL)
-		goto error;
-
-	// Split buffer into lines
-	p = cmdbuf;
-	for (line = 0; line < num_lines; line++)
-	{
-		cmdline[line] = p;
-
-		switch (lf_code)
-		{
-		case LF_WIN:
-			p = strstr(cmdline[line], _CRLF);
-			*p++ = '\0';
-			*p++ = '\0';
-			break;
-
-		case LF_MAC:
-			p = strchr(cmdline[line], _CR);
-			*p++ = '\0';
-			break;
-
-		case LF_UNIX:
-			p = strchr(cmdline[line], _LF);
-			*p++ = '\0';
-			break;
-		}
-	}
-
-	// Allocate command list structure
-	if ((cmd = (CMDLIST **)calloc(num_items, sizeof(CMDLIST *))) == NULL)
-		goto error;
-
-	for (i = 0; i < num_items; i++)
-	{
-		if ((cmd[i] = (CMDLIST *)calloc(1, sizeof(CMDLIST))) == NULL)
-			goto error;
-	}
-
-	// Register after checking line count of each item
-	for (i = 0; i < 2; i++)
-	{
-		int item_line = 0;
-
-		line  = 0;
-		item  = 0;
-		found = 0;
-
-		while (line < num_lines && item < num_items)
-		{
-			strcpy(linebuf, cmdline[line]);
-
-			if (linebuf[0] == '$')
-			{
-				switch (cmdlist_get_tag(linebuf))
-				{
-				case TAG_CMD:
-					found = 1;
-					item_line = 0;
-					break;
-
-				case TAG_END:
-					found = 0;
-					item++;
-					break;
-				}
-			}
-			else if (found)
-			{
-				if (i == 0)
-					cmd[item]->lines++;
-				else
-					cmd[item]->line[item_line++] = cmdline[line];
-			}
-			line++;
-		}
-
-		if (i == 0)
-		{
-			for (item = 0; item < num_items; item++)
-			{
-				if ((cmd[item]->line = calloc(1, sizeof(char *) * cmd[item]->lines)) == NULL)
-					goto error;
-			}
-		}
-	}
-
-	free(cmdline);
-	cmdline = NULL;
-
-	// Initialize display information
-	sel_line   = 0;
-	prev_line  = 0;
-	rows_line  = (ui_layout_get()->logical_height - 48) /
-		((charset & CHARSET_GBK) ? 14 : 16);
-	if (rows_line < 1)
-		rows_line = 1;
-	show_lines = rows_line;
-	num_lines  = cmd[0]->lines;
-	if (num_lines < show_lines) show_lines = num_lines;
-
-	top_item   = 0;
-	sel_item   = 0;
-	prev_item  = 0;
-	rows_item  = (ui_layout_get()->logical_height - 64) / 16;
-	if (rows_item < 1)
-		rows_item = 1;
-	show_items = rows_item;
-	if (num_items < show_items) show_items = num_items;
-
-	// Calculate item menu width
-	item_sx = ui_layout_get()->logical_width;
-	for (item = 0; item < num_items; item++)
-	{
-		int x;
-
-		x = ui_layout_get()->logical_width -
-			(strlen(cmd[item]->line[0]) * 7 + 16);
-		if (item_sx > x) item_sx = x;
-	}
-
-	menu_open = 1;
-
-	return;
-
+    top_item = sel_item = prev_item = 0;
+    rows_item = (ui_layout_get()->logical_height - 64) / 16;
+    if (rows_item < 1) rows_item = 1;
+    show_items = rows_item;
+    if (num_items < show_items) show_items = num_items;
+    item_sx = ui_layout_get()->logical_width;
+    for (i = 0; i < num_items; ++i) {
+        int x = ui_layout_get()->logical_width -
+            (command_title_width(cmd[i]->line[0], charset) + 16);
+        if (item_sx > x) item_sx = x;
+    }
+    if (item_sx < ui_layout_get()->logical_width / 4)
+        item_sx = ui_layout_get()->logical_width / 4;
+    menu_open = 1;
+    return;
 error:
-	free_commandlist();
+    command_data_free(&parsed);
+    free_commandlist();
 }
 
 
@@ -555,12 +183,6 @@ void free_commandlist(void)
 		}
 		free(cmd);
 		cmd = NULL;
-	}
-
-	if (cmdline)
-	{
-		free(cmdline);
-		cmdline = NULL;
 	}
 
 	if (cmdbuf)
@@ -623,7 +245,7 @@ void commandlist(int flag)
 			uifont_print_shadow(36, 5, UI_COLOR(UI_PAL_TITLE), title);
 			draw_battery_status(1);
 
-			if (charset & CHARSET_GBK)
+			if (charset == CHARSET_GBK || charset == CHARSET_SHIFTJIS || charset == CHARSET_UTF8)
 			{
 				for (y = 0; y < show_lines; y++)
 					textfont_print(6, 37 + 14 * y, UI_COLOR(UI_PAL_SELECT), cmd[sel_item]->line[y + sel_line], charset);
@@ -869,446 +491,158 @@ void commandlist(int flag)
 	Command List Size Reduction Process
 ******************************************************************************/
 
-#define INFO_SEEK	0
-#define CMD_SEEK	1
-#define END_SEEK	2
-
 int commandlist_size_reduction(void)
 {
 #if (EMU_SYSTEM == CPS2)
-	game_database_t database = {0};
-	game_database_game_t database_game;
-	game_database_error_t database_error;
+    game_database_t database = {0};
+    game_database_game_t database_game;
 #else
-	game_metadata_t metadata = {0};
-	game_metadata_entry_t metadata_entry;
-	game_metadata_error_t metadata_error;
+    game_metadata_t metadata = {0};
+    game_metadata_entry_t metadata_entry;
 #endif
-	int fd_cmd, fd_out;
-	char path[PATH_MAX], path2[PATH_MAX];
-	char *p, linebuf[512], rom_name[512][16];//256
-	int i, j, l, found = 0, total_roms = 0;
-	int charset, progress;
-	int header_end, body_start, body_end;
-	int line = 0;
-	int org_size, new_size;
-	char *textbuf = NULL, **line_ptr = NULL;
+    char path[PATH_MAX], backup[PATH_MAX], rom_name[512][16];
+    const char *names[512];
+    unsigned char *input = NULL, *output = NULL;
+    size_t read_bytes = 0, output_size = 0, written = 0;
+    off_t input_size;
+    int count = 0, fd = -1, out_fd = -1, i, accepted = 0;
+    int backup_moved = 0, output_created = 0;
 
 #if (EMU_SYSTEM == CPS2)
-	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_database_filename()))
-		return 0;
-	database_error = game_database_open(&database, path, GAME_DATABASE_CORE_CPS2);
-	if (database_error != GAME_DATABASE_OK || game_database_count(&database) > 512)
-	{
-		game_database_close(&database);
-		return 0;
-	}
-	total_roms = (int)game_database_count(&database);
-	for (i = 0; i < total_roms; i++)
-	{
-		if (game_database_get_game(&database, (uint32_t)i, &database_game) != GAME_DATABASE_OK)
-		{
-			game_database_close(&database);
-			return 0;
-		}
-		strcpy(rom_name[i], database_game.name);
-	}
-	game_database_close(&database);
+    if (!path_format(path, sizeof(path), "%s%s", launchDir, game_database_filename()))
+        return 0;
+    if (game_database_open(&database, path, GAME_DATABASE_CORE_CPS2) != GAME_DATABASE_OK ||
+        game_database_count(&database) > 512) {
+        game_database_close(&database);
+        return 0;
+    }
+    count = (int)game_database_count(&database);
+    for (i = 0; i < count; ++i) {
+        if (game_database_get_game(&database, (uint32_t)i, &database_game) != GAME_DATABASE_OK) {
+            game_database_close(&database);
+            return 0;
+        }
+        snprintf(rom_name[i], sizeof(rom_name[i]), "%s", database_game.name);
+        names[i] = rom_name[i];
+    }
+    game_database_close(&database);
 #else
-	if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
-		return 0;
-	metadata_error = game_metadata_load(&metadata, path, game_metadata_current_core());
-	if (metadata_error != GAME_METADATA_OK || game_metadata_count(&metadata) > 512)
-	{
-		game_metadata_unload(&metadata);
-		return 0;
-	}
-	total_roms = (int)game_metadata_count(&metadata);
-	for (i = 0; i < total_roms; i++)
-	{
-		if (!game_metadata_get(&metadata, (uint32_t)i, &metadata_entry))
-		{
-			game_metadata_unload(&metadata);
-			return 0;
-		}
-		strcpy(rom_name[i], metadata_entry.name);
-	}
-	game_metadata_unload(&metadata);
+    if (!path_format(path, sizeof(path), "%s%s", launchDir, game_metadata_filename()))
+        return 0;
+    if (game_metadata_load(&metadata, path, game_metadata_current_core()) != GAME_METADATA_OK ||
+        game_metadata_count(&metadata) > 512) {
+        game_metadata_unload(&metadata);
+        return 0;
+    }
+    count = (int)game_metadata_count(&metadata);
+    for (i = 0; i < count; ++i) {
+        if (!game_metadata_get(&metadata, (uint32_t)i, &metadata_entry)) {
+            game_metadata_unload(&metadata);
+            return 0;
+        }
+        snprintf(rom_name[i], sizeof(rom_name[i]), "%s", metadata_entry.name);
+        names[i] = rom_name[i];
+    }
+    game_metadata_unload(&metadata);
 #endif
+    if (!path_format(path, sizeof(path), "%scommand.dat", launchDir) ||
+        !path_format(backup, sizeof(backup), "%scommand.org", launchDir))
+        return 0;
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    pad_wait_clear();
+    ui_popup_reset();
+    msg_screen_init(WP_CMDLIST, ICON_COMMANDDAT, TEXT(COMMAND_DAT_SIZE_REDUCTION));
+    msg_printf(TEXT(CMDLIST_MESSAGE1));
+    msg_printf(TEXT(CMDLIST_MESSAGE2));
+    msg_printf(TEXT(CMDLIST_MESSAGE3));
+    msg_printf(TEXT(CMDLIST_MESSAGE4));
+    do {
+        video_driver->waitVsync(video_data);
+        pad_update();
+        if (pad_pressed(PLATFORM_PAD_B1)) {
+            accepted = 1;
+            break;
+        }
+        if (Loop == LOOP_EXIT) break;
+    } while (!pad_pressed(PLATFORM_PAD_B2));
+    pad_wait_clear();
+    if (!accepted)
+        goto cancel;
 
-	if (!path_format(path, sizeof(path), "%scommand.dat", launchDir)) return 0;
-	fd_cmd = open(path, O_RDONLY);
-	if (fd_cmd < 0)
-		return 0;
-
-	pad_wait_clear();
-	ui_popup_reset();
-	msg_screen_init(WP_CMDLIST, ICON_COMMANDDAT, TEXT(COMMAND_DAT_SIZE_REDUCTION));
-
-	header_end = -1;
-	body_start = -1;
-	body_end   = -1;
-	charset    = CHARSET_DEFAULT;
-
-	msg_printf(TEXT(CMDLIST_MESSAGE1));
-	msg_printf(TEXT(CMDLIST_MESSAGE2));
-	msg_printf(TEXT(CMDLIST_MESSAGE3));
-	msg_printf(TEXT(CMDLIST_MESSAGE4));
-
-	i = 0;
-	do
-	{
-		video_driver->waitVsync(video_data);
-		pad_update();
-
-		if (pad_pressed(PLATFORM_PAD_B1))
-		{
-			i = 1;
-			break;
-		}
-
-		if (Loop == LOOP_EXIT) break;
-
-	} while (!pad_pressed(PLATFORM_PAD_B2));
-
-	pad_wait_clear();
-
-	if (!i)
-	{
-		close(fd_cmd);
-		goto cancel;
-	}
-
-	org_size = (int)lseek(fd_cmd, 0, SEEK_END);
-	lseek(fd_cmd, 0, SEEK_SET);
-
-	msg_printf("\n");
-	msg_printf(TEXT(CHECKING_COMMAND_DAT_FORMAT));
-
-	// Check number of registered games
-	while (fd_readline(fd_cmd, linebuf, 512) > 0)
-	{
-		if (strrchr(linebuf, '\r') == NULL)
-		{
-			if (strrchr(linebuf, '\n') == NULL)
-			{
-				linebuf[509] = '\r';//253
-				linebuf[510] = '\n';//254
-			}
-		}
-
-		if (linebuf[0] == '$')
-		{
-			p = strtok(linebuf, "\r\n");
-
-			if (p && linebuf[0] == '$')
-			{
-				if (!strncasecmp(linebuf, "$charset", 8) && strchr(linebuf, '=') != NULL)
-				{
-					char *type;
-
-					strtok(linebuf, " =");
-					if ((type = strtok(NULL, " =")) != NULL)
-					{
-						if (!strcasecmp(type, "GBK"))
-						{
-							charset = CHARSET_GBK;
-						}
-						else if (!strcasecmp(type, "Shift_JIS"))
-						{
-							charset = CHARSET_SHIFTJIS;
-						}
-						else if (!strcasecmp(type, "ISO-8859-1") || !strcasecmp(type, "Latin1"))
-						{
-							charset = CHARSET_LATIN1;
-						}
-					}
-				}
-				else if (!strncmp(linebuf, "$info", 5) && strchr(linebuf, '=') != NULL)
-				{
-					strtok(linebuf, " =");
-					if (strtok(NULL, " =") != NULL)
-					{
-						if (body_start == -1)
-						{
-							// Record first $info
-							body_start = line;
-						}
-						found = 1;
-					}
-				}
-				else if (!strncmp(linebuf, "$end", 4))
-				{
-					// Record last $end
-					body_end = line;
-				}
-			}
-		}
-		else if (body_start == -1)
-		{
-			if (!strcmp(linebuf, "\r\n")) header_end = line;
-		}
-
-		line++;
-	}
-
-	if (!found)
-	{
-		msg_printf(TEXT(UNKNOWN_FORMAT));
-		close(fd_cmd);
-		goto error;
-	}
-	if (line == 0)
-	{
-		msg_printf(TEXT(EMPTY_FILE));
-		close(fd_cmd);
-		goto error;
-	}
-
-	if ((line_ptr = (char **)malloc(sizeof(char *) * line)) == NULL)
-	{
-		msg_printf(TEXT(COULD_NOT_ALLOCATE_MEMORY));
-		goto error;
-	}
-	if ((textbuf = (char *)malloc(org_size + 1)) == NULL)
-	{
-		msg_printf(TEXT(COULD_NOT_ALLOCATE_MEMORY));
-		goto error;
-	}
-	memset(textbuf, 0, org_size + 1);
-
-	lseek(fd_cmd, 0, SEEK_SET);
-	{ ssize_t io_result = read(fd_cmd, textbuf, org_size); (void)io_result; }
-	close(fd_cmd);
-
-	if (charset == CHARSET_DEFAULT)
-	{
-		charset = check_text_encode(textbuf, org_size);
-	}
-
-	// Save line positions
-	line_ptr[0] = strtok(textbuf, "\n");
-
-	i = 1;
-	while (1)
-	{
-		if ((p = strtok(NULL, "\n")) == NULL) break;
-		line_ptr[i++] = p;
-	}
-
-	for (i = 0; i < line; i++)
-	{
-		if ((p = strrchr(line_ptr[i], '\r')) != NULL)
-			*p = '\0';
-	}
-
-	// Create backup filename
-	if (!path_format(path2, sizeof(path2), "%scommand.org", launchDir)) return 0;
-
-	remove(path2);
-
-	// Rename and backup (backup filename: command.org)
-	if (rename(path, path2) < 0)
-	{
-		msg_printf(TEXT(COULD_NOT_RENAME_FILE));
-		goto error;
-	}
-
-	//------------------------------------------------------------------
-	// Start reduction process
-	//------------------------------------------------------------------
-	fd_out = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644);
-	if (fd_out < 0)
-	{
-		msg_printf(TEXT(COULD_NOT_CREATE_OUTPUT_FILE));
-		goto error;
-	}
-
-	l = 0;
-	progress = INFO_SEEK;
-
-	msg_printf("\n");
-
-	if (charset != CHARSET_DEFAULT)
-	{
-		if (charset == CHARSET_GBK)
-			fd_printf(fd_out, "$charset=gbk\r\n");
-		else if (charset == CHARSET_SHIFTJIS)
-			fd_printf(fd_out, "$charset=shift_jis\r\n");
-		else
-			fd_printf(fd_out, "$charset=latin1\r\n");
-
-	}
-
-	// Copy header
-	if (header_end != -1)
-	{
-		for (; l <= header_end; l++)
-		{
-			strcpy(linebuf, line_ptr[l]);
-
-			if (strncasecmp(linebuf, "$charset", 8) != 0)
-			{
-				fd_printf(fd_out, "%s\r\n", linebuf);
-					}
-		}
-	}
-
-	for (; l <= body_end; l++)
-	{
-		strcpy(linebuf, line_ptr[l]);
-
-		switch (progress)
-		{
-		case INFO_SEEK:
-			if (linebuf[0] == '$')
-			{
-				// Command list start
-				if (!strncasecmp(linebuf, "$info", 5) && strchr(linebuf, '=') != NULL)
-				{
-					char *name;
-
-					strtok(linebuf, " =");
-					if ((name = strtok(NULL, " =\r\n")) != NULL)
-					{
-						found = 0;
-
-						if (strchr(name, ','))
-						{
-							char linebuf2[512], *name2;//256
-
-							strcpy(linebuf2, name);
-							name2 = strtok(linebuf2, ",");
-
-							do
-							{
-#if (EMU_SYSTEM == NCDZ)
-								if (!strcasecmp(name2, "trally")) strcpy(name2, "rallych");
-#endif
-								for (i = 0; i < total_roms; i++)
-								{
-									if (!strcasecmp(name2, rom_name[i]))
-									{
-										found = 2;
-										break;
-									}
-								}
-								if (found) break;
-
-							} while ((name2 = strtok(NULL, ",")) != NULL);
-						}
-						else
-						{
-#if (EMU_SYSTEM == NCDZ)
-							if (!strcasecmp(name, "trally")) strcpy(name, "rallych");
-#endif
-							for (i = 0; i < total_roms; i++)
-							{
-								if (!strcasecmp(name, rom_name[i]))
-								{
-									found = 1;
-									break;
-								}
-							}
-						}
-
-						if (found)
-						{
-							if (l != 0)
-							{
-								j = l;
-								while (j > body_start)
-								{
-									if (line_ptr[j - 1][0] == '#') j--;
-									else break;
-								}
-
-								while (j < l)
-								{
-									fd_printf(fd_out, "%s\r\n", line_ptr[j]);
-									j++;
-								}
-							}
-
-							msg_printf(TEXT(COPYING_x), rom_name[i]);
-							fd_printf(fd_out, "$info=%s\r\n", name);
-							progress = CMD_SEEK;
-											}
-					}
-				}
-			}
-			break;
-
-		case CMD_SEEK:
-			if (!strncasecmp(linebuf, "$cmd", 4))
-			{
-				// Command start
-				progress = END_SEEK;
-				fd_printf(fd_out, "$cmd\r\n");
-					}
-			else if (!strncasecmp(linebuf, "$info", 5))
-			{
-				// Next command - go back 1 line
-				fd_printf(fd_out, "\r\n");
-				progress = INFO_SEEK;
-				l--;
-			}
-			break;
-
-		case END_SEEK:
-			if (!strncasecmp(linebuf, "$end", 4))
-			{
-				// Command end
-				progress = CMD_SEEK;
-				fd_printf(fd_out, "$end\r\n");
-					}
-			else
-			{
-				// Command list contents - output as-is
-				fd_printf(fd_out, "%s\r\n", linebuf);
-					}
-			break;
-		}
-	}
-
-	if (body_end < line - 1)
-	{
-		if (strlen(line_ptr[l]) == 0)
-			l++;
-
-		for (; l < line; l++)
-		{
-			strcpy(linebuf, line_ptr[l]);
-			fd_printf(fd_out, "%s\r\n", linebuf);
-			}
-	}
-
-	close(fd_out);
-
-	{
-		int tmp_fd = open(path, O_RDONLY);
-		new_size = (int)lseek(tmp_fd, 0, SEEK_END);
-		close(tmp_fd);
-	}
-
-	msg_printf("\n");
-	msg_printf(TEXT(REDUCTION_RESULT), org_size, new_size, 100.0 - ((float)new_size / (float)org_size) * 100.0);
-
-	msg_printf("\n");
-	msg_printf(TEXT(COMPLETE));
-
+    input_size = lseek(fd, 0, SEEK_END);
+    if (input_size <= 0 || input_size > 16 * 1024 * 1024 ||
+        lseek(fd, 0, SEEK_SET) != 0)
+        goto error;
+    input = malloc((size_t)input_size);
+    if (input == NULL)
+        goto error;
+    while (read_bytes < (size_t)input_size) {
+        ssize_t n = read(fd, input + read_bytes, (size_t)input_size - read_bytes);
+        if (n <= 0)
+            goto error;
+        read_bytes += (size_t)n;
+    }
+    close(fd);
+    fd = -1;
+    msg_printf("\n");
+    msg_printf(TEXT(CHECKING_COMMAND_DAT_FORMAT));
+    if (!command_data_reduce(input, read_bytes, names, (size_t)count,
+                             &output, &output_size)) {
+        msg_printf(TEXT(UNKNOWN_FORMAT));
+        goto error;
+    }
+    /* Do not destroy an existing backup. Roll back if output creation fails. */
+    fd = open(backup, O_RDONLY);
+    if (fd >= 0) {
+        close(fd);
+        fd = -1;
+        goto error;
+    }
+    if (rename(path, backup) != 0)
+        goto error;
+    backup_moved = 1;
+    out_fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+    if (out_fd < 0)
+        goto error;
+    output_created = 1;
+    while (written < output_size) {
+        ssize_t n = write(out_fd, output + written, output_size - written);
+        if (n <= 0)
+            goto error;
+        written += (size_t)n;
+    }
+    if (close(out_fd) != 0) {
+        out_fd = -1;
+        goto error;
+    }
+    out_fd = -1;
+    backup_moved = 0;
+    msg_printf("\n");
+    msg_printf(TEXT(REDUCTION_RESULT), (int)read_bytes, (int)output_size,
+               100.0 - ((float)output_size / (float)read_bytes) * 100.0);
+    msg_printf("\n");
+    msg_printf(TEXT(COMPLETE));
+    goto finish;
 error:
-	if (textbuf) free(textbuf);
-	if (line_ptr) free(line_ptr);
-
-	msg_printf("\n");
-	msg_printf(TEXT(PRESS_ANY_BUTTON2));
-	pad_wait_press(PAD_WAIT_INFINITY);
-
+    msg_printf("\n");
+    msg_printf(TEXT(UNKNOWN_FORMAT));
+    if (out_fd >= 0) close(out_fd);
+    if (backup_moved) {
+        if (output_created) remove(path);
+        rename(backup, path);
+    }
+finish:
+    msg_printf("\n");
+    msg_printf(TEXT(PRESS_ANY_BUTTON2));
+    pad_wait_press(PAD_WAIT_INFINITY);
 cancel:
-	pad_wait_clear();
-	ui_popup_reset();
-
-	load_background(WP_FILER);
-	return 1;
+    if (fd >= 0) close(fd);
+    free(input);
+    free(output);
+    pad_wait_clear();
+    ui_popup_reset();
+    load_background(WP_FILER);
+    return 1;
 }

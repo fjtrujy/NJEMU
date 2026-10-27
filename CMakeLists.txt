@@ -653,6 +653,8 @@ if (COMMAND_LIST)
     set(COMMON_SRC ${COMMON_SRC}
         common/cmdlist.h
         common/cmdlist.c
+        common/command_data.h
+        common/command_data.c
     )
 endif()
 
@@ -1014,6 +1016,11 @@ set_source_files_properties(
 set(GAME_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}.tsv")
 set(UI_EXTRA_UNICODE_ARGS --unicode-source "${GAME_METADATA_SOURCE}")
 set(UI_EXTRA_UNICODE_DEPENDS "${GAME_METADATA_SOURCE}")
+if(COMMAND_LIST)
+    set(COMMAND_UNICODE_SOURCE "${CMAKE_SOURCE_DIR}/metadata/command_list_unicode.txt")
+    list(APPEND UI_EXTRA_UNICODE_ARGS --unicode-source "${COMMAND_UNICODE_SOURCE}")
+    list(APPEND UI_EXTRA_UNICODE_DEPENDS "${COMMAND_UNICODE_SOURCE}")
+endif()
 if("${TARGET}" STREQUAL "CPS1" OR "${TARGET}" STREQUAL "MVS")
     set(DIP_METADATA_SOURCE "${CMAKE_SOURCE_DIR}/metadata/${TARGET_LOWER}_dips.json")
     list(APPEND UI_EXTRA_UNICODE_ARGS --unicode-source "${DIP_METADATA_SOURCE}")
@@ -2203,6 +2210,16 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     )
     add_test(NAME ui_utf8_tests COMMAND ui_utf8_tests)
+
+    add_executable(command_data_tests
+        tests/command_data_tests.c
+        src/common/command_data.c
+        src/common/ui_utf8.c
+    )
+    target_include_directories(command_data_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(NAME command_data_tests COMMAND command_data_tests)
 
     if(GUI)
         add_executable(font_runtime_tests

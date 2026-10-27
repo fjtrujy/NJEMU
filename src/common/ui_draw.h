@@ -34,8 +34,9 @@ int uifont_get_string_width(const char *s);
 #define CHARSET_DEFAULT		0
 #define CHARSET_ISO8859_1	1
 #define CHARSET_LATIN1		1
-#define CHARSET_SHIFTJIS	2
+#define CHARSET_SHIFTJIS	3
 #define CHARSET_GBK			2
+#define CHARSET_UTF8		4
 
 #define ui_fill_frame(no)		video_driver->fillFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER, MAKECOL32(ui_palette[no].r,ui_palette[no].g,ui_palette[no].b))
 

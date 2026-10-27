@@ -94,7 +94,8 @@ test('all human-facing static HTML text has a translation or an intentional inva
     const invariant = new Set([
         'NJEMU', 'GitHub', 'CPS1', 'CPS2', 'Neo Geo MVS/AES',
         'Neo Geo CD', 'PSP', 'PlayStation 2', 'PlayStation Vita',
-        'Desktop', 'master', 'Neo-Geo MVS', 'ROMCNV',
+        'Desktop', 'PS2', 'PS Vita', 'master', 'Neo-Geo MVS', 'ROMCNV',
+        'command.dat', 'PSP/GAME/MVSPSP/command.dat', 'ux0:data/mvs/command.dat',
         '$title$ - Documentation', '$icon$', '$subtitle$', '$body$',
     ]);
     for (const filename of ['index.html', 'stats.html', 'converter.html', 'doc_template.html']) {
@@ -110,6 +111,19 @@ test('all human-facing static HTML text has a translation or an intentional inva
                 `${filename} missing translation: ${phrase}`);
         }
     }
+});
+
+test('optional command-list instructions link to external data and explain per-platform placement', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    assert.match(html, /id="command-lists"/);
+    assert.match(html, /href="#command-lists"/);
+    assert.match(html, /href="https:\/\/e2j\.net\/files\/command_0\.168\.zip"/);
+    assert.match(html, /PSP\/GAME\/MVSPSP\/command\.dat/);
+    assert.match(html, /ux0:data\/mvs\/command\.dat/);
+    assert.match(html, /Older tagged releases may not display its Japanese text correctly/);
+    assert.match(html, /games work normally without a command\.dat file/);
+    const { i18n } = createI18n({ languages: ['es-ES'] });
+    assert.equal(i18n.t('Command lists'), 'Listas de movimientos');
 });
 
 test('Spanish converter guides preserve English command examples and comparison tables', () => {
