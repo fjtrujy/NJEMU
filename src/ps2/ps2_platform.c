@@ -5,6 +5,7 @@
 #include "common/platform_driver.h"
 #include "common/runtime_paths.h"
 #include "ps2/ps2_cache_storage.h"
+#include "ps2/ps2_launch_storage.h"
 
 #include <kernel.h>
 #include <sifrpc.h>
@@ -21,6 +22,8 @@
 #include <ps2_dev9_driver.h>
 #include <ps2_hdd_driver.h>
 #include <ps2_hdd_launch.h>
+#include <ps2_ata_bdm_driver.h>
+#include <ps2_ata_bdm_launch.h>
 #include <ps2_poweroff_driver.h>
 #include <ps2_audio_driver.h>
 #if defined(PS2_FAST_CACHE)
@@ -41,18 +44,40 @@ typedef struct ps2_platform {
 static ps2_hdd_launch_context_t hdd_launch;
 static bool hdd_launch_active;
 static bool hdd_launch_invalid;
+static ps2_ata_bdm_launch_context_t ata_bdm_launch;
+static bool ata_bdm_launch_active;
+static bool ata_bdm_launch_invalid;
 
 static void ps2_prepare_launch(int argc, char *argv[])
 {
 	char cwd[FILENAME_MAX];
+	const char *launch_cwd;
+	ps2_launch_storage_t storage;
 	int status;
 
 	memset(&hdd_launch, 0, sizeof(hdd_launch));
 	hdd_launch_active = false;
 	hdd_launch_invalid = false;
-	if (getcwd(cwd, sizeof(cwd)) == NULL ||
-	    (strncmp(cwd, "pfs:/", 5) != 0 &&
-	     strncmp(cwd, "pfs0:/", 6) != 0))
+	memset(&ata_bdm_launch, 0, sizeof(ata_bdm_launch));
+	ata_bdm_launch_active = false;
+	ata_bdm_launch_invalid = false;
+	launch_cwd = getcwd(cwd, sizeof(cwd));
+	storage = ps2_launch_storage_detect(argc, (const char *const *)argv,
+		launch_cwd, PS2_ATA_BDM_LAUNCH_MARKER);
+	if (storage == PS2_LAUNCH_STORAGE_ATA_BDM) {
+		/* massN: alone is not a transport identity. The bootstrap marker
+		 * takes precedence over ordinary USB/MX4SIO detection. */
+		status = ps2_ata_bdm_launch_capture_current(&ata_bdm_launch, argc, argv);
+		if (status != PS2_ATA_BDM_LAUNCH_OK) {
+			ata_bdm_launch_invalid = true;
+			printf("[ps2-ata] invalid ATA/BDM launch context (%d)\n", status);
+			return;
+		}
+		ata_bdm_launch_active = true;
+		printf("[ps2-ata] preserving ATA/BDM cwd %s\n",
+		       ata_bdm_launch.directory);
+	}
+	if (storage != PS2_LAUNCH_STORAGE_APA_PFS)
 		return;
 
 	status = ps2_hdd_launch_capture_current(&hdd_launch, argc, argv);
@@ -78,6 +103,12 @@ static void ps2_shutdown_hdd_filesystem(void)
 	deinit_fileXio_driver();
 }
 
+static void ps2_shutdown_ata_bdm_filesystem(void)
+{
+	deinit_ata_bdm_driver(true);
+	deinit_poweroff_driver();
+}
+
 #if defined(PS2_FAST_CACHE)
 static bool cacheio_driver_initialized;
 static bool cacheio_driver_requested;
@@ -93,7 +124,7 @@ static void reset_IOP()
 
 static bool stage_drivers_before_iop_reset(void)
 {
-	if (hdd_launch_invalid)
+	if (hdd_launch_invalid || ata_bdm_launch_invalid)
 		return false;
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 	uint32_t application_requirements =
@@ -105,7 +136,7 @@ static bool stage_drivers_before_iop_reset(void)
 		uint32_t boot_requirements = 0u;
 
 		cacheio_driver_requested = false;
-		if (!hdd_launch_active &&
+		if (!hdd_launch_active && !ata_bdm_launch_active &&
 		    ps2_drivers_img_requirements_for_current_boot(
 		         0u, &boot_requirements) == PS2_DRIVERS_IMG_OK &&
 			(boot_requirements & (PS2_DRIVER_REQ_USB | PS2_DRIVER_REQ_MX4SIO)) != 0u) {
@@ -115,12 +146,15 @@ static bool stage_drivers_before_iop_reset(void)
 	}
 #endif
 
-	/* The PFS cwd is not a boot-device identity; the saved APA
-	 * partition requires explicit HDD dependency selection. */
-	result = hdd_launch_active ?
-		ps2_drivers_img_stage_default_for_boot_device(
-			BOOT_DEVICE_HDD0, application_requirements) :
-		ps2_drivers_img_stage_default_for_current_boot(application_requirements);
+	/* Explicit transport selection prevents the APA ATAD stack and
+	 * ATA-backed BDM stack from being staged together. */
+	if (ata_bdm_launch_active)
+		result = ps2_drivers_img_stage_default_for_ata_bdm(application_requirements);
+	else if (hdd_launch_active)
+		result = ps2_drivers_img_stage_default_for_boot_device(
+			BOOT_DEVICE_HDD0, application_requirements);
+	else
+		result = ps2_drivers_img_stage_default_for_current_boot(application_requirements);
 	if (result != PS2_DRIVERS_IMG_OK) {
 		printf("[ps2_drivers] IRX staging failed: %s (%d)\n",
 			ps2_drivers_img_error_string(result), result);
@@ -168,6 +202,12 @@ static bool init_drivers()
 			printf("[ps2-hdd] filesystem restore failed (%d)\n", status);
 			return false;
 		}
+	} else if (ata_bdm_launch_active) {
+		int status = ps2_ata_bdm_launch_restore(&ata_bdm_launch);
+		if (status != PS2_ATA_BDM_LAUNCH_OK) {
+			printf("[ps2-ata] filesystem restore failed (%d)\n", status);
+			return false;
+		}
 	} else {
 		init_only_boot_ps2_filesystem_driver();
 	}
@@ -196,6 +236,8 @@ static bool init_drivers()
 #endif
 		if (hdd_launch_active)
 			ps2_shutdown_hdd_filesystem();
+		else if (ata_bdm_launch_active)
+			ps2_shutdown_ata_bdm_filesystem();
 		else
 			deinit_only_boot_ps2_filesystem_driver();
 		return false;
@@ -219,6 +261,8 @@ static void deinit_drivers()
 #endif
 	if (hdd_launch_active) {
 		ps2_shutdown_hdd_filesystem();
+	} else if (ata_bdm_launch_active) {
+		ps2_shutdown_ata_bdm_filesystem();
 	} else {
 		deinit_only_boot_ps2_filesystem_driver();
 	}

@@ -138,6 +138,8 @@ jobs:
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers.irximg"
         test -s "$PS2SDK/ports/share/ps2_drivers/ps2_drivers_irximg_bootstrap.elf"
         test -s "$PS2SDK/ports/include/ps2_hdd_launch.h"
+        test -s "$PS2SDK/ports/include/ps2_ata_bdm_launch.h"
+        test -s "$PS2SDK/ports/include/ps2_ata_bdm_driver.h"
 
     - name: Resolve cache override
       run: |
