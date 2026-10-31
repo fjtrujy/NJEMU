@@ -1,4 +1,79 @@
-# PS2 internal HDD boot (issue #23)
+# PS2 internal HDD boot (issues #23 and #29)
+
+## Internal exFAT HDD through wLaunchELF-R3Z (issue #29)
+
+The same universal `BOOT.ELF` also handles exFAT partitions on the internal
+HDD exposed by wLaunchELF-R3Z 4.80 as `ata0:/` or `ata1:/`. The bootstrap
+restores the ATA/BDM transport, discovers the canonical `massN:/` mount and
+passes `--ps2-drivers-ata-bdm` to the extensionless NJEMU executable. ATA
+volume numbers are not assumed to correspond to `massN` numbers; ambiguous
+mount discovery fails instead of selecting an arbitrary volume.
+
+NJEMU captures that marker and the current `massN:/` directory **before its
+own IOP reset**. It stages ATA/BDM rather than the generic USB/MX4SIO or
+APA/PFS driver set, and restores the exact launch directory afterward through
+`ps2_ata_bdm_launch_restore()`. The ATA-backed BDM driver must never be staged
+together with APA/PFS `ps2atad`. Audio and controller drivers are staged as
+usual, and FAST CACHE acceleration is not requested for ATA/BDM. The core's
+normal ROM/cache policy is unaffected.
+
+Place `BOOT.ELF`, the `MVS` or `CPS2` executable, `elf_path.ini` naming that
+executable, `ps2_drivers.irximg`, and the regular release assets together in
+the exFAT directory. Launch **`BOOT.ELF` from R3Z**, not the core executable.
+No `BOOT_ATA.ELF` or separate HDD bootstrap is needed.
+
+This integration depends on `ps2_drivers/njemu` at or after merge
+`d89375cb` (PR #30). Earlier installed bootstraps do not support the R3Z
+handoff. Physical PS2 verification remains outstanding; the standalone driver
+smoke test and PCSX2 results do not substitute for it. Keep issue #29 open
+until the complete integration is validated on hardware.
+
+### NJEMU exFAT validation (PCSX2)
+
+The real wLaunchELF-R3Z 4.80 executable auto-launched `ata0:/BOOT.ELF` on
+PCSX2 2.9.146 using a **cloned, isolated 1 GiB MBR/exFAT image**. The original
+image, user HDD, and source ROMs were not altered. The bootstrap recovered
+the filesystem as `mass0:/`, loaded NJEMU without another IOP reset, and
+forwarded the transport marker to each core.
+
+- **MVS / Windjammers:** NJEMU captured `mass0:/`, staged its ATA/BDM and
+  application IRXs, reset its IOP, restored exFAT, detected the Neo Geo BIOS
+  and `wjammers` ROM set, and finished game and audio initialization. An
+  existing saved BIOS-selection config was copied into the isolated image to
+  avoid a controller-dependent first-boot prompt.
+- **CPS2 / Alien vs. Predator:** The same launch sequence detected `avsp`,
+  loaded ROM members from the exFAT disk, initialized the 16 MiB graphics
+  cache, and completed PS2 audio initialization.
+- The host-side `ps2_launch_storage_tests` cover the explicit marker on
+  `mass1:/`, APA/PFS selection, unmarked USB/MX4SIO paths, and absent cwd.
+
+Both runs used the updated universal bootstrap, with SHA-256
+`5c4e5b3a55618129727b33b219fbd22b9d1ab91454bee450118d773981f4afae`.
+The tests establish application/game loading, not real-device behavior or
+long-duration reliability. `ata1:/`, multiple ambiguous devices and physical
+PS2 launches still need explicit validation.
+
+### Fresh USB and APA/PFS regression checks
+
+With the same updated bootstrap and NJEMU source, PCSX2 2.9.146 also passed:
+
+- **USB FAT32, MVS / Windjammers:** A cloned 256 MiB USB image booted through
+  `mass0:/UNIVERSAL_TEST/BOOT.ELF`. The bootstrap detected live USB (not ATA),
+  NJEMU survived its own IOP reset, and the BIOS, ROM set and audio loaded.
+  PCSX2 reported `ohci_die: DMA error` during USB startup, as in the previous
+  baseline, but game initialization succeeded.
+- **APA/PFS HDD, MVS / Windjammers:** A cloned 8 GiB HDD image booted through
+  the existing PFS wLaunchELF handoff. NJEMU preserved `hdd0:__common`,
+  restored PFS after its own reset, and finished ROM and audio loading.
+
+The host launch-selection test and release-packaging tests passed, as did
+canonical GCC builds of CPS1, CPS2, MVS and NCDZ. A real canonical PS2 ZIP
+was produced and verified to contain identical MVS/CPS2 universal bootstraps,
+the correct `elf_path.ini` files and the external IRX images, without ROMs.
+LLVM compilation of the changed PS2 platform source succeeded, but the full
+LLVM build remains blocked by unrelated compiler/linker object compatibility
+issues; see the issue #29 PR test summary for details. These observations do
+not validate physical PS2 ATA/exFAT hardware.
 
 ## Current universal launch (ps2_drivers PR #29)
 
