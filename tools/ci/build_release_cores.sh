@@ -69,15 +69,16 @@ build_core() {
   install="$PWD/release-stage/$core"
 
   if [[ "$platform" == PS2 ]]; then
-    # Preserve the canonical PS2 release matrix, including IRX packaging.
+    # All canonical PS2 cores need the universal IRX bootstrap for ATA/BDM
+    # launch recovery. Only CPS2/MVS use streaming and FAST CACHE support.
     feature_args=(
       -DGUI=ON -DSAVE_STATE=ON -DCOMMAND_LIST=ON
       -DUSE_CACHE=OFF -DPS2_FAST_CACHE=OFF
-      -DPS2_EXTERNAL_IRX_IMAGE=OFF -DPS2_DIRTY_SPRITE_UPLOADS=OFF
+      -DPS2_EXTERNAL_IRX_IMAGE=ON -DPS2_DIRTY_SPRITE_UPLOADS=OFF
     )
     if [[ "$core" == CPS2 || "$core" == MVS ]]; then
       feature_args+=(
-        -DUSE_CACHE=ON -DPS2_FAST_CACHE=ON -DPS2_EXTERNAL_IRX_IMAGE=ON
+        -DUSE_CACHE=ON -DPS2_FAST_CACHE=ON
       )
     fi
     if [[ "$core" == MVS ]]; then
@@ -105,14 +106,13 @@ build_core() {
     grep -q '^GUI:BOOL=ON$' "$build/CMakeCache.txt"
     grep -q '^SAVE_STATE:BOOL=ON$' "$build/CMakeCache.txt"
     grep -q '^COMMAND_LIST:BOOL=ON$' "$build/CMakeCache.txt"
+    grep -q '^PS2_EXTERNAL_IRX_IMAGE:BOOL=ON$' "$build/CMakeCache.txt"
     if [[ "$core" == CPS2 || "$core" == MVS ]]; then
       grep -q '^USE_CACHE:BOOL=ON$' "$build/CMakeCache.txt"
       grep -q '^PS2_FAST_CACHE:BOOL=ON$' "$build/CMakeCache.txt"
-      grep -q '^PS2_EXTERNAL_IRX_IMAGE:BOOL=ON$' "$build/CMakeCache.txt"
     else
       grep -q '^USE_CACHE:BOOL=OFF$' "$build/CMakeCache.txt"
       grep -q '^PS2_FAST_CACHE:BOOL=OFF$' "$build/CMakeCache.txt"
-      grep -q '^PS2_EXTERNAL_IRX_IMAGE:BOOL=OFF$' "$build/CMakeCache.txt"
     fi
     if [[ "$core" == MVS ]]; then
       grep -q '^PS2_DIRTY_SPRITE_UPLOADS:BOOL=ON$' "$build/CMakeCache.txt"
