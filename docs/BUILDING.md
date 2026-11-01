@@ -54,7 +54,7 @@ The current public feature switches include:
 | `USE_CACHE` | Streaming cache fallback | Valid for CPS2/MVS; default ON on PSP/PS2 and OFF on Desktop/Vita |
 | `USE_DESKTOP_GL` | Compile Desktop OpenGL backend alongside SDL | Desktop only; default ON |
 | `PS2_FAST_CACHE` | PS2 accelerated cache I/O | Requires PS2 + `USE_CACHE=ON`; default ON on PS2 |
-| `PS2_EXTERNAL_IRX_IMAGE` | Use the external PS2 driver image/bootstrap path | PS2 only; default OFF for ordinary builds; canonical releases enable it for cached CPS2/MVS |
+| `PS2_EXTERNAL_IRX_IMAGE` | Use the external PS2 driver image/bootstrap path | PS2 only; default OFF for ordinary builds; canonical releases enable it for all four cores |
 | `PS2_VIDEO_MODE` | Initial PS2 output mode (`240p`, `480i`, `480p`) | PS2 only; default `480i`; runtime settings can change mode |
 | `PSP_ME_AUDIO` | PSP Media Engine audio-production capability | PSP only; default OFF; the canonical PSP release enables it |
 | `PSP_AUDIO_PROFILE` | PSP audio timing diagnostics | PSP only; default OFF |
@@ -151,7 +151,7 @@ cmake --build build-ps2-mvs --parallel
 cmake --install build-ps2-mvs
 ```
 
-Without `NJEMU_CANONICAL_RELEASE=ON`, the default PS2 build embeds its IRX drivers and installs the directly launchable core ELF. Canonical PS2 releases instead enable `PS2_EXTERNAL_IRX_IMAGE=ON` for cached CPS2/MVS builds and ship the universal `BOOT.ELF`, `ps2_drivers.irximg`, the extensionless core executable, and `elf_path.ini`. CPS1/NCDZ releases retain the classic embedded-driver ELF layout.
+Without `NJEMU_CANONICAL_RELEASE=ON`, the default PS2 build embeds its IRX drivers and installs the directly launchable core ELF. Canonical PS2 releases instead enable `PS2_EXTERNAL_IRX_IMAGE=ON` **for CPS1, CPS2, MVS, and NCDZ**, and each core ships the universal `BOOT.ELF`, `ps2_drivers.irximg`, its extensionless executable, and `elf_path.ini`. Launch `BOOT.ELF`, never the core executable. This is required for all four cores to preserve the internal ATA/BDM FAT/exFAT mount across their IOP reset. CPS1/NCDZ remain uncached (`USE_CACHE=OFF`, `PS2_FAST_CACHE=OFF`); only cached CPS2/MVS use cache acceleration.
 
 The **same `BOOT.ELF`** works on USB, MX4SIO and internal HDD when the storage is supported by `ps2_drivers`. On APA/PFS use an ELF launcher such as wLaunchELF that supplies the original `hdd0:<partition>:pfs:/...` launch argument. No separate HDD/ATA bootstrap is packaged. This does not change `USE_CACHE` ROM requirements. The PS2 accelerated FAST CACHE driver stays disabled on HDD, while USB/MX4SIO retain their existing acceleration path. Details and PCSX2 validation are documented in `docs/PS2_HDD_BOOT.md`, and the external-image size history in `docs/BINARY_SIZE_AUDIT.md`.
 

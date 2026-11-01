@@ -17,16 +17,51 @@ together with APA/PFS `ps2atad`. Audio and controller drivers are staged as
 usual, and FAST CACHE acceleration is not requested for ATA/BDM. The core's
 normal ROM/cache policy is unaffected.
 
-Place `BOOT.ELF`, the `MVS` or `CPS2` executable, `elf_path.ini` naming that
+Place `BOOT.ELF`, the `CPS1`, `CPS2`, `MVS` or `NCDZ` executable, `elf_path.ini` naming that
 executable, `ps2_drivers.irximg`, and the regular release assets together in
 the exFAT directory. Launch **`BOOT.ELF` from R3Z**, not the core executable.
 No `BOOT_ATA.ELF` or separate HDD bootstrap is needed.
 
+**All four canonical PS2 cores use this same layout.** Earlier releases used
+directly launchable `CPS1.ELF` and `NCDZ.ELF` binaries, which could not use
+the universal bootstrap's ATA/BDM transport handoff. This explains the
+real-hardware report on issue #29: CPS2/MVS booted from R3Z while CPS1/NCDZ
+returned to the browser after a black screen. The new canonical package
+routes the uncached cores through `BOOT.ELF` without enabling their streaming
+cache or changing ordinary standalone development builds.
+
 This integration depends on `ps2_drivers/njemu` at or after merge
 `d89375cb` (PR #30). Earlier installed bootstraps do not support the R3Z
-handoff. Physical PS2 verification remains outstanding; the standalone driver
-smoke test and PCSX2 results do not substitute for it. Keep issue #29 open
-until the complete integration is validated on hardware.
+handoff. A user has confirmed CPS2 and MVS booting through R3Z on a real PS2;
+CPS1 and NCDZ need another physical-console test with the updated all-core
+bootstrap package. Keep issue #29 open until that validation is complete.
+
+### CPS1/NCDZ follow-up to issue #29
+
+The reported black-screen-then-browser behavior only affected CPS1 and NCDZ.
+They were the two canonical PS2 cores still distributed as standalone
+`CPS1.ELF` / `NCDZ.ELF` binaries. Their embedded-driver startup could not
+recover the R3Z ATA/BDM filesystem through the universal bootstrap. The
+canonical build and release checks now require the **same external-IRX
+`BOOT.ELF` layout for all four cores**. This does not turn on streaming
+cache or FAST CACHE for CPS1/NCDZ and does not affect ordinary, noncanonical
+standalone developer builds.
+
+In PCSX2 2.9.146, the actual wLaunchELF-R3Z 4.80 launched
+`ata0:/BOOT.ELF` from separate clones of the existing isolated exFAT disk,
+once with `elf_path.ini = CPS1`, once with `elf_path.ini = NCDZ`. Both runs:
+
+- Translated `ata0:/` to `mass0:/` through the universal bootstrap.
+- Loaded the correct extensionless core and captured the ATA/BDM launch
+  marker before the core's own IOP reset.
+- Recovered the filesystem and initialized the PS2 video backend instead of
+  returning to wLaunchELF.
+
+All four canonical GCC PS2 cores built with the same bootstrap, and the
+release-packaging tests and ZIP checks require identical `BOOT.ELF` files,
+the corresponding `elf_path.ini` and `ps2_drivers.irximg`, with no stale
+direct ELF or bundled ROM. This confirms the launch/initialization fix in
+PCSX2; CPS1/NCDZ gameplay and physical PS2 behavior are not yet verified.
 
 ### NJEMU exFAT validation (PCSX2)
 
@@ -77,14 +112,14 @@ not validate physical PS2 ATA/exFAT hardware.
 
 ## Current universal launch (ps2_drivers PR #29)
 
-Canonical PS2 CPS2/MVS releases use **one universal `BOOT.ELF`** copied from
+Canonical PS2 CPS1/CPS2/MVS/NCDZ releases use **one universal `BOOT.ELF`** copied from
 the installed `ps2_drivers_irximg_bootstrap.elf`. It is the **same byte-for-byte
 bootstrap** on USB FAT32, MX4SIO and internal APA/PFS HDD; ATA-backed BDM
 FAT/exFAT is also handled by the generic driver bootstrap. NJEMU no longer
 installs or packages `BOOT_HDD.ELF` or `BOOT_ATA.ELF`.
 
 Each target directory must contain the universal `BOOT.ELF`, the extensionless
-core executable (`MVS` or `CPS2`), `elf_path.ini` naming that executable,
+core executable (`CPS1`, `CPS2`, `MVS` or `NCDZ`), `elf_path.ini` naming that executable,
 `ps2_drivers.irximg`, and the core's installed `lang/`, `font/`, databases,
 and user-provided ROM/cache files. Run the `BOOT.ELF` *in that directory*.
 

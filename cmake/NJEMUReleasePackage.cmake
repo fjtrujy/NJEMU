@@ -54,34 +54,29 @@ function(_njemu_validate_install core install_dir)
     if(NJEMU_RELEASE_PLATFORM STREQUAL "psp")
         set(_required_binary "EBOOT.PBP")
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "ps2")
-        # PS2 canonical releases intentionally use two layouts. Cached CPS2/MVS
-        # builds use one universal external IRX-image bootstrap on all storage
-        # devices; CPS1/NCDZ remain directly launchable ELFs.
-        if(core STREQUAL "CPS2" OR core STREQUAL "MVS")
-            foreach(_required_file IN ITEMS
-                    "BOOT.ELF" "${core}"
-                    "ps2_drivers.irximg" "elf_path.ini")
-                if(NOT EXISTS "${install_dir}/${_required_file}" OR IS_DIRECTORY "${install_dir}/${_required_file}")
-                    message(FATAL_ERROR
-                        "release packaging: ${core}: external-IRX release file is missing: ${_required_file}")
-                endif()
-            endforeach()
-            foreach(_obsolete IN ITEMS BOOT_HDD.ELF BOOT_ATA.ELF)
-                if(EXISTS "${install_dir}/${_obsolete}")
-                    message(FATAL_ERROR
-                        "release packaging: ${core}: obsolete storage bootstrap must not be distributed: ${_obsolete}")
-                endif()
-            endforeach()
-            file(READ "${install_dir}/elf_path.ini" _elf_path)
-            string(STRIP "${_elf_path}" _elf_path)
-            if(NOT _elf_path STREQUAL "${core}")
+        # All canonical PS2 cores require the universal IRX-image bootstrap
+        # for USB, APA/PFS HDD and ATA/BDM FAT/exFAT HDD launch recovery.
+        foreach(_required_file IN ITEMS
+                "BOOT.ELF" "${core}"
+                "ps2_drivers.irximg" "elf_path.ini")
+            if(NOT EXISTS "${install_dir}/${_required_file}" OR IS_DIRECTORY "${install_dir}/${_required_file}")
                 message(FATAL_ERROR
-                    "release packaging: ${core}: elf_path.ini points to '${_elf_path}', expected '${core}'")
+                    "release packaging: ${core}: external-IRX release file is missing: ${_required_file}")
             endif()
-            set(_required_binary "${core}")
-        else()
-            set(_required_binary "${core}.ELF")
+        endforeach()
+        foreach(_obsolete IN ITEMS BOOT_HDD.ELF BOOT_ATA.ELF "${core}.ELF")
+            if(EXISTS "${install_dir}/${_obsolete}")
+                message(FATAL_ERROR
+                    "release packaging: ${core}: obsolete PS2 executable must not be distributed: ${_obsolete}")
+            endif()
+        endforeach()
+        file(READ "${install_dir}/elf_path.ini" _elf_path)
+        string(STRIP "${_elf_path}" _elf_path)
+        if(NOT _elf_path STREQUAL "${core}")
+            message(FATAL_ERROR
+                "release packaging: ${core}: elf_path.ini points to '${_elf_path}', expected '${core}'")
         endif()
+        set(_required_binary "${core}")
     elseif(NJEMU_RELEASE_PLATFORM STREQUAL "psvita")
         set(_required_binary "${core}.vpk")
     else()
@@ -168,13 +163,15 @@ endforeach()
 
 if(NJEMU_RELEASE_PLATFORM STREQUAL "ps2")
     # The universal bootstrap is a storage-independent ps2_drivers artifact,
-    # not a target-specific executable. Never ship different MVS/CPS2 copies.
+    # not a target-specific executable. Every PS2 core must ship the same file.
     file(SHA256 "${NJEMU_INSTALL_MVS}/BOOT.ELF" _mvs_boot_sha)
-    file(SHA256 "${NJEMU_INSTALL_CPS2}/BOOT.ELF" _cps2_boot_sha)
-    if(NOT _mvs_boot_sha STREQUAL _cps2_boot_sha)
-        message(FATAL_ERROR
-            "release packaging: PS2 MVS/CPS2 BOOT.ELF binaries must be identical")
-    endif()
+    foreach(_core IN LISTS _cores)
+        file(SHA256 "${NJEMU_INSTALL_${_core}}/BOOT.ELF" _boot_sha)
+        if(NOT _mvs_boot_sha STREQUAL _boot_sha)
+            message(FATAL_ERROR
+                "release packaging: PS2 ${_core}/MVS BOOT.ELF binaries must be identical")
+        endif()
+    endforeach()
 endif()
 
 set(_archive_name "njemu-${NJEMU_RELEASE_VERSION}-${NJEMU_RELEASE_PLATFORM}.zip")
