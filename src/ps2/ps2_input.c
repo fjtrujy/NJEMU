@@ -122,18 +122,16 @@ static void decodePadState(const struct padButtonStatus *pad, input_state_t *out
 	}
 }
 
-/* The worker is the sole padRead() owner when it exists. DIntr/EIntr protects
- * EE-thread publication/consumption on the single EE CPU; it does not lock
- * PADMAN's IOP/DMA updates, so the libpad read stays outside that section. */
-static void ps2_input_publish(ps2_input_t *ps2, struct JoyInfo *info,
+/* Called with EE interrupts masked. Keep packet acquisition and publication
+ * ordered across the worker and the game thread. This does not stop PADMAN's
+ * IOP-side acquisition or its DMA publications. */
+static void ps2_input_publish_locked(ps2_input_t *ps2, struct JoyInfo *info,
 	bool connected, const input_state_t *fresh)
 {
 	input_state_t sample;
 	bool valid;
 
-	DIntr();
 	if (connected && (!info->opened || !info->was_ready)) {
-		EIntr();
 		return;
 	}
 	valid = ps2_input_sample_cache_update(&info->sample_cache,
@@ -171,7 +169,41 @@ static void ps2_input_publish(ps2_input_t *ps2, struct JoyInfo *info,
 #endif
 	if (!connected)
 		info->was_ready = 0;
-	EIntr();
+}
+
+/* padRead() copies the already-published libpad DMA packet without RPC.
+ * Both callers mask EE interrupts across that copy and history publication:
+ * an older worker result must never be committed after a newer frame read. */
+static void ps2_input_capture_locked(ps2_input_t *ps2, struct JoyInfo *info)
+{
+	struct padButtonStatus pad = {0};
+	input_state_t fresh;
+	int state, length;
+
+	if (!info->opened || !info->was_ready)
+		return;
+	state = padGetState(info->port, info->slot);
+	if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR ||
+		state == PAD_STATE_FINDPAD) {
+		ps2_input_publish_locked(ps2, info, false, NULL);
+		return;
+	}
+	/* Established pads may expose a valid DMA packet while a libpad
+	 * analog/rumble command is executing. */
+	if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1 &&
+		state != PAD_STATE_EXECCMD) {
+		ps2_input_publish_locked(ps2, info, true, NULL);
+		return;
+	}
+	length = padRead(info->port, info->slot, &pad);
+	if (ps2_pad_packet_valid(length,
+		offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
+		pad.mode, pad.btns)) {
+		decodePadState(&pad, &fresh);
+		ps2_input_publish_locked(ps2, info, true, &fresh);
+	} else {
+		ps2_input_publish_locked(ps2, info, true, NULL);
+	}
 }
 
 /* Regular EE thread, never a VBLANK interrupt. Its cadence can only reveal
@@ -198,40 +230,9 @@ static void ps2_input_sampler(void *arg)
 		started = ps2_input_profile_now_us();
 #endif
 		for (index = 0; index < MAX_CONTROLLERS; index++) {
-				struct JoyInfo *info = &joyInfo[index];
-				struct padButtonStatus pad = {0};
-				input_state_t fresh;
-				int eligible;
-				int state;
-				int length;
-
-				DIntr();
-				eligible = info->opened && info->was_ready;
-				EIntr();
-				if (!eligible)
-					continue;
-				state = padGetState(info->port, info->slot);
-				if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR ||
-					state == PAD_STATE_FINDPAD) {
-					ps2_input_publish(ps2, info, false, NULL);
-					continue;
-				}
-				/* An established pad may still expose its last valid DMA
-				 * snapshot while PADMAN executes an analog/rumble command. */
-				if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1 &&
-					state != PAD_STATE_EXECCMD) {
-					ps2_input_publish(ps2, info, true, NULL);
-					continue;
-				}
-				length = padRead(info->port, info->slot, &pad);
-				if (ps2_pad_packet_valid(length,
-					offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
-					pad.mode, pad.btns)) {
-					decodePadState(&pad, &fresh);
-					ps2_input_publish(ps2, info, true, &fresh);
-				} else {
-					ps2_input_publish(ps2, info, true, NULL);
-				}
+			DIntr();
+			ps2_input_capture_locked(ps2, &joyInfo[index]);
+			EIntr();
 		}
 		DIntr();
 		ps2->sampler_busy = 0;
@@ -295,8 +296,8 @@ static void ps2_start_input_sampler(ps2_input_t *ps2)
 	thread.stack = ps2->sampler_stack;
 	thread.stack_size = PS2_INPUT_SAMPLER_STACK_SIZE;
 	thread.gp_reg = &_gp;
-	/* One priority above emulation; periodic reads keep controller state
-	 * fresh without a blocking call on the gameplay frame boundary. */
+	/* One priority above emulation; periodic snapshots capture transitions
+	 * between frame boundaries, while the game thread also samples directly. */
 	thread.initial_priority = NJEMU_MAIN_THREAD_PRIORITY - 1;
 	ps2->sampler_thread_id = CreateThread(&thread);
 	if (ps2->sampler_thread_id < 0)
@@ -636,10 +637,13 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	if (ps2->sampler_running)
 		ps2_resume_input_sampler(ps2);
 
-	/* The worker exclusively owns padRead() when running. The game thread
-	 * consumes validated publications and one frame-aware history step. */
+	/* Sample the latest PADMAN publication at the gameplay frame boundary.
+	 * Without this read, the 8 ms worker phase can add a full game frame of
+	 * latency. The EE critical section orders this read against worker
+	 * publications; the history still retains observed interframe changes. */
 	if (ps2->sampler_running) {
 		DIntr();
+		ps2_input_capture_locked(ps2, info);
 		valid = info->published_valid != 0;
 		if (valid) {
 			*state = info->published;

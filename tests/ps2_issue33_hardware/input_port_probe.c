@@ -30,25 +30,26 @@ static volatile int stop_requested;
 static volatile int published_ready;
 static uint32_t published_buttons;
 static ps2_input_history_t history;
+static ps2_input_history_t synchronous_history;
 static ps2_input_edge_latch_t old_latch;
 static unsigned worker_valid, worker_invalid;
 static unsigned worker_down, worker_up, worker_prior;
 static unsigned frame_valid, frame_invalid;
-static unsigned base_down, old_down, new_down;
-static unsigned base_up, old_up, new_up;
-static unsigned base_prior, old_prior, new_prior;
-static unsigned worker_diff, old_diff, new_diff;
-static unsigned old_port_diff, new_port_diff, max_depth;
+static unsigned base_down, old_down, new_down, sync_down;
+static unsigned base_up, old_up, new_up, sync_up;
+static unsigned base_prior, old_prior, new_prior, sync_prior;
+static unsigned worker_diff, old_diff, new_diff, sync_diff;
+static unsigned old_port_diff, new_port_diff, sync_port_diff, max_depth;
 static unsigned direct_only_frames, worker_only_frames;
-static unsigned onset_miss_old, onset_miss_new;
-static unsigned release_lag_old, release_lag_new;
+static unsigned onset_miss_old, onset_miss_new, onset_miss_sync;
+static unsigned release_lag_old, release_lag_new, release_lag_sync;
 static unsigned anomalous_frames;
 static unsigned char first_ready_seen;
 
 typedef struct {
     unsigned frame;
-    unsigned baseline, worker, legacy, ordered;
-    unsigned port_base, port_worker, port_old, port_new;
+    unsigned baseline, worker, legacy, ordered, synchronous;
+    unsigned port_base, port_worker, port_old, port_new, port_sync;
 } trace_t;
 static trace_t trace[TRACE_LIMIT];
 static unsigned trace_count;
@@ -85,6 +86,9 @@ static void worker(void *unused)
         int state, len;
         uint32_t now;
         memset(&pad, 0, sizeof(pad));
+        /* The frame-boundary read uses this same EE lock so that the
+         * worker cannot publish a packet it read before a newer frame. */
+        DIntr();
         state = padGetState(0, 0);
         len = padRead(0, 0, &pad);
         if ((state == PAD_STATE_STABLE || state == PAD_STATE_FINDCTP1) &&
@@ -92,7 +96,6 @@ static void worker(void *unused)
                 offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
                 pad.mode, pad.btns)) {
             now = decode(pad.btns);
-            DIntr();
             if (published_ready) {
                 worker_down += bitcount(now & ~worker_prior);
                 worker_up += bitcount(worker_prior & ~now);
@@ -102,9 +105,11 @@ static void worker(void *unused)
             published_buttons = now;
             if (!published_ready) {
                 ps2_input_history_set_live(&history, now);
+                ps2_input_history_set_live(&synchronous_history, now);
                 ps2_input_edge_latch_record(&old_latch, now);
             } else {
                 ps2_input_history_record(&history, now);
+                ps2_input_history_record(&synchronous_history, now);
                 ps2_input_edge_latch_record(&old_latch, now);
             }
             if (history.count > max_depth) max_depth = history.count;
@@ -112,27 +117,26 @@ static void worker(void *unused)
             if (((~pad.btns) & (PAD_START | PAD_SELECT)) ==
                 (PAD_START | PAD_SELECT))
                 stop_requested = 1;
-            EIntr();
         } else {
-            DIntr();
             worker_invalid++;
-            EIntr();
         }
+        EIntr();
         DelayThread(WORKER_US);
     }
 }
 
 static void print_stats(unsigned frames, int finish)
 {
-    printf("[SF2PROBE] %s frames=%u direct=%u/%u worker=%u/%u observed=%u/%u base=%u/%u legacy=%u/%u ordered=%u/%u diffWorker=%u diffOld=%u diffNew=%u portOld=%u portNew=%u directOnly=%u workerOnly=%u onsetMissOld=%u onsetMissNew=%u releaseLagOld=%u releaseLagNew=%u peakQ=%u overflow=%u resync=%u trace=%u\n",
+    printf("[SF2PROBE] %s frames=%u direct=%u/%u worker=%u/%u observed=%u/%u base=%u/%u legacy=%u/%u ordered=%u/%u sync=%u/%u diffWorker=%u diffOld=%u diffNew=%u diffSync=%u portOld=%u portNew=%u portSync=%u directOnly=%u workerOnly=%u onsetMissOld=%u onsetMissNew=%u onsetMissSync=%u releaseLagOld=%u releaseLagNew=%u releaseLagSync=%u peakQ=%u overflow=%u resync=%u trace=%u\n",
         finish ? "DONE" : "STAT", frames,
         frame_valid, frame_invalid, worker_valid, worker_invalid,
         worker_down, worker_up,
         base_down, base_up, old_down, old_up, new_down, new_up,
-        worker_diff, old_diff, new_diff, old_port_diff, new_port_diff,
+        sync_down, sync_up, worker_diff, old_diff, new_diff, sync_diff,
+        old_port_diff, new_port_diff, sync_port_diff,
         direct_only_frames, worker_only_frames,
-        onset_miss_old, onset_miss_new,
-        release_lag_old, release_lag_new, max_depth,
+        onset_miss_old, onset_miss_new, onset_miss_sync,
+        release_lag_old, release_lag_new, release_lag_sync, max_depth,
         (unsigned)history.overflows, (unsigned)history.backlog_resyncs,
         trace_count);
     fflush(stdout);
@@ -182,8 +186,8 @@ int main(void)
     fflush(stdout);
 
     while (!stop_requested && frames < FRAME_LIMIT) {
-        uint32_t base = 0, snapshot = 0, old = 0, ordered = 0;
-        uint32_t pbase, pworker, pold, pnew;
+        uint32_t base = 0, snapshot = 0, old = 0, ordered = 0, sync = 0;
+        uint32_t pbase, pworker, pold, pnew, psync;
         int frame_ok, have_worker;
         memset(&packet, 0, sizeof(packet));
         /* The main thread direct padRead models the old frame-boundary
@@ -203,6 +207,9 @@ int main(void)
             snapshot = published_buttons;
             old = ps2_input_edge_latch_consume(&old_latch, snapshot, 0);
             ordered = ps2_input_history_consume(&history);
+            if (frame_ok)
+                ps2_input_history_record(&synchronous_history, base);
+            sync = ps2_input_history_consume(&synchronous_history);
         }
         EIntr();
         if (frame_ok && have_worker) {
@@ -211,22 +218,28 @@ int main(void)
                 base_prior = base;
                 old_prior = old;
                 new_prior = ordered;
+                sync_prior = sync;
             }
             pbase = sf2_probe_ports(base);
             pworker = sf2_probe_ports(snapshot);
             pold = sf2_probe_ports(old);
             pnew = sf2_probe_ports(ordered);
+            psync = sf2_probe_ports(sync);
             base_down += bitcount(base & ~base_prior);
             base_up += bitcount(base_prior & ~base);
             old_down += bitcount(old & ~old_prior);
             old_up += bitcount(old_prior & ~old);
             new_down += bitcount(ordered & ~new_prior);
             new_up += bitcount(new_prior & ~ordered);
+            sync_down += bitcount(sync & ~sync_prior);
+            sync_up += bitcount(sync_prior & ~sync);
             if (pworker != pbase) worker_diff++;
             if (old != base) old_diff++;
             if (ordered != base) new_diff++;
+            if (sync != base) sync_diff++;
             if (pold != pbase) old_port_diff++;
             if (pnew != pbase) new_port_diff++;
+            if (psync != pbase) sync_port_diff++;
             if ((base & ~snapshot) != 0) direct_only_frames++;
             if ((snapshot & ~base) != 0) worker_only_frames++;
             /* A down transition present in the frame-boundary reference but
@@ -234,9 +247,12 @@ int main(void)
              * It is not proof of a physically missed attack animation. */
             onset_miss_old += bitcount((base & ~base_prior) & ~old);
             onset_miss_new += bitcount((base & ~base_prior) & ~ordered);
+            onset_miss_sync += bitcount((base & ~base_prior) & ~sync);
             release_lag_old += bitcount((base_prior & ~base) & old);
             release_lag_new += bitcount((base_prior & ~base) & ordered);
-            if (pbase != pworker || pbase != pold || pbase != pnew) {
+            release_lag_sync += bitcount((base_prior & ~base) & sync);
+            if (pbase != pworker || pbase != pold || pbase != pnew ||
+                pbase != psync) {
                 if (trace_count < TRACE_LIMIT) {
                     trace_t *t = &trace[trace_count++];
                     t->frame = frames;
@@ -244,16 +260,19 @@ int main(void)
                     t->worker = snapshot;
                     t->legacy = old;
                     t->ordered = ordered;
+                    t->synchronous = sync;
                     t->port_base = pbase;
                     t->port_worker = pworker;
                     t->port_old = pold;
                     t->port_new = pnew;
+                    t->port_sync = psync;
                 }
                 anomalous_frames++;
             }
             base_prior = base;
             old_prior = old;
             new_prior = ordered;
+            sync_prior = sync;
             frame_valid++;
         } else {
             frame_invalid++;
@@ -268,9 +287,10 @@ int main(void)
     print_stats(frames, 1);
     for (i = 0; i < (int)trace_count; i++) {
         const trace_t *t = &trace[i];
-        printf("[SF2TRACE] frame=%u base=%03x worker=%03x old=%03x new=%03x portBase=%06x portWorker=%06x portOld=%06x portNew=%06x\n",
+        printf("[SF2TRACE] frame=%u base=%03x worker=%03x old=%03x new=%03x sync=%03x portBase=%06x portWorker=%06x portOld=%06x portNew=%06x portSync=%06x\n",
             t->frame, t->baseline, t->worker, t->legacy, t->ordered,
-            t->port_base, t->port_worker, t->port_old, t->port_new);
+            t->synchronous, t->port_base, t->port_worker, t->port_old,
+            t->port_new, t->port_sync);
     }
     printf("[SF2PROBE] END mismatchFrames=%u complete=%u\n",
         anomalous_frames, (unsigned)stop_requested);

@@ -221,6 +221,32 @@ static void worker_phase_latency_model(void)
         100.0 * (double)additional_frame_cases / cases);
 }
 
+static void frame_boundary_refresh_before_consume(void)
+{
+    ps2_input_history_t h = {0};
+
+    ps2_input_history_set_live(&h, 0);
+    /* PADMAN now has a button-down packet, but the 8 ms worker has not
+     * run again. The frame-boundary read must publish it immediately. */
+    ps2_input_history_record(&h, B1);
+    assert(ps2_input_history_consume(&h) == B1);
+    assert(h.count == 0);
+
+    /* The worker may subsequently read that same packet. There must be
+     * no duplicate edge, and a frame-boundary release is immediate too. */
+    ps2_input_history_record(&h, B1);
+    assert(h.count == 0);
+    ps2_input_history_record(&h, 0);
+    assert(ps2_input_history_consume(&h) == 0);
+    assert(h.count == 0);
+
+    /* Interframe button pulses are still replayed in order. */
+    ps2_input_history_record(&h, B1);
+    ps2_input_history_record(&h, 0);
+    assert(ps2_input_history_consume(&h) == B1);
+    assert(ps2_input_history_consume(&h) == 0);
+}
+
 int main(void)
 {
     short_press();
@@ -233,5 +259,6 @@ int main(void)
     multiplayer_menu_and_axes();
     bounded_backlogs();
     worker_phase_latency_model();
+    frame_boundary_refresh_before_consume();
     return 0;
 }

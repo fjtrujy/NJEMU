@@ -35,11 +35,14 @@ cannot recover transitions that the IOP never acquired.
 
 ## Implementation and boundaries
 
-In the working branch, a dedicated EE worker exclusively calls
-`padRead()` when running. The main thread consumes validated published
-snapshots and never races another `padRead()`; if the worker cannot
-start, a synchronous main-thread sampling fallback remains. The
-worker is paused around pad topology refresh, analog-mode
+In the working branch, a dedicated EE worker periodically calls
+`padRead()`, and the game thread also captures the latest PADMAN packet
+**at each input-poll frame boundary**, before consuming the history.
+Both callers hold the same short EE interrupt-masked critical section
+for the libpad packet copy and history publication. This prevents an
+older worker read from overwriting a newer frame read while avoiding
+the measured worker-phase delay. The fallback remains synchronous when
+the worker cannot start. The worker is paused around pad topology refresh, analog-mode
 reconfiguration and menu/game capture transitions. Disconnects and
 invalid repeated packets clear stale data. Existing physical
 controller order, multitap enumeration, analog axes and Start/Select
@@ -57,8 +60,10 @@ large, stale backlog. The history is cleared on menu transitions and
 disconnection. Start/Select always come from the latest published
 physical level, never from replayed gameplay history.
 
-`DIntr()/EIntr()` protects the EE-side published copy/history and
-worker lifecycle flags against EE-thread preemption. It does not
+`DIntr()/EIntr()` protects the EE-side pad DMA snapshot copy,
+published copy/history and worker lifecycle flags against EE-thread
+preemption. `padRead()` itself only copies libpad's already-published
+DMA data and makes no RPC. The EE critical section does not
 freeze PADMAN's IOP acquisitions or SIF/DMA publication, and no code
 assumes that it does. No dynamic allocations happen at input-poll time.
 
@@ -75,7 +80,7 @@ faster than the emulated game's input granularity.
 | --- | --- | --- |
 | Two observed B1 taps within 16 ms | 1 visible down | 2 visible downs, at 16 and 48 ms |
 | RIGHT then separate DOWN, released before frame | Spurious RIGHT+DOWN | RIGHT, release, DOWN, release |
-| Old snapshot processed after newer sample | Stale latch state can be resurrected | Not possible via two concurrent `padRead()` owners |
+| Old snapshot processed after newer sample | Stale latch state can be resurrected | EE critical section orders both reads with publication |
 | Short 0-5 ms pulse before t=16 ms poll | One pressed frame | One pressed frame at t=16 ms; release at t=32 ms |
 
 The two-tap timeline is *post-acquisition*: at t=0/4/8/12 ms
@@ -89,8 +94,9 @@ model also finds that ~23.7% of uniformly enumerated publication/worker
 phase pairs could miss a freshly published state that a direct
 frame-boundary `padRead()` would see. Its worst-case additional
 delivery delay is one game frame (~16.7 ms). This is not a physical
-measurement. **The single-owner change is therefore not yet proven
-free of input-latency regressions.**
+measurement. The original worker-only version subsequently reproduced
+this phase mismatch on physical PS2 hardware. The frame-boundary read
+was added to address that regression and needs its own physical retest.
 
 PCSX2 virtual-pad input (not a physical DualShock) used 40 Square taps
 at 35/65 ms, 40 Square taps at 12/32 ms, and 20 Right+Square chords at
@@ -124,7 +130,7 @@ The profiler is OFF by default and forced OFF for canonical releases.
 ## Validation
 
 - Portable C99 reproduction and history policy tests pass.
-- All 50 Desktop CTest cases pass.
+- All 51 Desktop CTest cases pass, including CPS1 port projections.
 - PS2 GCC 15.2.0 builds pass for CPS1, CPS2, MVS and NCDZ.
 - PCSX2 booted `sf2` and `dino` through their ROM and analog-mode
   startup paths; scripted virtual-controller transitions reached the
@@ -153,9 +159,35 @@ The profiler is OFF by default and forced OFF for canonical releases.
   frame-boundary reads and 14,967 worker reads, all valid, with zero
   observed button transitions. The two references therefore remained
   equal, but this is only a **no-input baseline**, not latency evidence.
-  The next session requires intentional physical button transitions.
-  The revised probe also counts onset/release discrepancies against
-  the direct frame-boundary read separately from raw level mismatches.
+- A physical controller run then captured **89 press and 89 release**
+  transitions, all delivered by the legacy-latch and original
+  worker-only history consumers. Across 2,812 valid frame reads and
+  5,846 valid worker reads there were **49 CPS1 port-level mismatch
+  frames** versus a direct frame-boundary read. On **26 reference press
+  onsets**, the worker-only consumers still had the previous level;
+  **24 reference releases** likewise found the old pressed level. The
+  queue depth peaked at one; no invalid reads, overflows or resyncs.
+  Thus the issue was not input loss in this run, but the worker's extra
+  sampling-phase delay. This is *paired sampling on real hardware*,
+  not an absolute physical-button-to-attack time measurement.
+  See ignored diagnostic log
+  `tests/ps2_issue33_hardware/live_sf2_port_probe_20261118_active.log`.
+- The revised standalone probe also runs a **frame-refresh history
+  consumer** using the same direct read as the reference, recording
+  the packet before consuming that frame's history. It independently
+  counts direct-versus-synchronous mismatches and missed press onsets.
+  An initial physical run reached 7,200 frame reads and 14,971 worker
+  reads without invalid packets or mismatches, but no buttons were
+  pressed during that run; **the post-fix latency question remains
+  open** until another controller-input session.
+- A PCSX2 `sf2` smoke test of the frame-refresh build injected
+  Square and Right+Square events: 110 observed down/up transitions
+  were delivered 110/110 by the backend, with maximum queue depth one,
+  zero overflow/resynchronization, and no new invalid packets after
+  startup. The 3,000-poll diagnostic report recorded 100,364 us
+  cumulative input-poll time (~33.5 us/poll, peak 379 us) and
+  128,578 us for 6,507 worker passes (~19.8 us/pass). These PCSX2
+  timings are approximate and not proof of physical-PS2 frame cost.
 - To run the standalone hardware diagnostic, export `PS2DEV`, `PS2SDK`
   and the EE toolchain `PATH`, run
   `make -C tests/ps2_issue33_hardware`, then from that directory launch
@@ -165,7 +197,7 @@ The profiler is OFF by default and forced OFF for canonical releases.
   `ps2client ping`/`health` while its host: console connection is in
   use**: an exploratory run's console connection was closed after
   another client opened `host:/ps2client.ping`.
-- There is no proven before/after physical-to-emulated input latency
+- There is no proven after-fix physical-to-emulated input latency
   result, game-level attack-count comparison or live dual-controller /
   multitap regression test.
 
