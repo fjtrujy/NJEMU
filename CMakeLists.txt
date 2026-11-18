@@ -2306,6 +2306,14 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 		${CMAKE_CURRENT_SOURCE_DIR}/src)
 	add_test(NAME ps2_input_history_tests COMMAND ps2_input_history_tests)
 
+	add_executable(ps2_issue33_sf2_port_tests
+		tests/ps2_issue33_hardware/port_projection_test.c)
+	target_include_directories(ps2_issue33_sf2_port_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/ps2_issue33_hardware)
+	target_compile_options(ps2_issue33_sf2_port_tests PRIVATE ${WARNING_OPTIONS})
+	add_test(NAME ps2_issue33_sf2_port_tests COMMAND ps2_issue33_sf2_port_tests)
+
 	add_executable(ps2_launch_storage_tests
 		tests/ps2_launch_storage_tests.c)
 	target_include_directories(ps2_launch_storage_tests PRIVATE

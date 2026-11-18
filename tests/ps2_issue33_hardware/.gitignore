@@ -1,0 +1,4 @@
+input_port_probe.elf
+input_port_probe.o
+port_projection_test
+*.log

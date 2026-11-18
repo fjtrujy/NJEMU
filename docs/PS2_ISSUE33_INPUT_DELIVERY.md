@@ -129,8 +129,42 @@ The profiler is OFF by default and forced OFF for canonical releases.
 - PCSX2 booted `sf2` and `dino` through their ROM and analog-mode
   startup paths; scripted virtual-controller transitions reached the
   PS2 input backend and all observed transitions were delivered.
-- Previous PS2Link address `192.168.31.10` did not answer a ping on
-  2026-11-18. No IOP reset or real-PS2 runtime test was attempted.
+- The PS2Link endpoint `192.168.31.10` later became reachable on
+  2026-11-18. A standalone, non-IOP-reset PADMAN probe ran on the
+  physical PS2 and recorded 3,796 valid worker samples, zero invalid
+  samples, and 105 observed press/release transitions each. Both the
+  legacy latch and ordered-history consumer delivered 105/105; the
+  maximum backlog was one, with zero overflow/resynchronizations.
+  This validates basic real-hardware operation but does not reproduce
+  the FIFO-vs-latch difference or prove lower input latency.
+- A second isolated test is in `tests/ps2_issue33_hardware/`. Its
+  `input_port_probe.c` compares a direct frame-boundary `padRead()`
+  reference, the dedicated 8 ms worker snapshot, the legacy latch,
+  and the ordered-history consumer. It projects their button levels
+  to active-low Street Fighter II P1 CPS1 ports using the default
+  six-button map from `config/sf2.ini` and `cps1/inptport.c`. The
+  companion host test verifies the mapping and reversal order.
+  This projection does **not** execute `update_inputport()` or any
+  68000 game logic; its direct-vs-worker comparison deliberately has
+  two readers and is only a diagnostic, not production architecture.
+  `make -C tests/ps2_issue33_hardware check-host` and the PS2 GCC
+  build both pass; the desktop CTest suite now contains 51 tests.
+- An unattended physical run of this second test completed 7,200
+  frame-boundary reads and 14,967 worker reads, all valid, with zero
+  observed button transitions. The two references therefore remained
+  equal, but this is only a **no-input baseline**, not latency evidence.
+  The next session requires intentional physical button transitions.
+  The revised probe also counts onset/release discrepancies against
+  the direct frame-boundary read separately from raw level mismatches.
+- To run the standalone hardware diagnostic, export `PS2DEV`, `PS2SDK`
+  and the EE toolchain `PATH`, run
+  `make -C tests/ps2_issue33_hardware`, then from that directory launch
+  `ps2client -h 192.168.31.10 -t 1200 -e '[SF2PROBE] END' execee host:input_port_probe.elf`
+  with ps2link already running. It neither resets the IOP nor exits
+  to OSD; press START+SELECT to finish. **Do not send a simultaneous
+  `ps2client ping`/`health` while its host: console connection is in
+  use**: an exploratory run's console connection was closed after
+  another client opened `host:/ps2client.ping`.
 - There is no proven before/after physical-to-emulated input latency
   result, game-level attack-count comparison or live dual-controller /
   multitap regression test.
