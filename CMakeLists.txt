@@ -93,6 +93,7 @@ option(USE_UBSAN "Use UBSAN" OFF)
 option(USE_PG "Use Performance Graph" OFF)
 option(NJEMU_CANONICAL_RELEASE "Use the canonical downloadable distribution configuration" OFF)
 option(PS2_AUDIO_PROFILE "PS2: profile EE sound production and audsrv output stages" OFF)
+option(PS2_INPUT_PROFILE "PS2: log controller sampling and game-delivery diagnostics" OFF)
 option(PS2_AUDIO_RETRY_SHORT_WRITES "PS2: retry unaccepted audsrv PCM bytes" ON)
 if("${PLATFORM}" STREQUAL "PS2" AND "${TARGET}" STREQUAL "MVS")
     set(PS2_MVS_NATIVE_WORD_ACCESS_DEFAULT ON)
@@ -139,6 +140,7 @@ if(NJEMU_CANONICAL_RELEASE)
     set(USE_UBSAN OFF CACHE BOOL "Use UBSAN" FORCE)
     set(USE_PG OFF CACHE BOOL "Use Performance Graph" FORCE)
     set(PS2_AUDIO_PROFILE OFF CACHE BOOL "PS2: profile EE sound production and audsrv output stages" FORCE)
+    set(PS2_INPUT_PROFILE OFF CACHE BOOL "PS2: log controller sampling and game-delivery diagnostics" FORCE)
     if(PLATFORM STREQUAL "PSP")
         set(PSP_ME_AUDIO ON CACHE BOOL "PSP: enable Media Engine audio acceleration" FORCE)
     else()
@@ -374,6 +376,12 @@ if(PS2_AUDIO_PROFILE AND NOT PLATFORM STREQUAL "PS2")
 endif()
 if(PS2_AUDIO_PROFILE)
     add_definitions(-DPS2_AUDIO_PROFILE=1)
+endif()
+if(PS2_INPUT_PROFILE AND NOT PLATFORM STREQUAL "PS2")
+    message(FATAL_ERROR "PS2_INPUT_PROFILE requires PLATFORM=PS2")
+endif()
+if(PS2_INPUT_PROFILE)
+    add_definitions(-DPS2_INPUT_PROFILE=1)
 endif()
 if(PLATFORM STREQUAL "PS2" AND PS2_AUDIO_RETRY_SHORT_WRITES)
     add_definitions(-DPS2_AUDIO_RETRY_SHORT_WRITES=1)
@@ -2286,6 +2294,18 @@ if(BUILD_TESTING AND PLATFORM STREQUAL "DESKTOP")
 	target_include_directories(ps2_issue15_tests PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src)
 	add_test(NAME ps2_issue15_tests COMMAND ps2_issue15_tests)
+	add_executable(ps2_input_delivery_tests
+		tests/ps2_input_delivery_tests.c)
+	target_include_directories(ps2_input_delivery_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src)
+	add_test(NAME ps2_input_delivery_tests COMMAND ps2_input_delivery_tests)
+
+	add_executable(ps2_input_history_tests
+		tests/ps2_input_history_tests.c)
+	target_include_directories(ps2_input_history_tests PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/src)
+	add_test(NAME ps2_input_history_tests COMMAND ps2_input_history_tests)
+
 	add_executable(ps2_launch_storage_tests
 		tests/ps2_launch_storage_tests.c)
 	target_include_directories(ps2_launch_storage_tests PRIVATE

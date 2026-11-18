@@ -6,6 +6,9 @@
 #include <libmtap.h>
 #include <kernel.h>
 #include <delaythread.h>
+#if defined(PS2_INPUT_PROFILE)
+#include <timer.h>
+#endif
 #include <ps2_joystick_driver.h>
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 #include <ps2_drivers_img.h>
@@ -14,7 +17,7 @@
 #include "ps2/ps2_input_sample_cache.h"
 #include "ps2/ps2_pad_presence.h"
 #include "ps2/ps2_pad_packet.h"
-#include "ps2/ps2_input_edge_latch.h"
+#include "ps2/ps2_input_history.h"
 
 #define PS2_MAX_PORT      2 /* each ps2 has 2 ports */
 #define PS2_MAX_SLOT      4 /* maximum - 4 slots in one multitap */
@@ -30,7 +33,9 @@ struct JoyInfo
 {
     uint8_t padBuf[256];
     ps2_input_sample_cache_t sample_cache;
-    ps2_input_edge_latch_t edge_latch;
+    ps2_input_history_t history;
+    input_state_t published;
+    uint8_t published_valid;
     uint16_t btns;
     uint8_t analog_state[PS2_TOTAL_AXIS];
     uint8_t port;
@@ -39,6 +44,16 @@ struct JoyInfo
     uint8_t was_ready;
     int8_t rumble_ready;
     int8_t opened;
+#if defined(PS2_INPUT_PROFILE)
+    uint32_t profile_raw_previous;
+    uint32_t profile_delivered_previous;
+    uint32_t profile_raw_down, profile_raw_up;
+    uint32_t profile_delivered_down, profile_delivered_up;
+    uint32_t profile_valid, profile_invalid;
+    uint32_t profile_game_polls, profile_max_depth;
+    uint64_t profile_poll_us;
+    uint32_t profile_poll_max_us;
+#endif
 } __attribute__((aligned(64)));
 
 struct JoyInfo joyInfo[MAX_CONTROLLERS];
@@ -48,8 +63,34 @@ typedef struct ps2_input {
 	int sampler_thread_id;
 	void *sampler_stack;
 	volatile uint8_t sampler_running;
+	volatile uint8_t sampler_paused;
+	volatile uint8_t sampler_busy;
 	volatile uint8_t edge_capture_enabled;
+#if defined(PS2_INPUT_PROFILE)
+	uint32_t profile_worker_passes;
+	uint64_t profile_worker_us;
+	uint32_t profile_worker_max_us;
+#endif
 } ps2_input_t;
+
+#if defined(PS2_INPUT_PROFILE)
+static uint64_t ps2_input_profile_now_us(void)
+{
+	u32 seconds, microseconds;
+	TimerBusClock2USec(GetTimerSystemTime(), &seconds, &microseconds);
+	return (uint64_t)seconds * 1000000ULL + microseconds;
+}
+
+static unsigned ps2_input_profile_bits(uint32_t bits)
+{
+	unsigned total = 0;
+	while (bits) {
+		total += bits & 1u;
+		bits >>= 1;
+	}
+	return total;
+}
+#endif
 
 static uint32_t decodePadButtons(uint16_t pad_buttons)
 {
@@ -81,43 +122,153 @@ static void decodePadState(const struct padButtonStatus *pad, input_state_t *out
 	}
 }
 
-/* The sampler runs on a regular EE thread, never from the VBLANK interrupt.
- * It captures edges that would disappear between game-frame PADMAN reads. */
+/* The worker is the sole padRead() owner when it exists. DIntr/EIntr protects
+ * EE-thread publication/consumption on the single EE CPU; it does not lock
+ * PADMAN's IOP/DMA updates, so the libpad read stays outside that section. */
+static void ps2_input_publish(ps2_input_t *ps2, struct JoyInfo *info,
+	bool connected, const input_state_t *fresh)
+{
+	input_state_t sample;
+	bool valid;
+
+	DIntr();
+	if (connected && (!info->opened || !info->was_ready)) {
+		EIntr();
+		return;
+	}
+	valid = ps2_input_sample_cache_update(&info->sample_cache,
+		connected, fresh != NULL, fresh, &sample);
+	info->published_valid = valid ? 1 : 0;
+	if (valid) {
+		info->published = sample;
+		if (fresh) {
+#if defined(PS2_INPUT_PROFILE)
+			uint32_t level = sample.buttons & PS2_INPUT_EDGE_MASK;
+			info->profile_valid++;
+			if (ps2->edge_capture_enabled) {
+				info->profile_raw_down += ps2_input_profile_bits(
+					level & ~info->profile_raw_previous);
+				info->profile_raw_up += ps2_input_profile_bits(
+					info->profile_raw_previous & ~level);
+			}
+			info->profile_raw_previous = level;
+#endif
+			if (ps2->edge_capture_enabled)
+				ps2_input_history_record(&info->history, sample.buttons);
+			else
+				ps2_input_history_set_live(&info->history, sample.buttons);
+#if defined(PS2_INPUT_PROFILE)
+			if (info->history.count > info->profile_max_depth)
+				info->profile_max_depth = info->history.count;
+#endif
+		}
+	} else {
+		ps2_input_history_reset(&info->history);
+	}
+#if defined(PS2_INPUT_PROFILE)
+	if (connected && !fresh)
+		info->profile_invalid++;
+#endif
+	if (!connected)
+		info->was_ready = 0;
+	EIntr();
+}
+
+/* Regular EE thread, never a VBLANK interrupt. Its cadence can only reveal
+ * new snapshots actually published by PADMAN (normally VBLANK-paced). */
 static void ps2_input_sampler(void *arg)
 {
 	ps2_input_t *ps2 = (ps2_input_t *)arg;
 
 	while (ps2->sampler_running) {
 		int index;
+		int active;
+#if defined(PS2_INPUT_PROFILE)
+		uint64_t started;
+#endif
 		DelayThread(PS2_INPUT_SAMPLER_INTERVAL_US);
-		if (!ps2->sampler_running)
-			break;
-		if (!ps2->edge_capture_enabled)
+		DIntr();
+		active = ps2->sampler_running && !ps2->sampler_paused;
+		if (active)
+			ps2->sampler_busy = 1;
+		EIntr();
+		if (!active)
 			continue;
+#if defined(PS2_INPUT_PROFILE)
+		started = ps2_input_profile_now_us();
+#endif
 		for (index = 0; index < MAX_CONTROLLERS; index++) {
-			struct JoyInfo *info = &joyInfo[index];
-			struct padButtonStatus pad = {0};
-			int state;
-			int length;
+				struct JoyInfo *info = &joyInfo[index];
+				struct padButtonStatus pad = {0};
+				input_state_t fresh;
+				int eligible;
+				int state;
+				int length;
 
-			if (!info->opened || !info->was_ready)
-				continue;
-			state = padGetState(info->port, info->slot);
-			if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1)
-				continue;
-			length = padRead(info->port, info->slot, &pad);
-			if (!ps2_pad_packet_valid(length,
-				offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
-				pad.mode, pad.btns))
-				continue;
-			DIntr();
-			if (ps2->edge_capture_enabled && info->opened && info->was_ready)
-				ps2_input_edge_latch_record(&info->edge_latch,
-					decodePadButtons(pad.btns));
-			EIntr();
+				DIntr();
+				eligible = info->opened && info->was_ready;
+				EIntr();
+				if (!eligible)
+					continue;
+				state = padGetState(info->port, info->slot);
+				if (state == PAD_STATE_DISCONN || state == PAD_STATE_ERROR ||
+					state == PAD_STATE_FINDPAD) {
+					ps2_input_publish(ps2, info, false, NULL);
+					continue;
+				}
+				/* An established pad may still expose its last valid DMA
+				 * snapshot while PADMAN executes an analog/rumble command. */
+				if (state != PAD_STATE_STABLE && state != PAD_STATE_FINDCTP1 &&
+					state != PAD_STATE_EXECCMD) {
+					ps2_input_publish(ps2, info, true, NULL);
+					continue;
+				}
+				length = padRead(info->port, info->slot, &pad);
+				if (ps2_pad_packet_valid(length,
+					offsetof(struct padButtonStatus, btns) + sizeof(pad.btns),
+					pad.mode, pad.btns)) {
+					decodePadState(&pad, &fresh);
+					ps2_input_publish(ps2, info, true, &fresh);
+				} else {
+					ps2_input_publish(ps2, info, true, NULL);
+				}
 		}
+		DIntr();
+		ps2->sampler_busy = 0;
+#if defined(PS2_INPUT_PROFILE)
+		{
+			uint32_t elapsed = (uint32_t)(ps2_input_profile_now_us() - started);
+			ps2->profile_worker_passes++;
+			ps2->profile_worker_us += elapsed;
+			if (elapsed > ps2->profile_worker_max_us)
+				ps2->profile_worker_max_us = elapsed;
+		}
+#endif
+		EIntr();
 	}
 	ExitThread();
+}
+
+/* Device topology operations may close libpad ports. Pause and await a
+ * completed worker pass before changing their lifetime. */
+static void ps2_pause_input_sampler(ps2_input_t *ps2)
+{
+	if (ps2->sampler_thread_id < 0)
+		return;
+	DIntr();
+	ps2->sampler_paused = 1;
+	EIntr();
+	while (ps2->sampler_busy)
+		DelayThread(1000);
+}
+
+static void ps2_resume_input_sampler(ps2_input_t *ps2)
+{
+	if (ps2->sampler_thread_id < 0)
+		return;
+	DIntr();
+	ps2->sampler_paused = 0;
+	EIntr();
 }
 
 static void ps2_stop_input_sampler(ps2_input_t *ps2)
@@ -144,8 +295,8 @@ static void ps2_start_input_sampler(ps2_input_t *ps2)
 	thread.stack = ps2->sampler_stack;
 	thread.stack_size = PS2_INPUT_SAMPLER_STACK_SIZE;
 	thread.gp_reg = &_gp;
-	/* One priority above emulation; periodic short reads avoid long-frame
-	 * gaps without continuously occupying the EE. Audio remains unchanged. */
+	/* One priority above emulation; periodic reads keep controller state
+	 * fresh without a blocking call on the gameplay frame boundary. */
 	thread.initial_priority = NJEMU_MAIN_THREAD_PRIORITY - 1;
 	ps2->sampler_thread_id = CreateThread(&thread);
 	if (ps2->sampler_thread_id < 0)
@@ -157,18 +308,6 @@ failed:
 	ps2_stop_input_sampler(ps2);
 }
 
-static bool ps2_deliver_sample(struct JoyInfo *info, bool valid, bool fresh,
-	input_state_t *state)
-{
-	if (valid) {
-		DIntr();
-		state->buttons = ps2_input_edge_latch_consume(&info->edge_latch,
-			state->buttons, fresh);
-		EIntr();
-	}
-	return valid;
-}
-
 static void ps2_set_edge_capture(void *data, bool enabled)
 {
 	ps2_input_t *ps2 = (ps2_input_t *)data;
@@ -177,11 +316,21 @@ static void ps2_set_edge_capture(void *data, bool enabled)
 	if (!ps2)
 		return;
 	/* Edges captured in menu screens must never replay as game controls. */
+	/* Complete any in-flight padRead() before changing capture mode: a
+	 * snapshot read in the menu must not be published as a game event. */
+	ps2_pause_input_sampler(ps2);
 	DIntr();
 	ps2->edge_capture_enabled = enabled ? 1 : 0;
-	for (index = 0; index < MAX_CONTROLLERS; index++)
-		ps2_input_edge_latch_reset(&joyInfo[index].edge_latch);
+	for (index = 0; index < MAX_CONTROLLERS; index++) {
+		struct JoyInfo *info = &joyInfo[index];
+		if (info->published_valid)
+			ps2_input_history_set_live(&info->history,
+				info->published.buttons);
+		else
+			ps2_input_history_reset(&info->history);
+	}
 	EIntr();
+	ps2_resume_input_sampler(ps2);
 }
 
 static struct JoyInfo *getJoyInfo(uint32_t port, uint32_t slot)
@@ -195,14 +344,15 @@ static void closeJoyInfo(struct JoyInfo *info)
 		return;
 
 	padPortClose(info->port, info->slot);
+	DIntr();
 	info->sample_cache.valid = 0;
 	info->sample_cache.missed = 0;
-	DIntr();
-	ps2_input_edge_latch_reset(&info->edge_latch);
+	info->published_valid = 0;
+	ps2_input_history_reset(&info->history);
 	info->was_ready = 0;
+	info->opened = 0;
 	EIntr();
 	info->analog_mode_configured = 0;
-	info->opened = 0;
 }
 
 static void refreshJoyInfo(ps2_input_t *ps2)
@@ -253,12 +403,12 @@ static int32_t joyInfoState(struct JoyInfo *info)
 		state == PAD_STATE_FINDPAD)
 	{
 		info->analog_mode_configured = 0;
+		/* Drop both historical and cached input when a pad disappears. */
+		DIntr();
 		info->sample_cache.valid = 0;
 		info->sample_cache.missed = 0;
-		/* The sampler may be interrupted between observing a press and the
-		 * gameplay poll that detects a disconnect. Clear the edge atomically. */
-		DIntr();
-		ps2_input_edge_latch_reset(&info->edge_latch);
+		info->published_valid = 0;
+		ps2_input_history_reset(&info->history);
 		info->was_ready = 0;
 		EIntr();
 	}
@@ -382,7 +532,9 @@ static void ps2_refresh(void *data)
 	ps2_input_t *ps2 = (ps2_input_t *)data;
 
 	if (ps2) {
+		ps2_pause_input_sampler(ps2);
 		refreshJoyInfo(ps2);
+		ps2_resume_input_sampler(ps2);
 	}
 }
 
@@ -394,8 +546,8 @@ static void *ps2_init(void)
 	if (ps2 == NULL)
 		return NULL;
 	ps2->sampler_thread_id = -1;
-	/* The ROM browser and loading screens use ordinary polling. The common
-	 * frame loop arms capture only once gameplay is actually underway. */
+	/* The worker publishes live levels in menus and loading screens. The
+	 * common frame loop arms event history only when gameplay begins. */
 	ps2->edge_capture_enabled = 0;
 
 	if (init_joystick_driver(true) < 0) {
@@ -463,8 +615,12 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	struct padButtonStatus paddata = {0};
 	input_state_t fresh;
 	bool valid;
+	bool mode_ready;
 	int32_t ret;
 	struct JoyInfo *info = NULL;
+#if defined(PS2_INPUT_PROFILE)
+	uint64_t profile_started = ps2_input_profile_now_us();
+#endif
 
 	if (ps2 == NULL || state == NULL)
 		return false;
@@ -473,10 +629,84 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 	if (info == NULL) {
 		return false;
 	}
-	if (!configureJoyInfoAnalogMode(info)) {
+	/* Do not race a mode-changing libpad command with a worker read. */
+	if (ps2->sampler_running && !info->analog_mode_configured)
+		ps2_pause_input_sampler(ps2);
+	mode_ready = configureJoyInfoAnalogMode(info);
+	if (ps2->sampler_running)
+		ps2_resume_input_sampler(ps2);
+
+	/* The worker exclusively owns padRead() when running. The game thread
+	 * consumes validated publications and one frame-aware history step. */
+	if (ps2->sampler_running) {
+		DIntr();
+		valid = info->published_valid != 0;
+		if (valid) {
+			*state = info->published;
+			if (ps2->edge_capture_enabled)
+				state->buttons = (state->buttons & ~PS2_INPUT_EDGE_MASK) |
+					ps2_input_history_consume(&info->history);
+		}
+		EIntr();
+#if defined(PS2_INPUT_PROFILE)
+		{
+			uint32_t elapsed =
+				(uint32_t)(ps2_input_profile_now_us() - profile_started);
+			uint32_t reads, read_fail, raw_down, raw_up;
+			uint32_t visible_down, visible_up, depth, overflows, resyncs;
+			uint32_t worker_passes, worker_max, poll_max;
+			uint64_t worker_us, poll_us;
+			int report;
+			DIntr();
+			info->profile_game_polls++;
+			info->profile_poll_us += elapsed;
+			if (elapsed > info->profile_poll_max_us)
+				info->profile_poll_max_us = elapsed;
+			if (valid && ps2->edge_capture_enabled) {
+				uint32_t level = state->buttons & PS2_INPUT_EDGE_MASK;
+				info->profile_delivered_down += ps2_input_profile_bits(
+					level & ~info->profile_delivered_previous);
+				info->profile_delivered_up += ps2_input_profile_bits(
+					info->profile_delivered_previous & ~level);
+				info->profile_delivered_previous = level;
+			}
+			report = controller == 0 && (info->profile_game_polls % 600) == 0;
+			reads = info->profile_valid;
+			read_fail = info->profile_invalid;
+			raw_down = info->profile_raw_down;
+			raw_up = info->profile_raw_up;
+			visible_down = info->profile_delivered_down;
+			visible_up = info->profile_delivered_up;
+			depth = info->profile_max_depth;
+			overflows = info->history.overflows;
+			resyncs = info->history.backlog_resyncs;
+			poll_us = info->profile_poll_us;
+			poll_max = info->profile_poll_max_us;
+			worker_passes = ps2->profile_worker_passes;
+			worker_us = ps2->profile_worker_us;
+			worker_max = ps2->profile_worker_max_us;
+			EIntr();
+			if (report) {
+				printf("[ps2_input] polls=%lu reads=%lu invalid=%lu raw=%lu/%lu delivered=%lu/%lu depth=%lu overflow=%lu resync=%lu poll_us=%llu max=%lu worker=%lu/%llu max=%lu\n",
+					(unsigned long)info->profile_game_polls,
+					(unsigned long)reads, (unsigned long)read_fail,
+					(unsigned long)raw_down, (unsigned long)raw_up,
+					(unsigned long)visible_down, (unsigned long)visible_up,
+					(unsigned long)depth, (unsigned long)overflows,
+					(unsigned long)resyncs, (unsigned long long)poll_us,
+					(unsigned long)poll_max, (unsigned long)worker_passes,
+					(unsigned long long)worker_us, (unsigned long)worker_max);
+			}
+		}
+#endif
+		return valid;
+	}
+
+	/* If thread startup failed, retain the synchronous input fallback. */
+	if (!mode_ready) {
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-		return ps2_deliver_sample(info, valid, false, state);
+		return valid;
 	}
 
 	ret = padRead(info->port, info->slot, &paddata);
@@ -486,7 +716,7 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		sizeof(paddata.btns))) {
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-		return ps2_deliver_sample(info, valid, false, state);
+		return valid;
 	}
 
 	if (!ps2_pad_packet_valid(ret,
@@ -494,14 +724,14 @@ static bool ps2_sample(void *data, uint32_t controller, input_state_t *state) {
 		paddata.mode, paddata.btns)) {
 		valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 			false, NULL, state);
-		return ps2_deliver_sample(info, valid, false, state);
+		return valid;
 	}
 
 	decodePadState(&paddata, &fresh);
 
 	valid = ps2_input_sample_cache_update(&info->sample_cache, true,
 		true, &fresh, state);
-	return ps2_deliver_sample(info, valid, true, state);
+	return valid;
 }
 
 input_driver_t input_ps2 = {
