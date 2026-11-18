@@ -212,6 +212,29 @@ The profiler is OFF by default and forced OFF for canonical releases.
   `ps2client ping`/`health` while its host: console connection is in
   use**: an exploratory run's console connection was closed after
   another client opened `host:/ps2client.ping`.
+- For **real CPS1 gameplay through PS2Link** (not the standalone
+  probe), configure a separate non-release PS2 CPS1 CMake build with
+  `-DPS2_PS2LINK_SESSION=ON -DGUI=OFF -DPS2_INPUT_PROFILE=ON`.
+  The opt-in flag preserves the running PS2Link IOP rather than
+  calling `SifIopReset()`, and prevents return to the PS2 OSD on
+  shutdown or failed initialization by sleeping until an EE reset.
+  It is rejected for canonical/release or non-PS2 builds. Keep the
+  existing PS2 toolchain flags (especially `-D_EE`, `-DPS2` and
+  `-G0`); **do not replace `CMAKE_C_FLAGS` with only an extra define**.
+  Stage `game_name.ini` containing `sf2`, a local `config/sf2.ini`
+  and `njemu.ini` in that build directory. From the build directory,
+  use `ps2client -h 192.168.31.10 -t 1200 execee host:CPS1.ELF`.
+  Never send a second ps2client host request while the gameplay
+  session owns the host: connection; after gameplay, issue an EE-only
+  `ps2client -h 192.168.31.10 reset`, **not an IOP reset**.
+- On 2026-11-18 a dedicated test build launched `sf2` successfully
+  over the PS2Link host: filesystem. The startup log confirmed the
+  preserved IOP, fileXio, audio, video and pad initialization,
+  successful ROM loads and ongoing CPS1 input polling. Real controller
+  interaction reached the backend, with raw and delivered transitions
+  matching in the periodic diagnostic output and no queue overflow
+  or resynchronization. The user must still judge actual Street
+  Fighter II attack/motion recognition during gameplay.
 - The standalone post-fix frame-boundary comparison passes on real
   hardware. There is still no complete-game attack-count comparison,
   independent physical-button timestamp, or live dual-controller /

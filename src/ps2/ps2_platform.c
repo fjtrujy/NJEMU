@@ -114,6 +114,7 @@ static bool cacheio_driver_initialized;
 static bool cacheio_driver_requested;
 #endif
 
+#if !defined(NJEMU_PS2LINK_KEEP_IOP)
 static void reset_IOP()
 {
     SifInitRpc(0);
@@ -121,6 +122,17 @@ static void reset_IOP()
     while (!SifIopReset(NULL, 0)) {}
     while (!SifIopSync()) {}
 }
+#endif
+
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+static void ps2link_wait_for_ee_reset(const char *message)
+{
+	printf("[ps2link] %s; sleeping until ps2client reset\n", message);
+	fflush(stdout);
+	for (;;)
+		SleepThread();
+}
+#endif
 
 static bool stage_drivers_before_iop_reset(void)
 {
@@ -186,8 +198,15 @@ static bool prepare_IOP()
 	if (!stage_drivers_before_iop_reset())
 		return false;
 
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+	/* Diagnostics launched from PS2Link must preserve its IOP host: server.
+	 * This is a development-only build mode, never a release bootstrap. */
+	SifInitRpc(0);
+	printf("[ps2link] preserving running IOP; no SifIopReset\n");
+#else
     reset_IOP();
     SifInitRpc(0);
+#endif
     sbv_patch_enable_lmb();
     sbv_patch_disable_prefix_check();
     sbv_patch_fileio();
@@ -270,11 +289,18 @@ static void deinit_drivers()
 
 static void *ps2_init(void) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)calloc(1, sizeof(ps2_platform_t));
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+	if (ps2 == NULL)
+		ps2link_wait_for_ee_reset("allocation failed");
+#endif
 	if (ps2 == NULL)
 		return NULL;
 
 	if (!prepare_IOP()) {
 		free(ps2);
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+		ps2link_wait_for_ee_reset("IOP preparation failed");
+#endif
 		return NULL;
 	}
 	if (!init_drivers()) {
@@ -283,6 +309,9 @@ static void *ps2_init(void) {
 		ps2_drivers_img_forget_source();
 #endif
 		free(ps2);
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+		ps2link_wait_for_ee_reset("driver initialization failed");
+#endif
 		return NULL;
 	}
 
@@ -292,6 +321,12 @@ static void *ps2_init(void) {
 static void ps2_free(void *data) {
 	ps2_platform_t *ps2 = (ps2_platform_t*)data;
 
+#if defined(NJEMU_PS2LINK_KEEP_IOP)
+	/* Avoid unloading IOP services PS2Link may depend on. Never return to
+	 * the OSD: ps2client reset replaces this EE program safely instead. */
+	(void)ps2;
+	ps2link_wait_for_ee_reset("emulator finished");
+#endif
 	deinit_drivers();
 #if defined(PS2_EXTERNAL_IRX_IMAGE)
 	ps2_drivers_img_discard_staged();
