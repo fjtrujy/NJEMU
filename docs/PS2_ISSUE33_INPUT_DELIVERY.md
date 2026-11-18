@@ -233,8 +233,14 @@ The profiler is OFF by default and forced OFF for canonical releases.
   successful ROM loads and ongoing CPS1 input polling. Real controller
   interaction reached the backend, with raw and delivered transitions
   matching in the periodic diagnostic output and no queue overflow
-  or resynchronization. The user must still judge actual Street
-  Fighter II attack/motion recognition during gameplay.
+  or resynchronization. After testing on the real PS2, the user
+  reported **"I didn't notice anything wrong"**. The latest examined
+  24,600-poll gameplay report showed 846 observed button-down and
+  button-up transitions and 846/846 delivered, zero history overflows
+  and zero resynchronizations; its 87 invalid reads were confined to
+  startup. This is positive subjective gameplay feedback, **not**
+  an independently counted in-game attack/special-move acceptance
+  measurement.
 - The standalone post-fix frame-boundary comparison passes on real
   hardware. There is still no complete-game attack-count comparison,
   independent physical-button timestamp, or live dual-controller /
@@ -245,8 +251,9 @@ The profiler is OFF by default and forced OFF for canonical releases.
 **Do not open or merge a PR on these results alone.** The dedicated
 PS2Link input-port comparison now establishes that the fixed
 frame-refreshed variant avoids the worker's extra phase delay.
-Remaining gates are a real Street Fighter II gameplay comparison
-(rapid motions, simultaneous attacks and game reactions), reconnection,
-multitap/menu-exit validation and real-PS2 frame-time costs. A hardware
+Real Street Fighter II gameplay now has a positive subjective assessment,
+but an instrumented attack-count / game-logic comparison remains open,
+along with reconnection, multitap/menu-exit validation and real-PS2
+frame-time costs. A hardware
 failure caused by IOP acquisition rather than EE delivery requires an
 IOP/PADMAN investigation; a generalized EE FIFO will not fix it.
