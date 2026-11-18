@@ -178,8 +178,23 @@ The profiler is OFF by default and forced OFF for canonical releases.
   counts direct-versus-synchronous mismatches and missed press onsets.
   An initial physical run reached 7,200 frame reads and 14,971 worker
   reads without invalid packets or mismatches, but no buttons were
-  pressed during that run; **the post-fix latency question remains
-  open** until another controller-input session.
+  pressed during that run.
+- A second **physical-PS2 controller run** of the revised comparison
+  completed by START+SELECT with 2,223 valid direct frame reads, 4,622
+  valid worker reads, and 68 observed button-down/up transitions.
+  All 68 downs and 68 ups were delivered by the legacy latch, the
+  worker-only history and the frame-refreshed history. The worker-only
+  variants disagreed with the direct reference on 34 CPS1 port
+  frames, including 17 late press-onsets and 18 lagging releases.
+  In contrast, the **frame-refreshed history matched the direct
+  reference on all 2,223 frames**, with zero missed press onsets,
+  zero lagging releases, no invalid reads, overflow or resync and
+  maximum history depth one. See
+  `tests/ps2_issue33_hardware/live_sf2_port_probe_after_fix_active.log`
+  (ignored test output). This confirms that the extra worker-phase
+  delay is removed for the observed controller sequence at the
+  **CPS1 port projection level**, not that the complete Street
+  Fighter II game logic has been tested on physical hardware.
 - A PCSX2 `sf2` smoke test of the frame-refresh build injected
   Square and Right+Square events: 110 observed down/up transitions
   were delivered 110/110 by the backend, with maximum queue depth one,
@@ -197,17 +212,18 @@ The profiler is OFF by default and forced OFF for canonical releases.
   `ps2client ping`/`health` while its host: console connection is in
   use**: an exploratory run's console connection was closed after
   another client opened `host:/ps2client.ping`.
-- There is no proven after-fix physical-to-emulated input latency
-  result, game-level attack-count comparison or live dual-controller /
+- The standalone post-fix frame-boundary comparison passes on real
+  hardware. There is still no complete-game attack-count comparison,
+  independent physical-button timestamp, or live dual-controller /
   multitap regression test.
 
 ## Release / PR gate
 
-**Do not open or merge a PR on these results alone.** Reproduce the
-report on a real PS2, compare the old and new builds with identical
-controller/game setup, inspect input-to-CPS1-port timing, test rapid
-motions and simultaneously pressed attacks, reconnection, multitap,
-menu exit and frame-time costs. If the additional sampler-phase delay
-is perceptible, revise the delivery design before merging. A hardware
+**Do not open or merge a PR on these results alone.** The dedicated
+PS2Link input-port comparison now establishes that the fixed
+frame-refreshed variant avoids the worker's extra phase delay.
+Remaining gates are a real Street Fighter II gameplay comparison
+(rapid motions, simultaneous attacks and game reactions), reconnection,
+multitap/menu-exit validation and real-PS2 frame-time costs. A hardware
 failure caused by IOP acquisition rather than EE delivery requires an
 IOP/PADMAN investigation; a generalized EE FIFO will not fix it.
